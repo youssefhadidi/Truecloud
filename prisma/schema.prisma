@@ -1,0 +1,68 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  name      String?
+  role      String   @default("user") // user, admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files       File[]
+  permissions FilePermission[]
+  sessions    Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model File {
+  id          String   @id @default(cuid())
+  name        String
+  path        String
+  size        BigInt
+  mimeType    String
+  isDirectory Boolean  @default(false)
+  parentId    String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User             @relation(fields: [ownerId], references: [id])
+  permissions FilePermission[]
+
+  @@index([parentId])
+  @@index([ownerId])
+}
+
+model FilePermission {
+  id         String   @id @default(cuid())
+  fileId     String
+  userId     String
+  canRead    Boolean  @default(false)
+  canWrite   Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canShare   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, userId])
+}

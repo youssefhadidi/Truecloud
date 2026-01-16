@@ -1,0 +1,17 @@
+<!-- @format -->
+
+# Don't copy these to Docker image
+
+node_modules
+.next
+.git
+.env*.local
+*.log
+.DS_Store
+README.md
+SETUP.md
+DOCKER-DEPLOYMENT.md
+
+# Keep in image
+
+!.env.example

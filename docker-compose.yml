@@ -1,0 +1,29 @@
+# @format
+
+version: '3.8'
+
+services:
+  truecloud:
+    build: .
+    container_name: truecloud
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/db/truecloud.db
+      - STORAGE_MODE=direct
+      - UPLOAD_DIR=/data/files
+      - NEXTAUTH_TRUST_HOST=true
+    volumes:
+      # Mount Windows local directories for development
+      - C:\Users\yhadidi\Desktop\truecloud\uploads:/data/files
+      - C:\Users\yhadidi\Desktop\truecloud\db:/data/db
+    env_file:
+      - .env.local
+    networks:
+      - truecloud-network
+
+networks:
+  truecloud-network:
+    driver: bridge
