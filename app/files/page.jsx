@@ -57,6 +57,7 @@ export default function FilesPage() {
   const [processingFile, setProcessingFile] = useState(null); // Track file being processed
   const [viewerFile, setViewerFile] = useState(null); // File being viewed in media viewer
   const [uploads, setUploads] = useState([]); // Track upload progress
+  const [folderDisplayNames, setFolderDisplayNames] = useState({}); // Store display names for user folders
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -66,7 +67,25 @@ export default function FilesPage() {
 
   // Fetch files using custom hook
   const { data: filesData, isLoading: loading } = useFiles(currentPath, status === 'authenticated');
-  const files = filesData || [];
+  const files = useMemo(() => {
+    // Filter out hidden folders/files (starting with ".")
+    return (filesData || []).filter((f) => !f.name.startsWith('.'));
+  }, [filesData]);
+
+  // Store display names for user folders when files are loaded
+  useEffect(() => {
+    if (files && files.length > 0) {
+      const newDisplayNames = {};
+      files.forEach((file) => {
+        if (file.name.startsWith('user_') && file.displayName) {
+          newDisplayNames[file.name] = file.displayName;
+        }
+      });
+      if (Object.keys(newDisplayNames).length > 0) {
+        setFolderDisplayNames((prev) => ({ ...prev, ...newDisplayNames }));
+      }
+    }
+  }, [files]);
 
   // Memoize viewable files calculation
   const viewableFiles = useMemo(() => {
@@ -189,7 +208,7 @@ export default function FilesPage() {
           setErrorMessage(`Upload failed for ${file.name}`);
           setUploading(false);
         },
-      }
+      },
     );
   };
 
@@ -278,7 +297,7 @@ export default function FilesPage() {
           setRenamingFile(null);
           setProcessingFile(null);
         },
-      }
+      },
     );
   };
 
@@ -292,6 +311,14 @@ export default function FilesPage() {
     if (isImage(file.name)) return <FiImage className="text-green-500" size={24} />;
     if (isVideo(file.name)) return <FiVideo className="text-purple-500" size={24} />;
     return <FiFile className="text-gray-500" size={24} />;
+  };
+
+  const getFolderDisplayName = (folderName) => {
+    // Check if it's a user private folder and we have the display name cached
+    if (folderName.startsWith('user_')) {
+      return folderDisplayNames[folderName] || folderName;
+    }
+    return folderName;
   };
 
   const openMediaViewer = (file) => {
@@ -366,6 +393,12 @@ export default function FilesPage() {
                 <FiUser />
                 <span className="text-sm">{session?.user?.email}</span>
               </div>
+              {session?.user?.role === 'admin' && (
+                <button onClick={() => router.push('/admin')} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                  <FiUser />
+                  Admin Panel
+                </button>
+              )}
               <button onClick={() => signOut({ callbackUrl: '/auth/login' })} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                 <FiLogOut />
                 Sign Out
@@ -377,7 +410,7 @@ export default function FilesPage() {
 
       {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto max-w-[1280px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex flex-col relative"
+        className="flex-1 overflow-y-auto max-w-[1400px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex flex-col relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -401,17 +434,20 @@ export default function FilesPage() {
             <span>Home</span>
           </button>
           {currentPath &&
-            currentPath.split('/').map((folder, index, arr) => (
-              <div key={index} className="flex items-center gap-2">
-                <FiChevronRight size={14} />
-                <button
-                  onClick={() => navigateToBreadcrumb(index + 1)}
-                  className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${index === arr.length - 1 ? 'font-medium text-gray-900 dark:text-white' : ''}`}
-                >
-                  {folder}
-                </button>
-              </div>
-            ))}
+            currentPath.split('/').map((folder, index, arr) => {
+              const displayName = folder.startsWith('user_') ? getFolderDisplayName(folder) : folder;
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  <FiChevronRight size={14} />
+                  <button
+                    onClick={() => navigateToBreadcrumb(index + 1)}
+                    className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${index === arr.length - 1 ? 'font-medium text-gray-900 dark:text-white' : ''}`}
+                  >
+                    {displayName}
+                  </button>
+                </div>
+              );
+            })}
         </div>
 
         {/* Toolbar Navbar */}
@@ -587,10 +623,10 @@ export default function FilesPage() {
                                     className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
                                     disabled={processingFile === file.id}
                                   >
-                                    {file.name}
+                                    {file.displayName || file.name}
                                   </button>
                                 ) : (
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</div>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{file.displayName || file.name}</div>
                                 )}
                               </div>
                             </td>
@@ -654,11 +690,11 @@ export default function FilesPage() {
             </div>
           ) : (
             /* Grid View */
-            <div className="p-6">
+            <div className="p-4">
               {files.length === 0 && !creatingFolder ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">No files yet. Upload your first file!</div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-9 gap-2">
                   {creatingFolder && (
                     <div className="group relative bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border-2 border-blue-300 dark:border-blue-700">
                       <div className="aspect-square flex items-center justify-center mb-3 bg-white dark:bg-gray-600 rounded-lg">
@@ -692,7 +728,7 @@ export default function FilesPage() {
                   {files.map((file) => (
                     <div
                       key={file.id}
-                      className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-2 hover:shadow-lg transition-shadow cursor-pointer"
+                      className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 hover:shadow-lg transition-shadow cursor-pointer"
                       onClick={() => file.isDirectory && deletingFile?.id !== file.id && navigateToFolder(file.name)}
                       onContextMenu={(e) => handleContextMenu(e, file)}
                     >
@@ -834,8 +870,8 @@ export default function FilesPage() {
                       </div>
 
                       {/* File Name */}
-                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
-                        {file.name}
+                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.displayName || file.name}>
+                        {file.displayName || file.name}
                       </div>
 
                       {/* File Size */}

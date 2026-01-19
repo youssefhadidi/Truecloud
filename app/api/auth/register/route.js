@@ -3,6 +3,11 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import path from 'path';
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
 export async function POST(req) {
   try {
@@ -33,8 +38,15 @@ export async function POST(req) {
         username,
         password: hashedPassword,
         name: name || username,
+        role: 'user',
       },
     });
+
+    // Create private directory for user
+    const userDir = path.join(UPLOAD_DIR, `user_${user.id}`);
+    if (!existsSync(userDir)) {
+      await mkdir(userDir, { recursive: true });
+    }
 
     return NextResponse.json(
       {
@@ -45,7 +57,7 @@ export async function POST(req) {
           name: user.name,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error('Registration error:', error);
