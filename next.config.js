@@ -12,7 +12,7 @@ const nextConfig = {
     PORT: process.env.PORT || 3000,
   },
   publicRuntimeConfig: {
-    staticFolder: '/public',
+    staticFolder: '/mnt/Truenas/Truecloud/uploads',
   },
 };
 
