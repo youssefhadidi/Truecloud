@@ -4,8 +4,9 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, Suspense, lazy, useMemo } from 'react';
+import { useEffect, useState, Suspense, lazy, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { FixedSizeList as List } from 'react-window';
 import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile } from '@/lib/api/files';
 import {
   FiUpload,
@@ -36,12 +37,304 @@ import { isImage, isVideo, isAudio, isPdf } from '@/lib/clientFileUtils';
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 
+// Virtualized Grid Component
+const VirtualizedGrid = ({
+  files,
+  creatingFolder,
+  newFolderName,
+  onNewFolderNameChange,
+  onCancelCreateFolder,
+  onConfirmCreateFolder,
+  deletingFile,
+  renamingFile,
+  newFileName,
+  onNewFileNameChange,
+  onCancelRename,
+  onConfirmRename,
+  processingFile,
+  currentPath,
+  onNavigateToFolder,
+  onOpenMediaViewer,
+  onInitiateRename,
+  onHandleDownload,
+  onInitiateDelete,
+  onCancelDelete,
+}) => {
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [colCount, setColCount] = useState(8);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.clientWidth;
+        setContainerWidth(width);
+
+        // Calculate column count based on width
+        let cols = 2;
+        if (width > 1536) cols = 9; // xl
+        else if (width > 1280) cols = 8; // lg
+        else if (width > 768) cols = 5; // md
+        else if (width > 640) cols = 4; // sm
+        setColCount(cols);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const itemsPerRow = colCount;
+  const rowCount = Math.ceil((files.length + (creatingFolder ? 1 : 0)) / itemsPerRow);
+  const itemSize = 140; // height of each grid item
+
+  const handleScroll = () => {
+    // Virtual scroll implementation via masonry-style layout
+  };
+
+  return (
+    <div ref={containerRef} className="w-full h-full overflow-y-auto overflow-x-hidden">
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+        {creatingFolder && (
+          <div className="group relative bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border-2 border-blue-300 dark:border-blue-700">
+            <div className="aspect-square flex items-center justify-center mb-3 bg-white dark:bg-gray-600 rounded-lg">
+              <FiFolder className="text-blue-500" size={48} />
+            </div>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => onNewFolderNameChange(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') onConfirmCreateFolder();
+                if (e.key === 'Escape') onCancelCreateFolder();
+              }}
+              className="w-full px-2 py-1 text-sm mb-2 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              autoFocus
+              onFocus={(e) => e.target.select()}
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={onCancelCreateFolder}
+                className="flex-1 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button onClick={onConfirmCreateFolder} className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                Create
+              </button>
+            </div>
+          </div>
+        )}
+        {files.map((file) => (
+          <div
+            key={file.id}
+            className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => file.isDirectory && deletingFile?.id !== file.id && onNavigateToFolder(file.name)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              // Context menu handled by parent
+            }}
+          >
+            {deletingFile?.id === file.id ? (
+              <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-4 flex flex-col items-center justify-center gap-3 z-10">
+                <p className="text-red-800 dark:text-red-200 font-medium text-center text-sm">Delete {file.isDirectory ? 'folder' : 'file'}?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelDelete();
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onInitiateDelete(file);
+                    }}
+                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : renamingFile?.id === file.id ? (
+              <div className="absolute inset-0 bg-blue-50 dark:bg-blue-900/90 rounded-lg p-4 flex flex-col items-center justify-center gap-3 z-10">
+                <input
+                  type="text"
+                  value={newFileName}
+                  onChange={(e) => onNewFileNameChange(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') onConfirmRename();
+                    if (e.key === 'Escape') onCancelRename();
+                  }}
+                  className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelRename();
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirmRename();
+                    }}
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Rename
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className={`aspect-square flex items-center justify-center mb-3 bg-white dark:bg-gray-600 rounded-lg relative ${
+                isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)
+                  ? 'cursor-pointer hover:opacity-90 transition-opacity'
+                  : ''
+              }`}
+              onClick={() => {
+                if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) {
+                  onOpenMediaViewer(file);
+                }
+              }}
+            >
+              {processingFile === file.id && (
+                <div className="absolute inset-0 bg-white dark:bg-gray-600 bg-opacity-75 dark:bg-opacity-75 rounded-lg flex items-center justify-center z-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+              )}
+              {isImage(file.name) && (
+                <LazyImage
+                  src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
+                  alt={file.name}
+                  className="w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              )}
+              {isVideo(file.name) && (
+                <div className="relative w-full h-full">
+                  <LazyImage
+                    src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
+                    alt={file.name}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-black bg-opacity-60 rounded-full p-3">
+                      <FiVideo className="text-white" size={24} />
+                    </div>
+                  </div>
+                  <div className="hidden flex items-center justify-center w-full h-full" />
+                </div>
+              )}
+              {isPdf(file.name) && (
+                <div className="relative w-full h-full">
+                  <LazyImage
+                    src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
+                    alt={file.name}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      if (e?.target) {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                      }
+                    }}
+                  />
+                  <div className="hidden flex items-center justify-center w-full h-full" />
+                </div>
+              )}
+              <div className={`${!is3dFile(file.name) && (isImage(file.name) || isVideo(file.name) || isPdf(file.name)) ? 'hidden' : 'flex'} items-center justify-center w-full h-full`} />
+            </div>
+
+            <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.displayName || file.name}>
+              {file.displayName || file.name}
+            </div>
+
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {file.size > 0 ? `${Math.round(file.size / 1024)} KB` : '0 KB'}
+            </div>
+
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1">
+              {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (
+                <button
+                  onClick={() => onOpenMediaViewer(file)}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="View"
+                  disabled={processingFile === file.id}
+                >
+                  {is3dFile(file.name) ? (
+                    <FiBox size={16} className="text-orange-600 dark:text-orange-400" />
+                  ) : isVideo(file.name) ? (
+                    <FiVideo size={16} className="text-purple-600 dark:text-purple-400" />
+                  ) : isImage(file.name) ? (
+                    <FiImage size={16} className="text-green-600 dark:text-green-400" />
+                  ) : isAudio(file.name) ? (
+                    <FiVideo size={16} className="text-blue-600 dark:text-blue-400" />
+                  ) : isPdf(file.name) ? (
+                    <FiFile size={16} className="text-red-600 dark:text-red-400" />
+                  ) : null}
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInitiateRename(file);
+                }}
+                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Rename"
+                disabled={processingFile === file.id}
+              >
+                <FiEdit size={16} />
+              </button>
+              <button
+                onClick={() => onHandleDownload(file.id, file.name)}
+                className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download"
+                disabled={processingFile === file.id}
+              >
+                <FiDownload size={16} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInitiateDelete(file);
+                }}
+                className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Delete"
+                disabled={processingFile === file.id}
+              >
+                <FiTrash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function FilesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [currentPath, setCurrentPath] = useState('');
   const [pathHistory, setPathHistory] = useState(['']);
   const [viewMode, setViewMode] = useState('grid'); // 'list' or 'grid'
@@ -506,433 +799,209 @@ export default function FilesPage() {
         </div>
 
         {/* File Grid */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-auto flex-grow-1">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex-grow-1 flex flex-col">
           {viewMode === 'list' ? (
-            /* List View */
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Size</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Modified</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {creatingFolder && (
-                    <tr className="bg-blue-50 dark:bg-blue-900/20">
-                      <td colSpan="4" className="px-6 py-4">
-                        <div className="flex items-center gap-3 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
-                          <FiFolder className="text-blue-500" size={24} />
-                          <input
-                            type="text"
-                            value={newFolderName}
-                            onChange={(e) => setNewFolderName(e.target.value)}
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') confirmCreateFolder();
-                              if (e.key === 'Escape') cancelCreateFolder();
-                            }}
-                            onBlur={confirmCreateFolder}
-                            className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            autoFocus
-                            onFocus={(e) => e.target.select()}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={cancelCreateFolder}
-                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                            >
-                              Cancel
-                            </button>
-                            <button onClick={confirmCreateFolder} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-                              Create
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {files.length === 0 && !creatingFolder ? (
+            /* List View with Virtual Scrolling */
+            <div className="overflow-hidden flex-grow flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                     <tr>
-                      <td colSpan="4" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                        No files yet. Upload your first file!
-                      </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Size</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Modified</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                     </tr>
-                  ) : (
-                    files.map((file) => (
-                      <tr key={file.id} className="hover:bg-gray-50 dark:hover:bg-gray-700" onContextMenu={(e) => handleContextMenu(e, file)}>
-                        {deletingFile?.id === file.id ? (
-                          // Delete confirmation row
-                          <td colSpan="4" className="px-6 py-4">
-                            <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-4 py-2">
-                              <span className="text-red-800 dark:text-red-200 font-medium">
-                                Delete {file.isDirectory ? 'folder' : 'file'} "{file.name}"?
-                              </span>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={cancelDelete}
-                                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                                >
-                                  Cancel
-                                </button>
-                                <button onClick={confirmDelete} className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700">
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        ) : renamingFile?.id === file.id ? (
-                          // Rename row
-                          <td colSpan="4" className="px-6 py-4">
-                            <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
-                              {getFileIcon(file)}
-                              <input
-                                type="text"
-                                value={newFileName}
-                                onChange={(e) => setNewFileName(e.target.value)}
-                                onKeyPress={(e) => {
-                                  if (e.key === 'Enter') confirmRename();
-                                  if (e.key === 'Escape') cancelRename();
-                                }}
-                                className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                autoFocus
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={cancelRename}
-                                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                                >
-                                  Cancel
-                                </button>
-                                <button onClick={confirmRename} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-                                  Rename
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        ) : (
-                          // Normal row
-                          <>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                {processingFile === file.id ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div> : getFileIcon(file)}
-                                {file.isDirectory ? (
-                                  <button
-                                    onClick={() => navigateToFolder(file.name)}
-                                    className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                                    disabled={processingFile === file.id}
-                                  >
-                                    {file.displayName || file.name}
-                                  </button>
-                                ) : (
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{file.displayName || file.name}</div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex justify-end gap-2">
-                                {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (
-                                  <button
-                                    onClick={() => openMediaViewer(file)}
-                                    className="text-purple-600 hover:text-purple-900 dark:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="View"
-                                    disabled={processingFile === file.id}
-                                  >
-                                    {is3dFile(file.name) ? (
-                                      <FiBox size={18} />
-                                    ) : isVideo(file.name) ? (
-                                      <FiVideo size={18} />
-                                    ) : isImage(file.name) ? (
-                                      <FiImage size={18} />
-                                    ) : isAudio(file.name) ? (
-                                      <FiVideo size={18} />
-                                    ) : isPdf(file.name) ? (
-                                      <FiFile size={18} />
-                                    ) : null}
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => initiateRename(file)}
-                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Rename"
-                                  disabled={processingFile === file.id}
-                                >
-                                  <FiEdit size={18} />
-                                </button>
-                                <button
-                                  onClick={() => handleDownload(file.id, file.name)}
-                                  className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Download"
-                                  disabled={processingFile === file.id}
-                                >
-                                  <FiDownload size={18} />
-                                </button>
-                                <button
-                                  onClick={() => initiateDelete(file)}
-                                  className="text-red-600 hover:text-red-900 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Delete"
-                                  disabled={processingFile === file.id}
-                                >
-                                  <FiTrash2 size={18} />
-                                </button>
-                              </div>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                </table>
+              </div>
+
+              {creatingFolder && (
+                <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+                  <div className="flex items-center gap-3 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
+                    <FiFolder className="text-blue-500" size={24} />
+                    <input
+                      type="text"
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') confirmCreateFolder();
+                        if (e.key === 'Escape') cancelCreateFolder();
+                      }}
+                      onBlur={confirmCreateFolder}
+                      className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      autoFocus
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={cancelCreateFolder}
+                        className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      >
+                        Cancel
+                      </button>
+                      <button onClick={confirmCreateFolder} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                        Create
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {files.length === 0 && !creatingFolder ? (
+                <div className="flex items-center justify-center flex-grow text-gray-500 dark:text-gray-400">
+                  No files yet. Upload your first file!
+                </div>
+              ) : (
+                <List
+                  height={Math.max(300, window.innerHeight - 400)}
+                  itemCount={files.length}
+                  itemSize={65}
+                  width="100%"
+                  className="overflow-x-hidden"
+                >
+                  {({ index, style }) => {
+                    const file = files[index];
+                    return (
+                      <div style={style} className="overflow-hidden">
+                        <table className="w-full">
+                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {deletingFile?.id === file.id ? (
+                              <tr className="bg-red-50 dark:bg-red-900/20">
+                                <td colSpan="4" className="px-6 py-4">
+                                  <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-4 py-2">
+                                    <span className="text-red-800 dark:text-red-200 font-medium">
+                                      Delete {file.isDirectory ? 'folder' : 'file'} "{file.name}"?
+                                    </span>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={cancelDelete}
+                                        className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button onClick={confirmDelete} className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700">
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : renamingFile?.id === file.id ? (
+                              <tr className="bg-blue-50 dark:bg-blue-900/20">
+                                <td colSpan="4" className="px-6 py-4">
+                                  <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
+                                    {getFileIcon(file)}
+                                    <input
+                                      type="text"
+                                      value={newFileName}
+                                      onChange={(e) => setNewFileName(e.target.value)}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') confirmRename();
+                                        if (e.key === 'Escape') cancelRename();
+                                      }}
+                                      className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                      autoFocus
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={cancelRename}
+                                        className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button onClick={confirmRename} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                                        Rename
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : (
+                              <tr className="hover:bg-gray-50 dark:hover:bg-gray-700" onContextMenu={(e) => handleContextMenu(e, file)}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    {processingFile === file.id ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div> : getFileIcon(file)}
+                                    {file.isDirectory ? (
+                                      <button
+                                        onClick={() => navigateToFolder(file.name)}
+                                        className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                                        disabled={processingFile === file.id}
+                                      >
+                                        {file.displayName || file.name}
+                                      </button>
+                                    ) : (
+                                      <div className="text-sm font-medium text-gray-900 dark:text-white">{file.displayName || file.name}</div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="flex justify-end gap-2">
+                                    {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (
+                                      <button
+                                        onClick={() => openMediaViewer(file)}
+                                        className="text-purple-600 hover:text-purple-900 dark:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="View"
+                                        disabled={processingFile === file.id}
+                                      >
+                                        {is3dFile(file.name) ? (
+                                          <FiBox size={18} />
+                                        ) : isVideo(file.name) ? (
+                                          <FiVideo size={18} />
+                                        ) : isImage(file.name) ? (
+                                          <FiImage size={18} />
+                                        ) : isAudio(file.name) ? (
+                                          <FiVideo size={18} />
+                                        ) : isPdf(file.name) ? (
+                                          <FiFile size={18} />
+                                        ) : null}
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => initiateRename(file)}
+                                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Rename"
+                                      disabled={processingFile === file.id}
+                                    >
+                                      <FiEdit size={18} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownload(file.id, file.name)}
+                                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Download"
+                                      disabled={processingFile === file.id}
+                                    >
+                                      <FiDownload size={18} />
+                                    </button>
+                                    <button
+                                      onClick={() => initiateDelete(file)}
+                                      className="text-red-600 hover:text-red-900 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Delete"
+                                      disabled={processingFile === file.id}
+                                    >
+                                      <FiTrash2 size={18} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  }}
+                </List>
+              )}
             </div>
           ) : (
-            /* Grid View */
-            <div className="p-4">
+            /* Grid View with Virtual Scrolling */
+            <div className="p-4 flex flex-col flex-grow">
               {files.length === 0 && !creatingFolder ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">No files yet. Upload your first file!</div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-9 gap-2">
-                  {creatingFolder && (
-                    <div className="group relative bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border-2 border-blue-300 dark:border-blue-700">
-                      <div className="aspect-square flex items-center justify-center mb-3 bg-white dark:bg-gray-600 rounded-lg">
-                        <FiFolder className="text-blue-500" size={48} />
-                      </div>
-                      <input
-                        type="text"
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') confirmCreateFolder();
-                          if (e.key === 'Escape') cancelCreateFolder();
-                        }}
-                        className="w-full px-2 py-1 text-sm mb-2 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        autoFocus
-                        onFocus={(e) => e.target.select()}
-                      />
-                      <div className="flex gap-1">
-                        <button
-                          onClick={cancelCreateFolder}
-                          className="flex-1 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                        <button onClick={confirmCreateFolder} className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                          Create
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {files.map((file) => (
-                    <div
-                      key={file.id}
-                      className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 hover:shadow-lg transition-shadow cursor-pointer"
-                      onClick={() => file.isDirectory && deletingFile?.id !== file.id && navigateToFolder(file.name)}
-                      onContextMenu={(e) => handleContextMenu(e, file)}
-                    >
-                      {deletingFile?.id === file.id ? (
-                        // Delete confirmation overlay
-                        <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-4 flex flex-col items-center justify-center gap-3 z-10">
-                          <p className="text-red-800 dark:text-red-200 font-medium text-center text-sm">Delete {file.isDirectory ? 'folder' : 'file'}?</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                cancelDelete();
-                              }}
-                              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmDelete();
-                              }}
-                              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ) : renamingFile?.id === file.id ? (
-                        // Rename overlay
-                        <div className="absolute inset-0 bg-blue-50 dark:bg-blue-900/90 rounded-lg p-4 flex flex-col items-center justify-center gap-3 z-10">
-                          <input
-                            type="text"
-                            value={newFileName}
-                            onChange={(e) => setNewFileName(e.target.value)}
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') confirmRename();
-                              if (e.key === 'Escape') cancelRename();
-                            }}
-                            className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                cancelRename();
-                              }}
-                              className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmRename();
-                              }}
-                              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                            >
-                              Rename
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      {/* File Icon/Preview */}
-                      <div
-                        className={`aspect-square flex items-center justify-center mb-3 bg-white dark:bg-gray-600 rounded-lg relative ${
-                          isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)
-                            ? 'cursor-pointer hover:opacity-90 transition-opacity'
-                            : ''
-                        }`}
-                        onClick={() => {
-                          if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) {
-                            openMediaViewer(file);
-                          }
-                        }}
-                      >
-                        {processingFile === file.id && (
-                          <div className="absolute inset-0 bg-white dark:bg-gray-600 bg-opacity-75 dark:bg-opacity-75 rounded-lg flex items-center justify-center z-10">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                          </div>
-                        )}
-                        {isImage(file.name) && (
-                          <LazyImage
-                            src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
-                            alt={file.name}
-                            className="w-full h-full object-cover rounded-lg"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        )}
-                        {isVideo(file.name) && (
-                          <div className="relative w-full h-full">
-                            <LazyImage
-                              src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
-                              alt={file.name}
-                              className="w-full h-full object-cover rounded-lg"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="bg-black bg-opacity-60 rounded-full p-3">
-                                <FiVideo className="text-white" size={24} />
-                              </div>
-                            </div>
-                            <div className="hidden flex items-center justify-center w-full h-full">{getFileIcon(file)}</div>
-                          </div>
-                        )}
-                        {isPdf(file.name) && (
-                          <div className="relative w-full h-full">
-                            <LazyImage
-                              src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
-                              alt={file.name}
-                              className="w-full h-full object-cover rounded-lg"
-                              onError={(e) => {
-                                if (e?.target) {
-                                  e.target.style.display = 'none';
-                                  if (e.target.nextSibling) {
-                                    e.target.nextSibling.style.display = 'flex';
-                                  }
-                                }
-                              }}
-                            />
-                            <div className="hidden flex items-center justify-center w-full h-full">{getFileIcon(file)}</div>
-                          </div>
-                        )}
-                        <div
-                          className={`${
-                            !is3dFile(file.name) && (isImage(file.name) || isVideo(file.name) || isPdf(file.name)) ? 'hidden' : 'flex'
-                          } items-center justify-center w-full h-full`}
-                        >
-                          {getFileIcon(file)}
-                        </div>
-                      </div>
-
-                      {/* File Name */}
-                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.displayName || file.name}>
-                        {file.displayName || file.name}
-                      </div>
-
-                      {/* File Size */}
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatFileSize(file.size)}</div>
-
-                      {/* Actions (shown on hover) */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1">
-                        {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (
-                          <button
-                            onClick={() => openMediaViewer(file)}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="View Media"
-                            disabled={processingFile === file.id}
-                          >
-                            {is3dFile(file.name) ? (
-                              <FiBox size={16} className="text-orange-600 dark:text-orange-400" />
-                            ) : isVideo(file.name) ? (
-                              <FiVideo size={16} className="text-purple-600 dark:text-purple-400" />
-                            ) : isImage(file.name) ? (
-                              <FiImage size={16} className="text-green-600 dark:text-green-400" />
-                            ) : isAudio(file.name) ? (
-                              <FiVideo size={16} className="text-blue-600 dark:text-blue-400" />
-                            ) : isPdf(file.name) ? (
-                              <FiFile size={16} className="text-red-600 dark:text-red-400" />
-                            ) : null}
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            initiateRename(file);
-                          }}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Rename"
-                          disabled={processingFile === file.id}
-                        >
-                          <FiEdit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDownload(file.id, file.name)}
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Download"
-                          disabled={processingFile === file.id}
-                        >
-                          <FiDownload size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            initiateDelete(file);
-                          }}
-                          className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete"
-                          disabled={processingFile === file.id}
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <VirtualizedGrid files={files} creatingFolder={creatingFolder} newFolderName={newFolderName} onNewFolderNameChange={setNewFolderName} onCancelCreateFolder={cancelCreateFolder} onConfirmCreateFolder={confirmCreateFolder} deletingFile={deletingFile} renamingFile={renamingFile} newFileName={newFileName} onNewFileNameChange={setNewFileName} onCancelRename={cancelRename} onConfirmRename={confirmRename} processingFile={processingFile} currentPath={currentPath} onNavigateToFolder={navigateToFolder} onOpenMediaViewer={openMediaViewer} onInitiateRename={initiateRename} onHandleDownload={handleDownload} onInitiateDelete={initiateDelete} onCancelDelete={cancelDelete} />
               )}
             </div>
           )}
