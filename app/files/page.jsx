@@ -129,17 +129,17 @@ export default function FilesPage() {
           </div>
         )}
         {/* Breadcrumb Navigation */}
-        <div className="mb-2 sm:mb-4 flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 overflow-x-auto">
-          <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
-            <FiHome size={14} className="sm:block" />
+        <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-3 text-sm text-gray-600 dark:text-gray-400 overflow-x-auto pb-1">
+          <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
+            <FiHome size={16} />
             <span className="hidden sm:inline">Home</span>
           </button>
           {state.currentPath &&
             state.currentPath.split('/').map((folder, index, arr) => {
               const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
               return (
-                <div key={index} className="flex items-center gap-1 sm:gap-2">
-                  <FiChevronRight size={12} className="sm:block" />
+                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
+                  <FiChevronRight size={14} className="text-gray-400 dark:text-gray-600 flex-shrink-0" />
                   <button
                     onClick={() => navigation.navigateToBreadcrumb(index + 1)}
                     className={`hover:text-indigo-600 dark:hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-gray-900 dark:text-white' : ''}`}

@@ -49,10 +49,11 @@ const getItemGap = (width) => {
 
 // Calculate column count based on breakpoints
 const getColumnsCount = (width) => {
-  if (width < BREAKPOINT.sm) return 2; // sm
-  if (width < BREAKPOINT.md) return 4; // md
-  if (width < BREAKPOINT.lg) return 5; // lg
-  if (width < BREAKPOINT.xl) return 8; // xl
+  if (width < BREAKPOINT.sm) return 2; // xs - no column virtualizer
+  if (width < BREAKPOINT.md) return 3; // sm - no column virtualizer
+  if (width < BREAKPOINT.lg) return 4; // md - no column virtualizer
+  if (width < BREAKPOINT.xl) return 5; // lg - enable column virtualizer
+  if (width < BREAKPOINT['2xl']) return 8; // xl
   return 9; // 2xl
 };
 
@@ -139,13 +140,16 @@ const GridView = ({
     };
   }, []);
 
-  // Use column virtualizer for horizontal scrolling (columns)
+  // Only use column virtualizer on larger screens (lg+)
+  const shouldUseColumnVirtualizer = containerWidth >= BREAKPOINT.lg;
+
+  // Use column virtualizer for horizontal scrolling (columns) - only on lg+
   const columnVirtualizer = useVirtualizer({
     horizontal: true,
-    count: columns,
+    count: shouldUseColumnVirtualizer ? columns : 1,
     getScrollElement: () => parentRef.current,
     estimateSize: () => itemSize.width + gap,
-    overscan: 3,
+    overscan: shouldUseColumnVirtualizer ? 3 : 0,
   });
 
   // Calculate actual row count based on dynamic column count
@@ -156,24 +160,30 @@ const GridView = ({
     count: rowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => itemSize.height + gap,
-    overscan: 5,
+    overscan: shouldUseColumnVirtualizer ? 5 : 2, // Lower overscan on mobile for better performance
   });
 
   // Re-measure virtualizers when size changes
   useEffect(() => {
-    rowVirtualizer.measure();
-    columnVirtualizer.measure();
-  }, [itemSize.height, columns, rowVirtualizer, columnVirtualizer]);
+    if (shouldUseColumnVirtualizer) {
+      rowVirtualizer.measure();
+      columnVirtualizer.measure();
+    } else {
+      rowVirtualizer.measure();
+    }
+  }, [itemSize.height, columns, shouldUseColumnVirtualizer, rowVirtualizer, columnVirtualizer]);
 
   return (
     <div ref={parentRef} className="w-full h-full overflow-auto">
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: `${columnVirtualizer.getTotalSize()}px`,
-          position: 'relative',
-        }}
-      >
+      {shouldUseColumnVirtualizer ? (
+        // 2D virtualization for larger screens (lg+)
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: `${columnVirtualizer.getTotalSize()}px`,
+            position: 'relative',
+          }}
+        >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => (
           <div key={virtualRow.key}>
             {columnVirtualizer.getVirtualItems().map((virtualColumn) => {
@@ -437,7 +447,288 @@ const GridView = ({
             })}
           </div>
         ))}
-      </div>
+        </div>
+      ) : (
+        // Simple CSS grid for mobile/tablet with row virtualization
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            position: 'relative',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+            <div
+              key={virtualRow.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                  gap: `${gap}px`,
+                  padding: '4px',
+                  height: '100%',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {allItems.slice(virtualRow.index * columns, (virtualRow.index + 1) * columns).map((item) => (
+                  <div key={item.id || 'new-folder'} style={{ aspectRatio: '1', minWidth: 0, overflow: 'hidden' }}>
+              {item.isCreating ? (
+                <div className="group relative bg-blue-50 dark:bg-blue-900/20 rounded-lg p-1 border-2 border-blue-300 dark:border-blue-700 flex flex-col h-full">
+                  <div className="aspect-square flex items-center justify-center mb-1 bg-white dark:bg-gray-600 rounded-lg flex-shrink-0">
+                    <FiFolder className="text-blue-500" size={32} />
+                  </div>
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => onNewFolderNameChange(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') onConfirmCreateFolder();
+                      if (e.key === 'Escape') onCancelCreateFolder();
+                    }}
+                    className="w-full px-1 py-0.5 text-xs mb-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <div className="flex gap-0.5 mt-auto">
+                    <button
+                      onClick={onCancelCreateFolder}
+                      className="flex-1 px-1 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                    <button onClick={onConfirmCreateFolder} className="flex-1 px-1 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                      Create
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 hover:shadow-lg transition-shadow cursor-pointer flex flex-col aspect-square h-full overflow-hidden"
+                  onClick={() => item.isDirectory && deletingFile?.id !== item.id && onNavigateToFolder(item.name)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                  }}
+                >
+                  {deletingFile?.id === item.id ? (
+                    <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-2 flex flex-col items-center justify-center gap-2 z-10">
+                      <p className="text-red-800 dark:text-red-200 font-medium text-center text-xs">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCancelDelete();
+                          }}
+                          className="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConfirmDelete();
+                          }}
+                          className="px-2 py-0.5 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : renamingFile?.id === item.id ? (
+                    <div className="absolute inset-0 bg-blue-50 dark:bg-blue-900/90 rounded-lg p-2 flex flex-col items-center justify-center gap-2 z-10">
+                      <input
+                        type="text"
+                        value={newFileName}
+                        onChange={(e) => onNewFileNameChange(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') onConfirmRename();
+                          if (e.key === 'Escape') onCancelRename();
+                        }}
+                        className="w-full px-1 py-0.5 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCancelRename();
+                          }}
+                          className="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConfirmRename();
+                          }}
+                          className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Rename
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div
+                    className={`w-full flex-1 flex items-center justify-center mb-1 bg-white dark:bg-gray-600 rounded-lg relative overflow-hidden ${
+                      isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)
+                        ? 'cursor-pointer hover:opacity-90 transition-opacity'
+                        : ''
+                    }`}
+                    onClick={(e) => {
+                      if (isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)) {
+                        e.stopPropagation();
+                        onOpenMediaViewer(item);
+                      }
+                    }}
+                  >
+                    {processingFile === item.id && (
+                      <div className="absolute inset-0 bg-white dark:bg-gray-600 bg-opacity-75 dark:bg-opacity-75 rounded-lg flex items-center justify-center z-10">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                      </div>
+                    )}
+                    {isImage(item.name) && (
+                      <LazyImage
+                        src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                        alt={item.name}
+                        className="w-full h-full object-cover rounded-lg"
+                        isThumbnail={true}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    )}
+                    {isVideo(item.name) && (
+                      <div className="relative w-full h-full">
+                        <LazyImage
+                          src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                          alt={item.name}
+                          className="w-full h-full object-cover rounded-lg"
+                          isThumbnail={true}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="bg-black bg-opacity-60 rounded-full p-3">
+                            <FiVideo className="text-white" size={24} />
+                          </div>
+                        </div>
+                        <div className="hidden flex items-center justify-center w-full h-full" />
+                      </div>
+                    )}
+                    {isPdf(item.name) && (
+                      <div className="relative w-full h-full">
+                        <LazyImage
+                          src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                          alt={item.name}
+                          className="w-full h-full object-cover rounded-lg"
+                          isThumbnail={true}
+                          onError={(e) => {
+                            if (e?.target) {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                            }
+                          }}
+                        />
+                        <div className="hidden flex items-center justify-center w-full h-full" />
+                      </div>
+                    )}
+                    {item.isDirectory && <FiFolder className="text-blue-500" size={48} />}
+                    {!item.isDirectory && isVideo(item.name) && <FiVideo className="text-purple-500" size={32} />}
+                    {!item.isDirectory && isPdf(item.name) && <FiFile className="text-red-500" size={32} />}
+                    {!item.isDirectory && is3dFile(item.name) && <FiBox className="text-orange-500" size={32} />}
+                    {!item.isDirectory && !isImage(item.name) && !isVideo(item.name) && !isPdf(item.name) && !is3dFile(item.name) && (
+                      <FiFile className="text-gray-500" size={32} />
+                    )}
+                  </div>
+
+                  <div className="text-xs font-medium text-gray-900 dark:text-white truncate px-0.5 min-h-[16px]" title={item.displayName || item.name}>
+                    {item.displayName || item.name}
+                  </div>
+
+                  <div className="text-xs text-gray-500 dark:text-gray-400 px-0.5 mt-auto text-center">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
+
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-0.5">
+                    {(isVideo(item.name) || isImage(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenMediaViewer(item);
+                        }}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="View"
+                        disabled={processingFile === item.id}
+                      >
+                        {is3dFile(item.name) ? (
+                          <FiBox size={12} className="text-orange-600 dark:text-orange-400" />
+                        ) : isVideo(item.name) ? (
+                          <FiVideo size={12} className="text-purple-600 dark:text-purple-400" />
+                        ) : isImage(item.name) ? (
+                          <FiImage size={12} className="text-green-600 dark:text-green-400" />
+                        ) : isAudio(item.name) ? (
+                          <FiVideo size={12} className="text-blue-600 dark:text-blue-400" />
+                        ) : isPdf(item.name) ? (
+                          <FiFile size={12} className="text-red-600 dark:text-red-400" />
+                        ) : null}
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInitiateRename(item);
+                      }}
+                      className="p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Rename"
+                      disabled={processingFile === item.id}
+                    >
+                      <FiEdit size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onHandleDownload(item.id, item.name);
+                      }}
+                      className="p-1 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Download"
+                      disabled={processingFile === item.id}
+                    >
+                      <FiDownload size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInitiateDelete(item);
+                      }}
+                      className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete"
+                      disabled={processingFile === item.id}
+                    >
+                      <FiTrash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
