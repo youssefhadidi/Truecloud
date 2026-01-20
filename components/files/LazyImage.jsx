@@ -5,11 +5,28 @@
 import { useEffect, useState, useRef } from 'react';
 import { FiImage } from 'react-icons/fi';
 
-export default function LazyImage({ src, alt, className, onError }) {
+export default function LazyImage({ src, alt, className, onError, isThumbnail = false }) {
   const [isInView, setIsInView] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [thumbnailReady, setThumbnailReady] = useState(!isThumbnail);
+  const [isGenerating, setIsGenerating] = useState(isThumbnail);
   const imgRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+
+  // Extract fileId and path from src for thumbnail generation requests
+  const getThumbnailParams = () => {
+    if (!isThumbnail || !src) return null;
+    // src format: /api/files/thumbnail/[id]?path=[path]
+    const match = src.match(/\/api\/files\/thumbnail\/([^?]+)(?:\?path=(.+))?/);
+    if (match) {
+      return {
+        id: decodeURIComponent(match[1]),
+        path: match[2] ? decodeURIComponent(match[2]) : '',
+      };
+    }
+    return null;
+  };
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -36,6 +53,92 @@ export default function LazyImage({ src, alt, className, onError }) {
     };
   }, []);
 
+  // Handle thumbnail generation and polling
+  useEffect(() => {
+    if (!isThumbnail || !isInView || thumbnailReady) return;
+
+    const params = getThumbnailParams();
+    if (!params) {
+      setThumbnailReady(true);
+      return;
+    }
+
+    const handleThumbnailGeneration = async () => {
+      try {
+        setIsGenerating(true);
+
+        // Step 1: Check if thumbnail exists
+        const checkRes = await fetch(`/api/files/thumbnail/${params.id}?path=${encodeURIComponent(params.path)}`);
+        const checkData = await checkRes.json();
+
+        if (checkData.exists) {
+          // Thumbnail already exists, we're ready to load it
+          setThumbnailReady(true);
+          setIsGenerating(false);
+          return;
+        }
+
+        if (checkData.status === 'pending') {
+          // Thumbnail doesn't exist, request generation
+          await fetch('/api/files/thumbnail/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: params.id, path: params.path }),
+          });
+
+          // Step 2: Poll for completion (check every 500ms, max 20 attempts = 10 seconds)
+          let attempts = 0;
+          const maxAttempts = 20;
+
+          const interval = setInterval(async () => {
+            attempts++;
+            try {
+              const pollRes = await fetch(`/api/files/thumbnail/${params.id}?path=${encodeURIComponent(params.path)}`);
+              const pollData = await pollRes.json();
+
+              if (pollData.exists) {
+                // Thumbnail is ready
+                setThumbnailReady(true);
+                setIsGenerating(false);
+                clearInterval(interval);
+              } else if (attempts >= maxAttempts) {
+                // Timeout after 10 seconds, show error
+                setHasError(true);
+                setIsGenerating(false);
+                clearInterval(interval);
+              }
+            } catch (err) {
+              console.error('Error polling thumbnail status:', err);
+              if (attempts >= maxAttempts) {
+                setHasError(true);
+                setIsGenerating(false);
+                clearInterval(interval);
+              }
+            }
+          }, 500);
+
+          pollIntervalRef.current = interval;
+        } else {
+          // Unsupported or unknown status
+          setHasError(true);
+          setIsGenerating(false);
+        }
+      } catch (err) {
+        console.error('Error initiating thumbnail generation:', err);
+        setHasError(true);
+        setIsGenerating(false);
+      }
+    };
+
+    handleThumbnailGeneration();
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [isThumbnail, isInView, thumbnailReady]);
+
   const handleLoad = () => {
     setIsLoaded(true);
   };
@@ -51,7 +154,7 @@ export default function LazyImage({ src, alt, className, onError }) {
     <div ref={imgRef} className={`relative ${className}`}>
       {isInView ? (
         <>
-          {!hasError && (
+          {!hasError && thumbnailReady && (
             <img
               src={src}
               alt={alt}
@@ -62,7 +165,7 @@ export default function LazyImage({ src, alt, className, onError }) {
               decoding="async"
             />
           )}
-          {!isLoaded && !hasError && (
+          {(!isLoaded || isGenerating) && !hasError && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 animate-pulse">
               <FiImage className="text-gray-400" size={24} />
             </div>

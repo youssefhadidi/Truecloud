@@ -329,59 +329,12 @@ export async function GET(req, { params }) {
         },
       });
     } catch (err) {
-      // File doesn't exist yet, proceed to generation
-      logger.debug('GET /api/files/thumbnail - No cached thumbnail, generating', { fileId });
-    }
-
-    // Generate thumbnail for videos and images using ffmpeg (JPG format)
-    try {
-      // Acquire semaphore before generating thumbnail
-      logger.debug('GET /api/files/thumbnail - Acquiring semaphore', { fileId });
-      await thumbnailSemaphore.acquire();
-
-      try {
-        logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isHeic, isVideo, isImage });
-        if (isPdf) {
-          await generatePdfThumbnail(filePath, thumbnailPath);
-        } else if (isHeic) {
-          await generateHeicThumbnail(filePath, thumbnailPath);
-        } else {
-          await generateThumbnail(filePath, thumbnailPath, isVideo);
-        }
-
-        try {
-          const stats = await fsPromises.stat(thumbnailPath);
-          const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
-
-          // Stream the newly generated file
-          const fileStream = fs.createReadStream(thumbnailPath);
-          const duration = Date.now() - startTime;
-          logger.info('GET /api/files/thumbnail - Thumbnail generated and served', { fileId, duration: `${duration}ms` });
-          return new NextResponse(fileStream, {
-            headers: {
-              'Content-Type': 'image/jpeg',
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              ETag: etag,
-              'Content-Length': stats.size.toString(),
-            },
-          });
-        } catch (err) {
-          logger.error('GET /api/files/thumbnail - Failed to read generated thumbnail', { fileId, error: err.message });
-          // Failed to read generated file
-        }
-      } finally {
-        // Always release the semaphore
-        thumbnailSemaphore.release();
-      }
-    } catch (error) {
-      logger.error('GET /api/files/thumbnail - Generation failed', { fileId, type: isPdf ? 'PDF' : isVideo ? 'video' : 'image', error: error.message });
-      // Return 404 so the UI can fall back to the icon
+      // File doesn't exist yet, return immediately with pending status
+      const duration = Date.now() - startTime;
+      logger.debug('GET /api/files/thumbnail - No cached thumbnail, returning pending status', { fileId, duration: `${duration}ms` });
       return NextResponse.json(
-        {
-          error: 'Thumbnail generation not available',
-          message: 'FFmpeg is required for thumbnails. Install it from https://ffmpeg.org/download.html',
-        },
-        { status: 404 },
+        { exists: false, status: 'pending' },
+        { status: 200 }
       );
     }
   } catch (error) {

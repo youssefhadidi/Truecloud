@@ -242,6 +242,7 @@ const GridView = ({
                             src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
                             alt={file.name}
                             className="w-full h-full object-cover rounded-lg"
+                            isThumbnail={true}
                             onError={(e) => {
                               e.target.style.display = 'none';
                               if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
@@ -254,6 +255,7 @@ const GridView = ({
                               src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
                               alt={file.name}
                               className="w-full h-full object-cover rounded-lg"
+                              isThumbnail={true}
                               onError={(e) => {
                                 e.target.style.display = 'none';
                                 if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
@@ -273,6 +275,7 @@ const GridView = ({
                               src={`/api/files/thumbnail/${file.id}?path=${encodeURIComponent(currentPath)}`}
                               alt={file.name}
                               className="w-full h-full object-cover rounded-lg"
+                              isThumbnail={true}
                               onError={(e) => {
                                 if (e?.target) {
                                   e.target.style.display = 'none';
