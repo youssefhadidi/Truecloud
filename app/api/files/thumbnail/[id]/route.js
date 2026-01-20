@@ -195,6 +195,17 @@ export async function GET(req, { params }) {
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const filePath = join(uploadsDir, relativePath, fileId);
 
+    logger.info('GET /api/files/thumbnail - Paths', {
+      cwd: process.cwd(),
+      UPLOAD_DIR,
+      THUMBNAIL_DIR,
+      uploadsDir,
+      thumbnailsDir,
+      filePath,
+      relativePath,
+      fileId,
+    });
+
     try {
       await fsPromises.access(filePath);
     } catch {
