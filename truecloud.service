@@ -9,6 +9,7 @@ WorkingDirectory=/mnt/Truenas/Truecloud
 Environment="NODE_ENV=production"
 Environment="PORT=3000"
 Environment="UPLOAD_DIR=/mnt/nextcloud"
+Environment="THUMBNAIL_DIR=/mnt/Truenas/Truecloud/thumbnails"
 ExecStart=/root/.nvm/versions/node/v20.10.0/bin/pnpm start
 PrivateMounts=no
 Restart=always

@@ -8,6 +8,9 @@ import fsPromises from 'fs/promises';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
+
 // Semaphore to limit concurrent thumbnail generation
 class Semaphore {
   constructor(max) {
@@ -188,8 +191,8 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    const uploadsDir = join(process.cwd(), 'uploads');
-    const thumbnailsDir = join(process.cwd(), 'thumbnails');
+    const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
+    const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const filePath = join(uploadsDir, relativePath, fileId);
 
     try {
