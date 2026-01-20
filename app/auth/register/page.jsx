@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -17,6 +18,14 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { data: session, status } = useSession();
+
+  // Redirect to files if already logged in
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.push('/files');
+    }
+  }, [status, router]);
 
   const handleChange = (e) => {
     setFormData({
