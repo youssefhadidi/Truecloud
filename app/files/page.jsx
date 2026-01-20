@@ -365,6 +365,7 @@ export default function FilesPage() {
                     onInitiateDelete={handlers.initiateDelete}
                     onConfirmDelete={handlers.confirmDelete}
                     onCancelDelete={handlers.cancelDelete}
+                    formatFileSize={fileUtils.formatFileSize}
                   />{' '}
                 </Suspense>
               )}

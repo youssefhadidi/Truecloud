@@ -31,6 +31,7 @@ const GridView = ({
   onInitiateDelete,
   onConfirmDelete,
   onCancelDelete,
+  formatFileSize,
 }) => {
   const parentRef = useRef(null);
   const [colCount, setColCount] = useState(8);
@@ -293,7 +294,7 @@ const GridView = ({
                         {file.displayName || file.name}
                       </div>
 
-                      <div className="text-xs text-gray-500 dark:text-gray-400 px-1 mt-auto">{file.size > 0 ? `${Math.round(file.size / 1024)} KB` : '0 KB'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 px-1 mt-auto">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
 
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1">
                         {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (

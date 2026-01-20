@@ -2,14 +2,16 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, basename } from 'node:path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { spawn } from 'child_process';
+import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
+const STREAM_CACHE_DIR = './stream-cache';
 
 // Semaphore to limit concurrent thumbnail generation
 class Semaphore {
@@ -54,7 +56,8 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
   const ffmpegArgs = ['-y', '-i', filePath];
 
   if (isVideo) {
-    ffmpegArgs.push('-ss', '00:00:01.000');
+    // Extract first frame (faster than seeking to 1 second)
+    ffmpegArgs.push('-ss', '00:00:00.000');
   }
 
   // Extract only the first frame
@@ -74,14 +77,15 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
     let errorOutput = '';
     let timedOut = false;
 
-    // Set 10 second timeout
+    // Set 30 second timeout for videos (GoPro files can be large)
+    const timeoutDuration = isVideo ? 30000 : 10000;
     const timeout = setTimeout(() => {
       timedOut = true;
       ffmpeg.kill();
       const duration = Date.now() - startTime;
-      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('FFmpeg timeout after 10 seconds'));
-    }, 10000);
+      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms`, timeoutDuration });
+      reject(new Error(`FFmpeg timeout after ${timeoutDuration / 1000} seconds`));
+    }, timeoutDuration);
 
     ffmpeg.stderr.on('data', (data) => {
       errorOutput += data.toString();
@@ -246,7 +250,8 @@ export async function GET(req, { params }) {
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
-    const filePath = join(uploadsDir, relativePath, fileId);
+    const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
+    let filePath = join(uploadsDir, relativePath, fileId);
 
     logger.info('GET /api/files/thumbnail - Paths', {
       cwd: process.cwd(),
@@ -259,6 +264,7 @@ export async function GET(req, { params }) {
       fileId,
     });
 
+    // Check if file exists
     try {
       await fsPromises.access(filePath);
     } catch {
@@ -268,6 +274,21 @@ export async function GET(req, { params }) {
 
     // Get file extension for type detection
     const fileExt = extname(fileId).toLowerCase();
+
+    // For MP4 videos, check if we have a stream-cache version (faster to process)
+    if (fileExt === '.mp4') {
+      const pathHash = createHash('md5').update(filePath).digest('hex');
+      const cachedPath = join(streamCacheDir, `${pathHash}.mp4`);
+
+      try {
+        await fsPromises.access(cachedPath);
+        logger.debug('GET /api/files/thumbnail - Using stream-cache version for thumbnail', { fileId, cachedPath });
+        filePath = cachedPath;
+      } catch {
+        // No cached version, use original
+        logger.debug('GET /api/files/thumbnail - No stream-cache version, using original', { fileId });
+      }
+    }
 
     // Supported image, video, and PDF extensions
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];

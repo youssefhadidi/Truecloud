@@ -151,7 +151,7 @@ const ListView = ({
                   <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
                 )}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
               <div className="flex justify-end gap-2">
                 {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (

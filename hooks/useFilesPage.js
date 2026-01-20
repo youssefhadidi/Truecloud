@@ -83,7 +83,37 @@ export function useFilesPage(status) {
   // Fetch and sort files
   const { data: filesData, isLoading: loading } = useFiles(currentPath, status === 'authenticated');
   const files = useMemo(() => {
-    const filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
+    // Filter out hidden files
+    let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
+
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim();
+
+      // Check if it's a glob pattern (contains * or ?)
+      const isGlobPattern = query.includes('*') || query.includes('?');
+
+      if (isGlobPattern) {
+        // Convert glob pattern to regex
+        const regexPattern = query
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*')
+          .replace(/\?/g, '.');
+
+        try {
+          const regex = new RegExp(regexPattern, 'i');
+          filtered = filtered.filter((file) => regex.test(file.name));
+        } catch (e) {
+          // Invalid regex, fall back to simple substring match
+          const lowerQuery = query.toLowerCase();
+          filtered = filtered.filter((file) => file.name.toLowerCase().includes(lowerQuery));
+        }
+      } else {
+        // Simple substring match (case-insensitive)
+        const lowerQuery = query.toLowerCase();
+        filtered = filtered.filter((file) => file.name.toLowerCase().includes(lowerQuery));
+      }
+    }
 
     const sorted = [...filtered].sort((a, b) => {
       if (a.isDirectory && !b.isDirectory) return -1;
@@ -108,7 +138,7 @@ export function useFilesPage(status) {
     });
 
     return sorted;
-  }, [filesData, sortBy]);
+  }, [filesData, sortBy, searchQuery]);
 
   // Store folder display names
   useEffect(() => {
