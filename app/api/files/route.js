@@ -3,14 +3,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { readdir, stat } from 'fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-// Pre-resolve the upload directory to avoid repeated path.resolve calls
-const RESOLVED_UPLOAD_DIR = resolve(UPLOAD_DIR);
+// Pre-resolve the upload directory with trailing separator for proper security checks
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // GET - List files
 export async function GET(req) {
@@ -57,7 +57,7 @@ export async function GET(req) {
     }
 
     // Security: prevent directory traversal
-    const resolvedTarget = resolve(targetDir);
+    const resolvedTarget = resolve(targetDir) + sep;
     if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('GET /api/files - Directory traversal attempt detected', {
         requestedPath: relativePath,
@@ -173,7 +173,7 @@ export async function DELETE(req) {
     const targetPath = join(UPLOAD_DIR, relativePath, fileName);
 
     // Security: prevent directory traversal
-    const resolvedTarget = resolve(targetPath);
+    const resolvedTarget = resolve(targetPath) + sep;
     if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('DELETE /api/files - Directory traversal attempt', {
         fileName,
@@ -249,8 +249,8 @@ export async function PATCH(req) {
     const newPath = join(UPLOAD_DIR, relativePath, newName);
 
     // Security: prevent directory traversal
-    const resolvedOld = resolve(oldPath);
-    const resolvedNew = resolve(newPath);
+    const resolvedOld = resolve(oldPath) + sep;
+    const resolvedNew = resolve(newPath) + sep;
 
     if (!resolvedOld.startsWith(RESOLVED_UPLOAD_DIR) || !resolvedNew.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('PATCH /api/files - Directory traversal attempt', {

@@ -3,11 +3,11 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir } from 'fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(UPLOAD_DIR);
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export async function POST(req) {
   const startTime = Date.now();
@@ -37,7 +37,7 @@ export async function POST(req) {
     const targetPath = join(UPLOAD_DIR, relativePath || '', name);
 
     // Security: prevent directory traversal
-    if (!resolve(targetPath).startsWith(RESOLVED_UPLOAD_DIR)) {
+    if (!(resolve(targetPath) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('POST /api/files/mkdir - Directory traversal attempt', {
         folderName,
         targetPath,
