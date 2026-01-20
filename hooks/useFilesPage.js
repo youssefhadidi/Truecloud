@@ -38,6 +38,7 @@ export function useFilesPage(status) {
   const [viewerFile, setViewerFile] = useState(null);
   const [uploads, setUploads] = useState([]);
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -152,10 +153,12 @@ export function useFilesPage(status) {
     files,
     loading,
     viewableFiles,
+    searchQuery,
 
     // Setters
     setViewMode,
     setSortBy,
+    setSearchQuery,
     setCreatingFolder,
     setNewFolderName,
     setIsDragging,

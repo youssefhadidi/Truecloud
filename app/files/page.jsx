@@ -5,7 +5,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy } from 'react';
-import { FiUpload, FiLogOut, FiUser, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw } from 'react-icons/fi';
+import { FiUpload, FiLogOut, FiUser, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import Notifications from '@/components/Notifications';
@@ -171,6 +171,18 @@ export default function FilesPage() {
           </div>
 
           <div className="flex gap-2">
+            {/* Search Input */}
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={state.searchQuery}
+                onChange={(e) => state.setSearchQuery(e.target.value)}
+                placeholder="Search files... (*.pdf, *.jpg, etc.)"
+                className="pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
             {/* Sort Dropdown */}
             <select
               value={state.sortBy}

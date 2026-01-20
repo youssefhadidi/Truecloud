@@ -19,8 +19,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     return null;
   };
 
+  // Helper to check if file is HEIC
+  const isHeic = (fileName) => {
+    const ext = fileName.toLowerCase();
+    return ext.endsWith('.heic') || ext.endsWith('.heif');
+  };
+
   // Helper to build download URL
   const getFileUrl = (file, type) => {
+    // Use conversion endpoint for HEIC files
+    if (type === 'image' && isHeic(file.name)) {
+      return `/api/files/convert-heic?id=${encodeURIComponent(file.id)}&path=${encodeURIComponent(currentPath)}`;
+    }
     const baseUrl = `/api/files/${type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download'}/${file.id}`;
     return `${baseUrl}?path=${encodeURIComponent(currentPath)}`;
   };

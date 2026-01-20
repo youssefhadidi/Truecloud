@@ -110,6 +110,59 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
   });
 }
 
+// Helper function to generate HEIC/HEIF thumbnails
+async function generateHeicThumbnail(filePath, thumbnailPath) {
+  const startTime = Date.now();
+  logger.debug('Starting HEIC thumbnail generation', { filePath });
+
+  return new Promise((resolve, reject) => {
+    // Use ImageMagick to convert HEIC to JPG thumbnail (requires libheif)
+    const args = [filePath, '-resize', '150x150', '-quality', '85', thumbnailPath];
+
+    const magick = spawn('magick', args);
+    let errorOutput = '';
+    let timedOut = false;
+
+    // Set 10 second timeout
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      magick.kill();
+      const duration = Date.now() - startTime;
+      logger.error('ImageMagick HEIC timeout', { filePath, duration: `${duration}ms` });
+      reject(new Error('ImageMagick timeout after 10 seconds'));
+    }, 10000);
+
+    magick.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    magick.on('close', (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      if (code === 0) {
+        logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
+        resolve();
+      } else {
+        logger.error('ImageMagick HEIC failed', { filePath, code, duration: `${duration}ms`, errorOutput });
+        if (errorOutput.includes('no decode delegate') || errorOutput.includes('libheif')) {
+          reject(new Error('libheif is required for HEIC support. Install ImageMagick with libheif support.'));
+        } else {
+          reject(new Error(`ImageMagick exited with code ${code}: ${errorOutput}`));
+        }
+      }
+    });
+
+    magick.on('error', (err) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      logger.error('ImageMagick HEIC spawn error', { filePath, error: err.message, duration: `${duration}ms` });
+      reject(new Error(`ImageMagick spawn error: ${err.message}`));
+    });
+  });
+}
+
 // Helper function to generate PDF thumbnails
 async function generatePdfThumbnail(filePath, thumbnailPath) {
   return new Promise((resolve, reject) => {
@@ -218,14 +271,16 @@ export async function GET(req, { params }) {
 
     // Supported image, video, and PDF extensions
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    const heicExtensions = ['.heic', '.heif'];
     const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
     const pdfExtensions = ['.pdf'];
 
     const isImage = imageExtensions.includes(fileExt);
+    const isHeic = heicExtensions.includes(fileExt);
     const isVideo = videoExtensions.includes(fileExt);
     const isPdf = pdfExtensions.includes(fileExt);
 
-    if (!isImage && !isVideo && !isPdf) {
+    if (!isImage && !isHeic && !isVideo && !isPdf) {
       logger.debug('GET /api/files/thumbnail - Unsupported file type', { fileId, fileExt });
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
@@ -287,9 +342,11 @@ export async function GET(req, { params }) {
       await thumbnailSemaphore.acquire();
 
       try {
-        logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isVideo, isImage });
+        logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isHeic, isVideo, isImage });
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
+        } else if (isHeic) {
+          await generateHeicThumbnail(filePath, thumbnailPath);
         } else {
           await generateThumbnail(filePath, thumbnailPath, isVideo);
         }
