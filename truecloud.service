@@ -8,20 +8,13 @@ User=root
 WorkingDirectory=/mnt/Truenas/Truecloud
 Environment="NODE_ENV=production"
 Environment="PORT=3000"
-Environment="UPLOAD_DIR=/path/to/Truecloud/uploads"
-ExecStart=/root/.nvm/versions/node/v20.10.0/bin/pnpm
+Environment="UPLOAD_DIR=/mnt/nextcloud"
+ExecStart=/root/.nvm/versions/node/v20.10.0/bin/pnpm start
+PrivateMounts=no
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/truecloud/output.log
 StandardError=append:/var/log/truecloud/error.log
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/mnt/nextcloud
-ReadWritePaths=/mnt/Truenas/Truecloud/thumbnails
 
 [Install]
 WantedBy=multi-user.target
