@@ -69,10 +69,22 @@ const GridView = ({
   const itemsPerRow = colCount;
   const rowCount = Math.ceil(allItems.length / itemsPerRow);
 
+  // Calculate row height based on container width and column count
+  // Each item is square (aspect-square) so height = width
+  // Width of each item = (container width - gaps - padding) / column count
+  const getRowHeight = () => {
+    if (!parentRef.current) return 200;
+    const containerWidth = parentRef.current.clientWidth;
+    const padding = 16; // px-2 on both sides of grid = 2 * 8px
+    const gapTotal = (colCount - 1) * 8; // gap-2 = 8px between items
+    const itemWidth = (containerWidth - padding - gapTotal) / colCount;
+    return itemWidth + 8; // Add gap-2 spacing between rows
+  };
+
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 200,
+    estimateSize: getRowHeight,
     overscan: 3,
   });
 

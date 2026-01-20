@@ -10,13 +10,13 @@ import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile 
 import { FiUpload, FiLogOut, FiUser, FiFolder, FiFile, FiImage, FiVideo, FiRefreshCw, FiArrowLeft, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiBox } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
-import GridView from '@/components/files/GridView';
-import ListView from '@/components/files/ListView';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf } from '@/lib/clientFileUtils';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
+const GridView = lazy(() => import('@/components/files/GridView'));
+const ListView = lazy(() => import('@/components/files/ListView'));
 
 export default function FilesPage() {
   const { data: session, status } = useSession();
@@ -351,7 +351,7 @@ export default function FilesPage() {
     return Math.round((Number(bytes) / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
@@ -523,7 +523,14 @@ export default function FilesPage() {
                 </div>
               )}
 
-              {files.length === 0 && !creatingFolder ? (
+              {loading ? (
+                <div className="flex items-center justify-center flex-grow">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading files...</p>
+                  </div>
+                </div>
+              ) : files.length === 0 && !creatingFolder ? (
                 <div className="flex items-center justify-center flex-grow text-gray-500 dark:text-gray-400">No files yet. Upload your first file!</div>
               ) : (
                 <div className="flex flex-col flex-grow overflow-hidden">
@@ -535,58 +542,81 @@ export default function FilesPage() {
                       <div className="text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</div>
                     </div>
                   </div>
-                  <ListView
-                    files={files}
-                    deletingFile={deletingFile}
-                    renamingFile={renamingFile}
-                    newFileName={newFileName}
-                    setNewFileName={setNewFileName}
-                    cancelDelete={cancelDelete}
-                    confirmDelete={confirmDelete}
-                    cancelRename={cancelRename}
-                    confirmRename={confirmRename}
-                    processingFile={processingFile}
-                    handleContextMenu={handleContextMenu}
-                    getFileIcon={getFileIcon}
-                    navigateToFolder={navigateToFolder}
-                    formatFileSize={formatFileSize}
-                    openMediaViewer={openMediaViewer}
-                    initiateRename={initiateRename}
-                    handleDownload={handleDownload}
-                    initiateDelete={initiateDelete}
-                  />
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center flex-grow">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                      </div>
+                    }
+                  >
+                    <ListView
+                      files={files}
+                      deletingFile={deletingFile}
+                      renamingFile={renamingFile}
+                      newFileName={newFileName}
+                      setNewFileName={setNewFileName}
+                      cancelDelete={cancelDelete}
+                      confirmDelete={confirmDelete}
+                      cancelRename={cancelRename}
+                      confirmRename={confirmRename}
+                      processingFile={processingFile}
+                      handleContextMenu={handleContextMenu}
+                      getFileIcon={getFileIcon}
+                      navigateToFolder={navigateToFolder}
+                      formatFileSize={formatFileSize}
+                      openMediaViewer={openMediaViewer}
+                      initiateRename={initiateRename}
+                      handleDownload={handleDownload}
+                      initiateDelete={initiateDelete}
+                    />{' '}
+                  </Suspense>{' '}
                 </div>
               )}
             </div>
           ) : (
             /* Grid View with Virtual Scrolling */
             <div className="p-4 flex flex-col flex-grow">
-              {files.length === 0 && !creatingFolder ? (
+              {loading ? (
+                <div className="flex items-center justify-center flex-grow">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading files...</p>
+                  </div>
+                </div>
+              ) : files.length === 0 && !creatingFolder ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">No files yet. Upload your first file!</div>
               ) : (
-                <GridView
-                  files={files}
-                  creatingFolder={creatingFolder}
-                  newFolderName={newFolderName}
-                  onNewFolderNameChange={setNewFolderName}
-                  onCancelCreateFolder={cancelCreateFolder}
-                  onConfirmCreateFolder={confirmCreateFolder}
-                  deletingFile={deletingFile}
-                  renamingFile={renamingFile}
-                  newFileName={newFileName}
-                  onNewFileNameChange={setNewFileName}
-                  onCancelRename={cancelRename}
-                  onConfirmRename={confirmRename}
-                  processingFile={processingFile}
-                  currentPath={currentPath}
-                  onNavigateToFolder={navigateToFolder}
-                  onOpenMediaViewer={openMediaViewer}
-                  onInitiateRename={initiateRename}
-                  onHandleDownload={handleDownload}
-                  onInitiateDelete={initiateDelete}
-                  onConfirmDelete={confirmDelete}
-                  onCancelDelete={cancelDelete}
-                />
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center flex-grow">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    </div>
+                  }
+                >
+                  <GridView
+                    files={files}
+                    creatingFolder={creatingFolder}
+                    newFolderName={newFolderName}
+                    onNewFolderNameChange={setNewFolderName}
+                    onCancelCreateFolder={cancelCreateFolder}
+                    onConfirmCreateFolder={confirmCreateFolder}
+                    deletingFile={deletingFile}
+                    renamingFile={renamingFile}
+                    newFileName={newFileName}
+                    onNewFileNameChange={setNewFileName}
+                    onCancelRename={cancelRename}
+                    onConfirmRename={confirmRename}
+                    processingFile={processingFile}
+                    currentPath={currentPath}
+                    onNavigateToFolder={navigateToFolder}
+                    onOpenMediaViewer={openMediaViewer}
+                    onInitiateRename={initiateRename}
+                    onHandleDownload={handleDownload}
+                    onInitiateDelete={initiateDelete}
+                    onConfirmDelete={confirmDelete}
+                    onCancelDelete={cancelDelete}
+                  />{' '}
+                </Suspense>
               )}
             </div>
           )}
