@@ -45,3 +45,4 @@ uploads
 prisma/*.db
 prisma/*.db-journal
 /thumbnails
+/public/thumbnails

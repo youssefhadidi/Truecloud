@@ -7,6 +7,38 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { spawn } from 'child_process';
 
+// Semaphore to limit concurrent thumbnail generation
+class Semaphore {
+  constructor(max) {
+    this.max = max;
+    this.count = 0;
+    this.queue = [];
+  }
+
+  async acquire() {
+    if (this.count < this.max) {
+      this.count++;
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+
+  release() {
+    this.count--;
+    if (this.queue.length > 0) {
+      this.count++;
+      const resolve = this.queue.shift();
+      resolve();
+    }
+  }
+}
+
+// Create a global semaphore with max 10 concurrent thumbnail generations
+const thumbnailSemaphore = new Semaphore(10);
+
 // Helper function to generate thumbnails with FFmpeg
 async function generateThumbnail(filePath, thumbnailPath, isVideo) {
   const ffmpegArgs = ['-y', '-i', filePath];
@@ -21,10 +53,10 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
   // Optimize: smaller size, faster compression (JPG format)
   ffmpegArgs.push(
     '-vf',
-    'scale=200:200:force_original_aspect_ratio=decrease',
+    'scale=150:150:force_original_aspect_ratio=decrease',
     '-q:v',
-    '12', // JPG quality (1-31, higher = faster/lower quality)
-    thumbnailPath
+    '15', // JPG quality (1-31, higher = faster/lower quality)
+    thumbnailPath,
   );
 
   return new Promise((resolve, reject) => {
@@ -70,12 +102,12 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
     // Use ImageMagick's magick command directly (requires Ghostscript for PDF support)
     const args = [
       '-density',
-      '80', // Reduced from 150 for faster processing
+      '680', // Reduced from 150 for faster processing
       `${filePath}[0]`, // First page only - must come after density
       '-quality',
       '65', // Reduced from 80 for faster processing
       '-resize',
-      '200x200',
+      '150x150',
       thumbnailPath,
     ];
 
@@ -186,11 +218,23 @@ export async function GET(req, { params }) {
 
     // Check if JPG thumbnail already exists
     try {
-      const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
-      return new NextResponse(thumbnailBuffer, {
+      const stats = await fsPromises.stat(thumbnailPath);
+      const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
+
+      // Check if client has cached version
+      const ifNoneMatch = req.headers.get('if-none-match');
+      if (ifNoneMatch === etag) {
+        return new NextResponse(null, { status: 304 });
+      }
+
+      // Stream the file instead of reading into memory
+      const fileStream = fs.createReadStream(thumbnailPath);
+      return new NextResponse(fileStream, {
         headers: {
           'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          ETag: etag,
+          'Content-Length': stats.size.toString(),
         },
       });
     } catch (err) {
@@ -199,22 +243,36 @@ export async function GET(req, { params }) {
 
     // Generate thumbnail for videos and images using ffmpeg (JPG format)
     try {
-      if (isPdf) {
-        await generatePdfThumbnail(filePath, thumbnailPath);
-      } else {
-        await generateThumbnail(filePath, thumbnailPath, isVideo);
-      }
+      // Acquire semaphore before generating thumbnail
+      await thumbnailSemaphore.acquire();
 
       try {
-        const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
-        return new NextResponse(thumbnailBuffer, {
-          headers: {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=31536000',
-          },
-        });
-      } catch (err) {
-        // Failed to read generated file
+        if (isPdf) {
+          await generatePdfThumbnail(filePath, thumbnailPath);
+        } else {
+          await generateThumbnail(filePath, thumbnailPath, isVideo);
+        }
+
+        try {
+          const stats = await fsPromises.stat(thumbnailPath);
+          const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
+
+          // Stream the newly generated file
+          const fileStream = fs.createReadStream(thumbnailPath);
+          return new NextResponse(fileStream, {
+            headers: {
+              'Content-Type': 'image/jpeg',
+              'Cache-Control': 'public, max-age=31536000, immutable',
+              ETag: etag,
+              'Content-Length': stats.size.toString(),
+            },
+          });
+        } catch (err) {
+          // Failed to read generated file
+        }
+      } finally {
+        // Always release the semaphore
+        thumbnailSemaphore.release();
       }
     } catch (error) {
       console.error(`Thumbnail generation failed for ${isPdf ? 'PDF' : isVideo ? 'video' : 'image'}:`, error.message);
@@ -224,7 +282,7 @@ export async function GET(req, { params }) {
           error: 'Thumbnail generation not available',
           message: 'FFmpeg is required for thumbnails. Install it from https://ffmpeg.org/download.html',
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
   } catch (error) {
