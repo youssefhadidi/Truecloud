@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { spawn } from 'child_process';
+import { logger } from '@/lib/logger';
 
 // Semaphore to limit concurrent thumbnail generation
 class Semaphore {
@@ -18,9 +19,11 @@ class Semaphore {
   async acquire() {
     if (this.count < this.max) {
       this.count++;
+      logger.debug('Semaphore acquired', { active: this.count, max: this.max, queued: this.queue.length });
       return Promise.resolve();
     }
 
+    logger.debug('Semaphore waiting', { active: this.count, max: this.max, queued: this.queue.length });
     return new Promise((resolve) => {
       this.queue.push(resolve);
     });
@@ -28,6 +31,7 @@ class Semaphore {
 
   release() {
     this.count--;
+    logger.debug('Semaphore released', { active: this.count, max: this.max, queued: this.queue.length });
     if (this.queue.length > 0) {
       this.count++;
       const resolve = this.queue.shift();
@@ -41,6 +45,9 @@ const thumbnailSemaphore = new Semaphore(10);
 
 // Helper function to generate thumbnails with FFmpeg
 async function generateThumbnail(filePath, thumbnailPath, isVideo) {
+  const startTime = Date.now();
+  logger.debug('Starting FFmpeg thumbnail generation', { filePath, isVideo });
+
   const ffmpegArgs = ['-y', '-i', filePath];
 
   if (isVideo) {
@@ -68,6 +75,8 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
     const timeout = setTimeout(() => {
       timedOut = true;
       ffmpeg.kill();
+      const duration = Date.now() - startTime;
+      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms` });
       reject(new Error('FFmpeg timeout after 10 seconds'));
     }, 10000);
 
@@ -78,11 +87,12 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
     ffmpeg.on('close', (code) => {
       clearTimeout(timeout);
       if (timedOut) return;
+      const duration = Date.now() - startTime;
       if (code === 0) {
+        logger.debug('FFmpeg thumbnail generated', { filePath, duration: `${duration}ms` });
         resolve();
       } else {
-        console.error('FFmpeg failed with code:', code);
-        console.error('FFmpeg error output:', errorOutput);
+        logger.error('FFmpeg failed', { filePath, code, duration: `${duration}ms`, errorOutput });
         reject(new Error(`FFmpeg exited with code ${code}: ${errorOutput}`));
       }
     });
@@ -90,7 +100,8 @@ async function generateThumbnail(filePath, thumbnailPath, isVideo) {
     ffmpeg.on('error', (err) => {
       clearTimeout(timeout);
       if (timedOut) return;
-      console.error('FFmpeg spawn error:', err);
+      const duration = Date.now() - startTime;
+      logger.error('FFmpeg spawn error', { filePath, error: err.message, duration: `${duration}ms` });
       reject(new Error(`FFmpeg spawn error: ${err.message}`));
     });
   });
@@ -152,21 +163,28 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
 }
 
 export async function GET(req, { params }) {
+  const startTime = Date.now();
+  let fileId = 'unknown';
   try {
+    logger.debug('GET /api/files/thumbnail - Request received');
     const session = await auth();
     if (!session) {
+      logger.warn('GET /api/files/thumbnail - Unauthorized access');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resolvedParams = await params;
-    const fileId = decodeURIComponent(resolvedParams.id);
+    fileId = decodeURIComponent(resolvedParams.id);
 
     // Get path from query params
     const url = new URL(req.url);
     const relativePath = url.searchParams.get('path') || '';
 
+    logger.debug('GET /api/files/thumbnail - Processing', { fileId, path: relativePath });
+
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {
+      logger.error('GET /api/files/thumbnail - Directory traversal attempt', { fileId, relativePath });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -177,6 +195,7 @@ export async function GET(req, { params }) {
     try {
       await fsPromises.access(filePath);
     } catch {
+      logger.warn('GET /api/files/thumbnail - File not found', { filePath });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -193,6 +212,7 @@ export async function GET(req, { params }) {
     const isPdf = pdfExtensions.includes(fileExt);
 
     if (!isImage && !isVideo && !isPdf) {
+      logger.debug('GET /api/files/thumbnail - Unsupported file type', { fileId, fileExt });
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
 
@@ -224,11 +244,15 @@ export async function GET(req, { params }) {
       // Check if client has cached version
       const ifNoneMatch = req.headers.get('if-none-match');
       if (ifNoneMatch === etag) {
+        const duration = Date.now() - startTime;
+        logger.debug('GET /api/files/thumbnail - Cache hit (304)', { fileId, duration: `${duration}ms` });
         return new NextResponse(null, { status: 304 });
       }
 
       // Stream the file instead of reading into memory
       const fileStream = fs.createReadStream(thumbnailPath);
+      const duration = Date.now() - startTime;
+      logger.debug('GET /api/files/thumbnail - Serving cached thumbnail', { fileId, duration: `${duration}ms` });
       return new NextResponse(fileStream, {
         headers: {
           'Content-Type': 'image/jpeg',
@@ -239,14 +263,17 @@ export async function GET(req, { params }) {
       });
     } catch (err) {
       // File doesn't exist yet, proceed to generation
+      logger.debug('GET /api/files/thumbnail - No cached thumbnail, generating', { fileId });
     }
 
     // Generate thumbnail for videos and images using ffmpeg (JPG format)
     try {
       // Acquire semaphore before generating thumbnail
+      logger.debug('GET /api/files/thumbnail - Acquiring semaphore', { fileId });
       await thumbnailSemaphore.acquire();
 
       try {
+        logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isVideo, isImage });
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
         } else {
@@ -259,6 +286,8 @@ export async function GET(req, { params }) {
 
           // Stream the newly generated file
           const fileStream = fs.createReadStream(thumbnailPath);
+          const duration = Date.now() - startTime;
+          logger.info('GET /api/files/thumbnail - Thumbnail generated and served', { fileId, duration: `${duration}ms` });
           return new NextResponse(fileStream, {
             headers: {
               'Content-Type': 'image/jpeg',
@@ -268,6 +297,7 @@ export async function GET(req, { params }) {
             },
           });
         } catch (err) {
+          logger.error('GET /api/files/thumbnail - Failed to read generated thumbnail', { fileId, error: err.message });
           // Failed to read generated file
         }
       } finally {
@@ -275,7 +305,7 @@ export async function GET(req, { params }) {
         thumbnailSemaphore.release();
       }
     } catch (error) {
-      console.error(`Thumbnail generation failed for ${isPdf ? 'PDF' : isVideo ? 'video' : 'image'}:`, error.message);
+      logger.error('GET /api/files/thumbnail - Generation failed', { fileId, type: isPdf ? 'PDF' : isVideo ? 'video' : 'image', error: error.message });
       // Return 404 so the UI can fall back to the icon
       return NextResponse.json(
         {
@@ -286,7 +316,12 @@ export async function GET(req, { params }) {
       );
     }
   } catch (error) {
-    console.error('Thumbnail generation error:', error);
+    const duration = Date.now() - startTime;
+    logger.error('GET /api/files/thumbnail - Unexpected error', error);
+    logger.error('GET /api/files/thumbnail - Error details', {
+      fileId,
+      duration: `${duration}ms`,
+    });
     return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });
   }
 }
