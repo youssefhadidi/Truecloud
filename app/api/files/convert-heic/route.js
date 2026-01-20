@@ -5,7 +5,6 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { join, resolve, extname } from 'node:path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
-import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 
@@ -17,56 +16,26 @@ async function convertHeicToJpeg(inputPath, outputPath) {
   const startTime = Date.now();
   logger.debug('Starting HEIC to JPEG conversion', { inputPath, outputPath });
 
-  return new Promise((resolve, reject) => {
-    const args = [
-      inputPath,
-      '-quality',
-      '90',
-      '-strip', // Remove EXIF data for privacy/smaller size
-      outputPath,
-    ];
+  try {
+    // Use heic-convert to convert HEIC to JPEG
+    const heicConvert = (await import('heic-convert')).default;
 
-    const magick = spawn('magick', args);
-    let errorOutput = '';
-    let timedOut = false;
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      magick.kill();
-      const duration = Date.now() - startTime;
-      logger.error('HEIC conversion timeout', { inputPath, duration: `${duration}ms` });
-      reject(new Error('Conversion timeout after 30 seconds'));
-    }, 30000);
-
-    magick.stderr.on('data', (data) => {
-      errorOutput += data.toString();
+    const inputBuffer = await fsPromises.readFile(inputPath);
+    const outputBuffer = await heicConvert({
+      buffer: inputBuffer,
+      format: 'JPEG',
+      quality: 0.9,
     });
 
-    magick.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      if (code === 0) {
-        logger.info('HEIC to JPEG conversion completed', { inputPath, duration: `${duration}ms` });
-        resolve();
-      } else {
-        logger.error('HEIC conversion failed', { inputPath, code, duration: `${duration}ms`, errorOutput });
-        if (errorOutput.includes('no decode delegate') || errorOutput.includes('libheif')) {
-          reject(new Error('libheif is required for HEIC support. Install ImageMagick with libheif support.'));
-        } else {
-          reject(new Error(`Conversion failed with code ${code}: ${errorOutput}`));
-        }
-      }
-    });
+    await fsPromises.writeFile(outputPath, outputBuffer);
 
-    magick.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('HEIC conversion spawn error', { inputPath, error: err.message, duration: `${duration}ms` });
-      reject(new Error(`Conversion spawn error: ${err.message}`));
-    });
-  });
+    const duration = Date.now() - startTime;
+    logger.info('HEIC to JPEG conversion completed', { inputPath, duration: `${duration}ms` });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('HEIC conversion failed', { inputPath, error: error.message, duration: `${duration}ms` });
+    throw new Error(`HEIC conversion failed: ${error.message}`);
+  }
 }
 
 export async function GET(req) {

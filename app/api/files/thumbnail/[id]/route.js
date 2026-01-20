@@ -119,52 +119,29 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting HEIC thumbnail generation', { filePath });
 
-  return new Promise((resolve, reject) => {
-    // Use ImageMagick to convert HEIC to JPG thumbnail (requires libheif)
-    const args = [filePath, '-resize', '150x150', '-quality', '85', thumbnailPath];
+  try {
+    // Use heic-convert to convert HEIC to JPEG buffer
+    const { promisify } = await import('util');
+    const heicConvert = (await import('heic-convert')).default;
 
-    const magick = spawn('magick', args);
-    let errorOutput = '';
-    let timedOut = false;
-
-    // Set 10 second timeout
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      magick.kill();
-      const duration = Date.now() - startTime;
-      logger.error('ImageMagick HEIC timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('ImageMagick timeout after 10 seconds'));
-    }, 10000);
-
-    magick.stderr.on('data', (data) => {
-      errorOutput += data.toString();
+    const inputBuffer = await fsPromises.readFile(filePath);
+    const outputBuffer = await heicConvert({
+      buffer: inputBuffer,
+      format: 'JPEG',
+      quality: 0.85,
     });
 
-    magick.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      if (code === 0) {
-        logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
-        resolve();
-      } else {
-        logger.error('ImageMagick HEIC failed', { filePath, code, duration: `${duration}ms`, errorOutput });
-        if (errorOutput.includes('no decode delegate') || errorOutput.includes('libheif')) {
-          reject(new Error('libheif is required for HEIC support. Install ImageMagick with libheif support.'));
-        } else {
-          reject(new Error(`ImageMagick exited with code ${code}: ${errorOutput}`));
-        }
-      }
-    });
+    // Use sharp to resize the converted image
+    const sharp = (await import('sharp')).default;
+    await sharp(outputBuffer).resize(150, 150, { fit: 'inside' }).jpeg({ quality: 85 }).toFile(thumbnailPath);
 
-    magick.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('ImageMagick HEIC spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error(`ImageMagick spawn error: ${err.message}`));
-    });
-  });
+    const duration = Date.now() - startTime;
+    logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('HEIC thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
+    throw new Error(`HEIC conversion failed: ${error.message}`);
+  }
 }
 
 // Helper function to generate PDF thumbnails

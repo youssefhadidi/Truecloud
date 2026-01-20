@@ -25,6 +25,7 @@
     "bcryptjs": "^2.4.3",
     "formidable": "^3.5.1",
     "gm": "^1.25.1",
+    "heic-convert": "^2.1.0",
     "mime-types": "^3.0.2",
     "next": "16.1.2",
     "next-auth": "5.0.0-beta.30",
