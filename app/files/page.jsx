@@ -225,7 +225,7 @@ export default function FilesPage() {
         </div>
 
         {/* File Grid */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex-grow-1 flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
