@@ -3,12 +3,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { readdir, stat } from 'fs/promises';
-import path from 'path';
+import { join, resolve } from 'node:path';
 import { lookup } from 'mime-types';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+// Pre-resolve the upload directory to avoid repeated path.resolve calls
+const RESOLVED_UPLOAD_DIR = resolve(UPLOAD_DIR);
 
 // GET - List files
 export async function GET(req) {
@@ -31,7 +33,7 @@ export async function GET(req) {
 
     if (relativePath.startsWith('user_')) {
       // Accessing a user's private folder
-      targetDir = path.join(UPLOAD_DIR, relativePath);
+      targetDir = join(UPLOAD_DIR, relativePath);
       isPrivateFolder = true;
 
       // Extract user ID from path
@@ -51,17 +53,16 @@ export async function GET(req) {
       }
     } else {
       // Accessing shared folder
-      targetDir = path.join(UPLOAD_DIR, relativePath);
+      targetDir = join(UPLOAD_DIR, relativePath);
     }
 
     // Security: prevent directory traversal
-    const resolvedTarget = path.resolve(targetDir);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
-    if (!resolvedTarget.startsWith(resolvedUpload)) {
+    const resolvedTarget = resolve(targetDir);
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('GET /api/files - Directory traversal attempt detected', {
         requestedPath: relativePath,
         resolvedTarget,
-        resolvedUpload,
+        resolvedUpload: RESOLVED_UPLOAD_DIR,
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
@@ -73,7 +74,7 @@ export async function GET(req) {
     // Get file stats for each file
     let files = await Promise.all(
       fileNames.map(async (name) => {
-        const filePath = path.join(targetDir, name);
+        const filePath = join(targetDir, name);
         const stats = await stat(filePath);
 
         // Get user info for user folders to display username
@@ -169,12 +170,11 @@ export async function DELETE(req) {
     });
 
     // Construct file path
-    const targetPath = path.join(UPLOAD_DIR, relativePath, fileName);
+    const targetPath = join(UPLOAD_DIR, relativePath, fileName);
 
     // Security: prevent directory traversal
-    const resolvedTarget = path.resolve(targetPath);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
-    if (!resolvedTarget.startsWith(resolvedUpload)) {
+    const resolvedTarget = resolve(targetPath);
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('DELETE /api/files - Directory traversal attempt', {
         fileName,
         resolvedTarget,
@@ -245,15 +245,14 @@ export async function PATCH(req) {
     });
 
     // Construct paths
-    const oldPath = path.join(UPLOAD_DIR, relativePath, oldName);
-    const newPath = path.join(UPLOAD_DIR, relativePath, newName);
+    const oldPath = join(UPLOAD_DIR, relativePath, oldName);
+    const newPath = join(UPLOAD_DIR, relativePath, newName);
 
     // Security: prevent directory traversal
-    const resolvedOld = path.resolve(oldPath);
-    const resolvedNew = path.resolve(newPath);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
+    const resolvedOld = resolve(oldPath);
+    const resolvedNew = resolve(newPath);
 
-    if (!resolvedOld.startsWith(resolvedUpload) || !resolvedNew.startsWith(resolvedUpload)) {
+    if (!resolvedOld.startsWith(RESOLVED_UPLOAD_DIR) || !resolvedNew.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('PATCH /api/files - Directory traversal attempt', {
         oldName,
         newName,

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import fs from 'fs';
 import { stat } from 'fs/promises';
-import path from 'path';
+import { join } from 'node:path';
 import mime from 'mime-types';
 
 export async function GET(req, { params }) {
@@ -26,8 +26,8 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    const fullPath = path.join(uploadsDir, relativePath, fileId);
+    const uploadsDir = join(process.cwd(), 'uploads');
+    const fullPath = join(uploadsDir, relativePath, fileId);
 
     if (!fs.existsSync(fullPath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });

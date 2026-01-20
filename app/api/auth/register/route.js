@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import path from 'path';
+import { join } from 'node:path';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 

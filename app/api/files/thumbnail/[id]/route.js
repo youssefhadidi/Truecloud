@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import path from 'path';
+import { join, resolve, extname } from 'node:path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { spawn } from 'child_process';
@@ -188,9 +188,9 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    const thumbnailsDir = path.join(process.cwd(), 'thumbnails');
-    const filePath = path.join(uploadsDir, relativePath, fileId);
+    const uploadsDir = join(process.cwd(), 'uploads');
+    const thumbnailsDir = join(process.cwd(), 'thumbnails');
+    const filePath = join(uploadsDir, relativePath, fileId);
 
     try {
       await fsPromises.access(filePath);
@@ -200,7 +200,7 @@ export async function GET(req, { params }) {
     }
 
     // Get file extension for type detection
-    const fileExt = path.extname(fileId).toLowerCase();
+    const fileExt = extname(fileId).toLowerCase();
 
     // Supported image, video, and PDF extensions
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
@@ -218,7 +218,7 @@ export async function GET(req, { params }) {
 
     // Create thumbnail filename - always use JPG format
     const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.jpg`;
-    const thumbnailPath = path.join(thumbnailsDir, thumbnailFileName);
+    const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     // Ensure thumbnails directory exists
     try {
@@ -229,7 +229,7 @@ export async function GET(req, { params }) {
 
     // Check for old PNG thumbnail and delete it
     const oldPngThumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.png`;
-    const oldPngThumbnailPath = path.join(thumbnailsDir, oldPngThumbnailFileName);
+    const oldPngThumbnailPath = join(thumbnailsDir, oldPngThumbnailFileName);
     try {
       await fsPromises.unlink(oldPngThumbnailPath);
     } catch (err) {

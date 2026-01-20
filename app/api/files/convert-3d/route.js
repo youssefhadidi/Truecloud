@@ -3,7 +3,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import path from 'path';
+import { join, extname } from 'node:path';
 import { createHash } from 'crypto';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const CACHE_DIR = path.join(UPLOAD_DIR, '.cache');
+const CACHE_DIR = join(UPLOAD_DIR, '.cache');
 
 // Ensure cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
@@ -39,7 +39,7 @@ export async function GET(req) {
     // Handle bin file request
     if (binRequest) {
       const fileHash = createHash('md5').update(fileName).digest('hex');
-      const cacheBinPath = path.join(CACHE_DIR, `${fileHash}.bin`);
+      const cacheBinPath = join(CACHE_DIR, `${fileHash}.bin`);
 
       if (!fs.existsSync(cacheBinPath)) {
         return NextResponse.json({ error: 'Bin file not found' }, { status: 404 });
@@ -54,14 +54,14 @@ export async function GET(req) {
       });
     }
 
-    const fullPath = path.join(UPLOAD_DIR, fileName);
+    const fullPath = join(UPLOAD_DIR, fileName);
 
     // Verify file exists
     if (!fs.existsSync(fullPath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    const fileExt = path.extname(fileName).toLowerCase().slice(1);
+    const fileExt = extname(fileName).toLowerCase().slice(1);
 
     // If it's already GLTF/GLB, return it directly
     if (NO_CONVERSION_NEEDED.includes(fileExt)) {
@@ -76,9 +76,9 @@ export async function GET(req) {
 
     // Generate cache filename using hash
     const fileHash = createHash('md5').update(fileName).digest('hex');
-    const cacheGlbPath = path.join(CACHE_DIR, `${fileHash}.glb`);
-    const cacheGltfPath = path.join(CACHE_DIR, `${fileHash}.gltf`);
-    const cacheBinPath = path.join(CACHE_DIR, `${fileHash}.bin`);
+    const cacheGlbPath = join(CACHE_DIR, `${fileHash}.glb`);
+    const cacheGltfPath = join(CACHE_DIR, `${fileHash}.gltf`);
+    const cacheBinPath = join(CACHE_DIR, `${fileHash}.bin`);
 
     // If already converted as GLB, return it
     if (fs.existsSync(cacheGlbPath)) {
@@ -117,16 +117,16 @@ export async function GET(req) {
 
     // Convert 3D file to GLB using Assimp
     try {
-      const tempDir = path.join(UPLOAD_DIR, '.temp');
+      const tempDir = join(UPLOAD_DIR, '.temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
       // Create temp files with simple ASCII names to avoid encoding issues
-      const tempInputPath = path.join(tempDir, `input.${fileExt}`);
-      const tempGLBPath = path.join(tempDir, 'output.glb');
-      const tempGltfPath = path.join(tempDir, 'output.gltf');
-      const tempBinPath = path.join(tempDir, 'output.bin');
+      const tempInputPath = join(tempDir, `input.${fileExt}`);
+      const tempGLBPath = join(tempDir, 'output.glb');
+      const tempGltfPath = join(tempDir, 'output.gltf');
+      const tempBinPath = join(tempDir, 'output.bin');
 
       // Copy original file to temp location
       fs.copyFileSync(fullPath, tempInputPath);

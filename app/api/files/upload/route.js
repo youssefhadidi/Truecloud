@@ -4,10 +4,11 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import path from 'path';
+import { join, resolve } from 'node:path';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const RESOLVED_UPLOAD_DIR = resolve(UPLOAD_DIR);
 
 export async function POST(req) {
   const startTime = Date.now();
@@ -48,14 +49,14 @@ export async function POST(req) {
     const buffer = Buffer.from(bytes);
 
     // Ensure target directory exists
-    const targetDir = path.join(UPLOAD_DIR, relativePath);
+    const targetDir = join(UPLOAD_DIR, relativePath);
     if (!existsSync(targetDir)) {
       logger.debug('POST /api/files/upload - Creating target directory', { dir: targetDir });
       await mkdir(targetDir, { recursive: true });
     }
 
     // Security: prevent directory traversal
-    if (!path.resolve(targetDir).startsWith(path.resolve(UPLOAD_DIR))) {
+    if (!resolve(targetDir).startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('POST /api/files/upload - Directory traversal attempt', {
         targetDir,
         uploadDir: UPLOAD_DIR,
@@ -65,7 +66,7 @@ export async function POST(req) {
     }
 
     // Save file directly to storage with original name
-    const filePath = path.join(targetDir, file.name);
+    const filePath = join(targetDir, file.name);
     await writeFile(filePath, buffer);
 
     const duration = Date.now() - startTime;
