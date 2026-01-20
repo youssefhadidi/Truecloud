@@ -4,15 +4,15 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { FiImage } from 'react-icons/fi';
+import { useThumbnailStatus, useGenerateThumbnail, useThumbnailReady } from '@/lib/api/files';
 
 export default function LazyImage({ src, alt, className, onError, isThumbnail = false }) {
   const [isInView, setIsInView] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [thumbnailReady, setThumbnailReady] = useState(!isThumbnail);
-  const [isGenerating, setIsGenerating] = useState(isThumbnail);
+  const [shouldGenerateThumbnail, setShouldGenerateThumbnail] = useState(false);
+  const [pollForThumbnail, setPollForThumbnail] = useState(false);
   const imgRef = useRef(null);
-  const pollIntervalRef = useRef(null);
 
   // Extract fileId and path from src for thumbnail generation requests
   const getThumbnailParams = () => {
@@ -28,6 +28,26 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
     return null;
   };
 
+  const params = getThumbnailParams();
+
+  // Step 1: Check if thumbnail exists
+  const { data: statusData } = useThumbnailStatus(
+    params?.id || null,
+    params?.path || '',
+    isThumbnail && isInView && !isLoaded && !hasError
+  );
+
+  // Step 2: Generate thumbnail if needed
+  const generateMutation = useGenerateThumbnail();
+
+  // Step 3: Poll for thumbnail ready status
+  const { data: readyData } = useThumbnailReady(
+    params?.id || null,
+    params?.path || '',
+    pollForThumbnail
+  );
+
+  // Handle intersection observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -53,91 +73,32 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
     };
   }, []);
 
-  // Handle thumbnail generation and polling
+  // Handle thumbnail status check and generation request
   useEffect(() => {
-    if (!isThumbnail || !isInView || thumbnailReady) return;
+    if (!isThumbnail || !isInView || !statusData || !params) return;
 
-    const params = getThumbnailParams();
-    if (!params) {
-      setThumbnailReady(true);
+    if (statusData.exists) {
+      // Thumbnail already exists, we can load it now
       return;
     }
 
-    const handleThumbnailGeneration = async () => {
-      try {
-        setIsGenerating(true);
+    if (statusData.status === 'pending' && !shouldGenerateThumbnail) {
+      // Request generation
+      setShouldGenerateThumbnail(true);
+      generateMutation.mutate({ id: params.id, path: params.path });
+      setPollForThumbnail(true);
+    }
+  }, [statusData, isThumbnail, isInView, shouldGenerateThumbnail, params, generateMutation]);
 
-        // Step 1: Check if thumbnail exists
-        const checkRes = await fetch(`/api/files/thumbnail/${params.id}?path=${encodeURIComponent(params.path)}`);
-        const checkData = await checkRes.json();
+  // Handle polling completion
+  useEffect(() => {
+    if (!pollForThumbnail || !readyData) return;
 
-        if (checkData.exists) {
-          // Thumbnail already exists, we're ready to load it
-          setThumbnailReady(true);
-          setIsGenerating(false);
-          return;
-        }
-
-        if (checkData.status === 'pending') {
-          // Thumbnail doesn't exist, request generation
-          await fetch('/api/files/thumbnail/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: params.id, path: params.path }),
-          });
-
-          // Step 2: Poll for completion (check every 500ms, max 20 attempts = 10 seconds)
-          let attempts = 0;
-          const maxAttempts = 20;
-
-          const interval = setInterval(async () => {
-            attempts++;
-            try {
-              const pollRes = await fetch(`/api/files/thumbnail/${params.id}?path=${encodeURIComponent(params.path)}`);
-              const pollData = await pollRes.json();
-
-              if (pollData.exists) {
-                // Thumbnail is ready
-                setThumbnailReady(true);
-                setIsGenerating(false);
-                clearInterval(interval);
-              } else if (attempts >= maxAttempts) {
-                // Timeout after 10 seconds, show error
-                setHasError(true);
-                setIsGenerating(false);
-                clearInterval(interval);
-              }
-            } catch (err) {
-              console.error('Error polling thumbnail status:', err);
-              if (attempts >= maxAttempts) {
-                setHasError(true);
-                setIsGenerating(false);
-                clearInterval(interval);
-              }
-            }
-          }, 500);
-
-          pollIntervalRef.current = interval;
-        } else {
-          // Unsupported or unknown status
-          setHasError(true);
-          setIsGenerating(false);
-        }
-      } catch (err) {
-        console.error('Error initiating thumbnail generation:', err);
-        setHasError(true);
-        setIsGenerating(false);
-      }
-    };
-
-    handleThumbnailGeneration();
-
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
-  }, [isThumbnail, isInView, thumbnailReady]);
+    if (readyData.ready) {
+      // Thumbnail is ready, stop polling and allow image to load
+      setPollForThumbnail(false);
+    }
+  }, [readyData, pollForThumbnail]);
 
   const handleLoad = () => {
     setIsLoaded(true);
@@ -145,16 +106,21 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
 
   const handleError = () => {
     setHasError(true);
+    setPollForThumbnail(false);
     if (onError) {
       onError();
     }
   };
 
+  // Determine if we should show the image
+  const showImage = !isThumbnail || !statusData || statusData.exists || readyData?.ready;
+  const isGenerating = shouldGenerateThumbnail && !readyData?.ready;
+
   return (
     <div ref={imgRef} className={`relative ${className}`}>
       {isInView ? (
         <>
-          {!hasError && thumbnailReady && (
+          {!hasError && showImage && (
             <img
               src={src}
               alt={alt}
