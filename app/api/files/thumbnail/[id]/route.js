@@ -241,7 +241,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
 
     let magick;
     try {
-      magick = spawn('magick', args);
+      magick = spawn('convert', args);
     } catch (spawnError) {
       const duration = Date.now() - startTime;
       logger.error('ImageMagick not found', { filePath, error: spawnError.message, duration: `${duration}ms` });
