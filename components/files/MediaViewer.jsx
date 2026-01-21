@@ -39,7 +39,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   // Render media based on type
   const renderMedia = () => {
-    const containerClass = 'max-w-full max-h-full object-contain';
+    const containerClass = 'w-full h-full object-contain';
     const stopProp = (e) => e.stopPropagation();
 
     switch (fileType) {
@@ -51,7 +51,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'video':
         return (
-          <video controls autoPlay className={containerClass} src={getFileUrl(viewerFile, 'video')} onClick={stopProp}>
+          <video controls autoPlay className={containerClass} src={getFileUrl(viewerFile, 'video')} onClick={stopProp} style={{ width: '100%', height: '100%' }}>
             Your browser does not support video playback.
           </video>
         );
@@ -62,7 +62,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center">
               <FiVideo size={64} className="text-blue-400" />
             </div>
-            <audio controls className="w-full max-w-md" src={getFileUrl(viewerFile, 'audio')}>
+            <audio controls className="w-full" src={getFileUrl(viewerFile, 'audio')} style={{ width: '100%' }}>
               Your browser does not support audio playback.
             </audio>
           </div>
