@@ -98,19 +98,19 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
             />
           )}
           {(!isLoaded || isLoading) && !hasError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 animate-pulse">
-              <FiImage className="text-gray-400" size={24} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <FiImage className="text-gray-400 animate-spin" size={24} />
             </div>
           )}
           {hasError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+            <div className="absolute inset-0 flex items-center justify-center">
               <FiImage className="text-gray-400" size={24} />
             </div>
           )}
         </>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 animate-pulse">
-          <FiImage className="text-gray-400" size={20} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <FiImage className="text-gray-400 animate-spin" size={20} />
         </div>
       )}
     </div>
