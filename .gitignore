@@ -49,3 +49,5 @@ prisma/*.db-journal
 /heic-cache
 /stream-cache
 pnpm-lock.yaml
+
+stream_cache
