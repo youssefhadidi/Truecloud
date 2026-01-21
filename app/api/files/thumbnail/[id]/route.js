@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
-const STREAM_CACHE_DIR = './stream-cache';
+const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 // Semaphore to limit concurrent thumbnail generation
 class Semaphore {

@@ -9,8 +9,8 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = './heic'; // Store original HEIC files
-const CACHE_DIR = './heic-cache';
+const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
+const HEIC_CACHE_DIR = process.env.HEIC_CACHE_DIR || './heic-cache';
 
 // Convert HEIC to PNG (lossless)
 async function convertHeicToPng(inputPath, outputPath) {
@@ -66,7 +66,7 @@ export async function GET(req) {
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const heicDir = resolve(process.cwd(), HEIC_DIR);
-    const cacheDir = resolve(process.cwd(), CACHE_DIR);
+    const cacheDir = resolve(process.cwd(), HEIC_CACHE_DIR);
 
     // Try HEIC directory first, then uploads directory
     let filePath = join(heicDir, relativePath, fileId);

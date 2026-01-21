@@ -11,7 +11,7 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const STREAM_CACHE_DIR = './stream-cache';
+const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 // Check if MP4 has moov atom at the beginning (required for streaming)
 async function checkMoovAtom(filePath) {

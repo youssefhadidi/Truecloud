@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const CACHE_DIR = join(UPLOAD_DIR, '.cache');
+const CACHE_DIR = process.env.CACHE_DIR || './cache';
 
 // Ensure cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
