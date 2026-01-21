@@ -2,11 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { join, resolve, extname, basename } from 'node:path';
-import fs from 'fs';
+import { join, resolve, extname } from 'node:path';
 import fsPromises from 'fs/promises';
-import { spawn } from 'child_process';
 import { createHash } from 'crypto';
+import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -45,47 +44,59 @@ class Semaphore {
   }
 }
 
-// Create a global semaphore with max 10 concurrent thumbnail generations
 const thumbnailSemaphore = new Semaphore(10);
 
-// Helper function to generate thumbnails with FFmpeg
-async function generateThumbnail(filePath, thumbnailPath, isVideo) {
+// Helper function to generate image thumbnails with Sharp
+async function generateImageThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
-  logger.debug('Starting FFmpeg thumbnail generation', { filePath, isVideo });
+  logger.debug('Starting Sharp thumbnail generation', { filePath });
 
-  const ffmpegArgs = ['-y', '-i', filePath];
+  try {
+    const sharp = (await import('sharp')).default;
+    await sharp(filePath).resize(150, 150, { fit: 'inside' }).jpeg({ quality: 85 }).toFile(thumbnailPath);
 
-  if (isVideo) {
-    // Extract first frame (faster than seeking to 1 second)
-    ffmpegArgs.push('-ss', '00:00:00.000');
+    const duration = Date.now() - startTime;
+    logger.debug('Sharp thumbnail generated', { filePath, duration: `${duration}ms` });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('Sharp thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
+    throw new Error(`Sharp conversion failed: ${error.message}`);
   }
+}
 
-  // Extract only the first frame
-  ffmpegArgs.push('-frames:v', '1');
+// Helper function to generate video thumbnails with FFmpeg
+async function generateVideoThumbnail(filePath, thumbnailPath) {
+  const startTime = Date.now();
+  logger.debug('Starting FFmpeg thumbnail generation', { filePath });
 
-  // Optimize: smaller size, faster compression (JPG format)
-  ffmpegArgs.push(
+  const ffmpegArgs = [
+    '-y',
+    '-i',
+    filePath,
+    '-ss',
+    '00:00:00.000', // Extract first frame
+    '-frames:v',
+    '1',
     '-vf',
     'scale=150:150:force_original_aspect_ratio=decrease',
     '-q:v',
     '15', // JPG quality (1-31, higher = faster/lower quality)
     thumbnailPath,
-  );
+  ];
 
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn('ffmpeg', ffmpegArgs);
     let errorOutput = '';
     let timedOut = false;
 
-    // Set 30 second timeout for videos (GoPro files can be large)
-    const timeoutDuration = isVideo ? 30000 : 10000;
+    // Set 30 second timeout for videos
     const timeout = setTimeout(() => {
       timedOut = true;
       ffmpeg.kill();
       const duration = Date.now() - startTime;
-      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms`, timeoutDuration });
-      reject(new Error(`FFmpeg timeout after ${timeoutDuration / 1000} seconds`));
-    }, timeoutDuration);
+      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms` });
+      reject(new Error('FFmpeg timeout after 30 seconds'));
+    }, 30000);
 
     ffmpeg.stderr.on('data', (data) => {
       errorOutput += data.toString();
@@ -120,10 +131,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   logger.debug('Starting HEIC thumbnail generation', { filePath });
 
   try {
-    // Use heic-convert to convert HEIC to JPEG buffer
-    const { promisify } = await import('util');
     const heicConvert = (await import('heic-convert')).default;
-
     const inputBuffer = await fsPromises.readFile(filePath);
     const outputBuffer = await heicConvert({
       buffer: inputBuffer,
@@ -131,7 +139,6 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
       quality: 0.85,
     });
 
-    // Use sharp to resize the converted image
     const sharp = (await import('sharp')).default;
     await sharp(outputBuffer).resize(150, 150, { fit: 'inside' }).jpeg({ quality: 85 }).toFile(thumbnailPath);
 
@@ -146,29 +153,24 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
 
 // Helper function to generate PDF thumbnails
 async function generatePdfThumbnail(filePath, thumbnailPath) {
+  const startTime = Date.now();
+  logger.debug('Starting PDF thumbnail generation', { filePath });
+
   return new Promise((resolve, reject) => {
-    // Use ImageMagick's magick command directly (requires Ghostscript for PDF support)
-    const args = [
-      '-density',
-      '680', // Reduced from 150 for faster processing
-      `${filePath}[0]`, // First page only - must come after density
-      '-quality',
-      '65', // Reduced from 80 for faster processing
-      '-resize',
-      '150x150',
-      thumbnailPath,
-    ];
+    const args = ['-density', '80', `${filePath}[0]`, '-quality', '65', '-resize', '150x150', thumbnailPath];
 
     const magick = spawn('magick', args);
     let errorOutput = '';
     let timedOut = false;
 
-    // Set 15 second timeout for PDF processing
+    // Set 60 second timeout for PDF processing (increased from 15s)
     const timeout = setTimeout(() => {
       timedOut = true;
       magick.kill();
-      reject(new Error('ImageMagick timeout after 15 seconds'));
-    }, 15000);
+      const duration = Date.now() - startTime;
+      logger.error('ImageMagick timeout', { filePath, duration: `${duration}ms` });
+      reject(new Error('ImageMagick timeout after 60 seconds'));
+    }, 60000);
 
     magick.stderr.on('data', (data) => {
       errorOutput += data.toString();
@@ -177,15 +179,16 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
     magick.on('close', (code) => {
       clearTimeout(timeout);
       if (timedOut) return;
+      const duration = Date.now() - startTime;
       if (code === 0) {
+        logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
         resolve();
       } else {
-        console.error('ImageMagick PDF failed with code:', code);
-        console.error('ImageMagick error output:', errorOutput);
+        logger.error('ImageMagick failed', { filePath, code, duration: `${duration}ms`, errorOutput });
         if (errorOutput.includes('gswin') || errorOutput.includes('Ghostscript')) {
-          reject(new Error('Ghostscript is required for PDF thumbnails. Install from https://ghostscript.com/releases/gsdnld.html'));
+          reject(new Error('Ghostscript is required for PDF thumbnails'));
         } else {
-          reject(new Error(`ImageMagick PDF exited with code ${code}`));
+          reject(new Error(`ImageMagick exited with code ${code}`));
         }
       }
     });
@@ -193,7 +196,8 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
     magick.on('error', (err) => {
       clearTimeout(timeout);
       if (timedOut) return;
-      console.error('ImageMagick spawn error:', err);
+      const duration = Date.now() - startTime;
+      logger.error('ImageMagick spawn error', { filePath, error: err.message, duration: `${duration}ms` });
       reject(new Error(`ImageMagick spawn error: ${err.message}`));
     });
   });
@@ -202,6 +206,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
 export async function GET(req, { params }) {
   const startTime = Date.now();
   let fileId = 'unknown';
+
   try {
     logger.debug('GET /api/files/thumbnail - Request received');
     const session = await auth();
@@ -230,17 +235,6 @@ export async function GET(req, { params }) {
     const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
     let filePath = join(uploadsDir, relativePath, fileId);
 
-    logger.info('GET /api/files/thumbnail - Paths', {
-      cwd: process.cwd(),
-      UPLOAD_DIR,
-      THUMBNAIL_DIR,
-      uploadsDir,
-      thumbnailsDir,
-      filePath,
-      relativePath,
-      fileId,
-    });
-
     // Check if file exists
     try {
       await fsPromises.access(filePath);
@@ -262,12 +256,11 @@ export async function GET(req, { params }) {
         logger.debug('GET /api/files/thumbnail - Using stream-cache version for thumbnail', { fileId, cachedPath });
         filePath = cachedPath;
       } catch {
-        // No cached version, use original
         logger.debug('GET /api/files/thumbnail - No stream-cache version, using original', { fileId });
       }
     }
 
-    // Supported image, video, and PDF extensions
+    // Supported file extensions
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
     const heicExtensions = ['.heic', '.heif'];
     const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
@@ -288,60 +281,62 @@ export async function GET(req, { params }) {
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     // Ensure thumbnails directory exists
+    await fsPromises.mkdir(thumbnailsDir, { recursive: true });
+
+    // Check if thumbnail already exists
+    let thumbnailExists = false;
     try {
-      await fsPromises.mkdir(thumbnailsDir, { recursive: true });
-    } catch (err) {
-      console.error('Failed to create thumbnails directory:', err);
+      await fsPromises.stat(thumbnailPath);
+      thumbnailExists = true;
+    } catch {
+      // Doesn't exist yet
     }
 
-    // Check for old PNG thumbnail and delete it
-    const oldPngThumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.png`;
-    const oldPngThumbnailPath = join(thumbnailsDir, oldPngThumbnailFileName);
-    try {
-      await fsPromises.unlink(oldPngThumbnailPath);
-    } catch (err) {
-      // File doesn't exist, that's fine
-    }
+    // If thumbnail doesn't exist, generate it now (synchronously)
+    if (!thumbnailExists) {
+      logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isHeic, isVideo, isImage });
 
-    // Check if JPG thumbnail already exists
-    try {
-      const stats = await fsPromises.stat(thumbnailPath);
-      const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
-
-      // Check if client has cached version
-      const ifNoneMatch = req.headers.get('if-none-match');
-      if (ifNoneMatch === etag) {
-        const duration = Date.now() - startTime;
-        logger.debug('GET /api/files/thumbnail - Cache hit (304)', { fileId, duration: `${duration}ms` });
-        return new NextResponse(null, { status: 304 });
+      await thumbnailSemaphore.acquire();
+      try {
+        if (isPdf) {
+          await generatePdfThumbnail(filePath, thumbnailPath);
+        } else if (isHeic) {
+          await generateHeicThumbnail(filePath, thumbnailPath);
+        } else if (isVideo) {
+          await generateVideoThumbnail(filePath, thumbnailPath);
+        } else {
+          await generateImageThumbnail(filePath, thumbnailPath);
+        }
+        logger.info('GET /api/files/thumbnail - Generation complete', { fileId });
+      } catch (error) {
+        logger.error('GET /api/files/thumbnail - Generation failed', { fileId, error: error.message });
+        return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });
+      } finally {
+        thumbnailSemaphore.release();
       }
-
-      // Stream the file instead of reading into memory
-      const fileStream = fs.createReadStream(thumbnailPath);
-      const duration = Date.now() - startTime;
-      logger.debug('GET /api/files/thumbnail - Serving cached thumbnail', { fileId, duration: `${duration}ms` });
-      return new NextResponse(fileStream, {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000, immutable',
-          ETag: etag,
-          'Content-Length': stats.size.toString(),
-        },
-      });
-    } catch (err) {
-      // File doesn't exist yet, return immediately with pending status
-      const duration = Date.now() - startTime;
-      logger.debug('GET /api/files/thumbnail - No cached thumbnail, returning pending status', { fileId, duration: `${duration}ms` });
-      return NextResponse.json(
-        { exists: false, status: 'pending' },
-        { status: 200 }
-      );
     }
+
+    // Read thumbnail and convert to base64
+    const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
+    const base64 = thumbnailBuffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+    const duration = Date.now() - startTime;
+    logger.debug('GET /api/files/thumbnail - Returning base64', {
+      fileId,
+      duration: `${duration}ms`,
+      generated: !thumbnailExists,
+    });
+
+    return NextResponse.json({
+      data: dataUrl,
+      generated: !thumbnailExists,
+    });
   } catch (error) {
     const duration = Date.now() - startTime;
-    logger.error('GET /api/files/thumbnail - Unexpected error', error);
-    logger.error('GET /api/files/thumbnail - Error details', {
+    logger.error('GET /api/files/thumbnail - Unexpected error', {
       fileId,
+      error: error.message,
       duration: `${duration}ms`,
     });
     return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });

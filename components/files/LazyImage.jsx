@@ -4,17 +4,15 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { FiImage } from 'react-icons/fi';
-import { useThumbnailStatus, useGenerateThumbnail, useThumbnailReady } from '@/lib/api/files';
+import { useThumbnail } from '@/lib/api/files';
 
 export default function LazyImage({ src, alt, className, onError, isThumbnail = false }) {
   const [isInView, setIsInView] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [shouldGenerateThumbnail, setShouldGenerateThumbnail] = useState(false);
-  const [pollForThumbnail, setPollForThumbnail] = useState(false);
   const imgRef = useRef(null);
 
-  // Extract fileId and path from src for thumbnail generation requests
+  // Extract fileId and path from src for thumbnail requests
   const getThumbnailParams = () => {
     if (!isThumbnail || !src) return null;
     // src format: /api/files/thumbnail/[id]?path=[path]
@@ -30,22 +28,8 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
 
   const params = getThumbnailParams();
 
-  // Step 1: Check if thumbnail exists
-  const { data: statusData } = useThumbnailStatus(
-    params?.id || null,
-    params?.path || '',
-    isThumbnail && isInView && !isLoaded && !hasError
-  );
-
-  // Step 2: Generate thumbnail if needed
-  const generateMutation = useGenerateThumbnail();
-
-  // Step 3: Poll for thumbnail ready status
-  const { data: readyData } = useThumbnailReady(
-    params?.id || null,
-    params?.path || '',
-    pollForThumbnail
-  );
+  // Fetch thumbnail (generates if needed)
+  const { data: thumbnailData, isLoading, isError } = useThumbnail(params?.id || null, params?.path || '', isThumbnail && isInView && !hasError);
 
   // Handle intersection observer
   useEffect(() => {
@@ -57,8 +41,8 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
         }
       },
       {
-        rootMargin: '200px', // Increased for smoother loading experience
-        threshold: 0.01, // Start loading as soon as 1% is visible
+        rootMargin: '200px',
+        threshold: 0.01,
       },
     );
 
@@ -73,32 +57,15 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
     };
   }, []);
 
-  // Handle thumbnail status check and generation request
+  // Handle error from React Query
   useEffect(() => {
-    if (!isThumbnail || !isInView || !statusData || !params) return;
-
-    if (statusData.exists) {
-      // Thumbnail already exists, we can load it now
-      return;
+    if (isError) {
+      setHasError(true);
+      if (onError) {
+        onError();
+      }
     }
-
-    if (statusData.status === 'pending' && !shouldGenerateThumbnail) {
-      // Request generation
-      setShouldGenerateThumbnail(true);
-      generateMutation.mutate({ id: params.id, path: params.path });
-      setPollForThumbnail(true);
-    }
-  }, [statusData, isThumbnail, isInView, shouldGenerateThumbnail, params, generateMutation]);
-
-  // Handle polling completion
-  useEffect(() => {
-    if (!pollForThumbnail || !readyData) return;
-
-    if (readyData.ready) {
-      // Thumbnail is ready, stop polling and allow image to load
-      setPollForThumbnail(false);
-    }
-  }, [readyData, pollForThumbnail]);
+  }, [isError, onError]);
 
   const handleLoad = () => {
     setIsLoaded(true);
@@ -106,15 +73,14 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
 
   const handleError = () => {
     setHasError(true);
-    setPollForThumbnail(false);
     if (onError) {
       onError();
     }
   };
 
-  // Determine if we should show the image
-  const showImage = !isThumbnail || !statusData || statusData.exists || readyData?.ready;
-  const isGenerating = shouldGenerateThumbnail && !readyData?.ready;
+  // Use base64 data if it's a thumbnail, otherwise use original src
+  const imageSrc = isThumbnail && thumbnailData?.data ? thumbnailData.data : src;
+  const showImage = !isThumbnail || thumbnailData?.data;
 
   return (
     <div ref={imgRef} className={`relative ${className}`}>
@@ -122,7 +88,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
         <>
           {!hasError && showImage && (
             <img
-              src={src}
+              src={imageSrc}
               alt={alt}
               className={`${className} ${isLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
               onLoad={handleLoad}
@@ -131,7 +97,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
               decoding="async"
             />
           )}
-          {(!isLoaded || isGenerating) && !hasError && (
+          {(!isLoaded || isLoading) && !hasError && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 animate-pulse">
               <FiImage className="text-gray-400" size={24} />
             </div>

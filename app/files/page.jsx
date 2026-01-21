@@ -95,12 +95,18 @@ export default function FilesPage() {
                 <span className="text-sm truncate">{session?.user?.email}</span>
               </div>
               {session?.user?.role === 'admin' && (
-                <button onClick={() => router.push('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                >
                   <FiUser />
                   Admin Panel
                 </button>
               )}
-              <button onClick={() => signOut({ callbackUrl: '/auth/login' })} className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+              <button
+                onClick={() => signOut({ callbackUrl: '/auth/login' })}
+                className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+              >
                 <FiLogOut size={16} className="sm:block" />
                 <span className="hidden sm:inline">Sign Out</span>
               </button>
@@ -129,7 +135,7 @@ export default function FilesPage() {
           </div>
         )}
         {/* Breadcrumb Navigation */}
-        <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-3 text-sm text-gray-600 dark:text-gray-400 overflow-x-auto pb-1">
+        <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-3 text-sm text-gray-600 dark:text-gray-400 pb-1">
           <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
             <FiHome size={16} />
             <span className="hidden sm:inline">Home</span>
@@ -326,7 +332,7 @@ export default function FilesPage() {
             </div>
           ) : (
             /* Grid View with Virtual Scrolling */
-            <div className="p-4 flex flex-col flex-grow">
+            <div className="p-1 flex flex-col flex-grow">
               {state.loading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
