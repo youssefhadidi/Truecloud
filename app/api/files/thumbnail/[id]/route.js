@@ -60,6 +60,7 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
       limitInputPixels: false,
     })
       .resize(150, 150, { fit: 'inside' })
+      .withMetadata()
       .jpeg({ quality: 85 })
       .toFile(thumbnailPath);
 
@@ -219,7 +220,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
     });
 
     const sharp = (await import('sharp')).default;
-    await sharp(outputBuffer).resize(150, 150, { fit: 'inside' }).jpeg({ quality: 85 }).toFile(thumbnailPath);
+    await sharp(outputBuffer).resize(150, 150, { fit: 'inside' }).withMetadata().jpeg({ quality: 85 }).toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
