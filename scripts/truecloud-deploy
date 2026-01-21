@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+BRANCH=${1:-main}
+APP_DIR="/mnt/Truenas/Truecloud"
+SERVICE_NAME="truecloud.service"
+LOG_FILE="/var/log/truecloud/deploy.log"
+
+echo "========================================" | tee -a "$LOG_FILE"
+echo "Deploying TrueCloud - $(date)" | tee -a "$LOG_FILE"
+echo "Branch: $BRANCH" | tee -a "$LOG_FILE"
+echo "========================================" | tee -a "$LOG_FILE"
+
+cd "$APP_DIR"
+echo "[1/5] Fetching latest changes from git..." | tee -a "$LOG_FILE"
+git fetch origin "$BRANCH" >> "$LOG_FILE" 2>&1
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo "[WARNING] Stashing uncommitted changes..." | tee -a "$LOG_FILE"
+    git stash >> "$LOG_FILE" 2>&1
+fi
+
+echo "[2/5] Pulling code from origin/$BRANCH..." | tee -a "$LOG_FILE"
+git pull origin "$BRANCH" >> "$LOG_FILE" 2>&1
+
+echo "[3/5] Installing dependencies..." | tee -a "$LOG_FILE"
+pnpm install >> "$LOG_FILE" 2>&1
+
+echo "[4/5] Building Next.js application..." | tee -a "$LOG_FILE"
+pnpm build >> "$LOG_FILE" 2>&1
+
+echo "[5/5] Restarting systemctl service..." | tee -a "$LOG_FILE"
+systemctl restart "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
+
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo "✅ Service is running!" | tee -a "$LOG_FILE"
+else
+    echo "❌ Service failed to start" | tee -a "$LOG_FILE"
+    exit 1
+fi

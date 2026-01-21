@@ -44,4 +44,10 @@ next-env.d.ts
 uploads
 prisma/*.db
 prisma/*.db-journal
-/thumbnails/*
+/thumbnails
+/public/thumbnails
+/heic-cache
+/stream-cache
+pnpm-lock.yaml
+
+stream_cache

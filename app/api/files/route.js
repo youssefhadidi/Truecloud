@@ -3,22 +3,29 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { readdir, stat } from 'fs/promises';
-import path from 'path';
+import { join, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+// Pre-resolve the upload directory with trailing separator for proper security checks
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // GET - List files
 export async function GET(req) {
+  const startTime = Date.now();
   try {
+    logger.info('GET /api/files - Listing files');
     const session = await auth();
     if (!session) {
+      logger.warn('GET /api/files - Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
     const relativePath = searchParams.get('path') || '';
+    logger.debug('GET /api/files - Path requested', { path: relativePath, user: session.user.email });
 
     // Determine base directory based on path
     let targetDir;
@@ -26,7 +33,7 @@ export async function GET(req) {
 
     if (relativePath.startsWith('user_')) {
       // Accessing a user's private folder
-      targetDir = path.join(UPLOAD_DIR, relativePath);
+      targetDir = join(UPLOAD_DIR, relativePath);
       isPrivateFolder = true;
 
       // Extract user ID from path
@@ -36,17 +43,28 @@ export async function GET(req) {
 
       // Check if user has access (must be owner or admin)
       if (session.user.id !== userIdFromPath && session.user.role !== 'admin') {
+        logger.warn('GET /api/files - Access denied to private folder', {
+          requestedPath: relativePath,
+          userId: session.user.id,
+          userEmail: session.user.email,
+          folderOwnerId: userIdFromPath,
+        });
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
     } else {
       // Accessing shared folder
-      targetDir = path.join(UPLOAD_DIR, relativePath);
+      targetDir = join(UPLOAD_DIR, relativePath);
     }
 
     // Security: prevent directory traversal
-    const resolvedTarget = path.resolve(targetDir);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
-    if (!resolvedTarget.startsWith(resolvedUpload)) {
+    const resolvedTarget = resolve(targetDir) + sep;
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+      logger.error('GET /api/files - Directory traversal attempt detected', {
+        requestedPath: relativePath,
+        resolvedTarget,
+        resolvedUpload: RESOLVED_UPLOAD_DIR,
+        user: session.user.email,
+      });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -56,7 +74,7 @@ export async function GET(req) {
     // Get file stats for each file
     let files = await Promise.all(
       fileNames.map(async (name) => {
-        const filePath = path.join(targetDir, name);
+        const filePath = join(targetDir, name);
         const stats = await stat(filePath);
 
         // Get user info for user folders to display username
@@ -106,18 +124,33 @@ export async function GET(req) {
       return a.name.localeCompare(b.name);
     });
 
+    const duration = Date.now() - startTime;
+    logger.info('GET /api/files - Success', {
+      path: relativePath,
+      fileCount: files.length,
+      duration: `${duration}ms`,
+    });
+
     return NextResponse.json({ files });
   } catch (error) {
-    console.error('Error fetching files:', error);
+    const duration = Date.now() - startTime;
+    logger.error('GET /api/files - Error fetching files', error);
+    logger.error('GET /api/files - Request details', {
+      duration: `${duration}ms`,
+      url: req.url,
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // DELETE - Delete file or directory
 export async function DELETE(req) {
+  const startTime = Date.now();
   try {
+    logger.info('DELETE /api/files - Delete request');
     const session = await auth();
     if (!session) {
+      logger.warn('DELETE /api/files - Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -126,16 +159,27 @@ export async function DELETE(req) {
     const fileName = searchParams.get('id');
 
     if (!fileName) {
+      logger.warn('DELETE /api/files - Missing file name');
       return NextResponse.json({ error: 'File name required' }, { status: 400 });
     }
 
+    logger.debug('DELETE /api/files - Deleting file', {
+      path: relativePath,
+      fileName,
+      user: session.user.email,
+    });
+
     // Construct file path
-    const targetPath = path.join(UPLOAD_DIR, relativePath, fileName);
+    const targetPath = join(UPLOAD_DIR, relativePath, fileName);
 
     // Security: prevent directory traversal
-    const resolvedTarget = path.resolve(targetPath);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
-    if (!resolvedTarget.startsWith(resolvedUpload)) {
+    const resolvedTarget = resolve(targetPath) + sep;
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+      logger.error('DELETE /api/files - Directory traversal attempt', {
+        fileName,
+        resolvedTarget,
+        user: session.user.email,
+      });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -146,24 +190,40 @@ export async function DELETE(req) {
       // Delete directory recursively
       const { rm } = await import('fs/promises');
       await rm(targetPath, { recursive: true, force: true });
+      logger.info('DELETE /api/files - Directory deleted', {
+        fileName,
+        path: relativePath,
+        duration: `${Date.now() - startTime}ms`,
+      });
     } else {
       // Delete file
       const { unlink } = await import('fs/promises');
       await unlink(targetPath);
+      logger.info('DELETE /api/files - File deleted', {
+        fileName,
+        path: relativePath,
+        duration: `${Date.now() - startTime}ms`,
+      });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logger.error('DELETE /api/files - Error deleting file', error);
+    logger.error('DELETE /api/files - Request details', {
+      duration: `${Date.now() - startTime}ms`,
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // PATCH - Rename file or directory
 export async function PATCH(req) {
+  const startTime = Date.now();
   try {
+    logger.info('PATCH /api/files - Rename request');
     const session = await auth();
     if (!session) {
+      logger.warn('PATCH /api/files - Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -173,19 +233,31 @@ export async function PATCH(req) {
     const { newName } = await req.json();
 
     if (!oldName || !newName) {
+      logger.warn('PATCH /api/files - Missing old or new name');
       return NextResponse.json({ error: 'Old and new names required' }, { status: 400 });
     }
 
+    logger.debug('PATCH /api/files - Renaming file', {
+      oldName,
+      newName,
+      path: relativePath,
+      user: session.user.email,
+    });
+
     // Construct paths
-    const oldPath = path.join(UPLOAD_DIR, relativePath, oldName);
-    const newPath = path.join(UPLOAD_DIR, relativePath, newName);
+    const oldPath = join(UPLOAD_DIR, relativePath, oldName);
+    const newPath = join(UPLOAD_DIR, relativePath, newName);
 
     // Security: prevent directory traversal
-    const resolvedOld = path.resolve(oldPath);
-    const resolvedNew = path.resolve(newPath);
-    const resolvedUpload = path.resolve(UPLOAD_DIR);
+    const resolvedOld = resolve(oldPath) + sep;
+    const resolvedNew = resolve(newPath) + sep;
 
-    if (!resolvedOld.startsWith(resolvedUpload) || !resolvedNew.startsWith(resolvedUpload)) {
+    if (!resolvedOld.startsWith(RESOLVED_UPLOAD_DIR) || !resolvedNew.startsWith(RESOLVED_UPLOAD_DIR)) {
+      logger.error('PATCH /api/files - Directory traversal attempt', {
+        oldName,
+        newName,
+        user: session.user.email,
+      });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -193,9 +265,20 @@ export async function PATCH(req) {
     const { rename } = await import('fs/promises');
     await rename(oldPath, newPath);
 
+    const duration = Date.now() - startTime;
+    logger.info('PATCH /api/files - File renamed successfully', {
+      oldName,
+      newName,
+      path: relativePath,
+      duration: `${duration}ms`,
+    });
+
     return NextResponse.json({ success: true, newName });
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logger.error('PATCH /api/files - Error renaming file', error);
+    logger.error('PATCH /api/files - Request details', {
+      duration: `${Date.now() - startTime}ms`,
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

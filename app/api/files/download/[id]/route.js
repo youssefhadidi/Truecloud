@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import fs from 'fs';
 import { stat } from 'fs/promises';
-import path from 'path';
+import { join, basename } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { Readable } from 'stream';
@@ -30,7 +30,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    const filePath = path.join(UPLOAD_DIR, relativePath, fileName);
+    const filePath = join(UPLOAD_DIR, relativePath, fileName);
 
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
@@ -68,7 +68,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'application/zip',
           'Content-Length': zipBuffer.length.toString(),
-          'Content-Disposition': `attachment; filename="${path.basename(fileName)}.zip"`,
+          'Content-Disposition': `attachment; filename="${basename(fileName)}.zip"`,
         },
       });
     }
@@ -81,7 +81,7 @@ export async function GET(req, { params }) {
       headers: {
         'Content-Type': mimeType,
         'Content-Length': fileStats.size.toString(),
-        'Content-Disposition': `attachment; filename="${path.basename(fileName)}"`,
+        'Content-Disposition': `attachment; filename="${basename(fileName)}"`,
       },
     });
   } catch (error) {

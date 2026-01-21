@@ -3,7 +3,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import path from 'path';
+import { join, extname } from 'node:path';
 import { createHash } from 'crypto';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const CACHE_DIR = path.join(UPLOAD_DIR, '.cache');
+const CACHE_DIR = process.env.CACHE_DIR || './cache';
 
 // Ensure cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
@@ -32,7 +32,7 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Missing file parameter' }, { status: 400 });
     }
 
-    const fullPath = path.join(UPLOAD_DIR, fileName);
+    const fullPath = join(UPLOAD_DIR, fileName);
 
     // Verify file exists
     if (!fs.existsSync(fullPath)) {
@@ -47,7 +47,7 @@ export async function GET(req) {
     // Generate cache filename using hash (avoids special character issues)
     const fileHash = createHash('md5').update(fileName).digest('hex');
     const cacheFileName = `${fileHash}.glb`;
-    const cachePath = path.join(CACHE_DIR, cacheFileName);
+    const cachePath = join(CACHE_DIR, cacheFileName);
 
     // If already converted, return it
     if (fs.existsSync(cachePath)) {
@@ -62,14 +62,14 @@ export async function GET(req) {
 
     // Convert SKP to GLB using Assimp
     try {
-      const tempDir = path.join(UPLOAD_DIR, '.temp');
+      const tempDir = join(UPLOAD_DIR, '.temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
       // Create temp files with simple ASCII names to avoid encoding issues
-      const tempInputPath = path.join(tempDir, 'input.skp');
-      const tempOutputPath = path.join(tempDir, 'output.glb');
+      const tempInputPath = join(tempDir, 'input.skp');
+      const tempOutputPath = join(tempDir, 'output.glb');
 
       // Copy original file to temp location
       fs.copyFileSync(fullPath, tempInputPath);

@@ -1,0 +1,21 @@
+[Unit]
+Description=Truecloud Next.js Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/Truenas/Truecloud
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+Environment="UPLOAD_DIR=/mnt/nextcloud"
+Environment="THUMBNAIL_DIR=/mnt/Truenas/Truecloud/thumbnails"
+ExecStart=/root/.nvm/versions/node/v20.10.0/bin/pnpm start
+PrivateMounts=no
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/truecloud/output.log
+StandardError=append:/var/log/truecloud/error.log
+
+[Install]
+WantedBy=multi-user.target

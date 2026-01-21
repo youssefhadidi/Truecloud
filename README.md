@@ -38,7 +38,7 @@ npx prisma db push
 ```
 
 4. Create first admin user:
-   Use the register page to create your first user.
+   Use the admin creation script: `pnpm run create-admin`
 
 5. Run the development server:
 
@@ -50,11 +50,10 @@ pnpm dev
 
 ## Usage
 
-1. Register a new account at `/auth/register`
-2. Login at `/auth/login`
-3. Upload files from the dashboard
-4. Click on video thumbnails to stream videos
-5. Download files or delete them as needed
+1. Login at `/auth/login` (create users via `/admin`)
+2. Upload files from the dashboard
+3. Click on video thumbnails to stream videos
+4. Download files or delete them as needed
 
 ## File Permissions
 

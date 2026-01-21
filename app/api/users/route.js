@@ -7,7 +7,7 @@ import { checkUserIsAdmin } from '@/lib/permissions';
 import bcrypt from 'bcryptjs';
 import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import path from 'path';
+import { join } from 'node:path';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -89,7 +89,7 @@ export async function POST(req) {
 
     // Create private directory for regular users
     if (user.role !== 'admin') {
-      const userDir = path.join(UPLOAD_DIR, `user_${user.id}`);
+      const userDir = join(UPLOAD_DIR, `user_${user.id}`);
       if (!existsSync(userDir)) {
         await mkdir(userDir, { recursive: true });
       }

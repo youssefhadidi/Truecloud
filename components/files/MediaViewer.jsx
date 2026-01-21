@@ -19,8 +19,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     return null;
   };
 
+  // Helper to check if file is HEIC
+  const isHeic = (fileName) => {
+    const ext = fileName.toLowerCase();
+    return ext.endsWith('.heic') || ext.endsWith('.heif');
+  };
+
   // Helper to build download URL
   const getFileUrl = (file, type) => {
+    // Use conversion endpoint for HEIC files
+    if (type === 'image' && isHeic(file.name)) {
+      return `/api/files/convert-heic?id=${encodeURIComponent(file.id)}&path=${encodeURIComponent(currentPath)}`;
+    }
     const baseUrl = `/api/files/${type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download'}/${file.id}`;
     return `${baseUrl}?path=${encodeURIComponent(currentPath)}`;
   };
@@ -29,7 +39,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   // Render media based on type
   const renderMedia = () => {
-    const containerClass = 'max-w-full max-h-full object-contain';
+    const containerClass = 'w-full h-full object-contain';
     const stopProp = (e) => e.stopPropagation();
 
     switch (fileType) {
@@ -41,7 +51,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'video':
         return (
-          <video controls autoPlay className={containerClass} src={getFileUrl(viewerFile, 'video')} onClick={stopProp}>
+          <video controls autoPlay className={containerClass} src={getFileUrl(viewerFile, 'video')} onClick={stopProp} style={{ width: '100%', height: '100%' }}>
             Your browser does not support video playback.
           </video>
         );
@@ -52,7 +62,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center">
               <FiVideo size={64} className="text-blue-400" />
             </div>
-            <audio controls className="w-full max-w-md" src={getFileUrl(viewerFile, 'audio')}>
+            <audio controls className="w-full" src={getFileUrl(viewerFile, 'audio')} style={{ width: '100%' }}>
               Your browser does not support audio playback.
             </audio>
           </div>
