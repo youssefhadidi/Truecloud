@@ -51,12 +51,6 @@ Option 1 - Use the script:
 pnpm run create-admin
 ```
 
-Option 2 - Use the web interface:
-
-- Start the dev server with `pnpm dev`
-- Go to http://localhost:3000/auth/register
-- Create your account
-
 ## 5. Start Development Server
 
 ```bash
