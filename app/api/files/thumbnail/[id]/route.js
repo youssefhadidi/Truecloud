@@ -53,11 +53,11 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
 
   try {
     const sharp = (await import('sharp')).default;
-    
+
     // Try to process the image with failOnError: false to handle corrupted images
-    await sharp(filePath, { 
+    await sharp(filePath, {
       failOnError: false,
-      limitInputPixels: false 
+      limitInputPixels: false,
     })
       .resize(150, 150, { fit: 'inside' })
       .jpeg({ quality: 85 })
@@ -68,7 +68,7 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error('Sharp thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
-    
+
     // If Sharp fails with JPEG error, try using FFmpeg as fallback
     if (error.message.includes('VipsJpeg') || error.message.includes('JPEG')) {
       logger.warn('Sharp failed with JPEG error, attempting FFmpeg fallback', { filePath });
@@ -82,7 +82,7 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
         throw new Error(`Image conversion failed: ${error.message}`);
       }
     }
-    
+
     throw new Error(`Sharp conversion failed: ${error.message}`);
   }
 }
@@ -239,7 +239,16 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
   return new Promise((resolve, reject) => {
     const args = ['-density', '80', `${filePath}[0]`, '-quality', '65', '-resize', '150x150', thumbnailPath];
 
-    const magick = spawn('magick', args);
+    let magick;
+    try {
+      magick = spawn('magick', args);
+    } catch (spawnError) {
+      const duration = Date.now() - startTime;
+      logger.error('ImageMagick not found', { filePath, error: spawnError.message, duration: `${duration}ms` });
+      reject(new Error('ImageMagick is not installed or not in PATH'));
+      return;
+    }
+
     let errorOutput = '';
     let timedOut = false;
 
@@ -278,7 +287,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
       if (timedOut) return;
       const duration = Date.now() - startTime;
       logger.error('ImageMagick spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error(`ImageMagick spawn error: ${err.message}`));
+      reject(new Error('ImageMagick is not installed or not in PATH'));
     });
   });
 }
@@ -390,7 +399,21 @@ export async function GET(req, { params }) {
         logger.info('GET /api/files/thumbnail - Generation complete', { fileId });
       } catch (error) {
         logger.error('GET /api/files/thumbnail - Generation failed', { fileId, error: error.message });
-        return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });
+
+        // Return a more specific error message instead of crashing
+        const errorMessage = error.message.includes('ImageMagick')
+          ? 'PDF thumbnails require ImageMagick to be installed'
+          : error.message.includes('FFmpeg')
+            ? 'Video thumbnails require FFmpeg to be installed'
+            : 'Thumbnail generation failed';
+
+        return NextResponse.json(
+          {
+            error: errorMessage,
+            details: error.message,
+          },
+          { status: 500 },
+        );
       } finally {
         thumbnailSemaphore.release();
       }
