@@ -53,15 +53,95 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
 
   try {
     const sharp = (await import('sharp')).default;
-    await sharp(filePath).resize(150, 150, { fit: 'inside' }).jpeg({ quality: 85 }).toFile(thumbnailPath);
+    
+    // Try to process the image with failOnError: false to handle corrupted images
+    await sharp(filePath, { 
+      failOnError: false,
+      limitInputPixels: false 
+    })
+      .resize(150, 150, { fit: 'inside' })
+      .jpeg({ quality: 85 })
+      .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('Sharp thumbnail generated', { filePath, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error('Sharp thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
+    
+    // If Sharp fails with JPEG error, try using FFmpeg as fallback
+    if (error.message.includes('VipsJpeg') || error.message.includes('JPEG')) {
+      logger.warn('Sharp failed with JPEG error, attempting FFmpeg fallback', { filePath });
+      try {
+        await generateImageThumbnailWithFFmpeg(filePath, thumbnailPath);
+        const fallbackDuration = Date.now() - startTime;
+        logger.debug('FFmpeg fallback thumbnail generated', { filePath, duration: `${fallbackDuration}ms` });
+        return;
+      } catch (ffmpegError) {
+        logger.error('FFmpeg fallback also failed', { filePath, error: ffmpegError.message });
+        throw new Error(`Image conversion failed: ${error.message}`);
+      }
+    }
+    
     throw new Error(`Sharp conversion failed: ${error.message}`);
   }
+}
+
+// Helper function to generate image thumbnails with FFmpeg (fallback for corrupted images)
+async function generateImageThumbnailWithFFmpeg(filePath, thumbnailPath) {
+  const startTime = Date.now();
+  logger.debug('Starting FFmpeg image thumbnail generation', { filePath });
+
+  const ffmpegArgs = [
+    '-y',
+    '-i',
+    filePath,
+    '-vf',
+    'scale=150:150:force_original_aspect_ratio=decrease',
+    '-q:v',
+    '5', // JPG quality (1-31, lower = better quality)
+    thumbnailPath,
+  ];
+
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    let errorOutput = '';
+    let timedOut = false;
+
+    // Set 15 second timeout for images
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      ffmpeg.kill();
+      const duration = Date.now() - startTime;
+      logger.error('FFmpeg image timeout', { filePath, duration: `${duration}ms` });
+      reject(new Error('FFmpeg timeout after 15 seconds'));
+    }, 15000);
+
+    ffmpeg.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    ffmpeg.on('close', (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      if (code === 0) {
+        logger.debug('FFmpeg image thumbnail generated', { filePath, duration: `${duration}ms` });
+        resolve();
+      } else {
+        logger.error('FFmpeg image failed', { filePath, code, duration: `${duration}ms`, errorOutput });
+        reject(new Error(`FFmpeg exited with code ${code}: ${errorOutput}`));
+      }
+    });
+
+    ffmpeg.on('error', (err) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      logger.error('FFmpeg spawn error', { filePath, error: err.message, duration: `${duration}ms` });
+      reject(new Error(`FFmpeg spawn error: ${err.message}`));
+    });
+  });
 }
 
 // Helper function to generate video thumbnails with FFmpeg
