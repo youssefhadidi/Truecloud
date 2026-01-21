@@ -22,7 +22,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" style={{ height: '100dvh' }}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-dvh`}>
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>

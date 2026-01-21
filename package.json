@@ -12,7 +12,8 @@
     "db:studio": "prisma studio",
     "setup": "npm run db:generate && npm run db:push",
     "create-admin": "node scripts/create-admin.js",
-    "generate-secret": "node scripts/generate-secret.js"
+    "generate-secret": "node scripts/generate-secret.js",
+    "publish": "next build && systemctl restart truecloud"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
