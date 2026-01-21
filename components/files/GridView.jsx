@@ -205,7 +205,9 @@ const GridView = ({
                     className="w-full h-full object-cover rounded-lg"
                     isThumbnail={true}
                     onError={(e) => {
-                      e.target.style.display = 'none';
+                      if (e?.target) {
+                        e.target.style.display = 'none';
+                      }
                     }}
                   />
                 )}
@@ -218,7 +220,9 @@ const GridView = ({
                       className="w-full h-full object-cover rounded-lg"
                       isThumbnail={true}
                       onError={(e) => {
-                        e.target.style.display = 'none';
+                        if (e?.target) {
+                          e.target.style.display = 'none';
+                        }
                       }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -236,7 +240,9 @@ const GridView = ({
                     className="w-full h-full object-cover rounded-lg"
                     isThumbnail={true}
                     onError={(e) => {
-                      e.target.style.display = 'none';
+                      if (e?.target) {
+                        e.target.style.display = 'none';
+                      }
                     }}
                   />
                 )}
