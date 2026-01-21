@@ -4,11 +4,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, extname } from 'node:path';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const HEIC_DIR = './heic'; // Separate directory for HEIC files
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
+const RESOLVED_HEIC_DIR = resolve(process.cwd(), HEIC_DIR) + sep;
 
 export async function POST(req) {
   const startTime = Date.now();
@@ -25,6 +27,12 @@ export async function POST(req) {
     if (!existsSync(UPLOAD_DIR)) {
       logger.info('POST /api/files/upload - Creating upload directory', { dir: UPLOAD_DIR });
       await mkdir(UPLOAD_DIR, { recursive: true });
+    }
+
+    // Ensure HEIC directory exists
+    if (!existsSync(HEIC_DIR)) {
+      logger.info('POST /api/files/upload - Creating HEIC directory', { dir: HEIC_DIR });
+      await mkdir(HEIC_DIR, { recursive: true });
     }
 
     const formData = await req.formData();
@@ -48,18 +56,26 @@ export async function POST(req) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Check if file is HEIC/HEIF
+    const fileExt = extname(file.name).toLowerCase();
+    const isHeic = ['.heic', '.heif'].includes(fileExt);
+
+    // Use HEIC directory for HEIC files, otherwise use uploads directory
+    const baseDir = isHeic ? HEIC_DIR : UPLOAD_DIR;
+    const resolvedBaseDir = isHeic ? RESOLVED_HEIC_DIR : RESOLVED_UPLOAD_DIR;
+
     // Ensure target directory exists
-    const targetDir = join(UPLOAD_DIR, relativePath);
+    const targetDir = join(baseDir, relativePath);
     if (!existsSync(targetDir)) {
       logger.debug('POST /api/files/upload - Creating target directory', { dir: targetDir });
       await mkdir(targetDir, { recursive: true });
     }
 
     // Security: prevent directory traversal
-    if (!(resolve(targetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
+    if (!(resolve(targetDir) + sep).startsWith(resolvedBaseDir)) {
       logger.error('POST /api/files/upload - Directory traversal attempt', {
         targetDir,
-        uploadDir: UPLOAD_DIR,
+        baseDir,
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
@@ -74,6 +90,8 @@ export async function POST(req) {
       fileName,
       fileSize: file.size,
       path: relativePath,
+      isHeic,
+      storedIn: baseDir,
       duration: `${duration}ms`,
     });
 

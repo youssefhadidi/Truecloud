@@ -215,8 +215,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
     const inputBuffer = await fsPromises.readFile(filePath);
     const outputBuffer = await heicConvert({
       buffer: inputBuffer,
-      format: 'JPEG',
-      quality: 0.85,
+      format: 'PNG', // Use PNG to avoid double JPEG compression
     });
 
     const sharp = (await import('sharp')).default;

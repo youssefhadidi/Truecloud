@@ -9,28 +9,28 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const HEIC_DIR = './heic'; // Store original HEIC files
 const CACHE_DIR = './heic-cache';
 
-// Convert HEIC to JPEG
-async function convertHeicToJpeg(inputPath, outputPath) {
+// Convert HEIC to PNG (lossless)
+async function convertHeicToPng(inputPath, outputPath) {
   const startTime = Date.now();
-  logger.debug('Starting HEIC to JPEG conversion', { inputPath, outputPath });
+  logger.debug('Starting HEIC to PNG conversion', { inputPath, outputPath });
 
   try {
-    // Use heic-convert to convert HEIC to JPEG
+    // Use heic-convert to convert HEIC to PNG
     const heicConvert = (await import('heic-convert')).default;
 
     const inputBuffer = await fsPromises.readFile(inputPath);
     const outputBuffer = await heicConvert({
       buffer: inputBuffer,
-      format: 'JPEG',
-      quality: 0.9,
+      format: 'PNG', // Use PNG for lossless conversion
     });
 
     await fsPromises.writeFile(outputPath, outputBuffer);
 
     const duration = Date.now() - startTime;
-    logger.info('HEIC to JPEG conversion completed', { inputPath, duration: `${duration}ms` });
+    logger.info('HEIC to PNG conversion completed', { inputPath, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error('HEIC conversion failed', { inputPath, error: error.message, duration: `${duration}ms` });
@@ -65,8 +65,19 @@ export async function GET(req) {
     }
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
+    const heicDir = resolve(process.cwd(), HEIC_DIR);
     const cacheDir = resolve(process.cwd(), CACHE_DIR);
-    const filePath = join(uploadsDir, relativePath, fileId);
+
+    // Try HEIC directory first, then uploads directory
+    let filePath = join(heicDir, relativePath, fileId);
+    try {
+      await fsPromises.access(filePath);
+      logger.debug('GET /api/files/convert-heic - Found in heic directory', { filePath });
+    } catch {
+      // Not in heic directory, try uploads
+      filePath = join(uploadsDir, relativePath, fileId);
+      logger.debug('GET /api/files/convert-heic - Trying uploads directory', { filePath });
+    }
 
     // Verify file exists
     try {
@@ -88,7 +99,7 @@ export async function GET(req) {
 
     // Generate cache filename based on file path hash
     const pathHash = createHash('md5').update(filePath).digest('hex');
-    const cachedFileName = `${pathHash}.jpg`;
+    const cachedFileName = `${pathHash}.png`;
     const cachedFilePath = join(cacheDir, cachedFileName);
 
     // Check if cached version exists and is newer than source
@@ -112,7 +123,7 @@ export async function GET(req) {
         logger.debug('GET /api/files/convert-heic - Serving cached conversion', { fileId, duration: `${duration}ms` });
         return new NextResponse(fileStream, {
           headers: {
-            'Content-Type': 'image/jpeg',
+            'Content-Type': 'image/png',
             'Cache-Control': 'public, max-age=31536000, immutable',
             ETag: etag,
             'Content-Length': cachedStats.size.toString(),
@@ -124,9 +135,9 @@ export async function GET(req) {
       logger.debug('GET /api/files/convert-heic - No cached conversion, converting', { fileId });
     }
 
-    // Convert HEIC to JPEG
+    // Convert HEIC to PNG
     logger.info('GET /api/files/convert-heic - Converting HEIC file', { fileId });
-    await convertHeicToJpeg(filePath, cachedFilePath);
+    await convertHeicToPng(filePath, cachedFilePath);
 
     // Serve the converted file
     const stats = await fsPromises.stat(cachedFilePath);
@@ -137,7 +148,7 @@ export async function GET(req) {
 
     return new NextResponse(fileStream, {
       headers: {
-        'Content-Type': 'image/jpeg',
+        'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=31536000, immutable',
         ETag: etag,
         'Content-Length': stats.size.toString(),

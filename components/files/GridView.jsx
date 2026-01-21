@@ -113,7 +113,7 @@ const GridView = ({
             </div>
           ) : (
             <div
-              className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-2 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
+              className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
               style={{ WebkitTapHighlightColor: 'transparent' }}
               onClick={() => item.isDirectory && deletingFile?.id !== item.id && onNavigateToFolder(item.name)}
               onContextMenu={(e) => e.preventDefault()}
