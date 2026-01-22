@@ -71,15 +71,17 @@ async function getOrConvertHeicToJpeg(filePath, fileId) {
 
   logger.debug('Converting HEIC to JPEG for caching using heif-convert', { fileId });
 
-  // Use heif-convert from libheif1 package directly
-  const heifConvertArgs = [
-    filePath,
-    cachedJpegPath,
-  ];
+  // Try heif-convert first, fall back to ImageMagick if it fails
+  return convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime);
+}
 
+// Helper function to convert HEIC with fallback
+async function convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime) {
   return new Promise((resolve, reject) => {
+    // Try heif-convert first
+    const heifConvertArgs = [filePath, cachedJpegPath];
     const heifConvert = spawn('heif-convert', heifConvertArgs);
-    let errorOutput = '';
+    let heifErrorOutput = '';
     let timedOut = false;
 
     const timeout = setTimeout(() => {
@@ -90,7 +92,7 @@ async function getOrConvertHeicToJpeg(filePath, fileId) {
     }, 30000);
 
     heifConvert.stderr.on('data', (data) => {
-      errorOutput += data.toString();
+      heifErrorOutput += data.toString();
     });
 
     heifConvert.on('close', (code) => {
@@ -99,20 +101,72 @@ async function getOrConvertHeicToJpeg(filePath, fileId) {
       const duration = Date.now() - startTime;
       
       if (code === 0) {
-        logger.debug('HEIC converted to JPEG and cached', { fileId, duration: `${duration}ms` });
+        logger.debug('HEIC converted to JPEG and cached with heif-convert', { fileId, duration: `${duration}ms` });
         resolve(cachedJpegPath);
       } else {
-        logger.error('HEIC to JPEG conversion failed', { fileId, code, duration: `${duration}ms`, errorOutput });
-        reject(new Error(`heif-convert failed: ${errorOutput}`));
+        // heif-convert failed, try ImageMagick fallback
+        logger.warn('heif-convert failed, trying ImageMagick fallback', { fileId, error: heifErrorOutput.substring(0, 100) });
+        tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
       }
     });
 
     heifConvert.on('error', (err) => {
       clearTimeout(timeout);
       if (timedOut) return;
-      logger.error('heif-convert spawn error', { fileId, error: err.message });
-      reject(new Error(`heif-convert not found. Install libheif1: sudo apt-get install libheif1`));
+      logger.warn('heif-convert not found, trying ImageMagick fallback', { fileId });
+      // heif-convert not available, try ImageMagick
+      tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
     });
+  });
+}
+
+// Helper function to try ImageMagick convert as fallback
+function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, previousTimeout, resolve, reject) {
+  const convertArgs = [
+    `${filePath}[0]`, // Read first layer/frame, handle HEIC metadata issues
+    '-quality',
+    '85',
+    '-background',
+    'white',
+    '-alpha',
+    'off', // Remove alpha channel
+    cachedJpegPath,
+  ];
+
+  const convert = spawn('convert', convertArgs);
+  let convertErrorOutput = '';
+  let timedOut = false;
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    convert.kill();
+    logger.error('ImageMagick HEIC conversion timeout', { fileId });
+    reject(new Error('ImageMagick HEIC conversion timeout after 30 seconds'));
+  }, 30000);
+
+  convert.stderr.on('data', (data) => {
+    convertErrorOutput += data.toString();
+  });
+
+  convert.on('close', (code) => {
+    clearTimeout(timeout);
+    if (timedOut) return;
+    const duration = Date.now() - startTime;
+    
+    if (code === 0) {
+      logger.debug('HEIC converted to JPEG and cached with ImageMagick', { fileId, duration: `${duration}ms` });
+      resolve(cachedJpegPath);
+    } else {
+      logger.error('Both heif-convert and ImageMagick failed', { fileId, code, duration: `${duration}ms`, error: convertErrorOutput });
+      reject(new Error(`HEIC conversion failed with both tools: ${convertErrorOutput.substring(0, 200)}`));
+    }
+  });
+
+  convert.on('error', (err) => {
+    clearTimeout(timeout);
+    if (timedOut) return;
+    logger.error('ImageMagick spawn error', { fileId, error: err.message });
+    reject(new Error(`ImageMagick not found. Install with: sudo apt-get install imagemagick`));
   });
 }
 

@@ -18,7 +18,8 @@ const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cac
 export const maxDuration = 30;
 
 // Helper function to convert HEIC to JPEG and cache it using libheif1 heif-convert
-async function getOrConvertHeicToJpeg(filePath) {
+async function getOrConvertHeicToJpeg(filePath, fileId = '') {
+  const startTime = Date.now();
   const pathHash = createHash('md5').update(filePath).digest('hex');
   const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
   
@@ -33,38 +34,92 @@ async function getOrConvertHeicToJpeg(filePath) {
   // Ensure cache directory exists
   await mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
 
-  // Use heif-convert from libheif1 package directly
-  const heifConvertArgs = [
-    filePath,
-    cachedJpegPath,
-  ];
+  // Try heif-convert first, fall back to ImageMagick if it fails
+  return convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime);
+}
 
+// Helper function to convert HEIC with fallback
+async function convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime) {
   return new Promise((resolve, reject) => {
+    // Try heif-convert first
+    const heifConvertArgs = [filePath, cachedJpegPath];
     const heifConvert = spawn('heif-convert', heifConvertArgs);
-    let errorOutput = '';
+    let heifErrorOutput = '';
+    let timedOut = false;
 
     const timeout = setTimeout(() => {
+      timedOut = true;
       heifConvert.kill();
-      reject(new Error('HEIC to JPEG conversion timeout'));
+      reject(new Error('HEIC to JPEG conversion timeout after 30 seconds'));
     }, 30000);
 
     heifConvert.stderr.on('data', (data) => {
-      errorOutput += data.toString();
+      heifErrorOutput += data.toString();
     });
 
     heifConvert.on('close', (code) => {
       clearTimeout(timeout);
+      if (timedOut) return;
+      
       if (code === 0) {
         resolve(cachedJpegPath);
       } else {
-        reject(new Error(`heif-convert failed: ${errorOutput}`));
+        // heif-convert failed, try ImageMagick fallback
+        tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
       }
     });
 
     heifConvert.on('error', (err) => {
       clearTimeout(timeout);
-      reject(new Error(`heif-convert not found. Install libheif1: sudo apt-get install libheif1`));
+      if (timedOut) return;
+      // heif-convert not available, try ImageMagick
+      tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
     });
+  });
+}
+
+// Helper function to try ImageMagick convert as fallback
+function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, previousTimeout, resolve, reject) {
+  const convertArgs = [
+    `${filePath}[0]`, // Read first layer/frame, handle HEIC metadata issues
+    '-quality',
+    '85',
+    '-background',
+    'white',
+    '-alpha',
+    'off', // Remove alpha channel
+    cachedJpegPath,
+  ];
+
+  const convert = spawn('convert', convertArgs);
+  let convertErrorOutput = '';
+  let timedOut = false;
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    convert.kill();
+    reject(new Error('ImageMagick HEIC conversion timeout after 30 seconds'));
+  }, 30000);
+
+  convert.stderr.on('data', (data) => {
+    convertErrorOutput += data.toString();
+  });
+
+  convert.on('close', (code) => {
+    clearTimeout(timeout);
+    if (timedOut) return;
+    
+    if (code === 0) {
+      resolve(cachedJpegPath);
+    } else {
+      reject(new Error(`HEIC conversion failed with both tools: ${convertErrorOutput.substring(0, 200)}`));
+    }
+  });
+
+  convert.on('error', (err) => {
+    clearTimeout(timeout);
+    if (timedOut) return;
+    reject(new Error(`ImageMagick not found. Install with: sudo apt-get install imagemagick`));
   });
 }
 
