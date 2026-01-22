@@ -7,13 +7,15 @@
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start",
     "lint": "eslint",
+    "restart": "systemctl restart truecloud",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "setup": "npm run db:generate && npm run db:push",
     "create-admin": "node scripts/create-admin.js",
     "generate-secret": "node scripts/generate-secret.js",
-    "publish": "next build && systemctl restart truecloud"
+    "publish": "next build && systemctl restart truecloud",
+    "buildrestart" : "npm run build && npm run restart"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
