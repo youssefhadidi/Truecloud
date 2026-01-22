@@ -32,11 +32,15 @@ export async function GET(req) {
     logger.debug('Checking for updates', { repo: gitHubRepo, currentVersion });
 
     try {
-      // Fetch package.json directly from GitHub main branch (no releases or tags needed)
+      // Fetch package.json directly from GitHub main branch with cache busting
+      const cacheBuster = Date.now();
       const response = await fetch(
-        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json`,
+        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json?_t=${cacheBuster}`,
         {
           headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
             // Optional: add auth token for higher rate limits
             ...(process.env.GITHUB_TOKEN && { 'Authorization': `token ${process.env.GITHUB_TOKEN}` }),
           },
@@ -44,10 +48,10 @@ export async function GET(req) {
       );
 
       if (!response.ok) {
-        const errorMsg = response.status === 404 && true
+        const errorMsg = response.status === 404 
           ? `Repository not found: ${gitHubRepo}` 
           : `GitHub error: ${response.status}`;
-
+        
         logger.warn('Failed to fetch package.json from GitHub', { 
           status: response.status,
           repo: gitHubRepo,
