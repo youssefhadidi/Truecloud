@@ -2,11 +2,12 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, appendFile } from 'fs/promises';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 
 const STATE_FILE = resolve(process.cwd(), '.logs-state.json');
+const HISTORY_FILE = resolve(process.cwd(), '.logs-history.json');
 
 async function getLogState() {
   try {
@@ -25,6 +26,28 @@ async function saveLogState(path, offset) {
     await writeFile(STATE_FILE, JSON.stringify({ lastOffset: offset, lastPath: path }, null, 2));
   } catch (error) {
     console.error('Failed to save log state:', error);
+  }
+}
+
+async function getLogHistory() {
+  try {
+    if (existsSync(HISTORY_FILE)) {
+      const content = await readFile(HISTORY_FILE, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch {
+    // Return empty history if file doesn't exist or is invalid
+  }
+  return { lines: [] };
+}
+
+async function appendToHistory(newLines) {
+  try {
+    const history = await getLogHistory();
+    history.lines.push(...newLines);
+    await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2));
+  } catch (error) {
+    console.error('Failed to append to history:', error);
   }
 }
 
@@ -66,23 +89,29 @@ export async function GET(req) {
 
     // Get stored state
     const state = await getLogState();
+    const history = await getLogHistory();
     
     // If log path changed, reset offset
-    let newLines = '';
+    let newLines = [];
     let newOffset = logContent.length;
     
     if (state.lastPath === logPath && state.lastOffset < logContent.length) {
       // Only get new content since last read
-      newLines = logContent.slice(state.lastOffset);
+      const newContent = logContent.slice(state.lastOffset);
+      newLines = newContent
+        .split('\n')
+        .filter(line => line.trim());
     } else if (state.lastPath !== logPath) {
       // Different log file, return all
-      newLines = logContent;
+      newLines = logContent
+        .split('\n')
+        .filter(line => line.trim());
     }
 
-    // Parse into lines and filter empty ones
-    const lines = newLines
-      .split('\n')
-      .filter(line => line.trim());
+    // Append new lines to history
+    if (newLines.length > 0) {
+      await appendToHistory(newLines);
+    }
 
     // Save new state
     await saveLogState(logPath, newOffset);
@@ -90,8 +119,9 @@ export async function GET(req) {
     return NextResponse.json({
       success: true,
       logPath,
-      lines,
-      total: lines.length,
+      newLines,
+      allLines: history.lines,
+      total: history.lines.length,
       offset: newOffset,
     });
   } catch (error) {

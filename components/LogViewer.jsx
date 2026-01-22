@@ -23,19 +23,20 @@ export default function LogViewer() {
 
   const fetchLogs = async () => {
     try {
-      setIsLoading(true);
       setError(null);
-      const response = await axios.get('/api/system/logs?lines=100');
+      const response = await axios.get('/api/system/logs');
       
       if (response.data.success) {
-        setLogs(response.data.lines);
+        // Use allLines from history to maintain persistence
+        setLogs(response.data.allLines || []);
+        setIsLoading(false);
       } else {
         setError(response.data.error || 'Failed to load logs');
+        setIsLoading(false);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load logs');
       console.error('Error fetching logs:', err);
-    } finally {
       setIsLoading(false);
     }
   };
