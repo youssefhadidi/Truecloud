@@ -2,11 +2,12 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, sep } from 'node:path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
@@ -49,7 +50,7 @@ export async function GET(req) {
 
     const url = new URL(req.url);
     const fileId = url.searchParams.get('id');
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
 
     logger.debug('GET /api/files/convert-heic - Processing', { fileId, path: relativePath });
 
@@ -57,6 +58,26 @@ export async function GET(req) {
       logger.error('GET /api/files/convert-heic - Missing file ID');
       return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
     }
+
+    // Check user permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files/convert-heic - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    relativePath = accessCheck.normalizedPath;
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {

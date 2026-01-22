@@ -3,14 +3,17 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import { join, extname } from 'node:path';
+import { join, extname, resolve, sep } from 'node:path';
 import { createHash } from 'crypto';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { logger } from '@/lib/logger';
 
 const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 const CACHE_DIR = process.env.CACHE_DIR || './cache';
 
 // Ensure cache directory exists
@@ -31,30 +34,44 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const fileName = decodeURIComponent(searchParams.get('id') || '');
     const binRequest = searchParams.get('bin') === 'true';
+    let relativePath = searchParams.get('path') || '';
 
     if (!fileName) {
       return NextResponse.json({ error: 'Missing file parameter' }, { status: 400 });
     }
 
-    // Handle bin file request
-    if (binRequest) {
-      const fileHash = createHash('md5').update(fileName).digest('hex');
-      const cacheBinPath = join(CACHE_DIR, `${fileHash}.bin`);
+    // Check user permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
 
-      if (!fs.existsSync(cacheBinPath)) {
-        return NextResponse.json({ error: 'Bin file not found' }, { status: 404 });
-      }
-
-      const binBuffer = fs.readFileSync(cacheBinPath);
-      return new Response(binBuffer, {
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': binBuffer.length,
-        },
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files/convert-3d - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
       });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
 
-    const fullPath = join(UPLOAD_DIR, fileName);
+    relativePath = accessCheck.normalizedPath;
+
+    const fullPath = join(UPLOAD_DIR, relativePath, fileName);
+
+    // Security: prevent directory traversal
+    const resolvedTarget = resolve(fullPath) + sep;
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+      logger.error('GET /api/files/convert-3d - Directory traversal attempt', {
+        fileName,
+        resolvedTarget,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
 
     // Verify file exists
     if (!fs.existsSync(fullPath)) {

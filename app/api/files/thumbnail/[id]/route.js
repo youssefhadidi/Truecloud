@@ -2,11 +2,12 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
@@ -326,9 +327,25 @@ export async function GET(req, { params }) {
 
     // Get path from query params
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
 
     logger.debug('GET /api/files/thumbnail - Processing', { fileId, path: relativePath });
+
+    // Check permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files/thumbnail - Access denied', { fileId, relativePath, userId: session.user.id });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    relativePath = accessCheck.normalizedPath;
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {
