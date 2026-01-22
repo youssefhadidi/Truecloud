@@ -15,7 +15,7 @@
     "create-admin": "node scripts/create-admin.js",
     "generate-secret": "node scripts/generate-secret.js",
     "pull" :"git pull",
-    "update" : "npm run pull && npm run build && npm run restart"
+    "runUpdate" : "npm run pull && npm run build && npm run restart"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
