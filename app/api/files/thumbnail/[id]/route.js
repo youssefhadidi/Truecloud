@@ -7,7 +7,6 @@ import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
@@ -234,47 +233,80 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   }
 }
 
-// Helper function to generate PDF thumbnails using pdfjs-dist
+// Helper function to generate PDF thumbnails using ghostscript
 async function generatePdfThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
-  try {
-    // Set up worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  const gsArgs = [
+    '-q',
+    '-dNOPAUSE',
+    '-dBATCH',
+    '-dSAFER',
+    '-sDEVICE=png16m',
+    '-dFirstPage=1',
+    '-dLastPage=1',
+    '-r72',
+    `-sOutputFile=${thumbnailPath.replace('.webp', '.png')}`,
+    filePath,
+  ];
 
-    // Read PDF file
-    const pdfData = await fsPromises.readFile(filePath);
+  return new Promise((resolve, reject) => {
+    const gs = spawn('gs', gsArgs);
+    let errorOutput = '';
+    let timedOut = false;
 
-    // Load PDF document
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-    const page = await pdf.getPage(1);
+    // Set 60 second timeout for PDF processing
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      gs.kill();
+      const duration = Date.now() - startTime;
+      logger.error('Ghostscript timeout', { filePath, duration: `${duration}ms` });
+      reject(new Error('Ghostscript timeout after 60 seconds'));
+    }, 60000);
 
-    // Set up canvas for rendering
-    const viewport = page.getViewport({ scale: 2 });
-    const canvas = require('canvas').createCanvas(viewport.width, viewport.height);
-    const context = canvas.getContext('2d');
+    gs.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
 
-    // Render page to canvas
-    await page.render({
-      canvasContext: context,
-      viewport: viewport,
-    }).promise;
+    gs.on('close', async (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
 
-    // Convert canvas to buffer
-    const imageBuffer = canvas.toBuffer('image/png');
+      if (code !== 0) {
+        const duration = Date.now() - startTime;
+        logger.error('Ghostscript failed', { filePath, code, duration: `${duration}ms`, errorOutput });
+        reject(new Error(`Ghostscript exited with code ${code}: ${errorOutput}`));
+        return;
+      }
 
-    // Resize and convert to WebP
-    const sharp = (await import('sharp')).default;
-    await sharp(imageBuffer).resize(200, 200, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbnailPath);
+      try {
+        // Convert PNG to WebP
+        const pngPath = thumbnailPath.replace('.webp', '.png');
+        const sharp = (await import('sharp')).default;
+        await sharp(pngPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbnailPath);
 
-    const duration = Date.now() - startTime;
-    logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error('PDF thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
-    throw new Error(`PDF conversion failed: ${error.message}`);
-  }
+        // Clean up temporary PNG
+        await fsPromises.unlink(pngPath);
+
+        const duration = Date.now() - startTime;
+        logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
+        resolve();
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        logger.error('PDF thumbnail Sharp conversion failed', { filePath, error: error.message, duration: `${duration}ms` });
+        reject(new Error(`Sharp conversion failed: ${error.message}`));
+      }
+    });
+
+    gs.on('error', (err) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      logger.error('Ghostscript spawn error', { filePath, error: err.message, duration: `${duration}ms` });
+      reject(new Error('Ghostscript is not installed or not in PATH. Install it with: sudo apt-get install ghostscript'));
+    });
+  });
 }
 
 export async function GET(req, { params }) {
