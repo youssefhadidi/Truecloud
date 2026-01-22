@@ -2,9 +2,31 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { readFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { resolve } from 'path';
-import { createReadStream } from 'fs';
+import { existsSync } from 'fs';
+
+const STATE_FILE = resolve(process.cwd(), '.logs-state.json');
+
+async function getLogState() {
+  try {
+    if (existsSync(STATE_FILE)) {
+      const content = await readFile(STATE_FILE, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch {
+    // Return default state if file doesn't exist or is invalid
+  }
+  return { lastOffset: 0, lastPath: null };
+}
+
+async function saveLogState(path, offset) {
+  try {
+    await writeFile(STATE_FILE, JSON.stringify({ lastOffset: offset, lastPath: path }, null, 2));
+  } catch (error) {
+    console.error('Failed to save log state:', error);
+  }
+}
 
 export async function GET(req) {
   try {
@@ -12,9 +34,6 @@ export async function GET(req) {
     if (!session || session.user?.role !== 'admin') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
-
-    const url = new URL(req.url);
-    const lines = parseInt(url.searchParams.get('lines') || '100', 10);
 
     // Try common log locations
     const logPaths = [
@@ -45,17 +64,35 @@ export async function GET(req) {
       }, { status: 404 });
     }
 
-    // Get last N lines
-    const logLines = logContent
+    // Get stored state
+    const state = await getLogState();
+    
+    // If log path changed, reset offset
+    let newLines = '';
+    let newOffset = logContent.length;
+    
+    if (state.lastPath === logPath && state.lastOffset < logContent.length) {
+      // Only get new content since last read
+      newLines = logContent.slice(state.lastOffset);
+    } else if (state.lastPath !== logPath) {
+      // Different log file, return all
+      newLines = logContent;
+    }
+
+    // Parse into lines and filter empty ones
+    const lines = newLines
       .split('\n')
-      .filter(line => line.trim())
-      .slice(-lines);
+      .filter(line => line.trim());
+
+    // Save new state
+    await saveLogState(logPath, newOffset);
 
     return NextResponse.json({
       success: true,
       logPath,
-      lines: logLines,
-      total: logLines.length,
+      lines,
+      total: lines.length,
+      offset: newOffset,
     });
   } catch (error) {
     return NextResponse.json({
