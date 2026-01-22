@@ -15,11 +15,16 @@ const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
-const CACHE_DIR = process.env.CACHE_DIR || './cache';
+const CACHE_DIR = process.env.CACHE_DIR || './.cache';
+const RESOLVED_CACHE_DIR = resolve(process.cwd(), CACHE_DIR);
 
-// Ensure cache directory exists
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
+// Ensure cache directory exists with proper permissions
+try {
+  if (!fs.existsSync(RESOLVED_CACHE_DIR)) {
+    fs.mkdirSync(RESOLVED_CACHE_DIR, { recursive: true, mode: 0o755 });
+  }
+} catch (err) {
+  logger.warn('Failed to create cache directory on startup', { RESOLVED_CACHE_DIR, error: err.message });
 }
 
 // Formats that don't need conversion
@@ -94,9 +99,9 @@ export async function GET(req) {
 
     // Generate cache filename using hash
     const fileHash = createHash('md5').update(fileName).digest('hex');
-    const cacheGlbPath = join(CACHE_DIR, `${fileHash}.glb`);
-    const cacheGltfPath = join(CACHE_DIR, `${fileHash}.gltf`);
-    const cacheBinPath = join(CACHE_DIR, `${fileHash}.bin`);
+    const cacheGlbPath = join(RESOLVED_CACHE_DIR, `${fileHash}.glb`);
+    const cacheGltfPath = join(RESOLVED_CACHE_DIR, `${fileHash}.gltf`);
+    const cacheBinPath = join(RESOLVED_CACHE_DIR, `${fileHash}.bin`);
 
     // If already converted as GLB, return it
     if (fs.existsSync(cacheGlbPath)) {
@@ -135,9 +140,8 @@ export async function GET(req) {
 
     // Convert 3D file to GLB using Assimp
     try {
-      // Use fully resolved upload directory to ensure consistency
-      const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
-      const tempDir = join(uploadsDir, '.temp');
+      // Use cache directory for temp files (ensures proper permissions and writable location)
+      const tempDir = join(RESOLVED_CACHE_DIR, '.temp');
 
       // Ensure temp directory exists with proper permissions
       try {

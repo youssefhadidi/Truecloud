@@ -14,7 +14,7 @@ const execPromise = promisify(exec);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
-const CACHE_DIR = process.env.CACHE_DIR || './cache';
+const CACHE_DIR = process.env.CACHE_DIR || './.cache';
 
 // Ensure cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {

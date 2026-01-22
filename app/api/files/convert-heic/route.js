@@ -10,8 +10,8 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
-const HEIC_CACHE_DIR = process.env.HEIC_CACHE_DIR || './heic-cache';
+const HEIC_DIR = process.env.HEIC_DIR || './.heic'; // Store original HEIC files
+const HEIC_CACHE_DIR = process.env.HEIC_CACHE_DIR || './.heic-cache';
 
 // Convert HEIC to PNG (lossless)
 async function convertHeicToPng(inputPath, outputPath) {
