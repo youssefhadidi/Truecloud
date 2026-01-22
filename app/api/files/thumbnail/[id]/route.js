@@ -7,7 +7,7 @@ import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
-import { fromPath } from '@mkholt/pdf-thumbnail';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
@@ -234,21 +234,39 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   }
 }
 
-// Helper function to generate PDF thumbnails using @mkholt/pdf-thumbnail
+// Helper function to generate PDF thumbnails using pdfjs-dist
 async function generatePdfThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
   try {
-    // Generate thumbnail from PDF first page
-    const thumbnail = await fromPath(filePath, {
-      width: 200,
-      height: 200,
-    });
+    // Set up worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-    // Convert to WebP format and save
+    // Read PDF file
+    const pdfData = await fsPromises.readFile(filePath);
+
+    // Load PDF document
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    const page = await pdf.getPage(1);
+
+    // Set up canvas for rendering
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = require('canvas').createCanvas(viewport.width, viewport.height);
+    const context = canvas.getContext('2d');
+
+    // Render page to canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise;
+
+    // Convert canvas to buffer
+    const imageBuffer = canvas.toBuffer('image/png');
+
+    // Resize and convert to WebP
     const sharp = (await import('sharp')).default;
-    await sharp(thumbnail).webp({ quality: 80 }).toFile(thumbnailPath);
+    await sharp(imageBuffer).resize(200, 200, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
