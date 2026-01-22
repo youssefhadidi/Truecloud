@@ -47,12 +47,12 @@ export async function GET(req) {
         const errorMsg = response.status === 404 && true
           ? `Repository not found: ${gitHubRepo}` 
           : `GitHub error: ${response.status}`;
-        
+
         logger.warn('Failed to fetch package.json from GitHub', { 
-          status: response.status, 
+          status: response.status,
           repo: gitHubRepo,
         });
-        
+
         return NextResponse.json({ 
           hasUpdate: false, 
           message: errorMsg,
@@ -63,7 +63,7 @@ export async function GET(req) {
 
       const remotePackageJson = await response.json();
       const latestVersion = remotePackageJson.version;
-      
+
       // Simple version comparison
       const hasUpdate = latestVersion !== currentVersion && latestVersion > currentVersion;
 
