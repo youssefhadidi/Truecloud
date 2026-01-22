@@ -17,7 +17,7 @@ const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cac
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
 
-// Helper function to convert HEIC to JPEG and cache it
+// Helper function to convert HEIC to JPEG and cache it using libheif1 heif-convert
 async function getOrConvertHeicToJpeg(filePath) {
   const pathHash = createHash('md5').update(filePath).digest('hex');
   const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
@@ -33,41 +33,37 @@ async function getOrConvertHeicToJpeg(filePath) {
   // Ensure cache directory exists
   await mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
 
-  // Use FFmpeg with libheif to convert HEIC to JPEG
-  const ffmpegArgs = [
-    '-y',
-    '-i',
+  // Use heif-convert from libheif1 package directly
+  const heifConvertArgs = [
     filePath,
-    '-q:v',
-    '2', // Very high quality JPEG (1-31, lower is better)
     cachedJpegPath,
   ];
 
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    const heifConvert = spawn('heif-convert', heifConvertArgs);
     let errorOutput = '';
 
     const timeout = setTimeout(() => {
-      ffmpeg.kill();
+      heifConvert.kill();
       reject(new Error('HEIC to JPEG conversion timeout'));
-    }, 45000);
+    }, 30000);
 
-    ffmpeg.stderr.on('data', (data) => {
+    heifConvert.stderr.on('data', (data) => {
       errorOutput += data.toString();
     });
 
-    ffmpeg.on('close', (code) => {
+    heifConvert.on('close', (code) => {
       clearTimeout(timeout);
       if (code === 0) {
         resolve(cachedJpegPath);
       } else {
-        reject(new Error(`FFmpeg conversion failed: ${errorOutput}`));
+        reject(new Error(`heif-convert failed: ${errorOutput}`));
       }
     });
 
-    ffmpeg.on('error', (err) => {
+    heifConvert.on('error', (err) => {
       clearTimeout(timeout);
-      reject(new Error(`FFmpeg spawn error: ${err.message}`));
+      reject(new Error(`heif-convert not found. Install libheif1: sudo apt-get install libheif1`));
     });
   });
 }
