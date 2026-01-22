@@ -9,7 +9,7 @@ import { createReadStream } from 'fs';
 export async function GET(req) {
   try {
     const session = await auth();
-    if (!session || !session.user?.role !== 'admin') {
+    if (!session || session.user?.role !== 'admin') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
