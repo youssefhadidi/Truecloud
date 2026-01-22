@@ -13,6 +13,9 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 
+// Increase timeout for thumbnail generation (HEIC and PDF processing can be slow)
+export const maxDuration = 60;
+
 // Semaphore to limit concurrent thumbnail generation
 class Semaphore {
   constructor(max) {
@@ -217,13 +220,20 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   try {
     const heicConvert = (await import('heic-convert')).default;
     const inputBuffer = await fsPromises.readFile(filePath);
+    
+    // Convert directly to JPEG buffer instead of intermediate PNG for speed
     const outputBuffer = await heicConvert({
       buffer: inputBuffer,
-      format: 'PNG', // Use PNG to avoid double JPEG compression
+      format: 'JPEG',
+      quality: 0.9, // High quality intermediate
     });
 
     const sharp = (await import('sharp')).default;
-    await sharp(outputBuffer).resize(200, 200, { fit: 'inside' }).withMetadata().webp({ quality: 80 }).toFile(thumbnailPath);
+    // Skip withMetadata() for HEIC since we already converted
+    await sharp(outputBuffer)
+      .resize(200, 200, { fit: 'inside' })
+      .webp({ quality: 80 })
+      .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });

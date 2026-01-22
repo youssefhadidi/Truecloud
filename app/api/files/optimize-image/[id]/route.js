@@ -82,8 +82,34 @@ export async function GET(req, { params }) {
       // Optimize image using sharp
       let pipeline = sharp(filePath);
 
-      // Resize if needed
+      // Get metadata and apply EXIF orientation rotation
       const metadata = await pipeline.metadata();
+      
+      // Auto-rotate based on EXIF orientation
+      const orientationRotations = {
+        2: { flop: true },
+        3: { rotate: 180 },
+        4: { flip: true },
+        5: { rotate: 90, flop: true },
+        6: { rotate: 90 },
+        7: { rotate: 270, flop: true },
+        8: { rotate: 270 },
+      };
+      
+      const rotation = orientationRotations[metadata.orientation];
+      if (rotation) {
+        if (rotation.rotate) {
+          pipeline = pipeline.rotate(rotation.rotate);
+        }
+        if (rotation.flip) {
+          pipeline = pipeline.flip();
+        }
+        if (rotation.flop) {
+          pipeline = pipeline.flop();
+        }
+      }
+
+      // Resize if needed
       const shouldResize = metadata.width > maxWidth || metadata.height > maxHeight;
       
       if (shouldResize) {
