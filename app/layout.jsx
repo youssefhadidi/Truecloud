@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import AuthProvider from '@/components/AuthProvider';
 import QueryProvider from '@/components/QueryProvider';
+import UpdateChecker from '@/components/UpdateChecker';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -26,6 +27,7 @@ export default function RootLayout({ children }) {
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-dvh`}>
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>
+          <UpdateChecker />
         </QueryProvider>
       </body>
     </html>

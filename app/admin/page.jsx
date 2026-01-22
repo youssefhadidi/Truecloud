@@ -5,7 +5,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FiUsers, FiPlus, FiEdit, FiTrash2, FiLogOut, FiArrowLeft, FiX } from 'react-icons/fi';
+import { FiUsers, FiPlus, FiEdit, FiTrash2, FiLogOut, FiArrowLeft, FiX, FiRefreshCw } from 'react-icons/fi';
 import axios from 'axios';
 
 export default function AdminPage() {
@@ -24,6 +24,8 @@ export default function AdminPage() {
     role: 'user',
     hasRootAccess: false,
   });
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -49,6 +51,36 @@ export default function AdminPage() {
       alert('Failed to fetch users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    try {
+      setCheckingUpdates(true);
+      const response = await axios.get('/api/system/check-updates');
+      setUpdateInfo(response.data);
+      if (!response.data.hasUpdate) {
+        alert(`You are up to date! (Version ${response.data.currentVersion})`);
+      }
+    } catch (error) {
+      console.error('Error checking updates:', error);
+      alert('Failed to check for updates');
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
+  const handleRunUpdate = async () => {
+    if (!window.confirm('Are you sure you want to update? The server will restart automatically.')) {
+      return;
+    }
+    try {
+      await axios.post('/api/system/run-update');
+      alert('Update started. The server will restart shortly...');
+      setUpdateInfo(null);
+    } catch (error) {
+      console.error('Error running update:', error);
+      alert('Failed to start update: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -303,6 +335,34 @@ export default function AdminPage() {
                   </div>
                 </form>
               )}
+            </div>
+
+            {/* System Settings */}
+            <div className="bg-white rounded-lg shadow p-6 mt-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">System</h2>
+              <div className="space-y-3">
+                <button
+                  onClick={handleCheckUpdates}
+                  disabled={checkingUpdates}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400"
+                >
+                  <FiRefreshCw className={checkingUpdates ? 'animate-spin' : ''} />
+                  {checkingUpdates ? 'Checking...' : 'Check for Updates'}
+                </button>
+                {updateInfo?.hasUpdate && (
+                  <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">
+                      Update Available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
+                    </p>
+                    <button
+                      onClick={handleRunUpdate}
+                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+                    >
+                      Update Now
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
