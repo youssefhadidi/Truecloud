@@ -18,9 +18,9 @@ export async function GET(req) {
 
     // Try common log locations
     const logPaths = [
+      '/var/log/truecloud/output.log',
       resolve(process.cwd(), '.next/logs/server.log'),
       resolve(process.cwd(), 'logs/app.log'),
-      '/var/log/truecloud.log',
       resolve(process.cwd(), 'app.log'),
     ];
 
