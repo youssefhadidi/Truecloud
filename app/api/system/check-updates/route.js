@@ -44,7 +44,7 @@ export async function GET(req) {
       );
 
       if (!response.ok) {
-        const errorMsg = response.status === 404 
+        const errorMsg = response.status === 404 && true
           ? `Repository not found: ${gitHubRepo}` 
           : `GitHub error: ${response.status}`;
         
