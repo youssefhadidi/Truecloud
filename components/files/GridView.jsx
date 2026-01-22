@@ -7,7 +7,7 @@ import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
-import { isImage, isVideo, isAudio, isPdf } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import 'react-virtualized/styles.css';
 
 // Breakpoints
@@ -181,12 +181,12 @@ const GridView = ({
 
               <div
                 className={`w-full aspect-square flex items-center justify-center mb-2 bg-white dark:bg-gray-600 rounded-lg relative overflow-hidden ${
-                  isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)
+                  isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)
                     ? 'cursor-pointer hover:opacity-90 transition-opacity'
                     : ''
                 }`}
                 onClick={(e) => {
-                  if (isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)) {
+                  if (isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)) {
                     e.stopPropagation();
                     onOpenMediaViewer(item);
                   }
@@ -261,7 +261,7 @@ const GridView = ({
               <div className="text-xs text-gray-500 dark:text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
 
               <div className="absolute top-2 right-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1">
-                {(isVideo(item.name) || isImage(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name)) && (
+                {(isVideo(item.name) || isImage(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)) && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -281,6 +281,8 @@ const GridView = ({
                       <FiVideo size={16} className="text-blue-600 dark:text-blue-400" />
                     ) : isPdf(item.name) ? (
                       <FiFile size={16} className="text-red-600 dark:text-red-400" />
+                    ) : isXlsx(item.name) ? (
+                      <FiFile size={16} className="text-green-600 dark:text-green-400" />
                     ) : null}
                   </button>
                 )}

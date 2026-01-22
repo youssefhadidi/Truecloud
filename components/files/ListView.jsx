@@ -6,7 +6,7 @@ import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
-import { isImage, isVideo, isAudio, isPdf } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 
 const ListView = ({
   files,
@@ -125,7 +125,14 @@ const ListView = ({
           return (
             <div
               key={virtualRow.key}
-              className={`absolute left-0 w-full grid ${gridCols} gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 items-center`}
+              className={`absolute left-0 w-full grid ${gridCols} gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 items-center ${
+                isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name) ? 'cursor-pointer' : ''
+              }`}
+              onClick={() => {
+                if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) {
+                  openMediaViewer(file);
+                }
+              }}
               onContextMenu={(e) => handleContextMenu(e, file)}
               style={{
                 top: 0,
@@ -154,7 +161,7 @@ const ListView = ({
               <div className="text-sm text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
               <div className="flex justify-end gap-2">
-                {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name)) && (
+                {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
                   <button
                     onClick={() => openMediaViewer(file)}
                     className="text-purple-600 hover:text-purple-900 dark:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -170,6 +177,8 @@ const ListView = ({
                     ) : isAudio(file.name) ? (
                       <FiVideo size={18} />
                     ) : isPdf(file.name) ? (
+                      <FiFile size={18} />
+                    ) : isXlsx(file.name) ? (
                       <FiFile size={18} />
                     ) : null}
                   </button>

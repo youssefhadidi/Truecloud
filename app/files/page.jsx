@@ -120,7 +120,7 @@ export default function FilesPage() {
         className="flex-1 overflow-y-auto w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col relative"
         onDragOver={dragDrop.handleDragOver}
         onDragLeave={dragDrop.handleDragLeave}
-        onDrop={handlers.handleDrop}
+        onDrop={(e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
       >
         {/* Drag and Drop Overlay */}
         {state.isDragging && (
