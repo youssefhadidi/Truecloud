@@ -47,8 +47,10 @@ async function fixMp4ForStreaming(inputPath, outputPath) {
     const ffmpeg = spawn('ffmpeg', [
       '-i',
       inputPath,
-      '-c',
-      'copy', // Copy streams without re-encoding
+      '-c:v',
+      'copy', // Copy video stream without re-encoding
+      '-c:a',
+      'copy', // Copy audio stream without re-encoding
       '-movflags',
       'faststart', // Move moov atom to beginning
       '-y', // Overwrite output

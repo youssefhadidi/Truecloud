@@ -44,7 +44,7 @@ class Semaphore {
   }
 }
 
-const thumbnailSemaphore = new Semaphore(10);
+const thumbnailSemaphore = new Semaphore(20); // Increased for better parallelization
 
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePath, thumbnailPath) {
@@ -61,7 +61,7 @@ async function generateImageThumbnail(filePath, thumbnailPath) {
     })
       .resize(150, 150, { fit: 'inside' })
       .withMetadata()
-      .jpeg({ quality: 85 })
+      .webp({ quality: 80 }) // WebP format for better compression
       .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
@@ -100,7 +100,7 @@ async function generateImageThumbnailWithFFmpeg(filePath, thumbnailPath) {
     '-vf',
     'scale=150:150:force_original_aspect_ratio=decrease',
     '-q:v',
-    '5', // JPG quality (1-31, lower = better quality)
+    '80', // WebP quality (0-100, higher = better quality)
     thumbnailPath,
   ];
 
@@ -152,16 +152,18 @@ async function generateVideoThumbnail(filePath, thumbnailPath) {
 
   const ffmpegArgs = [
     '-y',
+    '-threads',
+    '1', // Limit threads per process for better parallelization
+    '-ss',
+    '00:00:01.000', // Seek before input for faster processing (skip black frames)
     '-i',
     filePath,
-    '-ss',
-    '00:00:00.000', // Extract first frame
     '-frames:v',
     '1',
     '-vf',
-    'scale=150:150:force_original_aspect_ratio=decrease',
+    'scale=200:200:force_original_aspect_ratio=decrease:flags=fast_bilinear', // Fast scaling
     '-q:v',
-    '15', // JPG quality (1-31, higher = faster/lower quality)
+    '80', // WebP quality (0-100, higher = better quality)
     thumbnailPath,
   ];
 
@@ -170,14 +172,14 @@ async function generateVideoThumbnail(filePath, thumbnailPath) {
     let errorOutput = '';
     let timedOut = false;
 
-    // Set 30 second timeout for videos
+    // Set 20 second timeout for videos (optimized FFmpeg should be faster)
     const timeout = setTimeout(() => {
       timedOut = true;
       ffmpeg.kill();
       const duration = Date.now() - startTime;
       logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('FFmpeg timeout after 30 seconds'));
-    }, 30000);
+      reject(new Error('FFmpeg timeout after 20 seconds'));
+    }, 20000);
 
     ffmpeg.stderr.on('data', (data) => {
       errorOutput += data.toString();
@@ -220,7 +222,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
     });
 
     const sharp = (await import('sharp')).default;
-    await sharp(outputBuffer).resize(150, 150, { fit: 'inside' }).withMetadata().jpeg({ quality: 85 }).toFile(thumbnailPath);
+    await sharp(outputBuffer).resize(200, 200, { fit: 'inside' }).withMetadata().webp({ quality: 80 }).toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
@@ -237,7 +239,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
   return new Promise((resolve, reject) => {
-    const args = ['-density', '80', `${filePath}[0]`, '-quality', '65', '-resize', '150x150', thumbnailPath];
+    const args = ['-density', '80', `${filePath}[0]`, '-quality', '65', '-resize', '200x200', thumbnailPath];
 
     let magick;
     try {
@@ -365,8 +367,8 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
 
-    // Create thumbnail filename - always use JPG format
-    const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.jpg`;
+    // Create thumbnail filename - always use WebP format
+    const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.webp`;
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     // Ensure thumbnails directory exists
@@ -422,7 +424,7 @@ export async function GET(req, { params }) {
     // Read thumbnail and convert to base64
     const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
     const base64 = thumbnailBuffer.toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    const dataUrl = `data:image/webp;base64,${base64}`;
 
     const duration = Date.now() - startTime;
     logger.debug('GET /api/files/thumbnail - Returning base64', {
