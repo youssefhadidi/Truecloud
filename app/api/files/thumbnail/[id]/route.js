@@ -7,7 +7,7 @@ import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
-import { pdf } from 'pdf-to-img';
+import { fromPath } from '@mkholt/pdf-thumbnail';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
@@ -234,24 +234,21 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   }
 }
 
-// Helper function to generate PDF thumbnails using pdf-to-img
+// Helper function to generate PDF thumbnails using @mkholt/pdf-thumbnail
 async function generatePdfThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
   try {
-    // Convert first page of PDF to images
-    const images = await pdf(filePath, { scale: 2 });
+    // Generate thumbnail from PDF first page
+    const thumbnail = await fromPath(filePath, {
+      width: 200,
+      height: 200,
+    });
 
-    if (!images || images.length === 0) {
-      throw new Error('No pages found in PDF');
-    }
-
-    // Get first page and convert to WebP thumbnail
-    const firstPageBuffer = images[0];
+    // Convert to WebP format and save
     const sharp = (await import('sharp')).default;
-
-    await sharp(firstPageBuffer).resize(200, 200, { fit: 'inside' }).withMetadata().webp({ quality: 80 }).toFile(thumbnailPath);
+    await sharp(thumbnail).webp({ quality: 80 }).toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
     logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
