@@ -37,7 +37,8 @@ const ListView = ({
     overscan: 10,
   });
 
-  const gridCols = 'grid-cols-[1fr_150px_150px_200px]';
+  // Responsive grid: mobile shows only name and actions, desktop shows all columns
+  const gridCols = 'sm:grid-cols-[1fr_150px_150px_200px] grid-cols-[1fr_100px]';
 
   return (
     <div ref={parentRef} className="flex-grow overflow-auto">
@@ -125,11 +126,11 @@ const ListView = ({
           return (
             <div
               key={virtualRow.key}
-              className={`absolute left-0 w-full grid ${gridCols} gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 items-center ${
-                isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name) ? 'cursor-pointer' : ''
-              }`}
+              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 items-center cursor-pointer transition-colors`}
               onClick={() => {
-                if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) {
+                if (file.isDirectory) {
+                  navigateToFolder(file.name);
+                } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) {
                   openMediaViewer(file);
                 }
               }}
@@ -147,19 +148,13 @@ const ListView = ({
                   <div className="flex-shrink-0">{getFileIcon(file)}</div>
                 )}
                 {file.isDirectory ? (
-                  <button
-                    onClick={() => navigateToFolder(file.name)}
-                    className=" font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate"
-                    disabled={processingFile === file.id}
-                  >
-                    {file.displayName || file.name}
-                  </button>
+                  <div className="font-medium text-indigo-600 dark:text-indigo-400 truncate">{file.displayName || file.name}</div>
                 ) : (
-                  <div className=" font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
+                  <div className="font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
                 )}
               </div>
-              <div className=" text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
-              <div className=" text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
+              <div className="hidden sm:block text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
+              <div className="hidden sm:block text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
               <div className="flex justify-end gap-2">
                 {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
                   <button

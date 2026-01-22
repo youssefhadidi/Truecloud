@@ -133,38 +133,41 @@ export default function FilesPage() {
         )}
 
         {/* Toolbar Navbar */}
-        <div className="sm:mb-6 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
-          <div className="flex gap-1 sm:gap-2 flex-wrap">
-            <label className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer text-xs sm:text-base">
+        <div className="sm:mt-2 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
+          {/* Left Group: Upload, New Folder, Search */}
+          <div className="flex gap-0 flex-wrap bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            {/* Upload Button */}
+            <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors border-r border-gray-300 dark:border-gray-600 last:border-r-0">
               <FiUpload size={16} />
-              <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload File'}</span>
-              <span className="sm:hidden">{state.uploading ? 'Upload...' : 'Upload'}</span>
+              <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
               <input type="file" className="hidden" onChange={handlers.handleUpload} disabled={state.uploading} />
             </label>
 
+            {/* New Folder Button */}
             <button
               onClick={handlers.initiateCreateFolder}
-              className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-base"
+              className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={state.creatingFolder}
             >
               <FiPlus size={16} />
               <span className="hidden sm:inline">New Folder</span>
             </button>
+
             {/* Search Input */}
-            <div className="relative flex-1 sm:flex-none min-w-0 sm:min-w-64">
-              <FiSearch className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <div className="relative flex-1 sm:flex-none min-w-0 sm:min-w-48 flex items-center px-3">
+              <FiSearch className="absolute text-gray-400 flex-shrink-0" size={16} />
               <input
                 type="text"
                 value={state.searchQuery}
                 onChange={(e) => state.setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                style={{ height: '100%' }}
-                className="w-full pl-8 sm:pl-10 pr-2 sm:pr-3 py-1 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs sm: focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-6 pr-2 py-1 sm:py-2 bg-transparent text-gray-900 dark:text-white text-xs sm:text-base placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none"
               />
             </div>
           </div>
 
-          <div className="flex gap-1 sm:gap-2 flex-wrap">
+          {/* Right Group: Sort, Back, Refresh, View Toggle */}
+          <div className="flex gap-1 sm:gap-2 flex-wrap items-center ml-auto">
             {/* Sort Dropdown */}
             <select
               value={state.sortBy}
@@ -219,7 +222,7 @@ export default function FilesPage() {
         </div>
 
         {/* Breadcrumb Navigation */}
-        <div className="mb-1 mt-1 sm:mb-4 flex items-center gap-2 sm:gap-3  text-gray-600 dark:text-gray-400 pb-1">
+        <div className="mb-1 mt-1 sm:mb-2 flex items-center gap-2 sm:gap-3  text-gray-600 dark:text-gray-400">
           <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
             <FiHome size={16} />
             <span className="hidden sm:inline">Home</span>
