@@ -32,15 +32,17 @@ export async function GET(req) {
     logger.debug('Checking for updates', { repo: gitHubRepo, currentVersion });
 
     try {
-      // Fetch package.json directly from GitHub main branch with cache busting
-      const cacheBuster = Date.now();
+      // Fetch package.json directly from GitHub main branch
+      // Use aggressive cache busting with timestamp
+      const timestamp = Date.now();
       const response = await fetch(
-        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json?_t=${cacheBuster}`,
+        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json?t=${timestamp}`,
         {
           headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
             'Pragma': 'no-cache',
             'Expires': '0',
+            'Accept': 'application/json',
             // Optional: add auth token for higher rate limits
             ...(process.env.GITHUB_TOKEN && { 'Authorization': `token ${process.env.GITHUB_TOKEN}` }),
           },
@@ -67,6 +69,12 @@ export async function GET(req) {
 
       const remotePackageJson = await response.json();
       const latestVersion = remotePackageJson.version;
+
+      logger.debug('Fetched remote version from GitHub', {
+        url: `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json`,
+        latestVersion,
+        currentVersion,
+      });
 
       // Simple version comparison
       const hasUpdate = latestVersion !== currentVersion && latestVersion > currentVersion;
