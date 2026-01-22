@@ -8,6 +8,14 @@ import { join, resolve, sep, extname } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
+// Allow large file uploads (set timeout to 10 minutes)
+export const maxDuration = 600;
+export const config = {
+  api: {
+    bodyParser: false, // Disable built-in body parser for manual handling
+  },
+};
+
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = './heic'; // Separate directory for HEIC files
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -40,11 +48,17 @@ export async function POST(req) {
 
     let formData;
     try {
+      logger.debug('POST /api/files/upload - Attempting to parse FormData', {
+        contentType: req.headers.get('content-type'),
+        contentLength: req.headers.get('content-length'),
+      });
       formData = await req.formData();
     } catch (parseError) {
       logger.error('POST /api/files/upload - FormData parsing failed', {
         contentType: req.headers.get('content-type'),
+        contentLength: req.headers.get('content-length'),
         error: parseError.message,
+        errorStack: parseError.stack,
       });
       return NextResponse.json({ error: 'Invalid FormData format', details: parseError.message }, { status: 400 });
     }
