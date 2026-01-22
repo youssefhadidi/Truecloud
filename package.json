@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "0.6.0",
+  "version": "0.10.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,7 +16,7 @@
     "generate-secret": "node scripts/generate-secret.js",
     "pull": "git pull",
     "runUpdate": "npm run pull && npm run build && npm run restart",
-    "bump-minor": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version' || true"
+    "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
