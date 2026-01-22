@@ -5,6 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { logger } from '@/lib/logger';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
+import { execSync } from 'child_process';
 
 export async function GET(req) {
   try {
@@ -26,51 +27,50 @@ export async function GET(req) {
       // Continue with fallback version
     }
 
-    // Get repo info from environment variable
-    const gitHubRepo = process.env.GITHUB_REPO || 'youssefhadidi/Truecloud';
-
-    logger.debug('Checking for updates', { repo: gitHubRepo, currentVersion });
+    logger.debug('Checking for updates', { currentVersion });
 
     try {
-      // Fetch package.json directly from GitHub main branch
-      // Use aggressive cache busting with timestamp
-      const timestamp = Date.now();
-      const response = await fetch(
-        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json?t=${timestamp}`,
-        {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'Accept': 'application/json',
-            // Optional: add auth token for higher rate limits
-            ...(process.env.GITHUB_TOKEN && { 'Authorization': `token ${process.env.GITHUB_TOKEN}` }),
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorMsg = response.status === 404 
-          ? `Repository not found: ${gitHubRepo}` 
-          : `GitHub error: ${response.status}`;
-        logger.warn('Failed to fetch package.json from GitHub', { 
-          status: response.status,
-          repo: gitHubRepo,
+      // Fetch latest from remote using git
+      try {
+        execSync('git fetch origin main', {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+          timeout: 10000,
         });
-
+        logger.debug('Git fetch completed');
+      } catch (error) {
+        logger.warn('Git fetch failed', { error: error.message });
         return NextResponse.json({ 
           hasUpdate: false, 
-          message: errorMsg,
+          message: 'Failed to fetch updates from git remote',
           currentVersion,
-          error: 'github_unavailable',
+          error: 'git_fetch_failed',
         }, { status: 200 });
       }
 
-      const remotePackageJson = await response.json();
+      // Get remote package.json using git show
+      let remotePackageJsonText;
+      try {
+        remotePackageJsonText = execSync('git show origin/main:package.json', {
+          cwd: process.cwd(),
+          encoding: 'utf-8',
+          stdio: 'pipe',
+          timeout: 5000,
+        });
+      } catch (error) {
+        logger.error('Failed to read remote package.json', { error: error.message });
+        return NextResponse.json({ 
+          hasUpdate: false, 
+          message: 'Failed to read remote package.json',
+          currentVersion,
+          error: 'git_show_failed',
+        }, { status: 200 });
+      }
+
+      const remotePackageJson = JSON.parse(remotePackageJsonText);
       const latestVersion = remotePackageJson.version;
 
-      logger.debug('Fetched remote version from GitHub', {
-        url: `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json`,
+      logger.debug('Fetched remote version from git', {
         latestVersion,
         currentVersion,
       });
@@ -88,10 +88,10 @@ export async function GET(req) {
         hasUpdate,
         currentVersion,
         latestVersion,
-        releaseUrl: `https://github.com/${gitHubRepo}/commits/main`,
+        releaseUrl: `https://github.com/youssefhadidi/Truecloud/commits/main`,
       });
     } catch (error) {
-      logger.error('Error fetching GitHub package.json', { error: error.message });
+      logger.error('Error checking for updates', { error: error.message });
       return NextResponse.json({ 
         hasUpdate: false, 
         message: `Error checking for updates: ${error.message}`,
