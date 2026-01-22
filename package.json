@@ -14,8 +14,9 @@
     "setup": "npm run db:generate && npm run db:push",
     "create-admin": "node scripts/create-admin.js",
     "generate-secret": "node scripts/generate-secret.js",
-    "pull" :"git pull",
-    "runUpdate" : "npm run pull && npm run build && npm run restart"
+    "pull": "git pull",
+    "runUpdate": "npm run pull && npm run build && npm run restart",
+    "bump-minor": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version' || true"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
