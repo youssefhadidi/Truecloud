@@ -54,7 +54,8 @@ const thumbnailSemaphore = new Semaphore(20); // Increased for better paralleliz
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
   const startTime = Date.now();
   const isBuffer = Buffer.isBuffer(filePathOrBuffer);
-  logger.debug('Starting Sharp thumbnail generation', { type: isBuffer ? 'buffer' : 'file' });
+  const inputType = isBuffer ? 'buffer' : 'file';
+  logger.debug('Starting Sharp thumbnail generation', { type: inputType });
 
   try {
     const sharp = (await import('sharp')).default;
@@ -69,21 +70,24 @@ async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
       .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
-    logger.debug('Sharp thumbnail generated', { filePath, duration: `${duration}ms` });
+    logger.debug('Sharp thumbnail generated', { type: inputType, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
-    logger.error('Sharp thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
+    logger.error('Sharp thumbnail generation failed', { type: inputType, error: error.message, duration: `${duration}ms` });
 
     // If Sharp fails with JPEG error, try using FFmpeg as fallback
     if (error.message.includes('VipsJpeg') || error.message.includes('JPEG')) {
-      logger.warn('Sharp failed with JPEG error, attempting FFmpeg fallback', { filePath });
+      logger.warn('Sharp failed with JPEG error, attempting FFmpeg fallback', { type: inputType });
       try {
-        await generateImageThumbnailWithFFmpeg(filePath, thumbnailPath);
-        const fallbackDuration = Date.now() - startTime;
-        logger.debug('FFmpeg fallback thumbnail generated', { filePath, duration: `${fallbackDuration}ms` });
-        return;
+        // Only use FFmpeg fallback for file paths, not buffers
+        if (!isBuffer) {
+          await generateImageThumbnailWithFFmpeg(filePathOrBuffer, thumbnailPath);
+          const fallbackDuration = Date.now() - startTime;
+          logger.debug('FFmpeg fallback thumbnail generated', { type: inputType, duration: `${fallbackDuration}ms` });
+          return;
+        }
       } catch (ffmpegError) {
-        logger.error('FFmpeg fallback also failed', { filePath, error: ffmpegError.message });
+        logger.error('FFmpeg fallback also failed', { type: inputType, error: ffmpegError.message });
         throw new Error(`Image conversion failed: ${error.message}`);
       }
     }
