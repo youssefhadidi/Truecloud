@@ -59,11 +59,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const getFileUrl = (file, type) => {
     // Use conversion endpoint for HEIC files
     if (type === 'image' && isHeic(file.name)) {
-      return `/api/files/convert-heic?id=${encodeURIComponent(file.id)}&path=${encodeURIComponent(currentPath)}`;
+      return `/api/files/convert-heic?id=${encodeURIComponent(file.name)}&path=${encodeURIComponent(currentPath)}`;
     }
     // Use optimization endpoint for images for faster loading
     if (type === 'image') {
-      return `/api/files/optimize-image/${encodeURIComponent(file.id)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
+      return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
     }
     const baseUrl = `/api/files/${type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download'}/${file.id}`;
     return `${baseUrl}?path=${encodeURIComponent(currentPath)}`;

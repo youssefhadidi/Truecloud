@@ -48,20 +48,20 @@ class Semaphore {
 const thumbnailSemaphore = new Semaphore(20); // Increased for better parallelization
 
 // Helper function to generate image thumbnails with Sharp
-async function generateImageThumbnail(filePath, thumbnailPath) {
+async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
   const startTime = Date.now();
-  logger.debug('Starting Sharp thumbnail generation', { filePath });
+  const isBuffer = Buffer.isBuffer(filePathOrBuffer);
+  logger.debug('Starting Sharp thumbnail generation', { type: isBuffer ? 'buffer' : 'file' });
 
   try {
     const sharp = (await import('sharp')).default;
 
     // Try to process the image with failOnError: false to handle corrupted images
-    await sharp(filePath, {
+    await sharp(filePathOrBuffer, {
       failOnError: false,
       limitInputPixels: false,
     })
       .resize(150, 150, { fit: 'inside' })
-      .withMetadata()
       .webp({ quality: 80 }) // WebP format for better compression
       .toFile(thumbnailPath);
 
@@ -428,7 +428,37 @@ export async function GET(req, { params }) {
         } else if (isVideo) {
           await generateVideoThumbnail(filePath, thumbnailPath);
         } else {
-          await generateImageThumbnail(filePath, thumbnailPath);
+          // Image: auto-rotate based on EXIF orientation
+          const sharp = (await import('sharp')).default;
+          const metadata = await sharp(filePath).metadata();
+          const orientationRotations = {
+            2: { flop: true },
+            3: { rotate: 180 },
+            4: { flip: true },
+            5: { rotate: 90, flop: true },
+            6: { rotate: 90 },
+            7: { rotate: 270, flop: true },
+            8: { rotate: 270 },
+          };
+          
+          const rotation = orientationRotations[metadata.orientation] || null;
+          
+          if (rotation) {
+            let rotated = sharp(filePath);
+            if (rotation.rotate) {
+              rotated = rotated.rotate(rotation.rotate);
+            }
+            if (rotation.flip) {
+              rotated = rotated.flip();
+            }
+            if (rotation.flop) {
+              rotated = rotated.flop();
+            }
+            const buffer = await rotated.toBuffer();
+            await generateImageThumbnail(buffer, thumbnailPath);
+          } else {
+            await generateImageThumbnail(filePath, thumbnailPath);
+          }
         }
         logger.info('GET /api/files/thumbnail - Generation complete', { fileId });
       } catch (error) {

@@ -10,11 +10,6 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 // Allow large file uploads (set timeout to 10 minutes)
 export const maxDuration = 600;
-export const config = {
-  api: {
-    bodyParser: false, // Disable built-in body parser for manual handling
-  },
-};
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = './heic'; // Separate directory for HEIC files
