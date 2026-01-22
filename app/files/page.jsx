@@ -88,24 +88,21 @@ export default function FilesPage() {
       <header className="bg-white dark:bg-gray-800 shadow">
         <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
           <div className="flex justify-between items-center gap-2 sm:gap-4">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">truecloud</h1>
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Truecloud</h1>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <div className="hidden sm:flex items-center gap-2 text-gray-700 dark:text-gray-300">
                 <FiUser />
-                <span className="text-sm truncate">{session?.user?.email}</span>
+                <span className=" truncate">{session?.user?.email}</span>
               </div>
               {session?.user?.role === 'admin' && (
-                <button
-                  onClick={() => router.push('/admin')}
-                  className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
-                >
+                <button onClick={() => router.push('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 ">
                   <FiUser />
                   Admin Panel
                 </button>
               )}
               <button
                 onClick={() => signOut({ callbackUrl: '/auth/login' })}
-                className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 "
               >
                 <FiLogOut size={16} className="sm:block" />
                 <span className="hidden sm:inline">Sign Out</span>
@@ -117,7 +114,7 @@ export default function FilesPage() {
 
       {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col relative"
+        className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 flex flex-col relative"
         onDragOver={dragDrop.handleDragOver}
         onDragLeave={dragDrop.handleDragLeave}
         onDrop={(e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
@@ -134,31 +131,9 @@ export default function FilesPage() {
             </div>
           </div>
         )}
-        {/* Breadcrumb Navigation */}
-        <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-3 text-sm text-gray-600 dark:text-gray-400 pb-1">
-          <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
-            <FiHome size={16} />
-            <span className="hidden sm:inline">Home</span>
-          </button>
-          {state.currentPath &&
-            state.currentPath.split('/').map((folder, index, arr) => {
-              const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
-              return (
-                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
-                  <FiChevronRight size={14} className="text-gray-400 dark:text-gray-600 flex-shrink-0" />
-                  <button
-                    onClick={() => navigation.navigateToBreadcrumb(index + 1)}
-                    className={`hover:text-indigo-600 dark:hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-gray-900 dark:text-white' : ''}`}
-                  >
-                    {displayName}
-                  </button>
-                </div>
-              );
-            })}
-        </div>
 
         {/* Toolbar Navbar */}
-        <div className="mb-3 sm:mb-6 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
+        <div className="sm:mb-6 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
           <div className="flex gap-1 sm:gap-2 flex-wrap">
             <label className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer text-xs sm:text-base">
               <FiUpload size={16} />
@@ -175,9 +150,6 @@ export default function FilesPage() {
               <FiPlus size={16} />
               <span className="hidden sm:inline">New Folder</span>
             </button>
-          </div>
-
-          <div className="flex gap-1 sm:gap-2 flex-wrap">
             {/* Search Input */}
             <div className="relative flex-1 sm:flex-none min-w-0 sm:min-w-64">
               <FiSearch className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -186,15 +158,18 @@ export default function FilesPage() {
                 value={state.searchQuery}
                 onChange={(e) => state.setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="w-full pl-8 sm:pl-10 pr-2 sm:pr-3 py-1 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                style={{ height: '100%' }}
+                className="w-full pl-8 sm:pl-10 pr-2 sm:pr-3 py-1 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs sm: focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+          </div>
 
+          <div className="flex gap-1 sm:gap-2 flex-wrap">
             {/* Sort Dropdown */}
             <select
               value={state.sortBy}
               onChange={(e) => state.setSortBy(e.target.value)}
-              className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm: bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="name-asc">Name (A-Z)</option>
               <option value="name-desc">Name (Z-A)</option>
@@ -243,6 +218,28 @@ export default function FilesPage() {
           </div>
         </div>
 
+        {/* Breadcrumb Navigation */}
+        <div className="mb-1 mt-1 sm:mb-4 flex items-center gap-2 sm:gap-3  text-gray-600 dark:text-gray-400 pb-1">
+          <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap">
+            <FiHome size={16} />
+            <span className="hidden sm:inline">Home</span>
+          </button>
+          {state.currentPath &&
+            state.currentPath.split('/').map((folder, index, arr) => {
+              const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
+              return (
+                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
+                  <FiChevronRight size={14} className="text-gray-400 dark:text-gray-600 flex-shrink-0" />
+                  <button
+                    onClick={() => navigation.navigateToBreadcrumb(index + 1)}
+                    className={`hover:text-indigo-600 dark:hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-gray-900 dark:text-white' : ''}`}
+                  >
+                    {displayName}
+                  </button>
+                </div>
+              );
+            })}
+        </div>
         {/* File Grid */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
           {state.viewMode === 'list' ? (
@@ -268,11 +265,11 @@ export default function FilesPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={handlers.cancelCreateFolder}
-                        className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                        className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                       >
                         Cancel
                       </button>
-                      <button onClick={handlers.confirmCreateFolder} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                      <button onClick={handlers.confirmCreateFolder} className="px-3 py-1  bg-blue-600 text-white rounded hover:bg-blue-700">
                         Create
                       </button>
                     </div>
@@ -284,7 +281,7 @@ export default function FilesPage() {
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading files...</p>
+                    <p className="mt-2  text-gray-600 dark:text-gray-400">Loading files...</p>
                   </div>
                 </div>
               ) : state.files.length === 0 && !state.creatingFolder ? (
@@ -337,7 +334,7 @@ export default function FilesPage() {
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading files...</p>
+                    <p className="mt-2  text-gray-600 dark:text-gray-400">Loading files...</p>
                   </div>
                 </div>
               ) : state.files.length === 0 && !state.creatingFolder ? (

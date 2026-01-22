@@ -95,7 +95,7 @@ const GridView = ({
                   if (e.key === 'Enter') onConfirmCreateFolder();
                   if (e.key === 'Escape') onCancelCreateFolder();
                 }}
-                className="w-full px-2 py-1 text-sm mb-2 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-2 py-1  mb-2 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 autoFocus
                 onFocus={(e) => e.target.select()}
               />
@@ -120,7 +120,7 @@ const GridView = ({
             >
               {deletingFile?.id === item.id ? (
                 <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
-                  <p className="text-red-800 dark:text-red-200 font-medium text-center text-sm">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
+                  <p className="text-red-800 dark:text-red-200 font-medium text-center ">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
                   <div className="flex gap-2">
                     <button
                       onClick={(e) => {
@@ -152,7 +152,7 @@ const GridView = ({
                       if (e.key === 'Enter') onConfirmRename();
                       if (e.key === 'Escape') onCancelRename();
                     }}
-                    className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white "
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -254,7 +254,7 @@ const GridView = ({
                 )}
               </div>
 
-              <div className="text-sm font-medium text-gray-900 dark:text-white truncate px-1" title={item.displayName || item.name}>
+              <div className=" font-medium text-gray-900 dark:text-white truncate px-1" title={item.displayName || item.name}>
                 {item.displayName || item.name}
               </div>
 

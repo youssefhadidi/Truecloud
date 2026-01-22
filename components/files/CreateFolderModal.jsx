@@ -23,7 +23,7 @@ export default function CreateFolderModal({ show, folderName, errorMessage, onFo
           onKeyPress={(e) => e.key === 'Enter' && onCreate()}
           autoFocus
         />
-        {errorMessage && <p className="text-sm text-red-600 dark:text-red-400 mb-2">{errorMessage}</p>}
+        {errorMessage && <p className=" text-red-600 dark:text-red-400 mb-2">{errorMessage}</p>}
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
             Cancel

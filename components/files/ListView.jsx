@@ -69,11 +69,11 @@ const ListView = ({
                   <div className="flex gap-2">
                     <button
                       onClick={cancelDelete}
-                      className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                     >
                       Cancel
                     </button>
-                    <button onClick={confirmDelete} className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700">
+                    <button onClick={confirmDelete} className="px-3 py-1  bg-red-600 text-white rounded hover:bg-red-700">
                       Delete
                     </button>
                   </div>
@@ -109,11 +109,11 @@ const ListView = ({
                   <div className="flex gap-2">
                     <button
                       onClick={cancelRename}
-                      className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                     >
                       Cancel
                     </button>
-                    <button onClick={confirmRename} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <button onClick={confirmRename} className="px-3 py-1  bg-blue-600 text-white rounded hover:bg-blue-700">
                       Rename
                     </button>
                   </div>
@@ -149,17 +149,17 @@ const ListView = ({
                 {file.isDirectory ? (
                   <button
                     onClick={() => navigateToFolder(file.name)}
-                    className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                    className=" font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate"
                     disabled={processingFile === file.id}
                   >
                     {file.displayName || file.name}
                   </button>
                 ) : (
-                  <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
+                  <div className=" font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
                 )}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
+              <div className=" text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
+              <div className=" text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
               <div className="flex justify-end gap-2">
                 {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
                   <button

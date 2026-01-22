@@ -64,8 +64,8 @@ export default function XlsxViewer({ fileId, currentPath, fileName }) {
   return (
     <div className="w-full h-full flex flex-col bg-gray-800">
       {/* Spreadsheet Table */}
-      <div className="flex-1 overflow-auto p-4">
-        <table className="border-collapse bg-gray-800 text-sm">
+      <div className="flex-1 overflow-auto p-0">
+        <table className="border-collapse bg-gray-800 ">
           <tbody>
             {currentSheetData.data?.map((row, rowIdx) => (
               <tr key={rowIdx}>
@@ -114,9 +114,7 @@ export default function XlsxViewer({ fileId, currentPath, fileName }) {
             <button
               key={idx}
               onClick={() => setActiveSheet(idx)}
-              className={`px-3 py-1 rounded text-sm whitespace-nowrap transition-colors ${
-                idx === activeSheet ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+              className={`px-3 py-1 rounded  whitespace-nowrap transition-colors ${idx === activeSheet ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
             >
               {sheet.name}
             </button>

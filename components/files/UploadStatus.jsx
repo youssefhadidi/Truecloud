@@ -23,7 +23,7 @@ export default function UploadStatus({ uploads }) {
                   {upload.status === 'error' && <FiXCircle className="text-red-500" size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{upload.fileName}</p>
+                  <p className=" font-medium text-gray-900 dark:text-white truncate">{upload.fileName}</p>
                   {upload.status === 'uploading' && (
                     <>
                       <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">

@@ -118,7 +118,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           <div>
             <h3 className="text-lg font-semibold text-white">{viewerFile.name}</h3>
             {viewableFiles.length > 1 && (
-              <p className="text-sm text-gray-400">
+              <p className=" text-gray-400">
                 {viewableFiles.findIndex((f) => f.id === viewerFile.id) + 1} / {viewableFiles.length}
               </p>
             )}

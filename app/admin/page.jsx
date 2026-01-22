@@ -142,7 +142,7 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-600">
+              <div className=" text-gray-600">
                 <FiUsers className="inline mr-1" />
                 {session?.user?.name || session?.user?.email}
               </div>
@@ -178,14 +178,14 @@ export default function AdminPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {users.map((user) => (
                       <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.username}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{user.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap  font-medium text-gray-900">{user.username}</td>
+                        <td className="px-6 py-4 whitespace-nowrap  text-gray-600">{user.email}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
                             {user.role}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <td className="px-6 py-4 whitespace-nowrap ">
                           <div className="flex items-center gap-3">
                             <button onClick={() => openEditForm(user)} className="text-blue-600 hover:text-blue-900" title="Edit">
                               <FiEdit size={18} />
@@ -224,7 +224,7 @@ export default function AdminPage() {
               ) : (
                 <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <label className="block  font-medium text-gray-700 mb-1">Username</label>
                     <input
                       type="text"
                       value={formData.username}
@@ -234,7 +234,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <label className="block  font-medium text-gray-700 mb-1">Email</label>
                     <input
                       type="email"
                       value={formData.email}
@@ -244,7 +244,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <label className="block  font-medium text-gray-700 mb-1">Name</label>
                     <input
                       type="text"
                       value={formData.name}
@@ -253,7 +253,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password {editingUser && '(leave blank to keep current)'}</label>
+                    <label className="block  font-medium text-gray-700 mb-1">Password {editingUser && '(leave blank to keep current)'}</label>
                     <input
                       type="password"
                       value={formData.password}
@@ -263,7 +263,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <label className="block  font-medium text-gray-700 mb-1">Role</label>
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
