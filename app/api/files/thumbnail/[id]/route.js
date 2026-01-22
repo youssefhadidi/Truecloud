@@ -12,6 +12,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
+const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
 
 // Increase timeout for thumbnail generation (HEIC and PDF processing can be slow)
 export const maxDuration = 60;
@@ -49,6 +50,75 @@ class Semaphore {
 }
 
 const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prevent resource exhaustion
+
+// Helper function to convert HEIC to JPEG and cache it
+async function getOrConvertHeicToJpeg(filePath, fileId) {
+  const startTime = Date.now();
+  const pathHash = createHash('md5').update(filePath).digest('hex');
+  const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
+  
+  // Check if we already have the JPEG cached
+  try {
+    await fsPromises.access(cachedJpegPath);
+    logger.debug('HEIC JPEG cache hit', { fileId, duration: `${Date.now() - startTime}ms` });
+    return cachedJpegPath;
+  } catch {
+    // Cache miss, need to convert
+  }
+
+  // Ensure cache directory exists
+  await fsPromises.mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
+
+  logger.debug('Converting HEIC to JPEG for caching', { fileId });
+
+  // Use FFmpeg with libheif to convert HEIC to JPEG
+  const ffmpegArgs = [
+    '-y',
+    '-i',
+    filePath,
+    '-q:v',
+    '2', // Very high quality JPEG (1-31, lower is better)
+    cachedJpegPath,
+  ];
+
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    let errorOutput = '';
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      ffmpeg.kill();
+      logger.error('HEIC to JPEG conversion timeout', { fileId });
+      reject(new Error('HEIC to JPEG conversion timeout after 45 seconds'));
+    }, 45000);
+
+    ffmpeg.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    ffmpeg.on('close', (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      const duration = Date.now() - startTime;
+      
+      if (code === 0) {
+        logger.debug('HEIC converted to JPEG and cached', { fileId, duration: `${duration}ms` });
+        resolve(cachedJpegPath);
+      } else {
+        logger.error('HEIC to JPEG conversion failed', { fileId, code, duration: `${duration}ms`, errorOutput });
+        reject(new Error(`FFmpeg conversion failed: ${errorOutput}`));
+      }
+    });
+
+    ffmpeg.on('error', (err) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      logger.error('HEIC to JPEG spawn error', { fileId, error: err.message });
+      reject(new Error(`FFmpeg spawn error: ${err.message}`));
+    });
+  });
+}
 
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
@@ -135,35 +205,31 @@ async function generateVideoThumbnail(filePath, thumbnailPath) {
   });
 }
 
-// Helper function to generate HEIC/HEIF thumbnails
-async function generateHeicThumbnail(filePath, thumbnailPath) {
+// Helper function to generate HEIC/HEIF thumbnails from cached JPEG
+async function generateHeicThumbnail(filePath, thumbnailPath, fileId) {
   const startTime = Date.now();
-  logger.debug('Starting HEIC thumbnail generation', { filePath });
+  logger.debug('Starting HEIC thumbnail generation', { fileId });
 
   try {
-    const heicConvert = (await import('heic-convert')).default;
-    const inputBuffer = await fsPromises.readFile(filePath);
+    // Get or create cached JPEG version
+    const cachedJpegPath = await getOrConvertHeicToJpeg(filePath, fileId);
     
-    // Convert directly to JPEG buffer instead of intermediate PNG for speed
-    const outputBuffer = await heicConvert({
-      buffer: inputBuffer,
-      format: 'JPEG',
-      quality: 0.5, // High quality intermediate
-    });
-
+    // Generate thumbnail from cached JPEG
     const sharp = (await import('sharp')).default;
-    // Skip withMetadata() for HEIC since we already converted
-    await sharp(outputBuffer)
+    await sharp(cachedJpegPath, {
+      failOnError: false,
+      limitInputPixels: false,
+    })
       .resize(200, 200, { fit: 'inside' })
       .webp({ quality: 80 })
       .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
-    logger.debug('HEIC thumbnail generated', { filePath, duration: `${duration}ms` });
+    logger.debug('HEIC thumbnail generated', { fileId, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
-    logger.error('HEIC thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
-    throw new Error(`HEIC conversion failed: ${error.message}`);
+    logger.error('HEIC thumbnail generation failed', { fileId, error: error.message, duration: `${duration}ms` });
+    throw new Error(`HEIC thumbnail failed: ${error.message}`);
   }
 }
 
@@ -360,7 +426,7 @@ export async function GET(req, { params }) {
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
         } else if (isHeic) {
-          await generateHeicThumbnail(filePath, thumbnailPath);
+          await generateHeicThumbnail(filePath, thumbnailPath, fileId);
         } else if (isVideo) {
           await generateVideoThumbnail(filePath, thumbnailPath);
         } else {

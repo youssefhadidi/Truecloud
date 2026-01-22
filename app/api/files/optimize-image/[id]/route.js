@@ -3,16 +3,74 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import fs from 'fs';
-import { stat } from 'fs/promises';
-import { join, basename } from 'node:path';
+import { stat, readFile, mkdir, access } from 'fs/promises';
+import { join, basename, resolve, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
+import { createHash } from 'crypto';
+import { spawn } from 'child_process';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
+
+// Helper function to convert HEIC to JPEG and cache it
+async function getOrConvertHeicToJpeg(filePath) {
+  const pathHash = createHash('md5').update(filePath).digest('hex');
+  const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
+  
+  // Check if we already have the JPEG cached
+  try {
+    await access(cachedJpegPath);
+    return cachedJpegPath;
+  } catch {
+    // Cache miss, need to convert
+  }
+
+  // Ensure cache directory exists
+  await mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
+
+  // Use FFmpeg with libheif to convert HEIC to JPEG
+  const ffmpegArgs = [
+    '-y',
+    '-i',
+    filePath,
+    '-q:v',
+    '2', // Very high quality JPEG (1-31, lower is better)
+    cachedJpegPath,
+  ];
+
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    let errorOutput = '';
+
+    const timeout = setTimeout(() => {
+      ffmpeg.kill();
+      reject(new Error('HEIC to JPEG conversion timeout'));
+    }, 45000);
+
+    ffmpeg.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    ffmpeg.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        resolve(cachedJpegPath);
+      } else {
+        reject(new Error(`FFmpeg conversion failed: ${errorOutput}`));
+      }
+    });
+
+    ffmpeg.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(new Error(`FFmpeg spawn error: ${err.message}`));
+    });
+  });
+}
 
 export async function GET(req, { params }) {
   try {
@@ -79,8 +137,17 @@ export async function GET(req, { params }) {
     }
 
     try {
+      // For HEIC files, use cached JPEG version
+      let optimizePath = filePath;
+      const fileExt = extname(fileName).toLowerCase();
+      const isHeic = fileExt === '.heic' || fileExt === '.heif';
+      
+      if (isHeic) {
+        optimizePath = await getOrConvertHeicToJpeg(filePath);
+      }
+
       // Optimize image using sharp
-      let pipeline = sharp(filePath, {
+      let pipeline = sharp(optimizePath, {
         failOnError: false,
         limitInputPixels: false,
       });
