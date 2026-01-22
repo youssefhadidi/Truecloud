@@ -7,6 +7,7 @@ import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
+import { pdf } from 'pdf-to-img';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './thumbnails';
@@ -233,65 +234,32 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
   }
 }
 
-// Helper function to generate PDF thumbnails
+// Helper function to generate PDF thumbnails using pdf-to-img
 async function generatePdfThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
-  return new Promise((resolve, reject) => {
-    const args = ['-density', '80', `${filePath}[0]`, '-quality', '65', '-resize', '200x200', thumbnailPath];
+  try {
+    // Convert first page of PDF to images
+    const images = await pdf(filePath, { scale: 2 });
 
-    let magick;
-    try {
-      magick = spawn('convert', args);
-    } catch (spawnError) {
-      const duration = Date.now() - startTime;
-      logger.error('ImageMagick not found', { filePath, error: spawnError.message, duration: `${duration}ms` });
-      reject(new Error('ImageMagick is not installed or not in PATH'));
-      return;
+    if (!images || images.length === 0) {
+      throw new Error('No pages found in PDF');
     }
 
-    let errorOutput = '';
-    let timedOut = false;
+    // Get first page and convert to WebP thumbnail
+    const firstPageBuffer = images[0];
+    const sharp = (await import('sharp')).default;
 
-    // Set 60 second timeout for PDF processing (increased from 15s)
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      magick.kill();
-      const duration = Date.now() - startTime;
-      logger.error('ImageMagick timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('ImageMagick timeout after 60 seconds'));
-    }, 60000);
+    await sharp(firstPageBuffer).resize(200, 200, { fit: 'inside' }).withMetadata().webp({ quality: 80 }).toFile(thumbnailPath);
 
-    magick.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    magick.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      if (code === 0) {
-        logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
-        resolve();
-      } else {
-        logger.error('ImageMagick failed', { filePath, code, duration: `${duration}ms`, errorOutput });
-        if (errorOutput.includes('gswin') || errorOutput.includes('Ghostscript')) {
-          reject(new Error('Ghostscript is required for PDF thumbnails'));
-        } else {
-          reject(new Error(`ImageMagick exited with code ${code}`));
-        }
-      }
-    });
-
-    magick.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('ImageMagick spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error('ImageMagick is not installed or not in PATH'));
-    });
-  });
+    const duration = Date.now() - startTime;
+    logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('PDF thumbnail generation failed', { filePath, error: error.message, duration: `${duration}ms` });
+    throw new Error(`PDF conversion failed: ${error.message}`);
+  }
 }
 
 export async function GET(req, { params }) {
