@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -24,8 +25,42 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const relativePath = searchParams.get('path') || '';
+    let relativePath = searchParams.get('path') || '';
     logger.debug('GET /api/files - Path requested', { path: relativePath, user: session.user.email });
+
+    // Check user permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+
+    logger.debug('GET /api/files - Access check result', {
+      userId: session.user.id,
+      requestedPath: relativePath,
+      isRoot,
+      accessCheck,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path (may be redirected)
+    relativePath = accessCheck.normalizedPath;
+    if (accessCheck.redirected) {
+      logger.info('GET /api/files - Redirected to personal folder', {
+        userId: session.user.id,
+        newPath: relativePath,
+      });
+    }
 
     // Determine base directory based on path
     let targetDir;
@@ -98,7 +133,7 @@ export async function GET(req) {
           id: name, // Use filename as ID
           name: name,
           displayName: displayName,
-          path: filePath,
+          path: filePath.replace(/\\/g, '/'),
           size: stats.size,
           mimeType: lookup(name) || 'application/octet-stream',
           isDirectory: stats.isDirectory(),
@@ -116,6 +151,17 @@ export async function GET(req) {
         return userIdFromFolder === session.user.id; // Only show user's own folder
       });
     }
+
+    // Normalize paths for frontend (hide uploads/user_id/ prefix)
+    files = files.map((file) => {
+      let normalizedPath = file.path.replace(/\\/g, '/');
+      // Remove uploads/ or uploads/user_{id}/ prefix
+      normalizedPath = normalizedPath.replace(/^uploads\/(?:user_[^/]+\/)?/, '');
+      return {
+        ...file,
+        path: normalizedPath,
+      };
+    });
 
     // Sort: directories first, then by name
     files.sort((a, b) => {
@@ -155,13 +201,34 @@ export async function DELETE(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const relativePath = searchParams.get('path') || '';
+    let relativePath = searchParams.get('path') || '';
     const fileName = searchParams.get('id');
 
     if (!fileName) {
       logger.warn('DELETE /api/files - Missing file name');
       return NextResponse.json({ error: 'File name required' }, { status: 400 });
     }
+
+    // Check if user has root access
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'write',
+      isRootUser: isRoot,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('DELETE /api/files - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path
+    relativePath = accessCheck.normalizedPath;
 
     logger.debug('DELETE /api/files - Deleting file', {
       path: relativePath,
@@ -228,7 +295,7 @@ export async function PATCH(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const relativePath = searchParams.get('path') || '';
+    let relativePath = searchParams.get('path') || '';
     const oldName = searchParams.get('id');
     const { newName } = await req.json();
 
@@ -236,6 +303,27 @@ export async function PATCH(req) {
       logger.warn('PATCH /api/files - Missing old or new name');
       return NextResponse.json({ error: 'Old and new names required' }, { status: 400 });
     }
+
+    // Check if user has root access
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'write',
+      isRootUser: isRoot,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('PATCH /api/files - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path
+    relativePath = accessCheck.normalizedPath;
 
     logger.debug('PATCH /api/files - Renaming file', {
       oldName,

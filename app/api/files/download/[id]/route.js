@@ -8,6 +8,7 @@ import { join, basename } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { Readable } from 'stream';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -23,12 +24,28 @@ export async function GET(req, { params }) {
 
     // Get path from query params
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileName.includes('..')) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    // Check user permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+
+    if (!accessCheck.allowed) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path
+    relativePath = accessCheck.normalizedPath;
 
     const filePath = join(UPLOAD_DIR, relativePath, fileName);
 

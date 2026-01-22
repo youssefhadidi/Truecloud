@@ -6,6 +6,7 @@ export function useFileHandlers({
   currentPath,
   setCreatingFolder,
   setNewFolderName,
+  newFolderName,
   addNotification,
   setUploads,
   setUploading,
@@ -33,12 +34,13 @@ export function useFileHandlers({
     setNewFolderName('');
   };
 
-  const confirmCreateFolder = (newFolderName) => {
-    if (!newFolderName.trim()) {
+  const confirmCreateFolder = (folderNameParam) => {
+    const folderName = folderNameParam || newFolderName;
+    if (!folderName || !folderName.trim()) {
       cancelCreateFolder();
       return;
     }
-    createFolderMutation.mutate(newFolderName, {
+    createFolderMutation.mutate(folderName, {
       onSuccess: () => {
         setCreatingFolder(false);
         setNewFolderName('');

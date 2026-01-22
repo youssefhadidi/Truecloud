@@ -6,6 +6,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
 import { logger } from '@/lib/logger';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = './heic'; // Separate directory for HEIC files
@@ -16,7 +17,9 @@ export async function POST(req) {
   const startTime = Date.now();
   let fileName = 'unknown';
   try {
-    logger.info('POST /api/files/upload - Upload request received');
+    logger.info('POST /api/files/upload - Upload request received', {
+      contentType: req.headers.get('content-type'),
+    });
     const session = await auth();
     if (!session) {
       logger.warn('POST /api/files/upload - Unauthorized upload attempt');
@@ -35,13 +38,57 @@ export async function POST(req) {
       await mkdir(HEIC_DIR, { recursive: true });
     }
 
-    const formData = await req.formData();
+    let formData;
+    try {
+      formData = await req.formData();
+    } catch (parseError) {
+      logger.error('POST /api/files/upload - FormData parsing failed', {
+        contentType: req.headers.get('content-type'),
+        error: parseError.message,
+      });
+      return NextResponse.json({ error: 'Invalid FormData format', details: parseError.message }, { status: 400 });
+    }
+
     const file = formData.get('file');
-    const relativePath = formData.get('path') || '';
+    let relativePath = formData.get('path') || '';
 
     if (!file) {
       logger.warn('POST /api/files/upload - No file provided in request');
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    // Check user permissions
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'write',
+      isRootUser: isRoot,
+    });
+
+    logger.debug('POST /api/files/upload - Access check result', {
+      userId: session.user.id,
+      requestedPath: relativePath,
+      isRoot,
+      accessCheck,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('POST /api/files/upload - Access denied', {
+        requestedPath: relativePath,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path (may be redirected)
+    relativePath = accessCheck.normalizedPath;
+    if (accessCheck.redirected) {
+      logger.info('POST /api/files/upload - Redirected to personal folder', {
+        userId: session.user.id,
+        newPath: relativePath,
+      });
     }
 
     fileName = file.name;
@@ -95,13 +142,16 @@ export async function POST(req) {
       duration: `${duration}ms`,
     });
 
+    // Normalize path for frontend response (hide uploads/user_id/ prefix)
+    const normalizedFilePath = filePath.replace(/\\/g, '/').replace(new RegExp(`^${baseDir.replace(/\\/g, '/')}/`), '');
+
     return NextResponse.json({
       success: true,
       file: {
         name: file.name,
         size: file.size,
         mimeType: file.type,
-        path: filePath,
+        path: normalizedFilePath,
       },
     });
   } catch (error) {

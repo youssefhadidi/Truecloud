@@ -23,7 +23,7 @@ export default function FilesPage() {
   const router = useRouter();
 
   // Get all state and helpers from custom hook
-  const state = useFilesPage(status);
+  const state = useFilesPage(status, session);
 
   // Navigation hooks
   const navigation = useNavigation({
@@ -62,6 +62,7 @@ export default function FilesPage() {
     currentPath: state.currentPath,
     setCreatingFolder: state.setCreatingFolder,
     setNewFolderName: state.setNewFolderName,
+    newFolderName: state.newFolderName,
     addNotification: state.addNotification,
     setUploads: state.setUploads,
     setUploading: state.setUploading,

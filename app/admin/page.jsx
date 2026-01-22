@@ -15,12 +15,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(null);
   const [formData, setFormData] = useState({
     email: '',
     username: '',
     password: '',
     name: '',
     role: 'user',
+    hasRootAccess: false,
   });
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function AdminPage() {
     try {
       await axios.post('/api/users', formData);
       setShowForm(false);
-      setFormData({ email: '', username: '', password: '', name: '', role: 'user' });
+      setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
       fetchUsers();
     } catch (error) {
       console.error('Error creating user:', error);
@@ -69,7 +71,7 @@ export default function AdminPage() {
       await axios.patch('/api/users', { ...formData, id: editingUser.id });
       setShowForm(false);
       setEditingUser(null);
-      setFormData({ email: '', username: '', password: '', name: '', role: 'user' });
+      setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
       fetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
@@ -78,10 +80,9 @@ export default function AdminPage() {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-
     try {
       await axios.delete(`/api/users?id=${userId}`);
+      setDeletingUser(null);
       fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -97,20 +98,21 @@ export default function AdminPage() {
       password: '',
       name: user.name || '',
       role: user.role,
+      hasRootAccess: user.hasRootAccess || false,
     });
     setShowForm(true);
   };
 
   const openCreateForm = () => {
     setEditingUser(null);
-    setFormData({ email: '', username: '', password: '', name: '', role: 'user' });
+    setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingUser(null);
-    setFormData({ email: '', username: '', password: '', name: '', role: 'user' });
+    setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
   };
 
   if (status === 'loading' || loading) {
@@ -172,6 +174,7 @@ export default function AdminPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Root Access</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -185,13 +188,18 @@ export default function AdminPage() {
                             {user.role}
                           </span>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.hasRootAccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {user.hasRootAccess ? 'Yes' : 'No'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap ">
                           <div className="flex items-center gap-3">
                             <button onClick={() => openEditForm(user)} className="text-blue-600 hover:text-blue-900" title="Edit">
                               <FiEdit size={18} />
                             </button>
                             {user.role !== 'admin' && (
-                              <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-900" title="Delete">
+                              <button onClick={() => setDeletingUser(user)} className="text-red-600 hover:text-red-900" title="Delete">
                                 <FiTrash2 size={18} />
                               </button>
                             )}
@@ -273,6 +281,18 @@ export default function AdminPage() {
                       <option value="admin">Admin</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="flex items-center gap-2 font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasRootAccess}
+                        onChange={(e) => setFormData({ ...formData, hasRootAccess: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Allow Root Access (Can access all files & folders)
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500">If unchecked, user can only access their personal folder</p>
+                  </div>
                   <div className="flex gap-2 pt-4">
                     <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
                       Cancel
@@ -287,6 +307,39 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deletingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Delete User</h3>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-gray-600">
+                Are you sure you want to delete <strong>{deletingUser.username}</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                <p className="font-semibold mb-1">This action will:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Permanently delete this user account</li>
+                  <li>Delete all files in their personal folder</li>
+                  <li>Remove all associated permissions and sessions</li>
+                </ul>
+              </div>
+              <p className="text-xs text-gray-500">This action cannot be undone.</p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
+              <button onClick={() => setDeletingUser(null)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={() => handleDeleteUser(deletingUser.id)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                Delete User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

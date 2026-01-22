@@ -411,9 +411,6 @@ export default function Viewer3D({ fileId, currentPath, fileName }) {
           </div>
         </div>
       </div>
-      <div className="text-xs text-gray-400 px-4 py-2 bg-gray-800 rounded">
-        <p>Controls: Left Click - Rotate | Right Click - Pan | Scroll/Middle Click - Zoom | Scroll Wheel - Zoom</p>
-      </div>
     </div>
   );
 }

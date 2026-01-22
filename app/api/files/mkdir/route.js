@@ -5,6 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -28,13 +29,48 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Folder name required' }, { status: 400 });
     }
 
+    // Check user permissions
+    let pathToUse = relativePath || '';
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: pathToUse,
+      operation: 'write',
+      isRootUser: isRoot,
+    });
+
+    logger.debug('POST /api/files/mkdir - Access check result', {
+      userId: session.user.id,
+      requestedPath: pathToUse,
+      isRoot,
+      accessCheck,
+    });
+
+    if (!accessCheck.allowed) {
+      logger.warn('POST /api/files/mkdir - Access denied', {
+        requestedPath: pathToUse,
+        userId: session.user.id,
+        reason: accessCheck.error,
+      });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+
+    // Use normalized path
+    const adjustedPath = accessCheck.normalizedPath;
+    if (accessCheck.redirected) {
+      logger.info('POST /api/files/mkdir - Redirected to personal folder', {
+        userId: session.user.id,
+        newPath: adjustedPath,
+      });
+    }
+
     logger.debug('POST /api/files/mkdir - Creating folder', {
       folderName,
-      path: relativePath,
+      path: adjustedPath,
       user: session.user.email,
     });
 
-    const targetPath = join(UPLOAD_DIR, relativePath || '', name);
+    const targetPath = join(UPLOAD_DIR, adjustedPath, name);
 
     // Security: prevent directory traversal
     if (!(resolve(targetPath) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {

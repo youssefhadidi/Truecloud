@@ -5,7 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { checkUserIsAdmin } from '@/lib/permissions';
 import bcrypt from 'bcryptjs';
-import { mkdir } from 'fs/promises';
+import { mkdir, rmdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'node:path';
 
@@ -31,6 +31,7 @@ export async function GET(req) {
         username: true,
         name: true,
         role: true,
+        hasRootAccess: true,
         createdAt: true,
       },
       orderBy: {
@@ -58,7 +59,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { email, username, password, name, role } = await req.json();
+    const { email, username, password, name, role, hasRootAccess } = await req.json();
 
     if (!email || !username || !password) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -84,6 +85,7 @@ export async function POST(req) {
         password: hashedPassword,
         name: name || username,
         role: role || 'user',
+        hasRootAccess: hasRootAccess || false,
       },
     });
 
@@ -103,6 +105,7 @@ export async function POST(req) {
           username: user.username,
           name: user.name,
           role: user.role,
+          hasRootAccess: user.hasRootAccess,
         },
       },
       { status: 201 },
@@ -146,9 +149,22 @@ export async function DELETE(req) {
       return NextResponse.json({ error: 'Cannot delete admin users' }, { status: 403 });
     }
 
+    // Delete user from database
     await prisma.user.delete({
       where: { id: userId },
     });
+
+    // Delete user's personal folder if it exists
+    const userDir = join(UPLOAD_DIR, `user_${userId}`);
+    if (existsSync(userDir)) {
+      try {
+        // Recursively remove the directory
+        await rmdir(userDir, { recursive: true, force: true });
+      } catch (folderError) {
+        console.error('Error deleting user folder:', folderError);
+        // Don't fail the user deletion if folder deletion fails
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -170,7 +186,7 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { id, email, username, name, password, role } = await req.json();
+    const { id, email, username, name, password, role, hasRootAccess } = await req.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
@@ -182,6 +198,7 @@ export async function PATCH(req) {
     if (name) updateData.name = name;
     if (password) updateData.password = await bcrypt.hash(password, 10);
     if (role) updateData.role = role;
+    if (typeof hasRootAccess === 'boolean') updateData.hasRootAccess = hasRootAccess;
 
     const user = await prisma.user.update({
       where: { id },
@@ -192,6 +209,7 @@ export async function PATCH(req) {
         username: true,
         name: true,
         role: true,
+        hasRootAccess: true,
       },
     });
 
