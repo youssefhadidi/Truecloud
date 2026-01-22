@@ -13,25 +13,32 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './.heic'; // Store original HEIC files
 const HEIC_CACHE_DIR = process.env.HEIC_CACHE_DIR || './.heic-cache';
 
-// Convert HEIC to PNG (lossless)
-async function convertHeicToPng(inputPath, outputPath) {
+// Convert HEIC to WebP
+async function convertHeicToWebp(inputPath, outputPath) {
   const startTime = Date.now();
-  logger.debug('Starting HEIC to PNG conversion', { inputPath, outputPath });
+  logger.debug('Starting HEIC to WebP conversion', { inputPath, outputPath });
 
   try {
-    // Use heic-convert to convert HEIC to PNG
+    // Use heic-convert to convert HEIC to JPEG buffer, then use Sharp to convert to WebP
     const heicConvert = (await import('heic-convert')).default;
+    const sharp = (await import('sharp')).default;
 
     const inputBuffer = await fsPromises.readFile(inputPath);
-    const outputBuffer = await heicConvert({
+    const jpegBuffer = await heicConvert({
       buffer: inputBuffer,
-      format: 'PNG', // Use PNG for lossless conversion
+      format: 'JPEG',
+      quality: 0.95,
     });
 
-    await fsPromises.writeFile(outputPath, outputBuffer);
+    // Convert JPEG to WebP
+    const webpBuffer = await sharp(jpegBuffer)
+      .webp({ quality: 85 })
+      .toBuffer();
+
+    await fsPromises.writeFile(outputPath, webpBuffer);
 
     const duration = Date.now() - startTime;
-    logger.info('HEIC to PNG conversion completed', { inputPath, duration: `${duration}ms` });
+    logger.info('HEIC to WebP conversion completed', { inputPath, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error('HEIC conversion failed', { inputPath, error: error.message, duration: `${duration}ms` });
@@ -120,7 +127,7 @@ export async function GET(req) {
 
     // Generate cache filename based on file path hash
     const pathHash = createHash('md5').update(filePath).digest('hex');
-    const cachedFileName = `${pathHash}.png`;
+    const cachedFileName = `${pathHash}.webp`;
     const cachedFilePath = join(cacheDir, cachedFileName);
 
     // Check if cached version exists and is newer than source
@@ -144,7 +151,7 @@ export async function GET(req) {
         logger.debug('GET /api/files/convert-heic - Serving cached conversion', { fileId, duration: `${duration}ms` });
         return new NextResponse(fileStream, {
           headers: {
-            'Content-Type': 'image/png',
+            'Content-Type': 'image/webp',
             'Cache-Control': 'public, max-age=31536000, immutable',
             ETag: etag,
             'Content-Length': cachedStats.size.toString(),
@@ -156,9 +163,9 @@ export async function GET(req) {
       logger.debug('GET /api/files/convert-heic - No cached conversion, converting', { fileId });
     }
 
-    // Convert HEIC to PNG
+    // Convert HEIC to WebP
     logger.info('GET /api/files/convert-heic - Converting HEIC file', { fileId });
-    await convertHeicToPng(filePath, cachedFilePath);
+    await convertHeicToWebp(filePath, cachedFilePath);
 
     // Serve the converted file
     const stats = await fsPromises.stat(cachedFilePath);
@@ -169,7 +176,7 @@ export async function GET(req) {
 
     return new NextResponse(fileStream, {
       headers: {
-        'Content-Type': 'image/png',
+        'Content-Type': 'image/webp',
         'Cache-Control': 'public, max-age=31536000, immutable',
         ETag: etag,
         'Content-Length': stats.size.toString(),

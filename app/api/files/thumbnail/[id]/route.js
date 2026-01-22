@@ -53,54 +53,23 @@ const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prev
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
   const startTime = Date.now();
-  const isBuffer = Buffer.isBuffer(filePathOrBuffer);
+  const isBuffer = Buffer.isBuffer(filePathOrBuffer); 
   const inputType = isBuffer ? 'buffer' : 'file';
   logger.debug('Starting Sharp thumbnail generation', { type: inputType });
 
-  try {
-    const sharp = (await import('sharp')).default;
-
-    // Try to process the image with failOnError: false to handle corrupted images
-    const result = await sharp(filePathOrBuffer, {
-      failOnError: false,
-      limitInputPixels: false,
-    })
-      .resize(150, 150, { fit: 'inside' })
-      .webp({ quality: 80 }) // WebP format for better compression
-      .toFile(thumbnailPath);
-
-    const duration = Date.now() - startTime;
-    logger.debug('Sharp thumbnail generated', { type: inputType, duration: `${duration}ms` });
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.warn('Sharp failed, generating placeholder thumbnail', { type: inputType, error: error.message, duration: `${duration}ms` });
-
-    // On any error, immediately generate placeholder (fail fast)
-    try {
-      await generatePlaceholderThumbnail(thumbnailPath);
-      logger.debug('Placeholder thumbnail generated as fallback', { type: inputType, duration: `${duration}ms` });
-    } catch (placeholderError) {
-      logger.error('Placeholder thumbnail generation also failed', { error: placeholderError.message });
-      throw new Error(`Thumbnail generation failed: ${error.message}`);
-    }
-  }
-}
-
-// Helper function to generate a placeholder thumbnail for corrupted images
-async function generatePlaceholderThumbnail(thumbnailPath) {
   const sharp = (await import('sharp')).default;
-  
-  // Generate a solid gray placeholder for corrupted images
-  await sharp({
-    create: {
-      width: 150,
-      height: 150,
-      channels: 3,
-      background: { r: 100, g: 100, b: 100 },
-    },
+
+  // Try to process the image with failOnError: false to handle corrupted images
+  await sharp(filePathOrBuffer, {
+    failOnError: false,
+    limitInputPixels: false,
   })
-    .webp({ quality: 80 })
+    .resize(150, 150, { fit: 'inside' })
+    .webp({ quality: 80 }) // WebP format for better compression
     .toFile(thumbnailPath);
+
+  const duration = Date.now() - startTime;
+  logger.debug('Sharp thumbnail generated', { type: inputType, duration: `${duration}ms` });
 }
 
 // Helper function to generate video thumbnails with FFmpeg
@@ -203,16 +172,19 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
   logger.debug('Starting PDF thumbnail generation', { filePath });
 
+  // Use JPEG as intermediate instead of PNG, then convert to WebP
+  const jpgPath = thumbnailPath.replace('.webp', '.jpg');
+
   const gsArgs = [
     '-q',
     '-dNOPAUSE',
     '-dBATCH',
     '-dSAFER',
-    '-sDEVICE=png16m',
+    '-sDEVICE=jpeg',
     '-dFirstPage=1',
     '-dLastPage=1',
     '-r150',
-    `-sOutputFile=${thumbnailPath.replace('.webp', '.png')}`,
+    `-sOutputFile=${jpgPath}`,
     filePath,
   ];
 
@@ -246,13 +218,12 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
       }
 
       try {
-        // Convert PNG to WebP
-        const pngPath = thumbnailPath.replace('.webp', '.png');
+        // Convert JPEG to WebP
         const sharp = (await import('sharp')).default;
-        await sharp(pngPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 90 }).toFile(thumbnailPath);
+        await sharp(jpgPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 90 }).toFile(thumbnailPath);
 
-        // Clean up temporary PNG
-        await fsPromises.unlink(pngPath);
+        // Clean up temporary JPEG
+        await fsPromises.unlink(jpgPath);
 
         const duration = Date.now() - startTime;
         logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
@@ -273,6 +244,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
     });
   });
 }
+
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
@@ -348,7 +320,7 @@ export async function GET(req, { params }) {
     }
 
     // Supported file extensions
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', 'png','.webp', '.svg', '.ico'];
     const heicExtensions = ['.heic', '.heif'];
     const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
     const pdfExtensions = ['.pdf'];

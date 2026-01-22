@@ -80,9 +80,12 @@ export async function GET(req, { params }) {
 
     try {
       // Optimize image using sharp
-      let pipeline = sharp(filePath);
+      let pipeline = sharp(filePath, {
+        failOnError: false,
+        limitInputPixels: false,
+      });
 
-      // Get metadata and apply EXIF orientation rotation
+      // Get metadata and apply EXIF orientation rotation in one operation
       const metadata = await pipeline.metadata();
       
       // Auto-rotate based on EXIF orientation
@@ -119,7 +122,7 @@ export async function GET(req, { params }) {
         });
       }
 
-      // Convert to WebP for better compression or JPEG
+      // Convert to WebP for better compression
       const format = 'webp';
       const optimizedBuffer = await pipeline.toFormat(format, { quality }).toBuffer();
 
