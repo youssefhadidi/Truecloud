@@ -10,6 +10,7 @@ import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils'
 
 export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Initialize fullscreen state from localStorage
   useEffect(() => {
@@ -20,6 +21,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       }
     }
   }, []);
+
+  // Reset loading state when file changes
+  useEffect(() => {
+    setIsLoading(true);
+  }, [viewerFile?.id]);
 
   // Save fullscreen state to localStorage
   const toggleFullscreen = () => {
@@ -55,6 +61,10 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     if (type === 'image' && isHeic(file.name)) {
       return `/api/files/convert-heic?id=${encodeURIComponent(file.id)}&path=${encodeURIComponent(currentPath)}`;
     }
+    // Use optimization endpoint for images for faster loading
+    if (type === 'image') {
+      return `/api/files/optimize-image/${encodeURIComponent(file.id)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
+    }
     const baseUrl = `/api/files/${type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download'}/${file.id}`;
     return `${baseUrl}?path=${encodeURIComponent(currentPath)}`;
   };
@@ -71,7 +81,26 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} onClick={stopProp} />;
 
       case 'image':
-        return <img src={getFileUrl(viewerFile, 'image')} alt={viewerFile.name} className={containerClass} onClick={stopProp} />;
+        return (
+          <div className="relative w-full h-full flex items-center justify-center">
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+                  <p className="text-gray-300 text-sm">Loading image...</p>
+                </div>
+              </div>
+            )}
+            <img 
+              src={getFileUrl(viewerFile, 'image')} 
+              alt={viewerFile.name} 
+              className={containerClass}
+              onClick={stopProp}
+              onLoad={() => setIsLoading(false)}
+              onError={() => setIsLoading(false)}
+            />
+          </div>
+        );
 
       case 'video':
         return (

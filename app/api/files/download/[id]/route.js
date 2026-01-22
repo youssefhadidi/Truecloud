@@ -94,11 +94,20 @@ export async function GET(req, { params }) {
     const fileBuffer = fs.readFileSync(filePath);
     const mimeType = lookup(fileName) || 'application/octet-stream';
 
+    // Determine cache duration based on file type
+    let cacheControl = 'no-store'; // Default: don't cache
+    if (mimeType.startsWith('image/')) {
+      cacheControl = 'public, max-age=31536000'; // 1 year for images
+    } else if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) {
+      cacheControl = 'public, max-age=604800'; // 1 week for media
+    }
+
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': mimeType,
         'Content-Length': fileStats.size.toString(),
-        'Content-Disposition': `attachment; filename="${basename(fileName)}"`,
+        'Content-Disposition': `inline; filename="${basename(fileName)}"`,
+        'Cache-Control': cacheControl,
       },
     });
   } catch (error) {
