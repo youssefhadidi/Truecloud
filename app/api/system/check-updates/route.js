@@ -32,16 +32,19 @@ export async function GET(req) {
     logger.debug('Checking for updates', { repo: gitHubRepo, currentVersion });
 
     try {
-      // Fetch latest release from GitHub API
-      const response = await fetch(`https://api.github.com/repos/${gitHubRepo}/releases/latest`, {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          // Optional: add auth token for higher rate limits
-          ...(process.env.GITHUB_TOKEN && { 'Authorization': `token ${process.env.GITHUB_TOKEN}` }),
-        },
-      });
+      // Fetch package.json directly from GitHub main branch (no releases or tags needed)
+      const response = await fetch(
+        `https://raw.githubusercontent.com/${gitHubRepo}/main/package.json`,
+        {
+          headers: {
+            // Optional: add auth token for higher rate limits
+            ...(process.env.GITHUB_TOKEN && { 'Authorization': `token ${process.env.GITHUB_TOKEN}` }),
+          },
+        }
+      );
 
       if (!response.ok) {
+<<<<<<< HEAD
         const errorText = await response.text();
         const errorMsg = response.status === 404 
           ? `Repository not found: ${gitHubRepo}` 
@@ -50,6 +53,14 @@ export async function GET(req) {
         logger.warn('Failed to fetch latest release from GitHub', { 
           status: response.status, 
           error: errorText,
+=======
+        const errorMsg = response.status === 404 
+          ? `Repository not found: ${gitHubRepo}` 
+          : `GitHub error: ${response.status}`;
+        
+        logger.warn('Failed to fetch package.json from GitHub', { 
+          status: response.status, 
+>>>>>>> 2d8ec9d14682efc1f0e138ed0f94039cdfe313aa
           repo: gitHubRepo,
         });
         
@@ -61,29 +72,26 @@ export async function GET(req) {
         }, { status: 200 });
       }
 
-      const release = await response.json();
-      const latestVersion = release.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+      const remotePackageJson = await response.json();
+      const latestVersion = remotePackageJson.version;
       
-      // Simple version comparison (string comparison works for semantic versioning in most cases)
+      // Simple version comparison
       const hasUpdate = latestVersion !== currentVersion && latestVersion > currentVersion;
 
       logger.info('Update check complete', { 
         currentVersion, 
         latestVersion, 
         hasUpdate,
-        releaseUrl: release.html_url,
       });
 
       return NextResponse.json({
         hasUpdate,
         currentVersion,
         latestVersion,
-        releaseUrl: release.html_url,
-        releaseNotes: release.body,
-        publishedAt: release.published_at,
+        releaseUrl: `https://github.com/${gitHubRepo}/commits/main`,
       });
     } catch (error) {
-      logger.error('Error fetching GitHub release info', { error: error.message });
+      logger.error('Error fetching GitHub package.json', { error: error.message });
       return NextResponse.json({ 
         hasUpdate: false, 
         message: `Error checking for updates: ${error.message}`,
