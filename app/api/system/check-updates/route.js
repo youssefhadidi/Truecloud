@@ -53,7 +53,6 @@ export async function GET(req) {
         const errorMsg = response.status === 404 
           ? `Repository not found: ${gitHubRepo}` 
           : `GitHub error: ${response.status}`;
-        
         logger.warn('Failed to fetch package.json from GitHub', { 
           status: response.status,
           repo: gitHubRepo,
