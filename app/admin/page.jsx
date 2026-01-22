@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { FiUsers, FiPlus, FiEdit, FiTrash2, FiLogOut, FiArrowLeft, FiX, FiRefreshCw } from 'react-icons/fi';
 import axios from 'axios';
+import LogViewer from '@/components/LogViewer';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -365,6 +366,11 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Live Logs Section */}
+        <div className="mt-8">
+          <LogViewer />
         </div>
       </div>
 

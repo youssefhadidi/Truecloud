@@ -105,14 +105,20 @@ function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, pre
     convertErrorOutput += data.toString();
   });
 
-  convert.on('close', (code) => {
+  convert.on('close', async (code) => {
     clearTimeout(timeout);
     if (timedOut) return;
     
     if (code === 0) {
-      resolve(cachedJpegPath);
+      // Verify the file was actually created
+      try {
+        await access(cachedJpegPath);
+        resolve(cachedJpegPath);
+      } catch {
+        reject(new Error(`ImageMagick conversion created no output file at ${cachedJpegPath}`));
+      }
     } else {
-      reject(new Error(`HEIC conversion failed with both tools: ${convertErrorOutput.substring(0, 200)}`));
+      reject(new Error(`HEIC conversion failed: ${convertErrorOutput.substring(0, 200)}`));
     }
   });
 
