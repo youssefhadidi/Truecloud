@@ -48,7 +48,7 @@ class Semaphore {
   }
 }
 
-const thumbnailSemaphore = new Semaphore(50); // Increased parallelization for better throughput
+const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prevent resource exhaustion
 
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
@@ -61,7 +61,7 @@ async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
     const sharp = (await import('sharp')).default;
 
     // Try to process the image with failOnError: false to handle corrupted images
-    await sharp(filePathOrBuffer, {
+    const result = await sharp(filePathOrBuffer, {
       failOnError: false,
       limitInputPixels: false,
     })
@@ -73,44 +73,16 @@ async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
     logger.debug('Sharp thumbnail generated', { type: inputType, duration: `${duration}ms` });
   } catch (error) {
     const duration = Date.now() - startTime;
-    logger.error('Sharp thumbnail generation failed', { type: inputType, error: error.message, duration: `${duration}ms` });
+    logger.warn('Sharp failed, generating placeholder thumbnail', { type: inputType, error: error.message, duration: `${duration}ms` });
 
-    // If Sharp fails with JPEG corruption error, skip FFmpeg and go straight to placeholder
-    if (!isBuffer && (error.message.includes('VipsJpeg') || error.message.includes('Invalid SOS'))) {
-      logger.warn('Sharp failed with corrupted JPEG, generating placeholder thumbnail', { type: inputType, error: error.message });
-      try {
-        await generatePlaceholderThumbnail(thumbnailPath);
-        logger.info('Placeholder thumbnail generated for corrupted image');
-        return;
-      } catch (placeholderError) {
-        logger.error('Placeholder thumbnail generation failed', { error: placeholderError.message });
-        throw new Error(`Image conversion failed: ${error.message}`);
-      }
+    // On any error, immediately generate placeholder (fail fast)
+    try {
+      await generatePlaceholderThumbnail(thumbnailPath);
+      logger.debug('Placeholder thumbnail generated as fallback', { type: inputType, duration: `${duration}ms` });
+    } catch (placeholderError) {
+      logger.error('Placeholder thumbnail generation also failed', { error: placeholderError.message });
+      throw new Error(`Thumbnail generation failed: ${error.message}`);
     }
-
-    // For other errors, try FFmpeg as fallback
-    if (!isBuffer && error.message.includes('JPEG')) {
-      logger.warn('Sharp failed with JPEG error, attempting FFmpeg fallback', { type: inputType });
-      try {
-        await generateImageThumbnailWithFFmpeg(filePathOrBuffer, thumbnailPath);
-        const fallbackDuration = Date.now() - startTime;
-        logger.debug('FFmpeg fallback thumbnail generated', { type: inputType, duration: `${fallbackDuration}ms` });
-        return;
-      } catch (ffmpegError) {
-        logger.error('FFmpeg fallback also failed', { type: inputType, error: ffmpegError.message });
-        // Try placeholder as final fallback
-        try {
-          await generatePlaceholderThumbnail(thumbnailPath);
-          logger.info('Placeholder thumbnail generated as final fallback');
-          return;
-        } catch (placeholderError) {
-          logger.error('Placeholder thumbnail generation also failed', { error: placeholderError.message });
-          throw new Error(`Image conversion failed: ${error.message}`);
-        }
-      }
-    }
-
-    throw new Error(`Sharp conversion failed: ${error.message}`);
   }
 }
 
