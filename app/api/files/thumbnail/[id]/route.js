@@ -103,63 +103,6 @@ async function generatePlaceholderThumbnail(thumbnailPath) {
     .toFile(thumbnailPath);
 }
 
-// Helper function to generate image thumbnails with FFmpeg (fallback for corrupted images)
-async function generateImageThumbnailWithFFmpeg(filePath, thumbnailPath) {
-  const startTime = Date.now();
-  logger.debug('Starting FFmpeg image thumbnail generation', { filePath });
-
-  const ffmpegArgs = [
-    '-y',
-    '-i',
-    filePath,
-    '-vf',
-    'scale=150:150:force_original_aspect_ratio=decrease',
-    '-q:v',
-    '80', // WebP quality (0-100, higher = better quality)
-    thumbnailPath,
-  ];
-
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-    let errorOutput = '';
-    let timedOut = false;
-
-    // Set 15 second timeout for images
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      ffmpeg.kill();
-      const duration = Date.now() - startTime;
-      logger.error('FFmpeg image timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('FFmpeg timeout after 15 seconds'));
-    }, 15000);
-
-    ffmpeg.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    ffmpeg.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      if (code === 0) {
-        logger.debug('FFmpeg image thumbnail generated', { filePath, duration: `${duration}ms` });
-        resolve();
-      } else {
-        logger.error('FFmpeg image failed', { filePath, code, duration: `${duration}ms`, errorOutput });
-        reject(new Error(`FFmpeg exited with code ${code}: ${errorOutput}`));
-      }
-    });
-
-    ffmpeg.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('FFmpeg spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error(`FFmpeg spawn error: ${err.message}`));
-    });
-  });
-}
-
 // Helper function to generate video thumbnails with FFmpeg
 async function generateVideoThumbnail(filePath, thumbnailPath) {
   const startTime = Date.now();
@@ -451,33 +394,48 @@ export async function GET(req, { params }) {
         } else {
           // Image: auto-rotate based on EXIF orientation
           const sharp = (await import('sharp')).default;
-          const metadata = await sharp(filePath).metadata();
-          const orientationRotations = {
-            2: { flop: true },
-            3: { rotate: 180 },
-            4: { flip: true },
-            5: { rotate: 90, flop: true },
-            6: { rotate: 90 },
-            7: { rotate: 270, flop: true },
-            8: { rotate: 270 },
-          };
           
-          const rotation = orientationRotations[metadata.orientation] || null;
-          
-          if (rotation) {
-            let rotated = sharp(filePath);
-            if (rotation.rotate) {
-              rotated = rotated.rotate(rotation.rotate);
+          try {
+            // Create a single Sharp instance and get metadata in one operation
+            let sharpInstance = sharp(filePath, {
+              failOnError: false,
+              limitInputPixels: false,
+            });
+            
+            const metadata = await sharpInstance.metadata();
+            
+            // Map EXIF orientation to transformation
+            const orientationRotations = {
+              2: { flop: true },
+              3: { rotate: 180 },
+              4: { flip: true },
+              5: { rotate: 90, flop: true },
+              6: { rotate: 90 },
+              7: { rotate: 270, flop: true },
+              8: { rotate: 270 },
+            };
+            
+            const rotation = orientationRotations[metadata.orientation] || null;
+            
+            // Apply rotation transformations if needed
+            if (rotation) {
+              if (rotation.rotate) {
+                sharpInstance = sharpInstance.rotate(rotation.rotate);
+              }
+              if (rotation.flip) {
+                sharpInstance = sharpInstance.flip();
+              }
+              if (rotation.flop) {
+                sharpInstance = sharpInstance.flop();
+              }
             }
-            if (rotation.flip) {
-              rotated = rotated.flip();
-            }
-            if (rotation.flop) {
-              rotated = rotated.flop();
-            }
-            const buffer = await rotated.toBuffer();
+            
+            // Convert to buffer with metadata (without original orientation)
+            const buffer = await sharpInstance.toBuffer();
             await generateImageThumbnail(buffer, thumbnailPath);
-          } else {
+          } catch (error) {
+            // If orientation detection fails, process without rotation
+            logger.warn('Orientation detection failed, processing without rotation', { fileId, error: error.message });
             await generateImageThumbnail(filePath, thumbnailPath);
           }
         }
