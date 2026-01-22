@@ -135,13 +135,20 @@ export async function GET(req) {
 
     // Convert 3D file to GLB using Assimp
     try {
-      const tempDir = join(UPLOAD_DIR, '.temp');
+      // Use fully resolved upload directory to ensure consistency
+      const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
+      const tempDir = join(uploadsDir, '.temp');
 
       // Ensure temp directory exists with proper permissions
       try {
         await fsPromises.mkdir(tempDir, { recursive: true, mode: 0o755 });
+        logger.debug('Temp directory ready', { tempDir });
       } catch (mkdirError) {
-        logger.error('Failed to create temp directory', { tempDir, error: mkdirError.message });
+        logger.error('Failed to create temp directory', {
+          tempDir,
+          error: mkdirError.message,
+          code: mkdirError.code,
+        });
         return NextResponse.json({ error: 'Failed to create temporary directory for conversion' }, { status: 500 });
       }
 
@@ -153,6 +160,11 @@ export async function GET(req) {
 
       // Copy original file to temp location with proper error handling
       try {
+        logger.debug('Copying file to temp location', {
+          source: fullPath,
+          destination: tempInputPath,
+          sourceExists: fs.existsSync(fullPath),
+        });
         await fsPromises.copyFile(fullPath, tempInputPath);
       } catch (copyError) {
         logger.error('Failed to copy file to temp directory', {
@@ -160,6 +172,8 @@ export async function GET(req) {
           destination: tempInputPath,
           error: copyError.message,
           code: copyError.code,
+          sourceExists: fs.existsSync(fullPath),
+          tempDirExists: fs.existsSync(tempDir),
         });
         return NextResponse.json({ error: `Failed to prepare file for conversion: ${copyError.message}` }, { status: 500 });
       }
@@ -207,16 +221,23 @@ export async function GET(req) {
       } finally {
         // Clean up temp files
         try {
-          if (fs.existsSync(tempInputPath)) await fsPromises.unlink(tempInputPath);
-          if (fs.existsSync(tempGLBPath)) await fsPromises.unlink(tempGLBPath);
-          if (fs.existsSync(tempGltfPath)) await fsPromises.unlink(tempGltfPath);
-          if (fs.existsSync(tempBinPath)) await fsPromises.unlink(tempBinPath);
+          const filesToClean = [tempInputPath, tempGLBPath, tempGltfPath, tempBinPath];
+          for (const file of filesToClean) {
+            if (fs.existsSync(file)) {
+              await fsPromises.unlink(file);
+              logger.debug('Cleaned up temp file', { file });
+            }
+          }
         } catch (cleanupError) {
           logger.warn('Error cleaning up temp files', { error: cleanupError.message });
         }
       }
     } catch (error) {
-      logger.error('Assimp conversion error', { fileName, error: error.message });
+      logger.error('Assimp conversion error', {
+        fileName,
+        error: error.message,
+        stack: error.stack,
+      });
       return NextResponse.json({ error: 'Failed to convert 3D file: ' + error.message }, { status: 500 });
     }
 
