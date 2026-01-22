@@ -148,7 +148,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath) {
     const outputBuffer = await heicConvert({
       buffer: inputBuffer,
       format: 'JPEG',
-      quality: 0.9, // High quality intermediate
+      quality: 0.5, // High quality intermediate
     });
 
     const sharp = (await import('sharp')).default;
