@@ -44,26 +44,15 @@ export async function GET(req) {
       );
 
       if (!response.ok) {
-<<<<<<< HEAD
-        const errorText = await response.text();
-        const errorMsg = response.status === 404 
-          ? `Repository not found: ${gitHubRepo}` 
-          : `GitHub API error: ${response.status}`;
-        
-        logger.warn('Failed to fetch latest release from GitHub', { 
-          status: response.status, 
-          error: errorText,
-=======
         const errorMsg = response.status === 404 
           ? `Repository not found: ${gitHubRepo}` 
           : `GitHub error: ${response.status}`;
-        
+
         logger.warn('Failed to fetch package.json from GitHub', { 
-          status: response.status, 
->>>>>>> 2d8ec9d14682efc1f0e138ed0f94039cdfe313aa
+          status: response.status,
           repo: gitHubRepo,
         });
-        
+
         return NextResponse.json({ 
           hasUpdate: false, 
           message: errorMsg,
@@ -74,7 +63,7 @@ export async function GET(req) {
 
       const remotePackageJson = await response.json();
       const latestVersion = remotePackageJson.version;
-      
+
       // Simple version comparison
       const hasUpdate = latestVersion !== currentVersion && latestVersion > currentVersion;
 
