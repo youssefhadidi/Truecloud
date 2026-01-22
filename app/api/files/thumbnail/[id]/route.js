@@ -246,7 +246,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
     '-sDEVICE=png16m',
     '-dFirstPage=1',
     '-dLastPage=1',
-    '-r72',
+    '-r150',
     `-sOutputFile=${thumbnailPath.replace('.webp', '.png')}`,
     filePath,
   ];
@@ -284,7 +284,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
         // Convert PNG to WebP
         const pngPath = thumbnailPath.replace('.webp', '.png');
         const sharp = (await import('sharp')).default;
-        await sharp(pngPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbnailPath);
+        await sharp(pngPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 90 }).toFile(thumbnailPath);
 
         // Clean up temporary PNG
         await fsPromises.unlink(pngPath);
