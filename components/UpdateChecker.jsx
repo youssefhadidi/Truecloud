@@ -3,7 +3,6 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
 import Notifications from '@/components/Notifications';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 
