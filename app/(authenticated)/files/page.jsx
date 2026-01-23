@@ -221,38 +221,6 @@ export default function FilesPage() {
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
-              {state.creatingFolder && (
-                <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-                  <div className="flex items-center gap-3 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
-                    <FiFolder className="text-blue-500" size={24} />
-                    <input
-                      type="text"
-                      value={state.newFolderName}
-                      onChange={(e) => state.setNewFolderName(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') handlers.confirmCreateFolder();
-                        if (e.key === 'Escape') handlers.cancelCreateFolder();
-                      }}
-                      onBlur={handlers.confirmCreateFolder}
-                      className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      autoFocus
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handlers.cancelCreateFolder}
-                        className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
-                      <button onClick={handlers.confirmCreateFolder} className="px-3 py-1  bg-blue-600 text-white rounded hover:bg-blue-700">
-                        Create
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
