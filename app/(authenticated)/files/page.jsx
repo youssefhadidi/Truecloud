@@ -9,7 +9,6 @@ import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiA
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import Notifications from '@/components/Notifications';
-import UserMenu from '@/components/UserMenu';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -75,7 +74,7 @@ export default function FilesPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -85,19 +84,7 @@ export default function FilesPage() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
-        <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
-          <div className="flex justify-between items-center gap-2 sm:gap-4">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Truecloud</h1>
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="w-full h-full bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
       {/* Main Content */}
       <main
         className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 flex flex-col relative"
