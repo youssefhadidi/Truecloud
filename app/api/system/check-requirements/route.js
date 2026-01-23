@@ -72,7 +72,7 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y ffmpeg',
   },
   {
-    name: 'aria2c',
+    name: 'aria2',
     command: 'aria2c',
     description: 'Torrent and metalink download utility',
     installable: true,
