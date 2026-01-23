@@ -1,3 +1,5 @@
+/** @format */
+
 'use client';
 
 import { useState } from 'react';
@@ -41,33 +43,31 @@ export default function UpdateChecker() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 rounded-lg shadow-lg p-4 max-w-sm z-50">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <h3 className="font-semibold text-blue-900">Update Available</h3>
-          <p className="text-sm text-blue-700 mt-1">
-            {updateInfo.currentVersion} → {updateInfo.latestVersion}
-          </p>
-          {updateInfo.releaseNotes && (
-            <details className="mt-2 text-xs text-blue-600">
-              <summary className="cursor-pointer hover:text-blue-700">Release notes</summary>
-              <div className="mt-2 p-2 bg-white rounded border border-blue-100 max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
-                {updateInfo.releaseNotes}
-              </div>
-            </details>
-          )}
-        </div>
-        <button
-          onClick={handleUpdate}
-          disabled={runUpdateMutation.isPending}
-          className="flex-shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors"
-        >
-          {runUpdateMutation.isPending ? 'Updating...' : 'Update Now'}
-        </button>
-      </div>
-    </div>
-
     <>
+      <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 rounded-lg shadow-lg p-4 max-w-sm z-50">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900">Update Available</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              {updateInfo.currentVersion} → {updateInfo.latestVersion}
+            </p>
+            {updateInfo.releaseNotes && (
+              <details className="mt-2 text-xs text-blue-600">
+                <summary className="cursor-pointer hover:text-blue-700">Release notes</summary>
+                <div className="mt-2 p-2 bg-white rounded border border-blue-100 max-h-40 overflow-y-auto whitespace-pre-wrap break-words">{updateInfo.releaseNotes}</div>
+              </details>
+            )}
+          </div>
+          <button
+            onClick={handleUpdate}
+            disabled={runUpdateMutation.isPending}
+            className="flex-shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors"
+          >
+            {runUpdateMutation.isPending ? 'Updating...' : 'Update Now'}
+          </button>
+        </div>
+      </div>
+
       {/* Notifications */}
       <Notifications notifications={notifications} />
 
