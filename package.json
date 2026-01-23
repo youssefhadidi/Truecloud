@@ -15,7 +15,8 @@
     "create-admin": "node scripts/create-admin.js",
     "generate-secret": "node scripts/generate-secret.js",
     "pull": "git pull",
-    "runUpdate": "npm run pull && npm run build && npm run restart",
+    "stopServ": "systemctl stop truecloud",
+    "runUpdate": "npm run stopServ && npm run pull && npm run build && npm run restart",
     "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'"
   },
   "dependencies": {
