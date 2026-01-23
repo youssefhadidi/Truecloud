@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
@@ -56,7 +57,7 @@ async function getOrConvertHeicToJpeg(filePath, fileId) {
   const startTime = Date.now();
   const pathHash = createHash('md5').update(filePath).digest('hex');
   const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
-  
+
   // Check if we already have the JPEG cached
   try {
     await fsPromises.access(cachedJpegPath);
@@ -99,7 +100,7 @@ async function convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, s
       clearTimeout(timeout);
       if (timedOut) return;
       const duration = Date.now() - startTime;
-      
+
       if (code === 0) {
         logger.debug('HEIC converted to JPEG and cached with heif-convert', { fileId, duration: `${duration}ms` });
         resolve(cachedJpegPath);
@@ -152,7 +153,7 @@ function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, pre
     clearTimeout(timeout);
     if (timedOut) return;
     const duration = Date.now() - startTime;
-    
+
     if (code === 0) {
       // Verify the file was actually created
       try {
@@ -180,7 +181,7 @@ function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, pre
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
   const startTime = Date.now();
-  const isBuffer = Buffer.isBuffer(filePathOrBuffer); 
+  const isBuffer = Buffer.isBuffer(filePathOrBuffer);
   const inputType = isBuffer ? 'buffer' : 'file';
   logger.debug('Starting Sharp thumbnail generation', { type: inputType });
 
@@ -270,7 +271,7 @@ async function generateHeicThumbnail(filePath, thumbnailPath, fileId) {
   try {
     // Get or create cached JPEG version
     const cachedJpegPath = await getOrConvertHeicToJpeg(filePath, fileId);
-    
+
     // Generate thumbnail from cached JPEG
     const sharp = (await import('sharp')).default;
     await sharp(cachedJpegPath, {
@@ -298,18 +299,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
   // Use JPEG as intermediate instead of PNG, then convert to WebP
   const jpgPath = thumbnailPath.replace('.webp', '.jpg');
 
-  const gsArgs = [
-    '-q',
-    '-dNOPAUSE',
-    '-dBATCH',
-    '-dSAFER',
-    '-sDEVICE=jpeg',
-    '-dFirstPage=1',
-    '-dLastPage=1',
-    '-r150',
-    `-sOutputFile=${jpgPath}`,
-    filePath,
-  ];
+  const gsArgs = ['-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=jpeg', '-dFirstPage=1', '-dLastPage=1', '-r150', `-sOutputFile=${jpgPath}`, filePath];
 
   return new Promise((resolve, reject) => {
     const gs = spawn('gs', gsArgs);
@@ -368,7 +358,6 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
   });
 }
 
-
 export async function GET(req, { params }) {
   const startTime = Date.now();
   let fileId = 'unknown';
@@ -413,9 +402,20 @@ export async function GET(req, { params }) {
     }
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
+    const heicDir = resolve(process.cwd(), HEIC_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
-    let filePath = join(uploadsDir, relativePath, fileId);
+
+    // Try HEIC directory first, then uploads directory (matches convert-heic and optimize-image behavior)
+    let filePath = join(heicDir, relativePath, fileId);
+    try {
+      await fsPromises.access(filePath);
+      logger.debug('GET /api/files/thumbnail - Found in heic directory', { filePath });
+    } catch {
+      // Not in heic directory, try uploads
+      filePath = join(uploadsDir, relativePath, fileId);
+      logger.debug('GET /api/files/thumbnail - Trying uploads directory', { filePath });
+    }
 
     // Check if file exists
     try {
@@ -443,7 +443,7 @@ export async function GET(req, { params }) {
     }
 
     // Supported file extensions
-    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', 'png','.webp', '.svg', '.ico'];
+    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', 'png', '.webp', '.svg', '.ico'];
     const heicExtensions = ['.heic', '.heif'];
     const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
     const pdfExtensions = ['.pdf'];
@@ -489,16 +489,16 @@ export async function GET(req, { params }) {
         } else {
           // Image: auto-rotate based on EXIF orientation
           const sharp = (await import('sharp')).default;
-          
+
           try {
             // Create a single Sharp instance and get metadata in one operation
             let sharpInstance = sharp(filePath, {
               failOnError: false,
               limitInputPixels: false,
             });
-            
+
             const metadata = await sharpInstance.metadata();
-            
+
             // Map EXIF orientation to transformation
             const orientationRotations = {
               2: { flop: true },
@@ -509,9 +509,9 @@ export async function GET(req, { params }) {
               7: { rotate: 270, flop: true },
               8: { rotate: 270 },
             };
-            
+
             const rotation = orientationRotations[metadata.orientation] || null;
-            
+
             // Apply rotation transformations if needed
             if (rotation) {
               if (rotation.rotate) {
@@ -524,7 +524,7 @@ export async function GET(req, { params }) {
                 sharpInstance = sharpInstance.flop();
               }
             }
-            
+
             // Convert to buffer with metadata (without original orientation)
             const buffer = await sharpInstance.toBuffer();
             await generateImageThumbnail(buffer, thumbnailPath);
