@@ -3,15 +3,16 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { FiUpload, FiLink, FiPlay } from 'react-icons/fi';
-import { useStartTorrentDownload } from '@/lib/api/downloads';
+import { FiUpload, FiLink, FiPlay, FiDownload } from 'react-icons/fi';
+import { useStartDownload } from '@/lib/api/downloads';
 
 export default function TorrentDownloadComponent({ onDownloadStart }) {
-  const [magnetLink, setMagnetLink] = useState('');
+  const [url, setUrl] = useState('');
   const [torrentFile, setTorrentFile] = useState(null);
+  const [downloadType, setDownloadType] = useState('http'); // 'http' or 'torrent'
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
-  const startDownloadMutation = useStartTorrentDownload();
+  const startDownloadMutation = useStartDownload();
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -22,22 +23,29 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
       }
       setTorrentFile(file);
       setError('');
-      setMagnetLink('');
+      setUrl('');
     }
   };
 
-  const handleMagnetLinkChange = (e) => {
+  const handleUrlChange = (e) => {
     const value = e.target.value;
-    setMagnetLink(value);
+    setUrl(value);
     if (value) {
       setTorrentFile(null);
       setError('');
+
+      // Auto-detect download type based on URL
+      if (value.startsWith('magnet:')) {
+        setDownloadType('torrent');
+      } else if (value.startsWith('http://') || value.startsWith('https://')) {
+        setDownloadType('http');
+      }
     }
   };
 
   const handleStartDownload = async () => {
-    if (!torrentFile && !magnetLink) {
-      setError('Please select a torrent file or enter a magnet link');
+    if (!torrentFile && !url) {
+      setError('Please select a file or enter a URL');
       return;
     }
 
@@ -48,16 +56,19 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
 
       if (torrentFile) {
         formData.append('torrentFile', torrentFile);
+        formData.append('downloadType', 'torrent');
       } else {
-        formData.append('magnetLink', magnetLink);
+        formData.append('url', url);
+        formData.append('downloadType', downloadType);
       }
 
       const data = await startDownloadMutation.mutateAsync(formData);
       onDownloadStart?.(data);
 
       // Reset form
-      setMagnetLink('');
+      setUrl('');
       setTorrentFile(null);
+      setDownloadType('http');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -73,6 +84,43 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
       {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{error}</div>}
 
       <div className="space-y-6">
+        {/* URL Input - HTTP/HTTPS or Magnet Link */}
+        <div>
+          <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {downloadType === 'http' ? (
+              <>
+                <FiDownload className="inline mr-2" />
+                Download URL (HTTP/HTTPS)
+              </>
+            ) : (
+              <>
+                <FiLink className="inline mr-2" />
+                Magnet Link or URL
+              </>
+            )}
+          </label>
+          <input
+            id="url"
+            type="text"
+            value={url}
+            onChange={handleUrlChange}
+            placeholder="https://example.com/file.zip or magnet:?xt=urn:btih:..."
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          />
+          {url && (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Detected type: {downloadType === 'http' ? 'HTTP Download' : 'Torrent/Magnet'}
+            </p>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
+          <span className="text-sm text-gray-500 dark:text-gray-400">OR</span>
+          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
+        </div>
+
         {/* Torrent File Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -98,33 +146,10 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="flex items-center gap-4">
-          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">OR</span>
-          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
-        </div>
-
-        {/* Magnet Link */}
-        <div>
-          <label htmlFor="magnet" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            <FiLink className="inline mr-2" />
-            Magnet Link
-          </label>
-          <input
-            id="magnet"
-            type="text"
-            value={magnetLink}
-            onChange={handleMagnetLinkChange}
-            placeholder="magnet:?xt=urn:btih:..."
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-          />
-        </div>
-
         {/* Start Download Button */}
         <button
           onClick={handleStartDownload}
-          disabled={startDownloadMutation.isPending || (!torrentFile && !magnetLink)}
+          disabled={startDownloadMutation.isPending || (!torrentFile && !url)}
           className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
         >
           <FiPlay size={18} />

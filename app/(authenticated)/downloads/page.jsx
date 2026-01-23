@@ -3,19 +3,49 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FiArrowLeft, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiRefreshCw, FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
-import { useTorrentDownloads } from '@/lib/api/downloads';
+import { useTorrentDownloads, usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function DownloadsPage() {
   const router = useRouter();
-  const { data: downloads, isLoading, refetch } = useTorrentDownloads();
+  const { data: downloads = [], isLoading, refetch } = useTorrentDownloads();
   const { addNotification } = useNotifications();
+  const pauseDownloadMutation = usePauseDownload();
+  const resumeDownloadMutation = useResumeDownload();
+  const removeDownloadMutation = useRemoveDownload();
 
   const handleDownloadStart = (downloadInfo) => {
     addNotification('success', `Download started: ${downloadInfo.name}`);
     refetch();
+  };
+
+  const handlePause = async (download) => {
+    try {
+      await pauseDownloadMutation.mutateAsync(download.gid);
+      addNotification('success', `Paused: ${download.name}`);
+    } catch (error) {
+      addNotification('error', `Failed to pause: ${error.message}`);
+    }
+  };
+
+  const handleResume = async (download) => {
+    try {
+      await resumeDownloadMutation.mutateAsync(download.gid);
+      addNotification('success', `Resumed: ${download.name}`);
+    } catch (error) {
+      addNotification('error', `Failed to resume: ${error.message}`);
+    }
+  };
+
+  const handleRemove = async (download) => {
+    try {
+      await removeDownloadMutation.mutateAsync(download.gid);
+      addNotification('success', `Removed: ${download.name}`);
+    } catch (error) {
+      addNotification('error', `Failed to remove: ${error.message}`);
+    }
   };
 
   return (
@@ -86,7 +116,7 @@ export default function DownloadsPage() {
                         </div>
 
                         {/* Download Info */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4">
                           <div>
                             <p className="text-xs text-gray-500 dark:text-gray-500">Progress</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.progress}%</p>
@@ -103,6 +133,48 @@ export default function DownloadsPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-500">Total Size</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.totalSize}</p>
                           </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        {download.error && (
+                          <div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-600 dark:text-red-400 text-xs">
+                            Error: {download.error}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          {download.status === 'active' && (
+                            <button
+                              onClick={() => handlePause(download)}
+                              disabled={pauseDownloadMutation.isPending}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50 disabled:opacity-50 text-sm"
+                            >
+                              <FiPause size={14} />
+                              Pause
+                            </button>
+                          )}
+                          {download.status === 'paused' && (
+                            <button
+                              onClick={() => handleResume(download)}
+                              disabled={resumeDownloadMutation.isPending}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 text-sm"
+                            >
+                              <FiPlay size={14} />
+                              Resume
+                            </button>
+                          )}
+                          {(download.status === 'complete' || download.status === 'error' || download.status === 'removed') && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {download.status === 'complete' ? 'Download completed' : download.status === 'error' ? 'Download failed' : 'Download removed'}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleRemove(download)}
+                            disabled={removeDownloadMutation.isPending}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 text-sm ml-auto"
+                          >
+                            <FiTrash2 size={14} />
+                            Remove
+                          </button>
                         </div>
                       </div>
                     ))}

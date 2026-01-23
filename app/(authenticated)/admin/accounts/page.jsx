@@ -130,7 +130,7 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="p-8">
+    <>
       <h1 className="text-3xl font-bold text-white mb-8">User Accounts</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -144,21 +144,11 @@ export default function AccountsPage() {
               <table className="w-full">
                 <thead className="bg-gray-700 border-b border-gray-600">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Username
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Root Access
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Root Access</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -167,38 +157,22 @@ export default function AccountsPage() {
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-white">{user.username}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-300">{user.email}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            user.role === 'admin' ? 'bg-purple-900 text-purple-200' : 'bg-gray-700 text-gray-300'
-                          }`}
-                        >
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-900 text-purple-200' : 'bg-gray-700 text-gray-300'}`}>
                           {user.role}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            user.hasRootAccess ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
-                          }`}
-                        >
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.hasRootAccess ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
                           {user.hasRootAccess ? 'Yes' : 'No'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => openEditForm(user)}
-                            className="text-blue-400 hover:text-blue-300"
-                            title="Edit"
-                          >
+                          <button onClick={() => openEditForm(user)} className="text-blue-400 hover:text-blue-300" title="Edit">
                             <FiEdit size={18} />
                           </button>
                           {user.role !== 'admin' && (
-                            <button
-                              onClick={() => setDeletingUser(user)}
-                              className="text-red-400 hover:text-red-300"
-                              title="Delete"
-                            >
+                            <button onClick={() => setDeletingUser(user)} className="text-red-400 hover:text-red-300" title="Delete">
                               <FiTrash2 size={18} />
                             </button>
                           )}
@@ -225,10 +199,7 @@ export default function AccountsPage() {
             </div>
 
             {!showForm ? (
-              <button
-                onClick={openCreateForm}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
+              <button onClick={openCreateForm} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 <FiPlus />
                 Add New User
               </button>
@@ -264,9 +235,7 @@ export default function AccountsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-gray-300 mb-1">
-                    Password {editingUser && '(leave blank to keep current)'}
-                  </label>
+                  <label className="block font-medium text-gray-300 mb-1">Password {editingUser && '(leave blank to keep current)'}</label>
                   <input
                     type="password"
                     value={formData.password}
@@ -299,11 +268,7 @@ export default function AccountsPage() {
                   <p className="mt-1 text-xs text-gray-400">If unchecked, user can only access their personal folder</p>
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeForm}
-                    className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700"
-                  >
+                  <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700">
                     Cancel
                   </button>
                   <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -332,10 +297,7 @@ export default function AccountsPage() {
                     Update Available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
                   </p>
                   {!showConfirmUpdate ? (
-                    <button
-                      onClick={() => setShowConfirmUpdate(true)}
-                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
-                    >
+                    <button onClick={() => setShowConfirmUpdate(true)} className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
                       Update Now
                     </button>
                   ) : (
@@ -364,6 +326,6 @@ export default function AccountsPage() {
           />
         </div>
       )}
-    </div>
+    </>
   );
 }

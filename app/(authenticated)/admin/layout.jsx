@@ -40,7 +40,7 @@ export default function AdminLayout({ children }) {
   ];
 
   return (
-    <div className="bg-gray-900 flex">
+    <div className="bg-gray-900 flex flex-grow">
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
         {/* Header */}
@@ -79,7 +79,9 @@ export default function AdminLayout({ children }) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col">
         {/* Page content */}
-        <div className="flex-1 overflow-auto">{children}</div>
+        <div className="flex-1 overflow-auto">
+          <div className="p-8">{children}</div>
+        </div>
       </div>
     </div>
   );
