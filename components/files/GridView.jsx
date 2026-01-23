@@ -20,12 +20,12 @@ const BREAKPOINT = {
 };
 
 const getColumnsCount = (width) => {
-  if (width < BREAKPOINT.sm) return 2;
-  if (width < BREAKPOINT.md) return 3;
-  if (width < BREAKPOINT.lg) return 4;
-  if (width < BREAKPOINT.xl) return 5;
-  if (width < BREAKPOINT['2xl']) return 8;
-  return 9;
+  if (width < BREAKPOINT.sm) return 3;
+  if (width < BREAKPOINT.md) return 4;
+  if (width < BREAKPOINT.lg) return 5;
+  if (width < BREAKPOINT.xl) return 6;
+  if (width < BREAKPOINT['2xl']) return 7;
+  return 8;
 };
 
 const GridView = ({

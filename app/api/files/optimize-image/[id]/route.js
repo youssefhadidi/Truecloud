@@ -3,17 +3,16 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import fs from 'fs';
-import { stat, readFile, mkdir, access } from 'fs/promises';
-import { join, basename, resolve, extname } from 'node:path';
+import { stat, mkdir } from 'fs/promises';
+import { join, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { createHash } from 'crypto';
-import { spawn } from 'child_process';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
+const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
@@ -32,8 +31,8 @@ export async function GET(req, { params }) {
     const url = new URL(req.url);
     let relativePath = url.searchParams.get('path') || '';
     const quality = Math.min(Math.max(parseInt(url.searchParams.get('quality') || '80'), 30), 100);
-    const maxWidth = parseInt(url.searchParams.get('w') || '2000');
-    const maxHeight = parseInt(url.searchParams.get('h') || '2000');
+    const maxWidth = parseInt(url.searchParams.get('w') || '1440');
+    const maxHeight = parseInt(url.searchParams.get('h') || '1440');
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileName.includes('..')) {
@@ -83,6 +82,34 @@ export async function GET(req, { params }) {
     }
 
     try {
+      // Generate cache key based on file path, quality, and dimensions
+      const cacheKey = createHash('md5')
+        .update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`)
+        .digest('hex');
+
+      // Create cache path preserving directory structure
+      const relativeCacheDir = join(relativePath);
+      const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
+      const cacheFileName = `${cacheKey}.webp`;
+      const cachePath = join(cacheDir, cacheFileName);
+
+      // Check if cached version exists and is newer than source file
+      if (fs.existsSync(cachePath)) {
+        const cacheStats = await stat(cachePath);
+        if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
+          // Serve cached version
+          const cachedBuffer = fs.readFileSync(cachePath);
+          return new NextResponse(cachedBuffer, {
+            headers: {
+              'Content-Type': 'image/webp',
+              'Content-Length': cachedBuffer.length.toString(),
+              'Cache-Control': 'public, max-age=31536000',
+              'X-Cache': 'HIT',
+            },
+          });
+        }
+      }
+
       // For HEIC files, use cached JPEG version
       let optimizePath = filePath;
       const fileExt = extname(fileName).toLowerCase();
@@ -139,11 +166,21 @@ export async function GET(req, { params }) {
       const format = 'webp';
       const optimizedBuffer = await pipeline.toFormat(format, { quality }).toBuffer();
 
+      // Cache the optimized image
+      try {
+        await mkdir(cacheDir, { recursive: true });
+        fs.writeFileSync(cachePath, optimizedBuffer);
+      } catch (cacheError) {
+        console.error('Failed to cache optimized image:', cacheError);
+        // Continue even if caching fails
+      }
+
       return new NextResponse(optimizedBuffer, {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': optimizedBuffer.length.toString(),
           'Cache-Control': 'public, max-age=31536000',
+          'X-Cache': 'MISS',
         },
       });
     } catch (sharpError) {
