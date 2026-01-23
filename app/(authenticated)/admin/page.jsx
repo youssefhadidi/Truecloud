@@ -88,7 +88,12 @@ export default function AdminPage() {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('/api/users', formData);
+      // Ensure admins always have root access
+      const userData = {
+        ...formData,
+        hasRootAccess: formData.role === 'admin' ? true : formData.hasRootAccess,
+      };
+      await axios.post('/api/users', userData);
       setShowForm(false);
       setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
       fetchUsers();
@@ -101,7 +106,13 @@ export default function AdminPage() {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     try {
-      await axios.patch('/api/users', { ...formData, id: editingUser.id });
+      // Ensure admins always have root access
+      const userData = {
+        ...formData,
+        id: editingUser.id,
+        hasRootAccess: formData.role === 'admin' ? true : formData.hasRootAccess,
+      };
+      await axios.patch('/api/users', userData);
       setShowForm(false);
       setEditingUser(null);
       setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
@@ -343,13 +354,16 @@ export default function AdminPage() {
                         <label className="flex items-center gap-2 font-medium text-gray-700">
                           <input
                             type="checkbox"
-                            checked={formData.hasRootAccess}
+                            checked={formData.role === 'admin' ? true : formData.hasRootAccess}
                             onChange={(e) => setFormData({ ...formData, hasRootAccess: e.target.checked })}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            disabled={formData.role === 'admin'}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                           />
                           Allow Root Access (Can access all files & folders)
                         </label>
-                        <p className="mt-1 text-xs text-gray-500">If unchecked, user can only access their personal folder</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {formData.role === 'admin' ? 'Admins always have root access' : 'If unchecked, user can only access their personal folder'}
+                        </p>
                       </div>
                       <div className="flex gap-2 pt-4">
                         <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">

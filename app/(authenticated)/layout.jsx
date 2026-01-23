@@ -11,6 +11,15 @@ export default function AuthenticatedLayout({ children }) {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  // Debug: log session data
+  useEffect(() => {
+    console.log('AuthenticatedLayout - Session:', {
+      status,
+      userRole: session?.user?.role,
+      isAdmin: session?.user?.role === 'admin',
+    });
+  }, [status, session]);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');

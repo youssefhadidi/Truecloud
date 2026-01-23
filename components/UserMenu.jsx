@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { FiChevronDown, FiUser, FiDownload, FiLogOut } from 'react-icons/fi';
 
-export default function UserMenu({ email, isAdmin }) {
+export default function UserMenu({ email, isAdmin = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const router = useRouter();
@@ -23,6 +23,11 @@ export default function UserMenu({ email, isAdmin }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Debug: log when isAdmin changes
+  useEffect(() => {
+    console.log('UserMenu - isAdmin prop changed:', isAdmin);
+  }, [isAdmin]);
 
   const handleAdminPanel = () => {
     router.push('/admin');
