@@ -200,9 +200,7 @@ export default function AdminPage() {
             <button
               onClick={() => setActiveTab('accounts')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'accounts'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === 'accounts' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Accounts
@@ -210,9 +208,7 @@ export default function AdminPage() {
             <button
               onClick={() => setActiveTab('requirements')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'requirements'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === 'requirements' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               System Requirements
@@ -220,9 +216,7 @@ export default function AdminPage() {
             <button
               onClick={() => setActiveTab('logs')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'logs'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === 'logs' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Logs
@@ -240,49 +234,51 @@ export default function AdminPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Root Access</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {users.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap  font-medium text-gray-900">{user.username}</td>
-                        <td className="px-6 py-4 whitespace-nowrap  text-gray-600">{user.email}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.hasRootAccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {user.hasRootAccess ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap ">
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => openEditForm(user)} className="text-blue-600 hover:text-blue-900" title="Edit">
-                              <FiEdit size={18} />
-                            </button>
-                            {user.role !== 'admin' && (
-                              <button onClick={() => setDeletingUser(user)} className="text-red-600 hover:text-red-900" title="Delete">
-                                <FiTrash2 size={18} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Root Access</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {users.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap  font-medium text-gray-900">{user.username}</td>
+                          <td className="px-6 py-4 whitespace-nowrap  text-gray-600">{user.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}
+                            >
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.hasRootAccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {user.hasRootAccess ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap ">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => openEditForm(user)} className="text-blue-600 hover:text-blue-900" title="Edit">
+                                <FiEdit size={18} />
+                              </button>
+                              {user.role !== 'admin' && (
+                                <button onClick={() => setDeletingUser(user)} className="text-red-600 hover:text-red-900" title="Delete">
+                                  <FiTrash2 size={18} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
             </div>
 
             {/* User Form */}
@@ -404,14 +400,13 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* System Requirements Tab */}
         {activeTab === 'requirements' && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <SystemRequirementsCheck />
-        </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <SystemRequirementsCheck />
+          </div>
         )}
 
         {/* Logs Tab */}
