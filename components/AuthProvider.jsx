@@ -12,5 +12,9 @@ export default function AuthProvider({ children }) {
     initVersionChecker();
   }, []);
 
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus={true}>
+      {children}
+    </SessionProvider>
+  );
 }

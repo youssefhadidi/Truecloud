@@ -30,6 +30,16 @@ export default function AdminPage() {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
 
+  // Debug session
+  useEffect(() => {
+    console.log('[AdminPage] Session status:', status);
+    console.log('[AdminPage] Session data:', {
+      email: session?.user?.email,
+      role: session?.user?.role,
+      id: session?.user?.id,
+    });
+  }, [status, session]);
+
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role !== 'admin') {
       router.push('/files');
