@@ -40,15 +40,12 @@ export default function AdminLayout({ children }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900 flex">
+    <div className="bg-gray-900 flex">
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-700">
-          <Link
-            href="/files"
-            className="flex items-center gap-2 text-gray-300 hover:text-white mb-4 transition-colors"
-          >
+          <Link href="/files" className="flex items-center gap-2 text-gray-300 hover:text-white mb-4 transition-colors">
             <FiArrowLeft />
             <span>Back to Files</span>
           </Link>
@@ -66,9 +63,7 @@ export default function AdminLayout({ children }) {
                   <Link
                     href={item.href}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     <Icon size={20} />

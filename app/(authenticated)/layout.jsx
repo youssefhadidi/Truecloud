@@ -40,7 +40,7 @@ function AuthenticatedLayoutContent({ children }) {
       </header>
 
       {/* Page Content */}
-      <main className="flex-1 overflow-y-auto w-full">{children}</main>
+      <main className="flex-1 flex overflow-y-auto w-full">{children}</main>
     </div>
   );
 }
