@@ -86,7 +86,7 @@ export default function FilesPage() {
     <div className="w-full h-full bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
       {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 flex flex-col relative"
+        className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 pb-16 sm:pb-1 flex flex-col relative"
         onDragOver={dragDrop.handleDragOver}
         onDragLeave={dragDrop.handleDragLeave}
         onDrop={(e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
@@ -125,8 +125,8 @@ export default function FilesPage() {
               <span className="hidden sm:inline">New Folder</span>
             </button>
 
-            {/* Search Input */}
-            <div className="relative flex-1 sm:flex-none min-w-0 sm:min-w-48 flex items-center px-3">
+            {/* Search Input - hidden on mobile */}
+            <div className="relative hidden sm:flex flex-1 sm:flex-none min-w-0 sm:min-w-48 items-center px-3">
               <FiSearch className="absolute text-gray-400 flex-shrink-0" size={16} />
               <input
                 type="text"
@@ -248,6 +248,11 @@ export default function FilesPage() {
                   >
                     <ListView
                       files={state.files}
+                      creatingFolder={state.creatingFolder}
+                      newFolderName={state.newFolderName}
+                      onNewFolderNameChange={state.setNewFolderName}
+                      onCancelCreateFolder={handlers.cancelCreateFolder}
+                      onConfirmCreateFolder={handlers.confirmCreateFolder}
                       deletingFile={state.deletingFile}
                       renamingFile={state.renamingFile}
                       newFileName={state.newFileName}
@@ -357,6 +362,20 @@ export default function FilesPage() {
           onNavigate={mediaViewer.navigateViewer}
         />
       </Suspense>
+
+      {/* Mobile Search Bar - fixed at bottom, semi-transparent */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 z-30">
+        <div className="relative flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2">
+          <FiSearch className="text-gray-400 flex-shrink-0 mr-2" size={16} />
+          <input
+            type="text"
+            value={state.searchQuery}
+            onChange={(e) => state.setSearchQuery(e.target.value)}
+            placeholder="Search files..."
+            className="w-full bg-transparent text-gray-900 dark:text-white text-sm placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none"
+          />
+        </div>
+      </div>
 
       {/* Upload Status */}
       <UploadStatus uploads={state.uploads} />

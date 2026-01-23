@@ -4,7 +4,7 @@
 
 import { useRef, useMemo, useCallback, useState } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -270,8 +270,8 @@ const GridView = ({
                       }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="bg-black bg-opacity-60 rounded-full p-2">
-                        <FiVideo className="text-white" size={20} />
+                      <div className="bg-gray-800 bg-opacity-50 rounded-full p-3">
+                        <FiPlay className="text-white" size={24} />
                       </div>
                     </div>
                   </div>
