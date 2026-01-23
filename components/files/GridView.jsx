@@ -96,7 +96,7 @@ const GridView = ({
     ({ columnIndex, key, rowIndex, style, parent }) => {
       const containerWidth = parent.props.width;
       const columns = getColumnsCount(containerWidth);
-      const gap = 8;
+      const gap = 4;
       const itemIndex = rowIndex * columns + columnIndex;
       const item = allItems[itemIndex];
 
@@ -113,7 +113,7 @@ const GridView = ({
           }}
         >
           {item.isCreating ? (
-            <div className="bg-blue-50 dark:bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 h-full">
+            <div className="bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 h-full">
               <input
                 type="text"
                 value={newFolderName}
@@ -122,7 +122,7 @@ const GridView = ({
                   if (e.key === 'Enter') onConfirmCreateFolder();
                   if (e.key === 'Escape') onCancelCreateFolder();
                 }}
-                className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white"
                 autoFocus
                 onFocus={(e) => e.target.select()}
               />
@@ -132,7 +132,7 @@ const GridView = ({
                     e.stopPropagation();
                     onCancelCreateFolder();
                   }}
-                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                  className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                 >
                   Cancel
                 </button>
@@ -149,7 +149,7 @@ const GridView = ({
             </div>
           ) : (
             <div
-              className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
+              className="group relative bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
               style={{ WebkitTapHighlightColor: 'transparent' }}
               onClick={(e) => {
                 // Only navigate to folder if not showing actions and clicking on folder
@@ -163,15 +163,15 @@ const GridView = ({
               onTouchMove={handleTouchMove}
             >
               {deletingFile?.id === item.id ? (
-                <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
-                  <p className="text-red-800 dark:text-red-200 font-medium text-center ">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
+                <div className="absolute inset-0 bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
+                  <p className="text-red-200 font-medium text-center ">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
                   <div className="flex gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onCancelDelete();
                       }}
-                      className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                     >
                       Cancel
                     </button>
@@ -187,7 +187,7 @@ const GridView = ({
                   </div>
                 </div>
               ) : renamingFile?.id === item.id ? (
-                <div className="absolute inset-0 bg-blue-50 dark:bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
+                <div className="absolute inset-0 bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
                   <input
                     type="text"
                     value={newFileName}
@@ -196,7 +196,7 @@ const GridView = ({
                       if (e.key === 'Enter') onConfirmRename();
                       if (e.key === 'Escape') onCancelRename();
                     }}
-                    className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white "
+                    className="w-full px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white "
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -206,7 +206,7 @@ const GridView = ({
                         e.stopPropagation();
                         onCancelRename();
                       }}
-                      className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                     >
                       Cancel
                     </button>
@@ -224,7 +224,7 @@ const GridView = ({
               ) : null}
 
               <div
-                className={`w-full aspect-square flex items-center justify-center mb-2 bg-white dark:bg-gray-600 rounded-lg relative overflow-hidden ${
+                className={`w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 rounded-lg relative overflow-hidden ${
                   isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)
                     ? 'cursor-pointer hover:opacity-90 transition-opacity'
                     : ''
@@ -237,7 +237,7 @@ const GridView = ({
                 }}
               >
                 {processingFile === item.id && (
-                  <div className="absolute inset-0 bg-white dark:bg-gray-600 bg-opacity-75 dark:bg-opacity-75 rounded-lg flex items-center justify-center z-10">
+                  <div className="absolute inset-0 bg-gray-600 bg-opacity-75 rounded-lg flex items-center justify-center z-10">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                   </div>
                 )}
@@ -298,16 +298,16 @@ const GridView = ({
                 )}
               </div>
 
-              <div className=" font-medium text-gray-900 dark:text-white truncate px-1" title={item.displayName || item.name}>
+              <div className=" font-medium text-white truncate px-1" title={item.displayName || item.name}>
                 {item.displayName || item.name}
               </div>
 
-              <div className="text-xs text-gray-500 dark:text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
+              <div className="text-xs text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
 
               {/* Action buttons - show on hover for desktop, on long press for mobile */}
               {(shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
                 <div
-                  className={`absolute top-2 right-2 flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
+                  className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
                     containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
                   }`}
                   onClick={(e) => e.stopPropagation()}
@@ -319,22 +319,22 @@ const GridView = ({
                       setShowingActionsFor(null);
                       onOpenMediaViewer(item);
                     }}
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="View"
                     disabled={processingFile === item.id}
                   >
                     {is3dFile(item.name) ? (
-                      <FiBox size={16} className="text-orange-600 dark:text-orange-400" />
+                      <FiBox size={16} className="text-orange-400" />
                     ) : isVideo(item.name) ? (
-                      <FiVideo size={16} className="text-purple-600 dark:text-purple-400" />
+                      <FiVideo size={16} className="text-purple-400" />
                     ) : isImage(item.name) ? (
-                      <FiImage size={16} className="text-green-600 dark:text-green-400" />
+                      <FiImage size={16} className="text-green-400" />
                     ) : isAudio(item.name) ? (
-                      <FiVideo size={16} className="text-blue-600 dark:text-blue-400" />
+                      <FiVideo size={16} className="text-blue-400" />
                     ) : isPdf(item.name) ? (
-                      <FiFile size={16} className="text-red-600 dark:text-red-400" />
+                      <FiFile size={16} className="text-red-400" />
                     ) : isXlsx(item.name) ? (
-                      <FiFile size={16} className="text-green-600 dark:text-green-400" />
+                      <FiFile size={16} className="text-green-400" />
                     ) : null}
                   </button>
                 )}
@@ -344,7 +344,7 @@ const GridView = ({
                     setShowingActionsFor(null);
                     onInitiateRename(item);
                   }}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-blue-400 hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Rename"
                   disabled={processingFile === item.id}
                 >
@@ -356,7 +356,7 @@ const GridView = ({
                     setShowingActionsFor(null);
                     onHandleDownload(item.id, item.name);
                   }}
-                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-indigo-400 hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Download"
                   disabled={processingFile === item.id}
                 >
@@ -368,7 +368,7 @@ const GridView = ({
                     setShowingActionsFor(null);
                     onInitiateDelete(item);
                   }}
-                  className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-red-400 hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Delete"
                   disabled={processingFile === item.id}
                 >

@@ -116,15 +116,15 @@ const ListView = ({
             return (
               <div
                 key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-200 dark:border-gray-700"
+                className="absolute left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
                 style={{
                   top: 0,
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
-                  <FiFolder className="text-blue-600 dark:text-blue-400" size={20} />
+                <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
+                  <FiFolder className="text-blue-400" size={20} />
                   <input
                     type="text"
                     value={newFolderName}
@@ -133,14 +133,14 @@ const ListView = ({
                       if (e.key === 'Enter') onConfirmCreateFolder();
                       if (e.key === 'Escape') onCancelCreateFolder();
                     }}
-                    className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="flex-1 px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white text-sm"
                     placeholder="Folder name..."
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={onCancelCreateFolder}
-                      className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                     >
                       Cancel
                     </button>
@@ -157,21 +157,21 @@ const ListView = ({
             return (
               <div
                 key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-red-50 dark:bg-red-900/20 border-b border-gray-200 dark:border-gray-700"
+                className="absolute left-0 w-full px-6 py-4 bg-red-900/20 border-b border-gray-700"
                 style={{
                   top: 0,
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-4 py-2">
-                  <span className="text-red-800 dark:text-red-200 font-medium">
+                <div className="flex items-center justify-between bg-red-900/20 border border-red-800 rounded px-4 py-2">
+                  <span className="text-red-200 font-medium">
                     Delete {file.isDirectory ? 'folder' : 'file'} "{file.name}"?
                   </span>
                   <div className="flex gap-2">
                     <button
                       onClick={cancelDelete}
-                      className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1  bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                     >
                       Cancel
                     </button>
@@ -188,14 +188,14 @@ const ListView = ({
             return (
               <div
                 key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-200 dark:border-gray-700"
+                className="absolute left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
                 style={{
                   top: 0,
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
+                <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
                   {getFileIcon(file)}
                   <input
                     type="text"
@@ -205,13 +205,13 @@ const ListView = ({
                       if (e.key === 'Enter') confirmRename();
                       if (e.key === 'Escape') cancelRename();
                     }}
-                    className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="flex-1 px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white"
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={cancelRename}
-                      className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                      className="px-3 py-1  bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                     >
                       Cancel
                     </button>
@@ -227,7 +227,7 @@ const ListView = ({
           return (
             <div
               key={virtualRow.key}
-              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 items-center cursor-pointer transition-colors`}
+              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-700 border-b border-gray-700 items-center cursor-pointer transition-colors`}
               style={{
                 top: 0,
                 height: `${virtualRow.size}px`,
@@ -256,13 +256,13 @@ const ListView = ({
                   <div className="flex-shrink-0">{getFileIcon(file)}</div>
                 )}
                 {file.isDirectory ? (
-                  <div className="font-medium text-indigo-600 dark:text-indigo-400 truncate">{file.displayName || file.name}</div>
+                  <div className="font-medium text-indigo-400 truncate">{file.displayName || file.name}</div>
                 ) : (
-                  <div className="font-medium text-gray-900 dark:text-white truncate">{file.displayName || file.name}</div>
+                  <div className="font-medium text-white truncate">{file.displayName || file.name}</div>
                 )}
               </div>
-              <div className="hidden sm:block text-gray-500 dark:text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
-              <div className="hidden sm:block text-gray-500 dark:text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
+              <div className="hidden sm:block text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
+              <div className="hidden sm:block text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
 
               {/* Action buttons - always show on desktop, show on long press for mobile */}
               {(!isMobile || shouldShowActions(file.id)) && (
@@ -274,7 +274,7 @@ const ListView = ({
                         setShowingActionsFor(null);
                         openMediaViewer(file);
                       }}
-                      className="text-purple-600 hover:text-purple-900 dark:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded"
+                      className="text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-purple-900/20 rounded"
                       title="View"
                       disabled={processingFile === file.id}
                     >
@@ -299,7 +299,7 @@ const ListView = ({
                       setShowingActionsFor(null);
                       initiateRename(file);
                     }}
-                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                    className="text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-blue-900/20 rounded"
                     title="Rename"
                     disabled={processingFile === file.id}
                   >
@@ -311,7 +311,7 @@ const ListView = ({
                       setShowingActionsFor(null);
                       handleDownload(file.id, file.name);
                     }}
-                    className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded"
+                    className="text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-indigo-900/20 rounded"
                     title="Download"
                     disabled={processingFile === file.id}
                   >
@@ -323,7 +323,7 @@ const ListView = ({
                       setShowingActionsFor(null);
                       initiateDelete(file);
                     }}
-                    className="text-red-600 hover:text-red-900 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                    className="text-red-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-red-900/20 rounded"
                     title="Delete"
                     disabled={processingFile === file.id}
                   >
