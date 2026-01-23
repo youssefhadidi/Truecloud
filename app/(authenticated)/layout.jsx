@@ -6,13 +6,10 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import UserMenu from '@/components/UserMenu';
-import Notifications from '@/components/Notifications';
-import { NotificationsProvider, useNotifications } from '@/contexts/NotificationsContext';
 
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { notifications } = useNotifications();
 
   // Debug: log session data
   useEffect(() => {
@@ -30,9 +27,6 @@ function AuthenticatedLayoutContent({ children }) {
   // Show layout even while loading, instead of full-screen loading
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
-      {/* Notifications */}
-      <Notifications notifications={notifications} />
-
       {/* Persistent Header */}
       <header className="bg-white dark:bg-gray-800 shadow flex-shrink-0">
         <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
@@ -52,9 +46,5 @@ function AuthenticatedLayoutContent({ children }) {
 }
 
 export default function AuthenticatedLayout({ children }) {
-  return (
-    <NotificationsProvider>
-      <AuthenticatedLayoutContent>{children}</AuthenticatedLayoutContent>
-    </NotificationsProvider>
-  );
+  return <AuthenticatedLayoutContent>{children}</AuthenticatedLayoutContent>;
 }

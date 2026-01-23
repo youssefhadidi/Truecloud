@@ -15,8 +15,12 @@ export function NotificationsProvider({ children }) {
     setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 5000);
   };
 
+  const dismissNotification = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
   return (
-    <NotificationsContext.Provider value={{ notifications, addNotification }}>
+    <NotificationsContext.Provider value={{ notifications, addNotification, dismissNotification }}>
       {children}
     </NotificationsContext.Provider>
   );

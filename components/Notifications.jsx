@@ -2,21 +2,11 @@
 
 'use client';
 
-import { useEffect } from 'react';
 import { FiX, FiAlertCircle, FiCheckCircle, FiInfo } from 'react-icons/fi';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
-export default function Notifications({ notifications, onDismiss }) {
-  useEffect(() => {
-    notifications.forEach((notification) => {
-      if (notification.autoDismiss) {
-        const timer = setTimeout(() => {
-          onDismiss(notification.id);
-        }, notification.duration || 5000);
-
-        return () => clearTimeout(timer);
-      }
-    });
-  }, [notifications, onDismiss]);
+export default function Notifications() {
+  const { notifications, dismissNotification } = useNotifications();
 
   const getIcon = (type) => {
     switch (type) {
@@ -59,7 +49,7 @@ export default function Notifications({ notifications, onDismiss }) {
             {notification.title && <p className=" font-medium text-gray-900 dark:text-white mb-1">{notification.title}</p>}
             <p className=" text-gray-700 dark:text-gray-300">{notification.message}</p>
           </div>
-          <button onClick={() => onDismiss(notification.id)} className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <button onClick={() => dismissNotification(notification.id)} className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
             <FiX size={18} />
           </button>
         </div>
