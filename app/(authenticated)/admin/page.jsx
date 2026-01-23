@@ -9,6 +9,7 @@ import { FiUsers, FiPlus, FiEdit, FiTrash2, FiArrowLeft, FiX, FiRefreshCw } from
 import axios from 'axios';
 import LogViewer from '@/components/LogViewer';
 import SystemRequirementsCheck from '@/components/SystemRequirementsCheck';
+import Notifications from '@/components/Notifications';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -19,6 +20,8 @@ export default function AdminPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -29,6 +32,18 @@ export default function AdminPage() {
   });
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
+
+  const addNotification = (type, message, title = null) => {
+    const id = Date.now();
+    setNotifications((prev) => [...prev, { id, type, message, title }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, 5000);
+  };
+
+  const showConfirm = (message, onConfirm) => {
+    setConfirmDialog({ message, onConfirm });
+  };
 
   // Debug session
   useEffect(() => {
@@ -59,7 +74,7 @@ export default function AdminPage() {
       setUsers(response.data.users);
     } catch (error) {
       console.error('Error fetching users:', error);
-      alert('Failed to fetch users');
+      addNotification('error', 'Failed to fetch users');
     } finally {
       setLoading(false);
     }
@@ -71,28 +86,27 @@ export default function AdminPage() {
       const response = await axios.get('/api/system/check-updates');
       setUpdateInfo(response.data);
       if (!response.data.hasUpdate) {
-        alert(`You are up to date! (Version ${response.data.currentVersion})`);
+        addNotification('success', `You are up to date! (Version ${response.data.currentVersion})`);
       }
     } catch (error) {
       console.error('Error checking updates:', error);
-      alert('Failed to check for updates');
+      addNotification('error', 'Failed to check for updates');
     } finally {
       setCheckingUpdates(false);
     }
   };
 
   const handleRunUpdate = async () => {
-    if (!window.confirm('Are you sure you want to update? The server will restart automatically.')) {
-      return;
-    }
-    try {
-      await axios.post('/api/system/run-update');
-      alert('Update started. The server will restart shortly...');
-      setUpdateInfo(null);
-    } catch (error) {
-      console.error('Error running update:', error);
-      alert('Failed to start update: ' + (error.response?.data?.error || error.message));
-    }
+    showConfirm('Are you sure you want to update? The server will restart automatically.', async () => {
+      try {
+        await axios.post('/api/system/run-update');
+        addNotification('success', 'Update started. The server will restart shortly...');
+        setUpdateInfo(null);
+      } catch (error) {
+        console.error('Error running update:', error);
+        addNotification('error', 'Failed to start update: ' + (error.response?.data?.error || error.message));
+      }
+    });
   };
 
   const handleCreateUser = async (e) => {
@@ -107,9 +121,10 @@ export default function AdminPage() {
       setShowForm(false);
       setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
       fetchUsers();
+      addNotification('success', 'User created successfully');
     } catch (error) {
       console.error('Error creating user:', error);
-      alert(error.response?.data?.error || 'Failed to create user');
+      addNotification('error', error.response?.data?.error || 'Failed to create user');
     }
   };
 
@@ -127,9 +142,10 @@ export default function AdminPage() {
       setEditingUser(null);
       setFormData({ email: '', username: '', password: '', name: '', role: 'user', hasRootAccess: false });
       fetchUsers();
+      addNotification('success', 'User updated successfully');
     } catch (error) {
       console.error('Error updating user:', error);
-      alert(error.response?.data?.error || 'Failed to update user');
+      addNotification('error', error.response?.data?.error || 'Failed to update user');
     }
   };
 
@@ -138,9 +154,10 @@ export default function AdminPage() {
       await axios.delete(`/api/users?id=${userId}`);
       setDeletingUser(null);
       fetchUsers();
+      addNotification('success', 'User deleted successfully');
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert(error.response?.data?.error || 'Failed to delete user');
+      addNotification('error', error.response?.data?.error || 'Failed to delete user');
     }
   };
 
@@ -458,6 +475,35 @@ export default function AdminPage() {
               </button>
               <button onClick={() => handleDeleteUser(deletingUser.id)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                 Delete User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notifications */}
+      <Notifications notifications={notifications} />
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
+            <p className="text-gray-900 dark:text-white mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Confirm
               </button>
             </div>
           </div>

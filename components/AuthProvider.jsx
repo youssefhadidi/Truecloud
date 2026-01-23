@@ -13,7 +13,7 @@ export default function AuthProvider({ children }) {
   }, []);
 
   return (
-    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus={true}>
+    <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
       {children}
     </SessionProvider>
   );

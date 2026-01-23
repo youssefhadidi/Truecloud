@@ -4,13 +4,14 @@
 
 import { useState, useRef } from 'react';
 import { FiUpload, FiLink, FiPlay } from 'react-icons/fi';
+import { useStartTorrentDownload } from '@/lib/api/downloads';
 
 export default function TorrentDownloadComponent({ onDownloadStart }) {
   const [magnetLink, setMagnetLink] = useState('');
   const [torrentFile, setTorrentFile] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
+  const startDownloadMutation = useStartTorrentDownload();
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -40,7 +41,6 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
       return;
     }
 
-    setIsLoading(true);
     setError('');
 
     try {
@@ -52,17 +52,7 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
         formData.append('magnetLink', magnetLink);
       }
 
-      const response = await fetch('/api/files/torrent-download', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start download');
-      }
-
-      const data = await response.json();
+      const data = await startDownloadMutation.mutateAsync(formData);
       onDownloadStart?.(data);
 
       // Reset form
@@ -72,9 +62,7 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
         fileInputRef.current.value = '';
       }
     } catch (err) {
-      setError(err.message || 'Failed to start download');
-    } finally {
-      setIsLoading(false);
+      setError(err.response?.data?.error || err.message || 'Failed to start download');
     }
   };
 
@@ -136,11 +124,11 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
         {/* Start Download Button */}
         <button
           onClick={handleStartDownload}
-          disabled={isLoading || (!torrentFile && !magnetLink)}
+          disabled={startDownloadMutation.isPending || (!torrentFile && !magnetLink)}
           className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
         >
           <FiPlay size={18} />
-          {isLoading ? 'Starting Download...' : 'Start Download'}
+          {startDownloadMutation.isPending ? 'Starting Download...' : 'Start Download'}
         </button>
       </div>
     </div>

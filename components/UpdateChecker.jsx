@@ -1,50 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import axios from 'axios';
+import Notifications from '@/components/Notifications';
+import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 
 export default function UpdateChecker() {
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateStarted, setUpdateStarted] = useState(false);
+  const { data: updateInfo, isLoading } = useCheckUpdates();
+  const runUpdateMutation = useRunUpdate();
+  const [notifications, setNotifications] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // Check for updates every 1 hour
-  const { data: updateInfo, isLoading } = useQuery({
-    queryKey: ['checkUpdates'],
-    queryFn: async () => {
-      try {
-        const response = await axios.get('/api/system/check-updates');
-        return response.data;
-      } catch (error) {
-        console.error('Failed to check for updates:', error);
-        return null;
-      }
-    },
-    refetchInterval: 60 * 60 * 1000, // 1 hour
-    staleTime: 60 * 60 * 1000, // 1 hour
-  });
+  const addNotification = (type, message, title = null) => {
+    const id = Date.now();
+    setNotifications((prev) => [...prev, { id, type, message, title }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, 5000);
+  };
+
+  const showConfirm = (message, onConfirm) => {
+    setConfirmDialog({ message, onConfirm });
+  };
 
   const handleUpdate = async () => {
-    if (!window.confirm('Are you sure you want to update? The server will restart automatically.')) {
-      return;
-    }
-
-    setIsUpdating(true);
-    try {
-      const response = await axios.post('/api/system/run-update');
-      if (response.data.success) {
-        setUpdateStarted(true);
-        // Show message for 5 seconds then reset
-        setTimeout(() => {
-          setIsUpdating(false);
-          setUpdateStarted(false);
-        }, 5000);
+    showConfirm('Are you sure you want to update? The server will restart automatically.', async () => {
+      try {
+        const result = await runUpdateMutation.mutateAsync();
+        if (result.success) {
+          addNotification('success', 'Update started. The server will restart shortly...');
+        }
+      } catch (error) {
+        addNotification('error', 'Failed to start update: ' + (error.response?.data?.error || error.message));
       }
-    } catch (error) {
-      console.error('Failed to start update:', error);
-      alert('Failed to start update: ' + (error.response?.data?.error || error.message));
-      setIsUpdating(false);
-    }
+    });
   };
 
   if (!updateInfo?.hasUpdate) {
@@ -70,17 +59,43 @@ export default function UpdateChecker() {
         </div>
         <button
           onClick={handleUpdate}
-          disabled={isUpdating}
+          disabled={runUpdateMutation.isPending}
           className="flex-shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors"
         >
-          {isUpdating ? 'Updating...' : 'Update Now'}
+          {runUpdateMutation.isPending ? 'Updating...' : 'Update Now'}
         </button>
       </div>
-      {updateStarted && (
-        <p className="text-xs text-green-700 mt-2 font-medium">
-          ✓ Update started. Server will restart shortly...
-        </p>
-      )}
     </div>
+
+    <>
+      {/* Notifications */}
+      <Notifications notifications={notifications} />
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
+            <p className="text-gray-900 dark:text-white mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

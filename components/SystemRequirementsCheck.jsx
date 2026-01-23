@@ -2,61 +2,47 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FiCheck, FiX, FiDownload } from 'react-icons/fi';
+import Notifications from '@/components/Notifications';
+import { useSystemRequirements, useInstallRequirement } from '@/lib/api/system';
 
 export default function SystemRequirementsCheck() {
-  const [requirements, setRequirements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: requirements, isLoading, refetch } = useSystemRequirements();
+  const installMutation = useInstallRequirement();
   const [installing, setInstalling] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
-  useEffect(() => {
-    checkRequirements();
-  }, []);
+  const addNotification = (type, message, title = null) => {
+    const id = Date.now();
+    setNotifications((prev) => [...prev, { id, type, message, title }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, 5000);
+  };
 
-  const checkRequirements = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/system/check-requirements');
-      if (response.ok) {
-        const data = await response.json();
-        setRequirements(data.requirements || []);
-      }
-    } catch (error) {
-      console.error('Error checking requirements:', error);
-    } finally {
-      setLoading(false);
-    }
+  const showConfirm = (message, onConfirm) => {
+    setConfirmDialog({ message, onConfirm });
   };
 
   const handleInstall = async (name) => {
-    if (!window.confirm(`Install ${name}?`)) return;
-
-    try {
-      setInstalling(name);
-      const response = await fetch('/api/system/install-requirement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(data.message || `${name} installation started`);
+    showConfirm(`Install ${name}?`, async () => {
+      try {
+        setInstalling(name);
+        const result = await installMutation.mutateAsync(name);
+        addNotification('success', result.message || `${name} installation started`);
         // Recheck requirements after a delay
-        setTimeout(checkRequirements, 2000);
-      } else {
-        const error = await response.json();
-        alert(error.message || `Failed to install ${name}`);
+        setTimeout(refetch, 2000);
+      } catch (error) {
+        addNotification('error', error.response?.data?.message || error.message || `Failed to install ${name}`);
+      } finally {
+        setInstalling(null);
       }
-    } catch (error) {
-      alert(`Error installing ${name}: ${error.message}`);
-    } finally {
-      setInstalling(null);
-    }
+    });
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -113,9 +99,38 @@ export default function SystemRequirementsCheck() {
         </div>
       )}
 
-      <button onClick={checkRequirements} className="mt-4 w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+      <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
         Refresh
       </button>
+
+      {/* Notifications */}
+      <Notifications notifications={notifications} />
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
+            <p className="text-gray-900 dark:text-white mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

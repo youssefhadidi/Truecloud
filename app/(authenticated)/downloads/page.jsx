@@ -3,35 +3,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FiArrowLeft, FiRefreshCw } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
 import Notifications from '@/components/Notifications';
+import { useTorrentDownloads } from '@/lib/api/downloads';
 
 export default function DownloadsPage() {
   const router = useRouter();
-  const [downloads, setDownloads] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: downloads, isLoading, refetch } = useTorrentDownloads();
   const [notifications, setNotifications] = useState([]);
-
-  // Fetch downloads
-  useEffect(() => {
-    fetchDownloads();
-  }, []);
-
-  const fetchDownloads = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/files/torrent-download');
-      if (!response.ok) throw new Error('Failed to fetch downloads');
-      const data = await response.json();
-      setDownloads(data.downloads || []);
-    } catch (error) {
-      addNotification('error', error.message || 'Failed to fetch downloads');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const addNotification = (type, message, title = null) => {
     const id = Date.now() + Math.random();
@@ -54,7 +35,7 @@ export default function DownloadsPage() {
 
   const handleDownloadStart = (downloadInfo) => {
     addNotification('success', `Download started: ${downloadInfo.name}`);
-    fetchDownloads();
+    refetch();
   };
 
   return (
@@ -85,7 +66,7 @@ export default function DownloadsPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Active Downloads</h2>
-                  <button onClick={fetchDownloads} disabled={isLoading} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
+                  <button onClick={() => refetch()} disabled={isLoading} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
                     <FiRefreshCw size={20} className={`text-gray-700 dark:text-gray-300 ${isLoading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
