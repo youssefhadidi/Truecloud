@@ -27,7 +27,7 @@ async function convertHeicToWebp(inputPath, outputPath) {
     const jpegBuffer = await heicConvert({
       buffer: inputBuffer,
       format: 'JPEG',
-      quality: 0.95,
+      quality: 0.80,
     });
 
     // Convert JPEG to WebP

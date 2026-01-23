@@ -67,8 +67,8 @@ async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
     failOnError: false,
     limitInputPixels: false,
   })
-    .resize(150, 150, { fit: 'inside' })
-    .webp({ quality: 80 }) // WebP format for better compression
+    .resize(300, 300, { fit: 'inside' })
+    .webp({ quality: 85 }) // WebP format for better compression
     .toFile(thumbnailPath);
 
   const duration = Date.now() - startTime;
@@ -153,8 +153,8 @@ async function generateHeicThumbnail(filePath, thumbnailPath, fileId) {
       failOnError: false,
       limitInputPixels: false,
     })
-      .resize(200, 200, { fit: 'inside' })
-      .webp({ quality: 80 })
+      .resize(300, 300, { fit: 'inside' })
+      .webp({ quality: 85 })
       .toFile(thumbnailPath);
 
     const duration = Date.now() - startTime;
@@ -208,7 +208,7 @@ async function generatePdfThumbnail(filePath, thumbnailPath) {
       try {
         // Convert JPEG to WebP
         const sharp = (await import('sharp')).default;
-        await sharp(jpgPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 90 }).toFile(thumbnailPath);
+        await sharp(jpgPath).resize(300, 300, { fit: 'inside' }).webp({ quality: 85 }).toFile(thumbnailPath);
 
         // Clean up temporary JPEG
         await fsPromises.unlink(jpgPath);
