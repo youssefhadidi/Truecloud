@@ -193,7 +193,7 @@ export async function POST(req) {
 }
 
 /**
- * GET /api/files/torrent-downloads
+ * GET /api/files/torrent-download
  * Get list of active downloads with progress
  */
 export async function GET(req) {

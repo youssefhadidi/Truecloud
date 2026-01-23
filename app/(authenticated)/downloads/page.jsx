@@ -22,7 +22,7 @@ export default function DownloadsPage() {
   const fetchDownloads = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/files/torrent-downloads');
+      const response = await fetch('/api/files/torrent-download');
       if (!response.ok) throw new Error('Failed to fetch downloads');
       const data = await response.json();
       setDownloads(data.downloads || []);
