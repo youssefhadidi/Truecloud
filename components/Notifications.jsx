@@ -24,22 +24,22 @@ export default function Notifications() {
   const getStyles = (type) => {
     switch (type) {
       case 'success':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800';
+        return 'bg-green-100/95 dark:bg-green-900/90 border-green-300 dark:border-green-700';
       case 'error':
-        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+        return 'bg-red-100/95 dark:bg-red-900/90 border-red-300 dark:border-red-700';
       case 'info':
-        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
+        return 'bg-blue-100/95 dark:bg-blue-900/90 border-blue-300 dark:border-blue-700';
       default:
-        return 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800';
+        return 'bg-gray-100/95 dark:bg-gray-900/90 border-gray-300 dark:border-gray-700';
     }
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+    <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 max-w-sm">
       {notifications.map((notification, index) => (
         <div
           key={notification.id}
-          className={`${getStyles(notification.type)} border rounded-lg shadow-lg p-4 flex items-start gap-3 animate-slide-in-right`}
+          className={`${getStyles(notification.type)} border rounded-lg shadow-lg p-4 flex items-start gap-3 animate-slide-in-right backdrop-blur-sm`}
           style={{
             animation: `slideInRight 0.3s ease-out ${index * 0.1}s both`,
           }}

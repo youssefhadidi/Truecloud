@@ -65,19 +65,19 @@ export default function LogViewer() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+    <div className="bg-gray-800 rounded-lg shadow">
+      <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Live Logs</h2>
-          <p className="text-sm text-gray-500 mt-1">{logs.length} lines loaded</p>
+          <h2 className="text-lg font-semibold text-white">Live Logs</h2>
+          <p className="text-sm text-gray-400 mt-1">{logs.length} lines loaded</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setAutoScroll(!autoScroll)}
             className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
               autoScroll
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
             {autoScroll ? '📍 Auto-scroll ON' : '📍 Auto-scroll OFF'}
@@ -85,7 +85,7 @@ export default function LogViewer() {
           <button
             onClick={fetchLogs}
             disabled={isLoading}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500"
           >
             <FiRefreshCw className={isLoading ? 'animate-spin' : ''} size={16} />
             Refresh
@@ -93,7 +93,7 @@ export default function LogViewer() {
           <button
             onClick={downloadLogs}
             disabled={logs.length === 0}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500"
           >
             <FiDownload size={16} />
             Download
@@ -101,7 +101,7 @@ export default function LogViewer() {
           <button
             onClick={clearLogs}
             disabled={logs.length === 0}
-            className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:bg-gray-50 disabled:text-gray-400 text-sm font-medium"
+            className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-800 disabled:text-gray-500 text-sm font-medium"
           >
             Clear View
           </button>
@@ -110,13 +110,13 @@ export default function LogViewer() {
 
       <div className="p-4">
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-400 text-sm">
             <p className="font-semibold">Error loading logs:</p>
             <p>{error}</p>
           </div>
         )}
 
-        <div className="bg-gray-900 rounded font-mono text-sm text-green-400 p-4 h-96 overflow-y-auto border border-gray-700">
+        <div className="bg-black rounded font-mono text-sm text-green-400 p-4 h-96 overflow-y-auto border border-gray-700">
           {logs.length === 0 ? (
             <div className="text-gray-500">
               {isLoading ? 'Loading logs...' : 'No logs available'}
@@ -133,7 +133,7 @@ export default function LogViewer() {
           )}
         </div>
 
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-xs text-gray-400">
           <p>Logs refresh automatically every 2 seconds</p>
         </div>
       </div>

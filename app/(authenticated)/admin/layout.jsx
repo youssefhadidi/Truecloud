@@ -7,7 +7,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft } from 'react-icons/fi';
 import Link from 'next/link';
-import UserMenu from '@/components/UserMenu';
 
 export default function AdminLayout({ children }) {
   const { data: session, status } = useSession();
@@ -80,11 +79,6 @@ export default function AdminLayout({ children }) {
             })}
           </ul>
         </nav>
-
-        {/* User Menu at bottom */}
-        <div className="p-4 border-t border-gray-700">
-          <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
-        </div>
       </div>
 
       {/* Main content area */}

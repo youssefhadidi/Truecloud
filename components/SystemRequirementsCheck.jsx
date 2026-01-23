@@ -47,10 +47,10 @@ export default function SystemRequirementsCheck() {
   const totalCount = requirements.length;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-gray-800 rounded-lg shadow p-6">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">System Requirements</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-lg font-semibold text-white mb-2">System Requirements</h2>
+        <p className="text-sm text-gray-400">
           {installedCount}/{totalCount} required programs installed
         </p>
       </div>
@@ -62,14 +62,14 @@ export default function SystemRequirementsCheck() {
           {requirements.map((req) => (
             <div
               key={req.name}
-              className={`flex items-center justify-between p-4 rounded-lg border ${req.installed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}
+              className={`flex items-center justify-between p-4 rounded-lg border ${req.installed ? 'bg-green-900/30 border-green-700' : 'bg-red-900/30 border-red-700'}`}
             >
               <div className="flex items-center gap-3">
-                {req.installed ? <FiCheck className="text-green-600" size={20} /> : <FiX className="text-red-600" size={20} />}
+                {req.installed ? <FiCheck className="text-green-400" size={20} /> : <FiX className="text-red-400" size={20} />}
                 <div>
-                  <p className={`font-medium ${req.installed ? 'text-green-900' : 'text-red-900'}`}>{req.name}</p>
-                  {req.version && <p className={`text-sm ${req.installed ? 'text-green-700' : 'text-red-700'}`}>{req.version}</p>}
-                  {req.description && <p className={`text-xs mt-1 ${req.installed ? 'text-green-600' : 'text-red-600'}`}>{req.description}</p>}
+                  <p className={`font-medium ${req.installed ? 'text-green-300' : 'text-red-300'}`}>{req.name}</p>
+                  {req.version && <p className={`text-sm ${req.installed ? 'text-green-400' : 'text-red-400'}`}>{req.version}</p>}
+                  {req.description && <p className={`text-xs mt-1 ${req.installed ? 'text-green-500' : 'text-red-500'}`}>{req.description}</p>}
                 </div>
               </div>
 
@@ -80,7 +80,7 @@ export default function SystemRequirementsCheck() {
                       onClick={() => handleInstall(req.name)}
                       disabled={installing === req.name}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                        installing === req.name ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        installing === req.name ? 'bg-gray-600 text-gray-300 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
                       }`}
                     >
                       <FiDownload size={16} />
@@ -92,13 +92,13 @@ export default function SystemRequirementsCheck() {
                 </div>
               )}
 
-              {!req.installed && !req.installable && <p className="text-sm text-red-600 font-medium">Cannot auto-install</p>}
+              {!req.installed && !req.installable && <p className="text-sm text-red-400 font-medium">Cannot auto-install</p>}
             </div>
           ))}
         </div>
       )}
 
-      <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+      <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 font-medium">
         Refresh
       </button>
     </div>
