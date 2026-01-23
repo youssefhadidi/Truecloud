@@ -8,6 +8,7 @@ import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
@@ -51,132 +52,6 @@ class Semaphore {
 }
 
 const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prevent resource exhaustion
-
-// Helper function to convert HEIC to JPEG and cache it using libheif1 heif-convert
-async function getOrConvertHeicToJpeg(filePath, fileId) {
-  const startTime = Date.now();
-  const pathHash = createHash('md5').update(filePath).digest('hex');
-  const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
-
-  // Check if we already have the JPEG cached
-  try {
-    await fsPromises.access(cachedJpegPath);
-    logger.debug('HEIC JPEG cache hit', { fileId, duration: `${Date.now() - startTime}ms` });
-    return cachedJpegPath;
-  } catch {
-    // Cache miss, need to convert
-  }
-
-  // Ensure cache directory exists
-  await fsPromises.mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
-
-  logger.debug('Converting HEIC to JPEG for caching using heif-convert', { fileId });
-
-  // Try heif-convert first, fall back to ImageMagick if it fails
-  return convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime);
-}
-
-// Helper function to convert HEIC with fallback
-async function convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime) {
-  return new Promise((resolve, reject) => {
-    // Try heif-convert first
-    const heifConvertArgs = [filePath, cachedJpegPath];
-    const heifConvert = spawn('heif-convert', heifConvertArgs);
-    let heifErrorOutput = '';
-    let timedOut = false;
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      heifConvert.kill();
-      logger.error('HEIC to JPEG conversion timeout', { fileId });
-      reject(new Error('HEIC to JPEG conversion timeout after 30 seconds'));
-    }, 30000);
-
-    heifConvert.stderr.on('data', (data) => {
-      heifErrorOutput += data.toString();
-    });
-
-    heifConvert.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-
-      if (code === 0) {
-        logger.debug('HEIC converted to JPEG and cached with heif-convert', { fileId, duration: `${duration}ms` });
-        resolve(cachedJpegPath);
-      } else {
-        // heif-convert failed, try ImageMagick fallback
-        logger.warn('heif-convert failed, trying ImageMagick fallback', { fileId, error: heifErrorOutput.substring(0, 100) });
-        tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
-      }
-    });
-
-    heifConvert.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      logger.warn('heif-convert not found, trying ImageMagick fallback', { fileId });
-      // heif-convert not available, try ImageMagick
-      tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
-    });
-  });
-}
-
-// Helper function to try ImageMagick convert as fallback
-function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, previousTimeout, resolve, reject) {
-  const convertArgs = [
-    `${filePath}[0]`, // Read first layer/frame, handle HEIC metadata issues
-    '-quality',
-    '85',
-    '-background',
-    'white',
-    '-alpha',
-    'off', // Remove alpha channel
-    cachedJpegPath,
-  ];
-
-  const convert = spawn('convert', convertArgs);
-  let convertErrorOutput = '';
-  let timedOut = false;
-
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    convert.kill();
-    logger.error('ImageMagick HEIC conversion timeout', { fileId });
-    reject(new Error('ImageMagick HEIC conversion timeout after 30 seconds'));
-  }, 30000);
-
-  convert.stderr.on('data', (data) => {
-    convertErrorOutput += data.toString();
-  });
-
-  convert.on('close', async (code) => {
-    clearTimeout(timeout);
-    if (timedOut) return;
-    const duration = Date.now() - startTime;
-
-    if (code === 0) {
-      // Verify the file was actually created
-      try {
-        await fsPromises.access(cachedJpegPath);
-        logger.debug('HEIC converted to JPEG and cached with ImageMagick', { fileId, duration: `${duration}ms` });
-        resolve(cachedJpegPath);
-      } catch {
-        logger.error('ImageMagick reported success but file not created', { fileId, cachedJpegPath });
-        reject(new Error(`ImageMagick conversion created no output file at ${cachedJpegPath}`));
-      }
-    } else {
-      logger.error('Both heif-convert and ImageMagick failed', { fileId, code, duration: `${duration}ms`, error: convertErrorOutput.substring(0, 200) });
-      reject(new Error(`HEIC conversion failed: ${convertErrorOutput.substring(0, 200)}`));
-    }
-  });
-
-  convert.on('error', (err) => {
-    clearTimeout(timeout);
-    if (timedOut) return;
-    logger.error('ImageMagick spawn error', { fileId, error: err.message });
-    reject(new Error(`ImageMagick not found. Install with: sudo apt-get install imagemagick`));
-  });
-}
 
 // Helper function to generate image thumbnails with Sharp
 async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {

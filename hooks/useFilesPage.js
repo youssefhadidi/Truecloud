@@ -81,7 +81,7 @@ export function useFilesPage(status) {
   }, [sortBy]);
 
   // Fetch and sort files
-  const { data: filesData, isLoading: loading } = useFiles(currentPath, status === 'authenticated');
+  const { data: filesData, isLoading } = useFiles(currentPath, status === 'authenticated');
   const files = useMemo(() => {
     // Filter out hidden files
     let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
@@ -181,7 +181,7 @@ export function useFilesPage(status) {
     uploads,
     folderDisplayNames,
     files,
-    loading,
+    isLoading,
     viewableFiles,
     searchQuery,
 

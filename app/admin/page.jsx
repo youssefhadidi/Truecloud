@@ -8,10 +8,12 @@ import { useEffect, useState } from 'react';
 import { FiUsers, FiPlus, FiEdit, FiTrash2, FiLogOut, FiArrowLeft, FiX, FiRefreshCw } from 'react-icons/fi';
 import axios from 'axios';
 import LogViewer from '@/components/LogViewer';
+import SystemRequirementsCheck from '@/components/SystemRequirementsCheck';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState('accounts');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -181,7 +183,7 @@ export default function AdminPage() {
                 <FiUsers className="inline mr-1" />
                 {session?.user?.name || session?.user?.email}
               </div>
-              <button onClick={() => signOut()} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+              <button onClick={() => signOut({ callbackUrl: '/auth/login' })} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                 <FiLogOut />
                 Sign Out
               </button>
@@ -192,15 +194,52 @@ export default function AdminPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Users List */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Users ({users.length})</h2>
-              </div>
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <div className="flex gap-8">
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'accounts'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Accounts
+            </button>
+            <button
+              onClick={() => setActiveTab('requirements')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'requirements'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              System Requirements
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'logs'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Logs
+            </button>
+          </div>
+        </div>
 
-              <div className="overflow-x-auto">
+        {/* Accounts Tab */}
+        {activeTab === 'accounts' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">Users ({users.length})</h2>
+                </div>
+
+                <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
@@ -244,134 +283,143 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
-          </div>
-          {/* User Form */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">{editingUser ? 'Edit User' : 'Create User'}</h2>
-                {showForm && (
-                  <button onClick={closeForm} className="text-gray-400 hover:text-gray-600">
-                    <FiX size={20} />
+            </div>
+
+            {/* User Form */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">{editingUser ? 'Edit User' : 'Create User'}</h2>
+                  {showForm && (
+                    <button onClick={closeForm} className="text-gray-400 hover:text-gray-600">
+                      <FiX size={20} />
+                    </button>
+                  )}
+                </div>
+
+                {!showForm ? (
+                  <button onClick={openCreateForm} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <FiPlus />
+                    Add New User
                   </button>
+                ) : (
+                  <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
+                    <div>
+                      <label className="block  font-medium text-gray-700 mb-1">Username</label>
+                      <input
+                        type="text"
+                        value={formData.username}
+                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block  font-medium text-gray-700 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block  font-medium text-gray-700 mb-1">Name</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block  font-medium text-gray-700 mb-1">Password {editingUser && '(leave blank to keep current)'}</label>
+                      <input
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        required={!editingUser}
+                      />
+                    </div>
+                    <div>
+                      <label className="block  font-medium text-gray-700 mb-1">Role</label>
+                      <select
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2 font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={formData.hasRootAccess}
+                          onChange={(e) => setFormData({ ...formData, hasRootAccess: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        Allow Root Access (Can access all files & folders)
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">If unchecked, user can only access their personal folder</p>
+                    </div>
+                    <div className="flex gap-2 pt-4">
+                      <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        {editingUser ? 'Update' : 'Create'}
+                      </button>
+                    </div>
+                  </form>
                 )}
               </div>
 
-              {!showForm ? (
-                <button onClick={openCreateForm} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                  <FiPlus />
-                  Add New User
-                </button>
-              ) : (
-                <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
-                  <div>
-                    <label className="block  font-medium text-gray-700 mb-1">Username</label>
-                    <input
-                      type="text"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block  font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block  font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block  font-medium text-gray-700 mb-1">Password {editingUser && '(leave blank to keep current)'}</label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      required={!editingUser}
-                    />
-                  </div>
-                  <div>
-                    <label className="block  font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 font-medium text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={formData.hasRootAccess}
-                        onChange={(e) => setFormData({ ...formData, hasRootAccess: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      Allow Root Access (Can access all files & folders)
-                    </label>
-                    <p className="mt-1 text-xs text-gray-500">If unchecked, user can only access their personal folder</p>
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                      Cancel
-                    </button>
-                    <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      {editingUser ? 'Update' : 'Create'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-
-            {/* System Settings */}
-            <div className="bg-white rounded-lg shadow p-6 mt-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">System</h2>
-              <div className="space-y-3">
-                <button
-                  onClick={handleCheckUpdates}
-                  disabled={checkingUpdates}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400"
-                >
-                  <FiRefreshCw className={checkingUpdates ? 'animate-spin' : ''} />
-                  {checkingUpdates ? 'Checking...' : 'Check for Updates'}
-                </button>
-                {updateInfo?.hasUpdate && (
-                  <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">
-                      Update Available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
-                    </p>
-                    <button
-                      onClick={handleRunUpdate}
-                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
-                    >
-                      Update Now
-                    </button>
-                  </div>
-                )}
+              {/* System Settings */}
+              <div className="bg-white rounded-lg shadow p-6 mt-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">System</h2>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleCheckUpdates}
+                    disabled={checkingUpdates}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400"
+                  >
+                    <FiRefreshCw className={checkingUpdates ? 'animate-spin' : ''} />
+                    {checkingUpdates ? 'Checking...' : 'Check for Updates'}
+                  </button>
+                  {updateInfo?.hasUpdate && (
+                    <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+                      <p className="text-sm font-semibold text-blue-900 mb-2">
+                        Update Available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
+                      </p>
+                      <button onClick={handleRunUpdate} className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
+                        Update Now
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
+        )}
 
-        {/* Live Logs Section */}
-        <div className="mt-8">
-          <LogViewer />
+        {/* System Requirements Tab */}
+        {activeTab === 'requirements' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <SystemRequirementsCheck />
         </div>
+        )}
+
+        {/* Logs Tab */}
+        {activeTab === 'logs' && (
+          <div>
+            <LogViewer />
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}

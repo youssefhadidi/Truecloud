@@ -10,124 +10,13 @@ import sharp from 'sharp';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
-
-// Helper function to convert HEIC to JPEG and cache it using libheif1 heif-convert
-async function getOrConvertHeicToJpeg(filePath, fileId = '') {
-  const startTime = Date.now();
-  const pathHash = createHash('md5').update(filePath).digest('hex');
-  const cachedJpegPath = join(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), `${pathHash}.jpg`);
-  
-  // Check if we already have the JPEG cached
-  try {
-    await access(cachedJpegPath);
-    return cachedJpegPath;
-  } catch {
-    // Cache miss, need to convert
-  }
-
-  // Ensure cache directory exists
-  await mkdir(resolve(process.cwd(), HEIC_JPEG_CACHE_DIR), { recursive: true });
-
-  // Try heif-convert first, fall back to ImageMagick if it fails
-  return convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime);
-}
-
-// Helper function to convert HEIC with fallback
-async function convertHeicToJpegWithFallback(filePath, cachedJpegPath, fileId, startTime) {
-  return new Promise((resolve, reject) => {
-    // Try heif-convert first
-    const heifConvertArgs = [filePath, cachedJpegPath];
-    const heifConvert = spawn('heif-convert', heifConvertArgs);
-    let heifErrorOutput = '';
-    let timedOut = false;
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      heifConvert.kill();
-      reject(new Error('HEIC to JPEG conversion timeout after 30 seconds'));
-    }, 30000);
-
-    heifConvert.stderr.on('data', (data) => {
-      heifErrorOutput += data.toString();
-    });
-
-    heifConvert.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      
-      if (code === 0) {
-        resolve(cachedJpegPath);
-      } else {
-        // heif-convert failed, try ImageMagick fallback
-        tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
-      }
-    });
-
-    heifConvert.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      // heif-convert not available, try ImageMagick
-      tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, timeout, resolve, reject);
-    });
-  });
-}
-
-// Helper function to try ImageMagick convert as fallback
-function tryImageMagickFallback(filePath, cachedJpegPath, fileId, startTime, previousTimeout, resolve, reject) {
-  const convertArgs = [
-    `${filePath}[0]`, // Read first layer/frame, handle HEIC metadata issues
-    '-quality',
-    '85',
-    '-background',
-    'white',
-    '-alpha',
-    'off', // Remove alpha channel
-    cachedJpegPath,
-  ];
-
-  const convert = spawn('convert', convertArgs);
-  let convertErrorOutput = '';
-  let timedOut = false;
-
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    convert.kill();
-    reject(new Error('ImageMagick HEIC conversion timeout after 30 seconds'));
-  }, 30000);
-
-  convert.stderr.on('data', (data) => {
-    convertErrorOutput += data.toString();
-  });
-
-  convert.on('close', async (code) => {
-    clearTimeout(timeout);
-    if (timedOut) return;
-    
-    if (code === 0) {
-      // Verify the file was actually created
-      try {
-        await access(cachedJpegPath);
-        resolve(cachedJpegPath);
-      } catch {
-        reject(new Error(`ImageMagick conversion created no output file at ${cachedJpegPath}`));
-      }
-    } else {
-      reject(new Error(`HEIC conversion failed: ${convertErrorOutput.substring(0, 200)}`));
-    }
-  });
-
-  convert.on('error', (err) => {
-    clearTimeout(timeout);
-    if (timedOut) return;
-    reject(new Error(`ImageMagick not found. Install with: sudo apt-get install imagemagick`));
-  });
-}
 
 export async function GET(req, { params }) {
   try {
@@ -198,7 +87,7 @@ export async function GET(req, { params }) {
       let optimizePath = filePath;
       const fileExt = extname(fileName).toLowerCase();
       const isHeic = fileExt === '.heic' || fileExt === '.heif';
-      
+
       if (isHeic) {
         optimizePath = await getOrConvertHeicToJpeg(filePath);
       }
@@ -211,7 +100,7 @@ export async function GET(req, { params }) {
 
       // Get metadata and apply EXIF orientation rotation in one operation
       const metadata = await pipeline.metadata();
-      
+
       // Auto-rotate based on EXIF orientation
       const orientationRotations = {
         2: { flop: true },
@@ -222,7 +111,7 @@ export async function GET(req, { params }) {
         7: { rotate: 270, flop: true },
         8: { rotate: 270 },
       };
-      
+
       const rotation = orientationRotations[metadata.orientation];
       if (rotation) {
         if (rotation.rotate) {
@@ -238,7 +127,7 @@ export async function GET(req, { params }) {
 
       // Resize if needed
       const shouldResize = metadata.width > maxWidth || metadata.height > maxHeight;
-      
+
       if (shouldResize) {
         pipeline = pipeline.resize(maxWidth, maxHeight, {
           fit: 'inside',

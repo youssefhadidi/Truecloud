@@ -5,10 +5,11 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy } from 'react';
-import { FiUpload, FiLogOut, FiUser, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import Notifications from '@/components/Notifications';
+import UserMenu from '@/components/UserMenu';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -91,23 +92,7 @@ export default function FilesPage() {
           <div className="flex justify-between items-center gap-2 sm:gap-4">
             <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Truecloud</h1>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <div className="hidden sm:flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <FiUser />
-                <span className=" truncate">{session?.user?.email}</span>
-              </div>
-              {session?.user?.role === 'admin' && (
-                <button onClick={() => router.push('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 ">
-                  <FiUser />
-                  Admin Panel
-                </button>
-              )}
-              <button
-                onClick={() => signOut({ callbackUrl: '/auth/login' })}
-                className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 "
-              >
-                <FiLogOut size={16} className="sm:block" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </button>
+              <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
             </div>
           </div>
         </div>
@@ -281,7 +266,7 @@ export default function FilesPage() {
                 </div>
               )}
 
-              {state.loading ? (
+              {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
@@ -334,7 +319,7 @@ export default function FilesPage() {
           ) : (
             /* Grid View with Virtual Scrolling */
             <div className="p-1 flex flex-col flex-grow">
-              {state.loading ? (
+              {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>

@@ -70,6 +70,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: '/auth/login',
   },
+  callbacks: {
+    async redirect({ url, baseUrl }) {
+      // If the URL is already an absolute URL on the same origin, use it
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      // If it's a URL from the same origin, use it
+      if (new URL(url).origin === baseUrl) return url;
+      // Otherwise, return to the base URL
+      return baseUrl;
+    },
+  },
   session: {
     strategy: 'jwt',
   },
