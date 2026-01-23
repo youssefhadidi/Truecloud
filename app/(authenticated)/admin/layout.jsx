@@ -8,14 +8,11 @@ import { useEffect } from 'react';
 import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft } from 'react-icons/fi';
 import Link from 'next/link';
 import UserMenu from '@/components/UserMenu';
-import Notifications from '@/components/Notifications';
-import { NotificationsProvider, useNotifications } from '@/contexts/NotificationsContext';
 
-function AdminLayoutContent({ children }) {
+export default function AdminLayout({ children }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const { notifications } = useNotifications();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -92,20 +89,9 @@ function AdminLayoutContent({ children }) {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col">
-        {/* Notifications */}
-        <Notifications notifications={notifications} />
-
         {/* Page content */}
         <div className="flex-1 overflow-auto">{children}</div>
       </div>
     </div>
-  );
-}
-
-export default function AdminLayout({ children }) {
-  return (
-    <NotificationsProvider>
-      <AdminLayoutContent>{children}</AdminLayoutContent>
-    </NotificationsProvider>
   );
 }

@@ -8,7 +8,6 @@ import { Suspense, lazy } from 'react';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
-import Notifications from '@/components/Notifications';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -361,9 +360,6 @@ export default function FilesPage() {
 
       {/* Upload Status */}
       <UploadStatus uploads={state.uploads} />
-
-      {/* Notifications */}
-      <Notifications notifications={state.notifications} onDismiss={state.dismissNotification} />
     </div>
   );
 }

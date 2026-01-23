@@ -3,23 +3,15 @@
 'use client';
 
 import { useState } from 'react';
-import Notifications from '@/components/Notifications';
 import Confirm from '@/components/Confirm';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function UpdateChecker() {
   const { data: updateInfo, isLoading } = useCheckUpdates();
   const runUpdateMutation = useRunUpdate();
-  const [notifications, setNotifications] = useState([]);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  const addNotification = (type, message, title = null) => {
-    const id = Date.now();
-    setNotifications((prev) => [...prev, { id, type, message, title }]);
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 5000);
-  };
+  const { addNotification } = useNotifications();
 
   const handleUpdate = async () => {
     try {
@@ -72,9 +64,6 @@ export default function UpdateChecker() {
           )}
         </div>
       </div>
-
-      {/* Notifications */}
-      <Notifications notifications={notifications} />
     </>
   );
 }

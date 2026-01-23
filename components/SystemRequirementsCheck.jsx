@@ -4,24 +4,16 @@
 
 import { useState } from 'react';
 import { FiCheck, FiX, FiDownload } from 'react-icons/fi';
-import Notifications from '@/components/Notifications';
 import Confirm from '@/components/Confirm';
 import { useSystemRequirements, useInstallRequirement } from '@/lib/api/system';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function SystemRequirementsCheck() {
   const { data: requirements, isLoading, refetch } = useSystemRequirements();
   const installMutation = useInstallRequirement();
   const [installing, setInstalling] = useState(null);
-  const [notifications, setNotifications] = useState([]);
   const [showConfirm, setShowConfirm] = useState(null);
-
-  const addNotification = (type, message, title = null) => {
-    const id = Date.now();
-    setNotifications((prev) => [...prev, { id, type, message, title }]);
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 5000);
-  };
+  const { addNotification } = useNotifications();
 
   const handleInstall = async (name) => {
     setShowConfirm(name);
@@ -109,9 +101,6 @@ export default function SystemRequirementsCheck() {
       <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
         Refresh
       </button>
-
-      {/* Notifications */}
-      <Notifications notifications={notifications} />
     </div>
   );
 }

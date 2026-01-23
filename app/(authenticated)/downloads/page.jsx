@@ -3,35 +3,15 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { FiArrowLeft, FiRefreshCw } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
-import Notifications from '@/components/Notifications';
 import { useTorrentDownloads } from '@/lib/api/downloads';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function DownloadsPage() {
   const router = useRouter();
   const { data: downloads, isLoading, refetch } = useTorrentDownloads();
-  const [notifications, setNotifications] = useState([]);
-
-  const addNotification = (type, message, title = null) => {
-    const id = Date.now() + Math.random();
-    setNotifications((prev) => [
-      ...prev,
-      {
-        id,
-        type,
-        message,
-        title,
-        autoDismiss: true,
-        duration: 5000,
-      },
-    ]);
-  };
-
-  const dismissNotification = (id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
+  const { addNotification } = useNotifications();
 
   const handleDownloadStart = (downloadInfo) => {
     addNotification('success', `Download started: ${downloadInfo.name}`);
@@ -133,8 +113,6 @@ export default function DownloadsPage() {
           </div>
         </div>
       </main>
-
-      <Notifications notifications={notifications} onDismiss={dismissNotification} />
     </div>
   );
 }

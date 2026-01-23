@@ -8,7 +8,7 @@ import DeleteConfirm from '@/components/DeleteConfirm';
 import Confirm from '@/components/Confirm';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/lib/api/users';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function AccountsPage() {
   const [showForm, setShowForm] = useState(false);
