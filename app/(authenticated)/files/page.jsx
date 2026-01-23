@@ -272,7 +272,7 @@ export default function FilesPage() {
             </div>
           ) : (
             /* Grid View with Virtual Scrolling */
-            <div className="p-1 flex flex-col flex-grow">
+            <div className="p-1 sm:p-0 flex flex-col flex-grow">
               {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">

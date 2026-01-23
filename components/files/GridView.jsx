@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useMemo, useCallback } from 'react';
+import { useRef, useMemo, useCallback, useState } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
@@ -53,6 +53,8 @@ const GridView = ({
   formatFileSize,
 }) => {
   const gridRef = useRef(null);
+  const [showingActionsFor, setShowingActionsFor] = useState(null);
+  const longPressTimerRef = useRef(null);
 
   const allItems = useMemo(() => {
     const items = [...files];
@@ -61,6 +63,34 @@ const GridView = ({
     }
     return items;
   }, [files, creatingFolder]);
+
+  const handleTouchStart = useCallback((item) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setShowingActionsFor(item.id);
+    }, 500); // 500ms long press
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  // Hide actions when delete or rename dialogs appear
+  const shouldShowActions = useCallback((itemId) => {
+    if (deletingFile?.id || renamingFile?.id) {
+      return false;
+    }
+    return showingActionsFor === itemId;
+  }, [deletingFile, renamingFile, showingActionsFor]);
 
   const cellRenderer = useCallback(
     ({ columnIndex, key, rowIndex, style, parent }) => {
@@ -121,8 +151,16 @@ const GridView = ({
             <div
               className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
               style={{ WebkitTapHighlightColor: 'transparent' }}
-              onClick={() => item.isDirectory && deletingFile?.id !== item.id && onNavigateToFolder(item.name)}
+              onClick={(e) => {
+                // Only navigate to folder if not showing actions and clicking on folder
+                if (item.isDirectory && deletingFile?.id !== item.id && !shouldShowActions(item.id)) {
+                  onNavigateToFolder(item.name);
+                }
+              }}
               onContextMenu={(e) => e.preventDefault()}
+              onTouchStart={() => handleTouchStart(item)}
+              onTouchEnd={handleTouchEnd}
+              onTouchMove={handleTouchMove}
             >
               {deletingFile?.id === item.id ? (
                 <div className="absolute inset-0 bg-red-50 dark:bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
@@ -266,11 +304,19 @@ const GridView = ({
 
               <div className="text-xs text-gray-500 dark:text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
 
-              <div className="absolute top-2 right-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1">
+              {/* Action buttons - show on hover for desktop, on long press for mobile */}
+              {(shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
+                <div
+                  className={`absolute top-2 right-2 flex gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
+                    containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                 {(isVideo(item.name) || isImage(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)) && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setShowingActionsFor(null);
                       onOpenMediaViewer(item);
                     }}
                     className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -295,6 +341,7 @@ const GridView = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setShowingActionsFor(null);
                     onInitiateRename(item);
                   }}
                   className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
@@ -306,6 +353,7 @@ const GridView = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setShowingActionsFor(null);
                     onHandleDownload(item.id, item.name);
                   }}
                   className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
@@ -317,6 +365,7 @@ const GridView = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setShowingActionsFor(null);
                     onInitiateDelete(item);
                   }}
                   className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
@@ -326,6 +375,22 @@ const GridView = ({
                   <FiTrash2 size={16} />
                 </button>
               </div>
+              )}
+
+              {/* Overlay to close action buttons on mobile */}
+              {shouldShowActions(item.id) && containerWidth < BREAKPOINT.sm && (
+                <div
+                  className="fixed inset-0 z-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowingActionsFor(null);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    setShowingActionsFor(null);
+                  }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -353,6 +418,11 @@ const GridView = ({
       onHandleDownload,
       onInitiateDelete,
       formatFileSize,
+      showingActionsFor,
+      handleTouchStart,
+      handleTouchEnd,
+      handleTouchMove,
+      shouldShowActions,
     ],
   );
 
