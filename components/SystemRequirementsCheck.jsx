@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { FiCheck, FiX, FiDownload } from 'react-icons/fi';
 import Notifications from '@/components/Notifications';
+import Confirm from '@/components/Confirm';
 import { useSystemRequirements, useInstallRequirement } from '@/lib/api/system';
 
 export default function SystemRequirementsCheck() {
@@ -12,7 +13,7 @@ export default function SystemRequirementsCheck() {
   const installMutation = useInstallRequirement();
   const [installing, setInstalling] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(null);
 
   const addNotification = (type, message, title = null) => {
     const id = Date.now();
@@ -22,24 +23,24 @@ export default function SystemRequirementsCheck() {
     }, 5000);
   };
 
-  const showConfirm = (message, onConfirm) => {
-    setConfirmDialog({ message, onConfirm });
+  const handleInstall = async (name) => {
+    setShowConfirm(name);
   };
 
-  const handleInstall = async (name) => {
-    showConfirm(`Install ${name}?`, async () => {
-      try {
-        setInstalling(name);
-        const result = await installMutation.mutateAsync(name);
-        addNotification('success', result.message || `${name} installation started`);
-        // Recheck requirements after a delay
-        setTimeout(refetch, 2000);
-      } catch (error) {
-        addNotification('error', error.response?.data?.message || error.message || `Failed to install ${name}`);
-      } finally {
-        setInstalling(null);
-      }
-    });
+  const handleConfirmInstall = async () => {
+    if (!showConfirm) return;
+    try {
+      setInstalling(showConfirm);
+      const result = await installMutation.mutateAsync(showConfirm);
+      addNotification('success', result.message || `${showConfirm} installation started`);
+      // Recheck requirements after a delay
+      setTimeout(refetch, 2000);
+    } catch (error) {
+      addNotification('error', error.response?.data?.message || error.message || `Failed to install ${showConfirm}`);
+    } finally {
+      setInstalling(null);
+      setShowConfirm(null);
+    }
   };
 
   if (isLoading) {
@@ -81,16 +82,22 @@ export default function SystemRequirementsCheck() {
               </div>
 
               {!req.installed && req.installable && (
-                <button
-                  onClick={() => handleInstall(req.name)}
-                  disabled={installing === req.name}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                    installing === req.name ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
-                >
-                  <FiDownload size={16} />
-                  {installing === req.name ? 'Installing...' : 'Install'}
-                </button>
+                <div>
+                  {showConfirm !== req.name ? (
+                    <button
+                      onClick={() => handleInstall(req.name)}
+                      disabled={installing === req.name}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        installing === req.name ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      <FiDownload size={16} />
+                      {installing === req.name ? 'Installing...' : 'Install'}
+                    </button>
+                  ) : (
+                    <Confirm message={`Install ${req.name}?`} onCancel={() => setShowConfirm(null)} onConfirm={handleConfirmInstall} isLoading={installing === req.name} />
+                  )}
+                </div>
               )}
 
               {!req.installed && !req.installable && <p className="text-sm text-red-600 font-medium">Cannot auto-install</p>}
@@ -105,32 +112,6 @@ export default function SystemRequirementsCheck() {
 
       {/* Notifications */}
       <Notifications notifications={notifications} />
-
-      {/* Confirm Dialog */}
-      {confirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
-            <p className="text-gray-900 dark:text-white mb-6">{confirmDialog.message}</p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmDialog(null)}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  confirmDialog.onConfirm();
-                  setConfirmDialog(null);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
