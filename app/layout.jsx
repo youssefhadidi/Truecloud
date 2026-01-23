@@ -5,6 +5,8 @@ import './globals.css';
 import AuthProvider from '@/components/AuthProvider';
 import QueryProvider from '@/components/QueryProvider';
 import UpdateChecker from '@/components/UpdateChecker';
+import { NotificationsProvider } from '@/contexts/NotificationsContext';
+import Notifications from '@/components/Notifications';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -26,8 +28,11 @@ export default function RootLayout({ children }) {
     <html lang="en" style={{ height: '100dvh' }}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-dvh`}>
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
-          <UpdateChecker />
+          <NotificationsProvider>
+            <Notifications />
+            <AuthProvider>{children}</AuthProvider>
+            <UpdateChecker />
+          </NotificationsProvider>
         </QueryProvider>
       </body>
     </html>

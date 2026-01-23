@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "0.23.0",
+  "version": "0.38.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -15,6 +15,7 @@
     "create-admin": "node scripts/create-admin.js",
     "generate-secret": "node scripts/generate-secret.js",
     "pull": "git pull",
+    "stopServ": "systemctl stop truecloud",
     "runUpdate": "npm run pull && npm run build && npm run restart",
     "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'"
   },

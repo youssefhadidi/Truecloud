@@ -5,10 +5,9 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy } from 'react';
-import { FiUpload, FiLogOut, FiUser, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
-import Notifications from '@/components/Notifications';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -74,7 +73,7 @@ export default function FilesPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -84,35 +83,7 @@ export default function FilesPage() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
-        <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
-          <div className="flex justify-between items-center gap-2 sm:gap-4">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Truecloud</h1>
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <div className="hidden sm:flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <FiUser />
-                <span className=" truncate">{session?.user?.email}</span>
-              </div>
-              {session?.user?.role === 'admin' && (
-                <button onClick={() => router.push('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 ">
-                  <FiUser />
-                  Admin Panel
-                </button>
-              )}
-              <button
-                onClick={() => signOut({ callbackUrl: '/auth/login' })}
-                className="flex items-center gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 "
-              >
-                <FiLogOut size={16} className="sm:block" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="w-full h-full bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
       {/* Main Content */}
       <main
         className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 flex flex-col relative"
@@ -249,39 +220,7 @@ export default function FilesPage() {
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
-              {state.creatingFolder && (
-                <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-                  <div className="flex items-center gap-3 border border-blue-200 dark:border-blue-800 rounded px-4 py-2">
-                    <FiFolder className="text-blue-500" size={24} />
-                    <input
-                      type="text"
-                      value={state.newFolderName}
-                      onChange={(e) => state.setNewFolderName(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') handlers.confirmCreateFolder();
-                        if (e.key === 'Escape') handlers.cancelCreateFolder();
-                      }}
-                      onBlur={handlers.confirmCreateFolder}
-                      className="flex-1 px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      autoFocus
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handlers.cancelCreateFolder}
-                        className="px-3 py-1  bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
-                      <button onClick={handlers.confirmCreateFolder} className="px-3 py-1  bg-blue-600 text-white rounded hover:bg-blue-700">
-                        Create
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {state.loading ? (
+              {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
@@ -334,7 +273,7 @@ export default function FilesPage() {
           ) : (
             /* Grid View with Virtual Scrolling */
             <div className="p-1 flex flex-col flex-grow">
-              {state.loading ? (
+              {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
@@ -421,9 +360,6 @@ export default function FilesPage() {
 
       {/* Upload Status */}
       <UploadStatus uploads={state.uploads} />
-
-      {/* Notifications */}
-      <Notifications notifications={state.notifications} onDismiss={state.dismissNotification} />
     </div>
   );
 }

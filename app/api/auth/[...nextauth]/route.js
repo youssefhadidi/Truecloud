@@ -55,16 +55,39 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.role = user.role;
         token.username = user.username;
+        console.log('[Auth] JWT callback - setting token:', {
+          email: user.email,
+          role: user.role,
+          id: user.id,
+        });
       }
       return token;
     },
     async session({ session, token }) {
+      console.log('[Auth] Session callback - token:', {
+        email: token.email,
+        role: token.role,
+        id: token.id,
+      });
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.username = token.username;
       }
+      console.log('[Auth] Session callback - returning session:', {
+        email: session.user?.email,
+        role: session.user?.role,
+        id: session.user?.id,
+      });
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      // If the URL is already an absolute URL on the same origin, use it
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      // If it's a URL from the same origin, use it
+      if (new URL(url).origin === baseUrl) return url;
+      // Otherwise, return to the base URL
+      return baseUrl;
     },
   },
   pages: {

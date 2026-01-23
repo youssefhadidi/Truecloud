@@ -4,10 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile } from '@/lib/api/files';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export function useFilesPage(status) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { addNotification } = useNotifications();
 
   // UI State
   const [uploading, setUploading] = useState(false);
@@ -33,7 +35,6 @@ export function useFilesPage(status) {
   const [deletingFile, setDeletingFile] = useState(null);
   const [renamingFile, setRenamingFile] = useState(null);
   const [newFileName, setNewFileName] = useState('');
-  const [notifications, setNotifications] = useState([]);
   const [processingFile, setProcessingFile] = useState(null);
   const [viewerFile, setViewerFile] = useState(null);
   const [uploads, setUploads] = useState([]);
@@ -46,26 +47,6 @@ export function useFilesPage(status) {
       router.push('/auth/login');
     }
   }, [status, router]);
-
-  // Notification helpers
-  const addNotification = (type, message, title = null) => {
-    const id = Date.now() + Math.random();
-    setNotifications((prev) => [
-      ...prev,
-      {
-        id,
-        type,
-        message,
-        title,
-        autoDismiss: true,
-        duration: 5000,
-      },
-    ]);
-  };
-
-  const dismissNotification = (id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
 
   // Persist preferences to localStorage
   useEffect(() => {
@@ -81,7 +62,7 @@ export function useFilesPage(status) {
   }, [sortBy]);
 
   // Fetch and sort files
-  const { data: filesData, isLoading: loading } = useFiles(currentPath, status === 'authenticated');
+  const { data: filesData, isLoading } = useFiles(currentPath, status === 'authenticated');
   const files = useMemo(() => {
     // Filter out hidden files
     let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
@@ -175,13 +156,12 @@ export function useFilesPage(status) {
     deletingFile,
     renamingFile,
     newFileName,
-    notifications,
     processingFile,
     viewerFile,
     uploads,
     folderDisplayNames,
     files,
-    loading,
+    isLoading,
     viewableFiles,
     searchQuery,
 
@@ -206,7 +186,6 @@ export function useFilesPage(status) {
 
     // Helpers
     addNotification,
-    dismissNotification,
     queryClient,
   };
 }

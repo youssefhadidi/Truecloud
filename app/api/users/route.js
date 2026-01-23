@@ -85,7 +85,8 @@ export async function POST(req) {
         password: hashedPassword,
         name: name || username,
         role: role || 'user',
-        hasRootAccess: hasRootAccess || false,
+        // Admins always have root access
+        hasRootAccess: role === 'admin' ? true : hasRootAccess || false,
       },
     });
 
@@ -198,7 +199,13 @@ export async function PATCH(req) {
     if (name) updateData.name = name;
     if (password) updateData.password = await bcrypt.hash(password, 10);
     if (role) updateData.role = role;
-    if (typeof hasRootAccess === 'boolean') updateData.hasRootAccess = hasRootAccess;
+
+    // Handle hasRootAccess: admins always have it, others only if explicitly set
+    if (role === 'admin') {
+      updateData.hasRootAccess = true;
+    } else if (typeof hasRootAccess === 'boolean') {
+      updateData.hasRootAccess = hasRootAccess;
+    }
 
     const user = await prisma.user.update({
       where: { id },

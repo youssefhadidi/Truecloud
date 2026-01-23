@@ -83,10 +83,7 @@ const GridView = ({
           }}
         >
           {item.isCreating ? (
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border-2 border-blue-300 dark:border-blue-700 flex flex-col h-full">
-              <div className="aspect-square flex items-center justify-center mb-2 bg-white dark:bg-gray-600 rounded-lg flex-shrink-0">
-                <FiFolder className="text-blue-500" size={cellWidth > 100 ? 48 : 32} />
-              </div>
+            <div className="bg-blue-50 dark:bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 h-full">
               <input
                 type="text"
                 value={newFolderName}
@@ -95,18 +92,27 @@ const GridView = ({
                   if (e.key === 'Enter') onConfirmCreateFolder();
                   if (e.key === 'Escape') onCancelCreateFolder();
                 }}
-                className="w-full px-2 py-1  mb-2 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-2 py-1 border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 autoFocus
                 onFocus={(e) => e.target.select()}
               />
-              <div className="flex gap-1 mt-auto">
+              <div className="flex gap-2">
                 <button
-                  onClick={onCancelCreateFolder}
-                  className="flex-1 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelCreateFolder();
+                  }}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                 >
                   Cancel
                 </button>
-                <button onClick={onConfirmCreateFolder} className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onConfirmCreateFolder();
+                  }}
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
                   Create
                 </button>
               </div>

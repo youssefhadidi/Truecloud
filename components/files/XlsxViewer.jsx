@@ -2,40 +2,15 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { useParseXlsx } from '@/lib/api/viewers';
 
 export default function XlsxViewer({ fileId, currentPath, fileName }) {
-  const [sheets, setSheets] = useState([]);
   const [activeSheet, setActiveSheet] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { data, isLoading, error } = useParseXlsx(fileId, currentPath);
 
-  useEffect(() => {
-    const loadXlsx = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/files/parse-xlsx?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`);
-
-        if (!response.ok) {
-          throw new Error(`Failed to load XLSX: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        setSheets(data.sheets || []);
-        setActiveSheet(0);
-      } catch (err) {
-        console.error('Error loading XLSX:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadXlsx();
-  }, [fileId, currentPath]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center">
         <div className="text-gray-400">Loading spreadsheet...</div>
@@ -46,10 +21,12 @@ export default function XlsxViewer({ fileId, currentPath, fileName }) {
   if (error) {
     return (
       <div className="w-full h-full flex items-center justify-center">
-        <div className="text-red-400">Error: {error}</div>
+        <div className="text-red-400">Error: {error.message}</div>
       </div>
     );
   }
+
+  const sheets = data?.sheets || [];
 
   if (!sheets.length) {
     return (
