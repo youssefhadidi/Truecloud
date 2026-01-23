@@ -62,67 +62,35 @@ function getCommandVersion(command, versionFlag = '--version') {
   });
 }
 
-// List of required system programs
+// List of required system programs (Debian only)
 const REQUIRED_PROGRAMS = [
   {
     name: 'FFmpeg',
     command: 'ffmpeg',
     description: 'Video processing and thumbnail generation',
     installable: true,
-    installCommand: {
-      debian: 'sudo apt-get install -y ffmpeg',
-      rhel: 'sudo yum install -y ffmpeg',
-      macos: 'brew install ffmpeg',
-      windows: 'choco install ffmpeg',
-    },
-  },
-  {
-    name: 'ImageMagick',
-    command: 'convert',
-    description: 'Image processing and conversion',
-    installable: true,
-    installCommand: {
-      debian: 'sudo apt-get install -y imagemagick',
-      rhel: 'sudo yum install -y ImageMagick',
-      macos: 'brew install imagemagick',
-      windows: 'choco install imagemagick',
-    },
+    installCommand: 'sudo apt-get install -y ffmpeg',
   },
   {
     name: 'aria2c',
     command: 'aria2c',
     description: 'Torrent and metalink download utility',
     installable: true,
-    installCommand: {
-      debian: 'sudo apt-get install -y aria2',
-      rhel: 'sudo yum install -y aria2',
-      macos: 'brew install aria2',
-      windows: 'choco install aria2',
-    },
+    installCommand: 'sudo apt-get install -y aria2',
   },
   {
     name: 'libheif1',
     command: 'heif-convert',
     description: 'HEIC/HEIF image format support',
     installable: true,
-    installCommand: {
-      debian: 'sudo apt-get install -y libheif1',
-      rhel: 'sudo yum install -y libheif',
-      macos: 'brew install libheif',
-      windows: null,
-    },
+    installCommand: 'sudo apt-get install -y libheif1',
   },
   {
     name: 'Ghostscript',
     command: 'gs',
     description: 'PDF processing and rendering',
     installable: true,
-    installCommand: {
-      debian: 'sudo apt-get install -y ghostscript',
-      rhel: 'sudo yum install -y ghostscript',
-      macos: 'brew install ghostscript',
-      windows: 'choco install ghostscript',
-    },
+    installCommand: 'sudo apt-get install -y ghostscript',
   },
 ];
 
@@ -190,26 +158,16 @@ export async function POST(req) {
       return NextResponse.json({ error: `Cannot install ${name} automatically` }, { status: 400 });
     }
 
+    // Only support Linux (Debian-based)
     const platform = process.platform;
-    let installCmd = null;
-
-    if (platform.includes('linux')) {
-      // Detect Linux distro
-      const isDebian = ['ubuntu', 'debian'].some((d) => process.env.DISTRO?.toLowerCase().includes(d));
-      installCmd = isDebian ? program.installCommand.debian : program.installCommand.rhel;
-    } else if (platform === 'darwin') {
-      installCmd = program.installCommand.macos;
-    } else if (platform === 'win32') {
-      installCmd = program.installCommand.windows;
+    if (!platform.includes('linux')) {
+      return NextResponse.json({ message: 'Installation is only supported on Linux systems. Please install manually.' }, { status: 400 });
     }
 
-    if (!installCmd) {
-      return NextResponse.json({ message: `${name} installation not available for this platform. Please install manually.` }, { status: 400 });
-    }
+    const installCmd = program.installCommand;
 
     // Execute the install command
-    const isWindows = platform === 'win32';
-    const install = spawn(isWindows ? 'cmd' : 'sh', isWindows ? ['/c', installCmd] : ['-c', installCmd]);
+    const install = spawn('sh', ['-c', installCmd]);
 
     let output = '';
     let errorOutput = '';

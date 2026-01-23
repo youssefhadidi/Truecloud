@@ -41,7 +41,8 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   const handleSignOut = async () => {
     setIsOpen(false);
-    await signOut({ callbackUrl: '/auth/login' });
+    await signOut({ redirect: false });
+    router.push('/auth/login');
   };
 
   return (
