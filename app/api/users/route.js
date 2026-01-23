@@ -1,9 +1,8 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAdmin } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
-import { checkUserIsAdmin } from '@/lib/permissions';
 import bcrypt from 'bcryptjs';
 import { mkdir, rmdir } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -13,16 +12,8 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Only admins can list all users
-    const isAdmin = await checkUserIsAdmin(session.user.id);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const { session, error } = await requireAdmin();
+    if (error) return error;
 
     const users = await prisma.user.findMany({
       select: {
@@ -49,15 +40,8 @@ export async function GET(req) {
 // POST - Create new user (admin only)
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const isAdmin = await checkUserIsAdmin(session.user.id);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const { session, error } = await requireAdmin();
+    if (error) return error;
 
     const { email, username, password, name, role, hasRootAccess } = await req.json();
 
@@ -120,15 +104,8 @@ export async function POST(req) {
 // DELETE - Delete user (admin only)
 export async function DELETE(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const isAdmin = await checkUserIsAdmin(session.user.id);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const { session, error } = await requireAdmin();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('id');
@@ -177,15 +154,8 @@ export async function DELETE(req) {
 // PATCH - Update user (admin only)
 export async function PATCH(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const isAdmin = await checkUserIsAdmin(session.user.id);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const { session, error } = await requireAdmin();
+    if (error) return error;
 
     const { id, email, username, name, password, role, hasRootAccess } = await req.json();
 

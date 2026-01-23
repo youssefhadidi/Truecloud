@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { FiRefreshCw, FiDownload } from 'react-icons/fi';
-import axios from 'axios';
+import axios from '@/lib/axiosConfig';
 
 export default function LogViewer() {
   const [logs, setLogs] = useState([]);
