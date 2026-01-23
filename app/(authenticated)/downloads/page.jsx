@@ -122,8 +122,8 @@ export default function DownloadsPage() {
                             <p className="font-medium text-gray-900 dark:text-white">{download.progress}%</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">Speed</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{download.speed}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">{download.isTorrent ? 'Download' : 'Speed'}</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{download.downloadSpeed}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 dark:text-gray-500">Downloaded</p>
@@ -134,6 +134,24 @@ export default function DownloadsPage() {
                             <p className="font-medium text-gray-900 dark:text-white">{download.totalSize}</p>
                           </div>
                         </div>
+
+                        {/* Torrent-specific info */}
+                        {download.isTorrent && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">Upload Speed</p>
+                              <p className="font-medium text-gray-900 dark:text-white">{download.uploadSpeed}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">Peers</p>
+                              <p className="font-medium text-gray-900 dark:text-white">{download.peers}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">Seeders</p>
+                              <p className="font-medium text-gray-900 dark:text-white">{download.seeders}</p>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Action Buttons */}
                         {download.error && (

@@ -10,6 +10,7 @@ import {
   addDownload,
   getActiveDownloads,
   getStoppedDownloads,
+  getWaitingDownloads,
   pauseDownload,
   resumeDownload,
   removeDownload,
@@ -68,9 +69,10 @@ export async function POST(req) {
       name: torrentFile ? torrentFile.name : url,
       status: 'active',
       progress: 0,
-      speed: '0 B/s',
+      downloadSpeed: '0 B/s',
       downloaded: '0 B',
       totalSize: 'Unknown',
+      isTorrent: torrentFile || url.startsWith('magnet:'),
     };
 
     logger.info('POST /api/files/torrent-download - Download started', {
@@ -102,14 +104,18 @@ export async function GET(req) {
       // Get active downloads
       const activeDownloads = await getActiveDownloads();
 
+      // Get waiting/paused downloads
+      const waitingDownloads = await getWaitingDownloads(0, 100);
+
       // Get recently stopped downloads (completed or failed)
       const stoppedDownloads = await getStoppedDownloads(0, 10);
 
       // Combine and sort by most recent
-      const allDownloads = [...activeDownloads, ...stoppedDownloads];
+      const allDownloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
 
       logger.debug('GET /api/files/torrent-download - Success', {
         active: activeDownloads.length,
+        waiting: waitingDownloads.length,
         stopped: stoppedDownloads.length,
       });
 
