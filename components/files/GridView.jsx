@@ -88,7 +88,6 @@ const GridView = ({
                 type="text"
                 value={newFolderName}
                 onChange={(e) => onNewFolderNameChange(e.target.value)}
-                onBlur={onCancelCreateFolder}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') onConfirmCreateFolder();
                   if (e.key === 'Escape') onCancelCreateFolder();
@@ -99,12 +98,21 @@ const GridView = ({
               />
               <div className="flex gap-2">
                 <button
-                  onClick={onCancelCreateFolder}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelCreateFolder();
+                  }}
                   className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                 >
                   Cancel
                 </button>
-                <button onClick={onConfirmCreateFolder} className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onConfirmCreateFolder();
+                  }}
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
                   Create
                 </button>
               </div>
