@@ -4,30 +4,53 @@ import { useEffect } from 'react';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 
-export function useNavigation({ currentPath, pathHistory, setCurrentPath, setPathHistory }) {
+export function useNavigation({ currentPath, pathHistory, historyIndex, setCurrentPath, setPathHistory, setHistoryIndex }) {
   const navigateToFolder = (folderName) => {
     const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+    // Truncate any forward history and add new path
+    const newHistory = [...pathHistory.slice(0, historyIndex + 1), newPath];
+    setPathHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
     setCurrentPath(newPath);
-    setPathHistory([...pathHistory, newPath]);
   };
 
   const goBack = () => {
-    if (pathHistory.length > 1) {
-      const newHistory = pathHistory.slice(0, -1);
-      setPathHistory(newHistory);
-      setCurrentPath(newHistory[newHistory.length - 1]);
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setCurrentPath(pathHistory[newIndex]);
     }
   };
 
+  const goForward = () => {
+    if (historyIndex < pathHistory.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setCurrentPath(pathHistory[newIndex]);
+    }
+  };
+
+  const canGoBack = historyIndex > 0;
+  const canGoForward = historyIndex < pathHistory.length - 1;
+
   const navigateToBreadcrumb = (index) => {
-    const newHistory = pathHistory.slice(0, index + 1);
+    // Build the path from breadcrumb segments
+    const pathParts = currentPath ? currentPath.split('/') : [];
+    const targetPath = index === 0 ? '' : pathParts.slice(0, index).join('/');
+
+    // Truncate forward history and add this path
+    const newHistory = [...pathHistory.slice(0, historyIndex + 1), targetPath];
     setPathHistory(newHistory);
-    setCurrentPath(newHistory[newHistory.length - 1]);
+    setHistoryIndex(newHistory.length - 1);
+    setCurrentPath(targetPath);
   };
 
   return {
     navigateToFolder,
     goBack,
+    goForward,
+    canGoBack,
+    canGoForward,
     navigateToBreadcrumb,
   };
 }

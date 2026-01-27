@@ -5,7 +5,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy } from 'react';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import { useFilesPage } from '@/hooks/useFilesPage';
@@ -18,7 +18,7 @@ const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
 const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 
-export default function FilesPage() {
+function FilesPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -29,8 +29,10 @@ export default function FilesPage() {
   const navigation = useNavigation({
     currentPath: state.currentPath,
     pathHistory: state.pathHistory,
+    historyIndex: state.historyIndex,
     setCurrentPath: state.setCurrentPath,
     setPathHistory: state.setPathHistory,
+    setHistoryIndex: state.setHistoryIndex,
   });
 
   // Media viewer hooks
@@ -128,11 +130,19 @@ export default function FilesPage() {
             </button>
             <button
               onClick={navigation.goBack}
-              disabled={state.pathHistory.length <= 1}
-              className={`p-2 rounded-lg ${state.pathHistory.length <= 1 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-700'}`}
+              disabled={!navigation.canGoBack}
+              className={`p-2 rounded-lg ${!navigation.canGoBack ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-700'}`}
               title="Go Back"
             >
               <FiArrowLeft size={20} />
+            </button>
+            <button
+              onClick={navigation.goForward}
+              disabled={!navigation.canGoForward}
+              className={`p-2 rounded-lg ${!navigation.canGoForward ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-700'}`}
+              title="Go Forward"
+            >
+              <FiArrowRight size={20} />
             </button>
 
             <button
@@ -396,5 +406,23 @@ export default function FilesPage() {
         </Suspense>
       )}
     </div>
+  );
+}
+
+// Wrap with Suspense for useSearchParams
+export default function FilesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center bg-gray-900">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-4 text-gray-400">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <FilesPageContent />
+    </Suspense>
   );
 }

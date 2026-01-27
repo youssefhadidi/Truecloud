@@ -1,20 +1,26 @@
 /** @format */
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export function useFilesPage(status) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
 
+  // Get initial path from URL
+  const initialPath = searchParams.get('path') || '';
+
   // UI State
   const [uploading, setUploading] = useState(false);
-  const [currentPath, setCurrentPath] = useState('');
-  const [pathHistory, setPathHistory] = useState(['']);
+  const [currentPath, setCurrentPath] = useState(initialPath);
+  const [pathHistory, setPathHistory] = useState([initialPath]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [isPopstateNavigation, setIsPopstateNavigation] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('fileViewMode') || 'grid';
@@ -61,6 +67,41 @@ export function useFilesPage(status) {
       localStorage.setItem('fileSortBy', sortBy);
     }
   }, [sortBy]);
+
+  // Sync URL with currentPath (but not during browser back/forward)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isPopstateNavigation) {
+      setIsPopstateNavigation(false);
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const currentUrlPath = url.searchParams.get('path') || '';
+
+    if (currentUrlPath !== currentPath) {
+      if (currentPath) {
+        url.searchParams.set('path', currentPath);
+      } else {
+        url.searchParams.delete('path');
+      }
+      window.history.pushState({ path: currentPath }, '', url.toString());
+    }
+  }, [currentPath, isPopstateNavigation]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopstate = (event) => {
+      const newPath = event.state?.path ?? new URL(window.location.href).searchParams.get('path') ?? '';
+      setIsPopstateNavigation(true);
+      setCurrentPath(newPath);
+    };
+
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, []);
 
   // Fetch and sort files
   const { data: filesData, isLoading } = useFiles(currentPath, status === 'authenticated');
@@ -150,6 +191,7 @@ export function useFilesPage(status) {
     uploading,
     currentPath,
     pathHistory,
+    historyIndex,
     viewMode,
     sortBy,
     creatingFolder,
@@ -189,6 +231,7 @@ export function useFilesPage(status) {
     setUploading,
     setCurrentPath,
     setPathHistory,
+    setHistoryIndex,
     setSharingFile,
 
     // Helpers
