@@ -134,7 +134,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   return (
     <div
-      className={`${isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-1'}`}
+      className={`${isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-1'}`}
       onClick={isFullscreen ? null : onClose}
     >
       <div

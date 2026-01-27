@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./custom.css";
 
 /* Always use dark theme */
 :root {

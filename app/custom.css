@@ -1,0 +1,4 @@
+/* Custom modal styles */
+.modal-backdrop {
+  background-color: rgba(75, 75, 75, 0.3);
+}
