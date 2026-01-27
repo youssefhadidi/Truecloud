@@ -12,8 +12,13 @@ export function useFilesPage(status) {
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
 
-  // Get initial path from URL
-  const initialPath = searchParams.get('path') || '';
+  // Get initial path from URL (only on first mount)
+  const [initialPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URL(window.location.href).searchParams.get('path') || '';
+    }
+    return '';
+  });
 
   // UI State
   const [uploading, setUploading] = useState(false);
