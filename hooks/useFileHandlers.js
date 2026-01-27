@@ -14,6 +14,7 @@ export function useFileHandlers({
   setProcessingFile,
   setRenamingFile,
   setNewFileName,
+  setSharingFile,
 }) {
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
@@ -166,6 +167,16 @@ export function useFileHandlers({
     );
   };
 
+  // Share operations
+  const initiateShare = (file, closeContextMenu) => {
+    setSharingFile(file);
+    if (closeContextMenu) closeContextMenu();
+  };
+
+  const cancelShare = () => {
+    setSharingFile(null);
+  };
+
   return {
     initiateCreateFolder,
     cancelCreateFolder,
@@ -179,5 +190,7 @@ export function useFileHandlers({
     initiateRename,
     cancelRename,
     confirmRename,
+    initiateShare,
+    cancelShare,
   };
 }

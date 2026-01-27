@@ -61,9 +61,9 @@ export default function SkpViewer({ fileId, currentPath, fileName }) {
 
         // For SKP files, use the conversion endpoint
         if (fileNameLower.endsWith('.skp')) {
-          objectUrl = `/api/files/convert-skp?id=${fileId}&path=${encodeURIComponent(currentPath)}`;
+          objectUrl = `/api/files/convert-skp?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
         } else {
-          objectUrl = `/api/files/download/${fileId}?path=${encodeURIComponent(currentPath)}`;
+          objectUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
         }
 
         // Try GLB/GLTF first (includes converted SKP files)

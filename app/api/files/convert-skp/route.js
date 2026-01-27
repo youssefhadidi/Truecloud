@@ -9,6 +9,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { logger } from '@/lib/logger';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const execPromise = promisify(exec);
 
@@ -29,7 +30,7 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const fileName = decodeURIComponent(searchParams.get('id') || '');
+    const fileName = safeDecodeURIComponent(searchParams.get('id') || '');
     let relativePath = searchParams.get('path') || '';
 
     if (!fileName) {

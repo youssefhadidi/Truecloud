@@ -9,6 +9,7 @@ import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
@@ -246,7 +247,7 @@ export async function GET(req, { params }) {
     }
 
     const resolvedParams = await params;
-    fileId = decodeURIComponent(resolvedParams.id);
+    fileId = safeDecodeURIComponent(resolvedParams.id);
 
     // Get path from query params
     const url = new URL(req.url);

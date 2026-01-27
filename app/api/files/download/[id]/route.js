@@ -9,6 +9,7 @@ import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -20,7 +21,7 @@ export async function GET(req, { params }) {
     }
 
     const { id } = await params;
-    const fileName = decodeURIComponent(id);
+    const fileName = safeDecodeURIComponent(id);
 
     // Get path from query params
     const url = new URL(req.url);

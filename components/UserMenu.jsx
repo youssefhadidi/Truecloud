@@ -5,7 +5,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { FiChevronDown, FiUser, FiDownload, FiLogOut } from 'react-icons/fi';
+import { FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2 } from 'react-icons/fi';
 
 export default function UserMenu({ email, isAdmin = false }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,6 +39,11 @@ export default function UserMenu({ email, isAdmin = false }) {
     setIsOpen(false);
   };
 
+  const handleShares = () => {
+    router.push('/shares');
+    setIsOpen(false);
+  };
+
   const handleSignOut = async () => {
     setIsOpen(false);
     await signOut({ redirect: false });
@@ -67,6 +72,14 @@ export default function UserMenu({ email, isAdmin = false }) {
               <hr className="my-1 border-gray-200 dark:border-gray-700" />
             </>
           )}
+
+          <button
+            onClick={handleShares}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <FiShare2 size={16} />
+            My Shares
+          </button>
 
           <button
             onClick={handleDownloads}

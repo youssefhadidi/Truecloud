@@ -5,31 +5,21 @@
 import { useEffect, useState, useRef } from 'react';
 import { FiImage } from 'react-icons/fi';
 import { useThumbnail } from '@/lib/api/files';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
-export default function LazyImage({ src, alt, className, onError, isThumbnail = false }) {
+export default function LazyImage({ src, alt, className, onError, isThumbnail = false, fileId = null, filePath = '' }) {
   const [isInView, setIsInView] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const imgRef = useRef(null);
 
-  // Extract fileId and path from src for thumbnail requests
-  const getThumbnailParams = () => {
-    if (!isThumbnail || !src) return null;
-    // src format: /api/files/thumbnail/[id]?path=[path]
-    const match = src.match(/\/api\/files\/thumbnail\/([^?]+)(?:\?path=(.+))?/);
-    if (match) {
-      return {
-        id: decodeURIComponent(match[1]),
-        path: match[2] ? decodeURIComponent(match[2]) : '',
-      };
-    }
-    return null;
-  };
-
-  const params = getThumbnailParams();
-
   // Fetch thumbnail (generates if needed)
-  const { data: thumbnailData, isLoading, isError } = useThumbnail(params?.id || null, params?.path || '', isThumbnail && isInView && !hasError);
+  // When isThumbnail is true, use fileId and filePath props directly to avoid URL encoding issues
+  const { data: thumbnailData, isLoading, isError } = useThumbnail(
+    isThumbnail ? fileId : null,
+    isThumbnail ? filePath : '',
+    isThumbnail && isInView && !hasError && fileId !== null
+  );
 
   // Handle intersection observer
   useEffect(() => {

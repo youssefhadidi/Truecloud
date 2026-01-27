@@ -4,7 +4,7 @@
 
 import { useRef, useMemo, useCallback } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -51,6 +51,8 @@ const GridView = ({
   onConfirmDelete,
   onCancelDelete,
   formatFileSize,
+  onInitiateShare,
+  sharedPaths,
 }) => {
   const gridRef = useRef(null);
 
@@ -206,10 +208,12 @@ const GridView = ({
 
                 {isImage(item.name) && (
                   <LazyImage
-                    src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                    src=""
                     alt={item.name}
                     className="w-full h-full object-cover rounded-lg"
                     isThumbnail={true}
+                    fileId={item.id}
+                    filePath={currentPath}
                     onError={(e) => {
                       if (e?.target) {
                         e.target.style.display = 'none';
@@ -221,10 +225,12 @@ const GridView = ({
                 {isVideo(item.name) && (
                   <div className="relative w-full h-full">
                     <LazyImage
-                      src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                      src=""
                       alt={item.name}
                       className="w-full h-full object-cover rounded-lg"
                       isThumbnail={true}
+                      fileId={item.id}
+                      filePath={currentPath}
                       onError={(e) => {
                         if (e?.target) {
                           e.target.style.display = 'none';
@@ -241,10 +247,12 @@ const GridView = ({
 
                 {isPdf(item.name) && (
                   <LazyImage
-                    src={`/api/files/thumbnail/${item.id}?path=${encodeURIComponent(currentPath)}`}
+                    src=""
                     alt={item.name}
                     className="w-full h-full object-cover rounded-lg"
                     isThumbnail={true}
+                    fileId={item.id}
+                    filePath={currentPath}
                     onError={(e) => {
                       if (e?.target) {
                         e.target.style.display = 'none';
@@ -257,6 +265,13 @@ const GridView = ({
                 {!item.isDirectory && is3dFile(item.name) && <FiBox className="text-orange-500" size={cellWidth > 100 ? 48 : 32} />}
                 {!item.isDirectory && !isImage(item.name) && !isVideo(item.name) && !isPdf(item.name) && !is3dFile(item.name) && (
                   <FiFile className="text-gray-500" size={cellWidth > 100 ? 48 : 32} />
+                )}
+
+                {/* Share indicator badge */}
+                {sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
+                  <div className="absolute top-1 left-1 bg-green-500 rounded-full p-1 shadow-sm" title="Shared">
+                    <FiShare2 size={10} className="text-white" />
+                  </div>
                 )}
               </div>
 
@@ -317,6 +332,17 @@ const GridView = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    onInitiateShare?.(item);
+                  }}
+                  className="p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Share"
+                  disabled={processingFile === item.id}
+                >
+                  <FiShare2 size={16} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onInitiateDelete(item);
                   }}
                   className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
@@ -353,6 +379,8 @@ const GridView = ({
       onHandleDownload,
       onInitiateDelete,
       formatFileSize,
+      onInitiateShare,
+      sharedPaths,
     ],
   );
 

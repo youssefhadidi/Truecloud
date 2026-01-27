@@ -224,9 +224,9 @@ export default function Viewer3D({ fileId, currentPath, fileName }) {
         const needsConversion = !['glb', 'gltf', 'obj'].includes(fileExt);
 
         if (needsConversion) {
-          conversionUrl = `/api/files/convert-3d?id=${fileId}&path=${encodeURIComponent(currentPath)}`;
+          conversionUrl = `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
         } else {
-          conversionUrl = `/api/files/download/${fileId}?path=${encodeURIComponent(currentPath)}`;
+          conversionUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
         }
 
         // Load as GLTF/GLB

@@ -6,11 +6,8 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { join, extname, resolve, sep } from 'node:path';
 import { createHash } from 'crypto';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
-import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { logger } from '@/lib/logger';
-import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 
 const execPromise = promisify(exec);
 
@@ -19,64 +16,58 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 const CACHE_DIR = process.env.CACHE_DIR || './.cache';
 const RESOLVED_CACHE_DIR = resolve(process.cwd(), CACHE_DIR);
 
-// Ensure cache directory exists with proper permissions
+// Ensure cache directory exists
 try {
   if (!fs.existsSync(RESOLVED_CACHE_DIR)) {
     fs.mkdirSync(RESOLVED_CACHE_DIR, { recursive: true, mode: 0o755 });
   }
 } catch (err) {
-  logger.warn('Failed to create cache directory on startup', { RESOLVED_CACHE_DIR, error: err.message });
+  console.warn('Failed to create cache directory:', err.message);
 }
 
-// Formats that don't need conversion
 const NO_CONVERSION_NEEDED = ['glb', 'gltf'];
 
-export async function GET(req) {
+export async function GET(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { token } = await params;
+    const password = req.headers.get('x-share-password');
+
+    // Verify share
+    const verification = await verifyShare(token, password);
+
+    if (!verification.valid) {
+      if (verification.requiresPassword) {
+        return NextResponse.json({ error: 'Password required' }, { status: 401 });
+      }
+      return NextResponse.json({ error: verification.error }, { status: 404 });
     }
+
+    const share = verification.share;
 
     const { searchParams } = new URL(req.url);
-    const fileName = safeDecodeURIComponent(searchParams.get('id') || '');
     const binRequest = searchParams.get('bin') === 'true';
-    let relativePath = searchParams.get('path') || '';
+    const subPath = searchParams.get('path') || '';
+    const fileName = searchParams.get('file') || share.fileName;
 
-    if (!fileName) {
-      return NextResponse.json({ error: 'Missing file parameter' }, { status: 400 });
+    // Build the path
+    let pathCheck;
+    if (share.isDirectory && subPath) {
+      pathCheck = validateSharePath(share, subPath);
+    } else if (share.isDirectory && fileName !== share.fileName) {
+      pathCheck = validateSharePath(share, fileName);
+    } else {
+      pathCheck = validateSharePath(share, '');
     }
 
-    // Check user permissions
-    const isRoot = await hasRootAccess(session.user.id);
-    const accessCheck = checkPathAccess({
-      userId: session.user.id,
-      path: relativePath,
-      operation: 'read',
-      isRootUser: isRoot,
-    });
-
-    if (!accessCheck.allowed) {
-      logger.warn('GET /api/files/convert-3d - Access denied', {
-        requestedPath: relativePath,
-        userId: session.user.id,
-        reason: accessCheck.error,
-      });
-      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    if (!pathCheck.allowed) {
+      return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
-    relativePath = accessCheck.normalizedPath;
-
-    const fullPath = join(UPLOAD_DIR, relativePath, fileName);
+    const fullPath = join(UPLOAD_DIR, pathCheck.fullPath);
 
     // Security: prevent directory traversal
     const resolvedTarget = resolve(fullPath) + sep;
     if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
-      logger.error('GET /api/files/convert-3d - Directory traversal attempt', {
-        fileName,
-        resolvedTarget,
-        user: session.user.email,
-      });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -99,7 +90,7 @@ export async function GET(req) {
     }
 
     // Generate cache filename using hash
-    const fileHash = createHash('md5').update(fileName).digest('hex');
+    const fileHash = createHash('md5').update(`${token}_${fileName}`).digest('hex');
     const cacheGlbPath = join(RESOLVED_CACHE_DIR, `${fileHash}.glb`);
     const cacheGltfPath = join(RESOLVED_CACHE_DIR, `${fileHash}.gltf`);
     const cacheBinPath = join(RESOLVED_CACHE_DIR, `${fileHash}.bin`);
@@ -115,17 +106,16 @@ export async function GET(req) {
       });
     }
 
-    // If already converted as GLTF, modify it to reference the bin file correctly
+    // If already converted as GLTF, return it
     if (fs.existsSync(cacheGltfPath)) {
       let gltfBuffer = fs.readFileSync(cacheGltfPath);
       let gltfJson = JSON.parse(gltfBuffer.toString());
 
-      // Update all buffer URIs to point to our bin endpoint
+      // Update buffer URIs to point to our bin endpoint
       if (gltfJson.buffers) {
         for (let buffer of gltfJson.buffers) {
           if (buffer.uri && !buffer.uri.startsWith('http')) {
-            // Replace with our bin endpoint
-            buffer.uri = `/api/files/convert-3d?id=${encodeURIComponent(fileName)}&bin=true`;
+            buffer.uri = `/api/public/${token}/convert-3d?bin=true`;
           }
         }
       }
@@ -139,84 +129,68 @@ export async function GET(req) {
       });
     }
 
+    // If requesting bin file and it exists, return it
+    if (binRequest && fs.existsSync(cacheBinPath)) {
+      const binBuffer = fs.readFileSync(cacheBinPath);
+      return new Response(binBuffer, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': binBuffer.length,
+        },
+      });
+    }
+
     // Convert 3D file to GLB using Assimp
     try {
-      // Use cache directory for temp files (ensures proper permissions and writable location)
       const tempDir = join(RESOLVED_CACHE_DIR, '.temp');
 
-      // Ensure temp directory exists with proper permissions
       try {
         await fsPromises.mkdir(tempDir, { recursive: true, mode: 0o755 });
-        logger.debug('Temp directory ready', { tempDir });
       } catch (mkdirError) {
-        logger.error('Failed to create temp directory', {
-          tempDir,
-          error: mkdirError.message,
-          code: mkdirError.code,
-        });
-        return NextResponse.json({ error: 'Failed to create temporary directory for conversion' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to create temporary directory' }, { status: 500 });
       }
 
-      // Create temp files with simple ASCII names to avoid encoding issues
-      const tempInputPath = join(tempDir, `input.${fileExt}`);
-      const tempGLBPath = join(tempDir, 'output.glb');
-      const tempGltfPath = join(tempDir, 'output.gltf');
-      const tempBinPath = join(tempDir, 'output.bin');
+      const tempInputPath = join(tempDir, `input_${fileHash}.${fileExt}`);
+      const tempGLBPath = join(tempDir, `output_${fileHash}.glb`);
+      const tempGltfPath = join(tempDir, `output_${fileHash}.gltf`);
+      const tempBinPath = join(tempDir, `output_${fileHash}.bin`);
 
-      // Copy original file to temp location with proper error handling
       try {
-        logger.debug('Copying file to temp location', {
-          source: fullPath,
-          destination: tempInputPath,
-          sourceExists: fs.existsSync(fullPath),
-        });
         await fsPromises.copyFile(fullPath, tempInputPath);
       } catch (copyError) {
-        logger.error('Failed to copy file to temp directory', {
-          source: fullPath,
-          destination: tempInputPath,
-          error: copyError.message,
-          code: copyError.code,
-          sourceExists: fs.existsSync(fullPath),
-          tempDirExists: fs.existsSync(tempDir),
-        });
-        return NextResponse.json({ error: `Failed to prepare file for conversion: ${copyError.message}` }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to prepare file for conversion' }, { status: 500 });
       }
 
       try {
-        // Use forward slashes and proper escaping
         const inputPath = tempInputPath.replace(/\\/g, '/');
         const glbOutput = tempGLBPath.replace(/\\/g, '/');
         const gltfOutput = tempGltfPath.replace(/\\/g, '/');
 
-        // Try GLB export first (binary format, single file)
         let conversionSuccess = false;
+
+        // Try GLB first
         try {
           await execPromise(`assimp export "${inputPath}" "${glbOutput}" -fglb2`);
           if (fs.existsSync(tempGLBPath)) {
             await fsPromises.copyFile(tempGLBPath, cacheGlbPath);
             conversionSuccess = true;
-            logger.debug('Converted to GLB', { fileName });
           }
         } catch (glbError) {
-          logger.warn('GLB export failed, trying GLTF', { fileName, error: glbError.message });
+          // Fall back to GLTF
         }
 
-        // If GLB failed, fall back to GLTF with separate bin file
+        // If GLB failed, try GLTF
         if (!conversionSuccess) {
           await execPromise(`assimp export "${inputPath}" "${gltfOutput}" -fgltf2`);
 
           if (fs.existsSync(tempGltfPath)) {
-            // Copy GLTF file
             await fsPromises.copyFile(tempGltfPath, cacheGltfPath);
 
-            // Copy associated bin file if it exists
             if (fs.existsSync(tempBinPath)) {
               await fsPromises.copyFile(tempBinPath, cacheBinPath);
             }
 
             conversionSuccess = true;
-            logger.debug('Converted to GLTF+BIN', { fileName });
           }
         }
 
@@ -225,38 +199,31 @@ export async function GET(req) {
         }
       } finally {
         // Clean up temp files
-        try {
-          const filesToClean = [tempInputPath, tempGLBPath, tempGltfPath, tempBinPath];
-          for (const file of filesToClean) {
-            if (fs.existsSync(file)) {
+        const filesToClean = [tempInputPath, tempGLBPath, tempGltfPath, tempBinPath];
+        for (const file of filesToClean) {
+          if (fs.existsSync(file)) {
+            try {
               await fsPromises.unlink(file);
-              logger.debug('Cleaned up temp file', { file });
+            } catch (e) {
+              // Ignore cleanup errors
             }
           }
-        } catch (cleanupError) {
-          logger.warn('Error cleaning up temp files', { error: cleanupError.message });
         }
       }
     } catch (error) {
-      logger.error('Assimp conversion error', {
-        fileName,
-        error: error.message,
-        stack: error.stack,
-      });
       return NextResponse.json({ error: 'Failed to convert 3D file: ' + error.message }, { status: 500 });
     }
 
-    // Return the appropriate cached file (GLB or GLTF)
+    // Return the cached file
     let cachePath;
     if (fs.existsSync(cacheGlbPath)) {
       cachePath = cacheGlbPath;
     } else if (fs.existsSync(cacheGltfPath)) {
       cachePath = cacheGltfPath;
     } else {
-      return NextResponse.json({ error: 'Conversion failed: no output file generated' }, { status: 500 });
+      return NextResponse.json({ error: 'Conversion failed' }, { status: 500 });
     }
 
-    // Read and return the converted file
     const fileBuffer = fs.readFileSync(cachePath);
     const contentType = cachePath.endsWith('.glb') ? 'model/gltf-binary' : 'model/gltf+json';
 
@@ -267,7 +234,7 @@ export async function GET(req) {
       },
     });
   } catch (error) {
-    console.error('Conversion error:', error);
+    console.error('Public convert-3d error:', error);
     return NextResponse.json({ error: 'Conversion failed: ' + error.message }, { status: 500 });
   }
 }

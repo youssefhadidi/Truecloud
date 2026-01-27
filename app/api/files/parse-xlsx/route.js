@@ -6,6 +6,7 @@ import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -20,7 +21,7 @@ export async function GET(req, { params }) {
     }
 
     const url = new URL(req.url);
-    const fileId = decodeURIComponent(url.searchParams.get('id') || '');
+    const fileId = safeDecodeURIComponent(url.searchParams.get('id') || '');
     let relativePath = url.searchParams.get('path') || '';
 
     logger.debug('GET /api/files/parse-xlsx - Processing', { fileId, path: relativePath });

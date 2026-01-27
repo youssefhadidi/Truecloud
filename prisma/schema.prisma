@@ -23,6 +23,7 @@ model User {
   files       File[]
   permissions FilePermission[]
   sessions    Session[]
+  shares      Share[]
 }
 
 model Session {
@@ -66,4 +67,24 @@ model FilePermission {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([fileId, userId])
+}
+
+model Share {
+  id           String    @id @default(cuid())
+  token        String    @unique @default(cuid())
+  path         String    // File/folder path relative to uploads
+  fileName     String    // Original file/folder name
+  isDirectory  Boolean   @default(false)
+  ownerId      String
+  passwordHash String?   // Optional bcrypt hash
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  accessCount  Int       @default(0)
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([ownerId])
+  @@index([path, fileName])
 }

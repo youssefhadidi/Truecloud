@@ -4,7 +4,7 @@
 
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 
@@ -27,6 +27,9 @@ const ListView = ({
   initiateRename,
   handleDownload,
   initiateDelete,
+  initiateShare,
+  sharedPaths,
+  currentPath,
 }) => {
   const parentRef = useRef(null);
 
@@ -145,7 +148,14 @@ const ListView = ({
                 {processingFile === file.id ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 flex-shrink-0"></div>
                 ) : (
-                  <div className="flex-shrink-0">{getFileIcon(file)}</div>
+                  <div className="flex-shrink-0 relative">
+                    {getFileIcon(file)}
+                    {sharedPaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
+                      <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5" title="Shared">
+                        <FiShare2 size={8} className="text-white" />
+                      </div>
+                    )}
+                  </div>
                 )}
                 {file.isDirectory ? (
                   <div className="font-medium text-indigo-600 dark:text-indigo-400 truncate">{file.displayName || file.name}</div>
@@ -193,6 +203,14 @@ const ListView = ({
                   disabled={processingFile === file.id}
                 >
                   <FiDownload size={18} />
+                </button>
+                <button
+                  onClick={() => initiateShare?.(file)}
+                  className="text-green-600 hover:text-green-900 dark:text-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Share"
+                  disabled={processingFile === file.id}
+                >
+                  <FiShare2 size={18} />
                 </button>
                 <button
                   onClick={() => initiateDelete(file)}

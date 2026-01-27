@@ -2,11 +2,11 @@
 
 'use client';
 
-import { FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox } from 'react-icons/fi';
+import { FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2 } from 'react-icons/fi';
 import { isImage, isVideo, isAudio } from '@/lib/clientFileUtils';
 import { is3dFile } from './Viewer3D';
 
-export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onRename, onDownload, onView, onDelete, onClose }) {
+export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onRename, onDownload, onView, onDelete, onShare, onClose }) {
   if (!contextMenu || !file) return null;
 
   return (
@@ -54,6 +54,10 @@ export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onR
           )}
         </>
       )}
+      <button onClick={onShare} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-green-600 dark:text-green-400">
+        <FiShare2 size={16} />
+        Share
+      </button>
       <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
       <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
         <FiTrash2 size={16} />

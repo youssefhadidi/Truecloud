@@ -1,66 +1,67 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import fs from 'fs';
-import { stat, readFile, mkdir, access } from 'fs/promises';
-import { join, basename, resolve, extname } from 'node:path';
+import { stat } from 'fs/promises';
+import { join, resolve, extname, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
-import { createHash } from 'crypto';
-import { spawn } from 'child_process';
-import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
-import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
-// Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
 
 export async function GET(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { token } = await params;
+    const password = req.headers.get('x-share-password');
+
+    // Verify share
+    const verification = await verifyShare(token, password);
+
+    if (!verification.valid) {
+      if (verification.requiresPassword) {
+        return NextResponse.json({ error: 'Password required' }, { status: 401 });
+      }
+      return NextResponse.json({ error: verification.error }, { status: 404 });
     }
 
-    const { id } = await params;
-    const fileName = safeDecodeURIComponent(id);
+    const share = verification.share;
 
-    // Get path and quality from query params
     const url = new URL(req.url);
-    let relativePath = url.searchParams.get('path') || '';
+    const subPath = url.searchParams.get('path') || '';
+    const fileName = url.searchParams.get('file') || share.fileName;
     const quality = Math.min(Math.max(parseInt(url.searchParams.get('quality') || '80'), 30), 100);
     const maxWidth = parseInt(url.searchParams.get('w') || '2000');
     const maxHeight = parseInt(url.searchParams.get('h') || '2000');
 
+    // Build the path
+    let pathCheck;
+    if (share.isDirectory && subPath) {
+      pathCheck = validateSharePath(share, subPath);
+    } else if (share.isDirectory && fileName !== share.fileName) {
+      pathCheck = validateSharePath(share, fileName);
+    } else {
+      pathCheck = validateSharePath(share, '');
+    }
+
+    if (!pathCheck.allowed) {
+      return NextResponse.json({ error: pathCheck.error }, { status: 400 });
+    }
+
+    const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
+
     // Security: prevent directory traversal
-    if (relativePath.includes('..') || fileName.includes('..')) {
+    const resolvedTarget = resolve(filePath) + sep;
+    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Check user permissions
-    const isRoot = await hasRootAccess(session.user.id);
-    const accessCheck = checkPathAccess({
-      userId: session.user.id,
-      path: relativePath,
-      operation: 'read',
-      isRootUser: isRoot,
-    });
-
-    if (!accessCheck.allowed) {
-      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
-    }
-
-    // Use normalized path
-    relativePath = accessCheck.normalizedPath;
-
-    const filePath = join(UPLOAD_DIR, relativePath, fileName);
-
     if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
     const fileStats = await stat(filePath);
@@ -99,7 +100,6 @@ export async function GET(req, { params }) {
         limitInputPixels: false,
       });
 
-      // Get metadata and apply EXIF orientation rotation in one operation
       const metadata = await pipeline.metadata();
 
       // Auto-rotate based on EXIF orientation
@@ -115,15 +115,9 @@ export async function GET(req, { params }) {
 
       const rotation = orientationRotations[metadata.orientation];
       if (rotation) {
-        if (rotation.rotate) {
-          pipeline = pipeline.rotate(rotation.rotate);
-        }
-        if (rotation.flip) {
-          pipeline = pipeline.flip();
-        }
-        if (rotation.flop) {
-          pipeline = pipeline.flop();
-        }
+        if (rotation.rotate) pipeline = pipeline.rotate(rotation.rotate);
+        if (rotation.flip) pipeline = pipeline.flip();
+        if (rotation.flop) pipeline = pipeline.flop();
       }
 
       // Resize if needed
@@ -137,8 +131,7 @@ export async function GET(req, { params }) {
       }
 
       // Convert to WebP for better compression
-      const format = 'webp';
-      const optimizedBuffer = await pipeline.toFormat(format, { quality }).toBuffer();
+      const optimizedBuffer = await pipeline.toFormat('webp', { quality }).toBuffer();
 
       return new NextResponse(optimizedBuffer, {
         headers: {
@@ -149,7 +142,7 @@ export async function GET(req, { params }) {
       });
     } catch (sharpError) {
       // If sharp fails, return original image
-      console.error('Image optimization failed, serving original:', sharpError);
+      console.error('Image optimization failed:', sharpError);
       const fileBuffer = fs.readFileSync(filePath);
       return new NextResponse(fileBuffer, {
         headers: {
@@ -160,7 +153,7 @@ export async function GET(req, { params }) {
       });
     }
   } catch (error) {
-    console.error('Optimize image error:', error);
+    console.error('GET /api/public/[token]/optimize-image - Error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
   }
 }

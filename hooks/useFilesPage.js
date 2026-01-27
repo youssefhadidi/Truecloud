@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile } from '@/lib/api/files';
+import { useFiles, useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export function useFilesPage(status) {
@@ -40,6 +40,7 @@ export function useFilesPage(status) {
   const [uploads, setUploads] = useState([]);
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [sharingFile, setSharingFile] = useState(null);
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -63,6 +64,9 @@ export function useFilesPage(status) {
 
   // Fetch and sort files
   const { data: filesData, isLoading } = useFiles(currentPath, status === 'authenticated');
+
+  // Fetch shared paths for share indicators
+  const { data: sharedPaths } = usePathShares(currentPath);
   const files = useMemo(() => {
     // Filter out hidden files
     let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
@@ -164,6 +168,8 @@ export function useFilesPage(status) {
     isLoading,
     viewableFiles,
     searchQuery,
+    sharingFile,
+    sharedPaths,
 
     // Setters
     setViewMode,
@@ -183,6 +189,7 @@ export function useFilesPage(status) {
     setUploading,
     setCurrentPath,
     setPathHistory,
+    setSharingFile,
 
     // Helpers
     addNotification,

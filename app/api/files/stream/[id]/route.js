@@ -9,6 +9,7 @@ import mime from 'mime-types';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
+import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -91,7 +92,7 @@ export async function GET(req, { params }) {
     }
 
     const resolvedParams = await params;
-    const fileId = decodeURIComponent(resolvedParams.id);
+    const fileId = safeDecodeURIComponent(resolvedParams.id);
 
     // Get path from query params
     const url = new URL(req.url);

@@ -16,6 +16,7 @@ import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileU
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
+const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 
 export default function FilesPage() {
   const { data: session, status } = useSession();
@@ -69,6 +70,7 @@ export default function FilesPage() {
     setProcessingFile: state.setProcessingFile,
     setRenamingFile: state.setRenamingFile,
     setNewFileName: state.setNewFileName,
+    setSharingFile: state.setSharingFile,
   });
 
   if (status === 'loading') {
@@ -265,6 +267,9 @@ export default function FilesPage() {
                       initiateRename={handlers.initiateRename}
                       handleDownload={fileUtils.handleDownload}
                       initiateDelete={handlers.initiateDelete}
+                      initiateShare={handlers.initiateShare}
+                      sharedPaths={state.sharedPaths}
+                      currentPath={state.currentPath}
                     />{' '}
                   </Suspense>{' '}
                 </div>
@@ -313,6 +318,8 @@ export default function FilesPage() {
                     onConfirmDelete={handlers.confirmDelete}
                     onCancelDelete={handlers.cancelDelete}
                     formatFileSize={fileUtils.formatFileSize}
+                    onInitiateShare={handlers.initiateShare}
+                    sharedPaths={state.sharedPaths}
                   />{' '}
                 </Suspense>
               )}
@@ -344,6 +351,10 @@ export default function FilesPage() {
           handlers.initiateDelete(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
+        onShare={() => {
+          handlers.initiateShare(state.selectedContextFile);
+          contextMenu.closeContextMenu();
+        }}
         onClose={contextMenu.closeContextMenu}
       />
 
@@ -356,6 +367,17 @@ export default function FilesPage() {
           onClose={mediaViewer.closeMediaViewer}
           onNavigate={mediaViewer.navigateViewer}
         />
+      </Suspense>
+
+      {/* Share Modal */}
+      <Suspense fallback={null}>
+        {state.sharingFile && (
+          <ShareModal
+            file={state.sharingFile}
+            currentPath={state.currentPath}
+            onClose={handlers.cancelShare}
+          />
+        )}
       </Suspense>
 
       {/* Upload Status */}
