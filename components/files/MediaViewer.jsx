@@ -134,9 +134,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   return (
     <div
-      className={`${isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 bg-opacity-75 flex items-center justify-center z-50 p-1'}`}
+      className={`${isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-1'}`}
       onClick={isFullscreen ? null : onClose}
-      style={isFullscreen ? {} : { backgroundColor: '#00000082' }}
     >
       <div
         className={`${isFullscreen ? 'w-screen h-screen rounded-none' : 'relative bg-gray-900 rounded-lg shadow-xl w-full max-w-[1600px] h-[90vh]'} bg-gray-900 flex flex-col`}
