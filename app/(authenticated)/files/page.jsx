@@ -316,6 +316,7 @@ export default function FilesPage() {
                     onConfirmDelete={handlers.confirmDelete}
                     onCancelDelete={handlers.cancelDelete}
                     formatFileSize={fileUtils.formatFileSize}
+                    onContextMenu={contextMenu.handleContextMenu}
                   />
                 </Suspense>
               )}
@@ -381,6 +382,17 @@ export default function FilesPage() {
 
       {/* Upload Status */}
       <UploadStatus uploads={state.uploads} />
+
+      {/* Share Modal */}
+      {state.sharingFile && (
+        <Suspense fallback={null}>
+          <ShareModal
+            file={state.sharingFile}
+            currentPath={state.currentPath}
+            onClose={handlers.cancelShare}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

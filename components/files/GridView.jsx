@@ -53,6 +53,7 @@ const GridView = ({
   formatFileSize,
   onInitiateShare,
   sharedPaths,
+  onContextMenu,
 }) => {
   const gridRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -162,7 +163,7 @@ const GridView = ({
                   onNavigateToFolder(item.name);
                 }
               }}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => onContextMenu?.(e, item)}
               onTouchStart={() => handleTouchStart(item)}
               onTouchEnd={handleTouchEnd}
               onTouchMove={handleTouchMove}
