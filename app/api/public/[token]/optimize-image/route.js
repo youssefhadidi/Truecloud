@@ -17,7 +17,9 @@ export const maxDuration = 30;
 export async function GET(req, { params }) {
   try {
     const { token } = await params;
-    const password = req.headers.get('x-share-password');
+    const url = new URL(req.url);
+    // Accept password from header or query param (for img/video tags that can't send headers)
+    const password = req.headers.get('x-share-password') || url.searchParams.get('pwd');
 
     // Verify share
     const verification = await verifyShare(token, password);
@@ -31,7 +33,6 @@ export async function GET(req, { params }) {
 
     const share = verification.share;
 
-    const url = new URL(req.url);
     const subPath = url.searchParams.get('path') || '';
     const fileName = url.searchParams.get('file') || share.fileName;
     const quality = Math.min(Math.max(parseInt(url.searchParams.get('quality') || '80'), 30), 100);

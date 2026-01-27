@@ -70,7 +70,9 @@ async function fixMp4ForStreaming(inputPath, outputPath) {
 export async function GET(req, { params }) {
   try {
     const { token } = await params;
-    const password = req.headers.get('x-share-password');
+    const url = new URL(req.url);
+    // Accept password from header or query param (for video/audio tags that can't send headers)
+    const password = req.headers.get('x-share-password') || url.searchParams.get('pwd');
 
     // Verify share
     const verification = await verifyShare(token, password);
@@ -85,7 +87,6 @@ export async function GET(req, { params }) {
     const share = verification.share;
 
     // Get optional subpath for directory shares
-    const url = new URL(req.url);
     const subPath = url.searchParams.get('path') || '';
     const fileName = url.searchParams.get('file') || share.fileName;
 

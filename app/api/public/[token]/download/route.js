@@ -14,7 +14,9 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 export async function GET(req, { params }) {
   try {
     const { token } = await params;
-    const password = req.headers.get('x-share-password');
+    const url = new URL(req.url);
+    // Accept password from header or query param
+    const password = req.headers.get('x-share-password') || url.searchParams.get('pwd');
 
     // Verify share
     const verification = await verifyShare(token, password);
@@ -29,7 +31,6 @@ export async function GET(req, { params }) {
     const share = verification.share;
 
     // Get optional subpath for directory shares
-    const url = new URL(req.url);
     const subPath = url.searchParams.get('path') || '';
 
     // Validate the path is within share scope

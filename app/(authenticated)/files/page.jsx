@@ -279,6 +279,8 @@ function FilesPageContent() {
                       handleDownload={fileUtils.handleDownload}
                       initiateDelete={handlers.initiateDelete}
                       initiateShare={handlers.initiateShare}
+                      sharedPaths={state.sharedPaths}
+                      currentPath={state.currentPath}
                     />
                   </Suspense>
                 </div>
@@ -329,6 +331,7 @@ function FilesPageContent() {
                     formatFileSize={fileUtils.formatFileSize}
                     onContextMenu={contextMenu.handleContextMenu}
                     onInitiateShare={handlers.initiateShare}
+                    sharedPaths={state.sharedPaths}
                   />
                 </Suspense>
               )}

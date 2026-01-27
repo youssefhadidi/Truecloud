@@ -61,6 +61,7 @@ export async function GET(req, { params }) {
       mimeType: lookup(share.fileName) || 'application/octet-stream',
       ownerUsername: share.owner.username,
       createdAt: share.createdAt,
+      allowUploads: share.allowUploads || false,
     });
   } catch (error) {
     console.error('GET /api/public/[token] - Error:', error);

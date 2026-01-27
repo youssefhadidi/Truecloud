@@ -56,7 +56,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { path, fileName, isDirectory, password, expiresAt } = await req.json();
+    const { path, fileName, isDirectory, password, expiresAt, allowUploads } = await req.json();
 
     if (!fileName) {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
@@ -129,6 +129,7 @@ export async function POST(req) {
         ownerId: session.user.id,
         passwordHash,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        allowUploads: isDirectory ? (allowUploads || false) : false,
       },
     });
 

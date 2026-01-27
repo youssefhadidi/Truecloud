@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiCopy, FiLock, FiCalendar, FiCheck, FiTrash2, FiX, FiLink, FiShare2 } from 'react-icons/fi';
+import { FiCopy, FiLock, FiCalendar, FiCheck, FiTrash2, FiX, FiLink, FiShare2, FiUpload } from 'react-icons/fi';
 import { useCreateShare, useDeleteShare, useFileShare } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
@@ -11,6 +11,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const [password, setPassword] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [expiresIn, setExpiresIn] = useState('never');
+  const [allowUploads, setAllowUploads] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
         isDirectory: file.isDirectory,
         password: usePassword ? password : null,
         expiresAt: calculateExpiry(expiresIn),
+        allowUploads: file.isDirectory ? allowUploads : false,
       });
 
       setShareUrl(result.shareUrl);
@@ -149,21 +151,29 @@ export default function ShareModal({ file, currentPath, onClose }) {
               </div>
 
               {existingShare && (
-                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                  <span>
-                    {existingShare.passwordHash ? (
-                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <FiLock size={14} />
-                        Password protected
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <FiLink size={14} />
-                        Anyone with the link can access
-                      </span>
-                    )}
-                  </span>
-                  <span>{existingShare.accessCount} views</span>
+                <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      {existingShare.passwordHash ? (
+                        <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <FiLock size={14} />
+                          Password protected
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <FiLink size={14} />
+                          Anyone with the link can access
+                        </span>
+                      )}
+                    </span>
+                    <span>{existingShare.accessCount} views</span>
+                  </div>
+                  {existingShare.allowUploads && (
+                    <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                      <FiUpload size={14} />
+                      Uploads enabled
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -215,6 +225,27 @@ export default function ShareModal({ file, currentPath, onClose }) {
                   <option value="30d">30 days</option>
                 </select>
               </div>
+
+              {/* Allow uploads (only for directories) */}
+              {file.isDirectory && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowUploads}
+                      onChange={(e) => setAllowUploads(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="flex items-center gap-2">
+                      <FiUpload size={16} className="text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Allow uploads</span>
+                    </div>
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 ml-7">
+                    Anyone with the link can upload files to this folder
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>

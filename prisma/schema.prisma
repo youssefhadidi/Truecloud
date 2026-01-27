@@ -78,6 +78,7 @@ model Share {
   ownerId      String
   passwordHash String?   // Optional bcrypt hash
   expiresAt    DateTime?
+  allowUploads Boolean   @default(false) // Allow public uploads to this share
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   accessCount  Int       @default(0)

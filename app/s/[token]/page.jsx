@@ -2,8 +2,8 @@
 
 'use client';
 
-import { useState, useEffect, use, lazy, Suspense } from 'react';
-import { FiDownload, FiLock, FiFile, FiFolder, FiImage, FiVideo, FiBox, FiFileText, FiEye, FiChevronRight, FiArrowLeft } from 'react-icons/fi';
+import { useState, useEffect, use, lazy, Suspense, useRef, useCallback } from 'react';
+import { FiDownload, FiLock, FiFile, FiFolder, FiImage, FiVideo, FiBox, FiFileText, FiEye, FiChevronRight, FiArrowLeft, FiGrid, FiList, FiPlay, FiUpload, FiX } from 'react-icons/fi';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
@@ -35,6 +35,10 @@ export default function SharePage({ params }) {
   const [viewingFile, setViewingFile] = useState(null);
   const [directoryFiles, setDirectoryFiles] = useState(null);
   const [currentSubPath, setCurrentSubPath] = useState('');
+  const [viewMode, setViewMode] = useState('grid');
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchShareData();
@@ -226,19 +230,17 @@ export default function SharePage({ params }) {
 
   // File viewer modal
   if (viewingFile) {
-    const headers = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
     const filePath = currentSubPath ? `${currentSubPath}/${viewingFile.name}` : viewingFile.name;
+    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
 
     const getFileUrl = () => {
-      const baseHeaders = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-
       if (isImage(viewingFile.name)) {
-        return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=85&w=2000&h=2000`;
+        return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=85&w=2000&h=2000${pwdParam}`;
       }
       if (isVideo(viewingFile.name) || isAudio(viewingFile.name) || isPdf(viewingFile.name)) {
-        return `/api/public/${token}/stream?file=${encodeURIComponent(filePath)}`;
+        return `/api/public/${token}/stream?file=${encodeURIComponent(filePath)}${pwdParam}`;
       }
-      return `/api/public/${token}/download?path=${encodeURIComponent(filePath)}`;
+      return `/api/public/${token}/download?path=${encodeURIComponent(filePath)}${pwdParam}`;
     };
 
     return (
@@ -304,20 +306,226 @@ export default function SharePage({ params }) {
     );
   }
 
+  // Helper to get thumbnail URL for images/videos in share
+  const getThumbnailUrl = (file) => {
+    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
+    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
+    return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=60&w=300&h=300${pwdParam}`;
+  };
+
+  // Helper to download a single file
+  const handleFileDownload = async (file) => {
+    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
+    const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
+    const downloadUrl = `/api/public/${token}/download?path=${encodeURIComponent(filePath)}`;
+    try {
+      const response = await fetch(downloadUrl, { headers });
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
+
+  // Upload file
+  const uploadFile = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', currentSubPath);
+
+    const headers = {};
+    if (verifiedPassword) {
+      headers['x-share-password'] = verifiedPassword;
+    }
+
+    try {
+      const response = await fetch(`/api/public/${token}/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Upload error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Handle file upload
+  const handleUpload = async (files) => {
+    if (!shareData?.allowUploads || !files.length) return;
+
+    const fileList = Array.from(files);
+    const uploadItems = fileList.map((file) => ({
+      id: `${file.name}-${Date.now()}`,
+      name: file.name,
+      status: 'uploading',
+    }));
+
+    setUploadingFiles(uploadItems);
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const result = await uploadFile(file);
+
+      setUploadingFiles((prev) =>
+        prev.map((item) =>
+          item.id === uploadItems[i].id ? { ...item, status: result.success ? 'done' : 'error', error: result.error } : item
+        )
+      );
+    }
+
+    // Refresh file list after upload
+    setTimeout(() => {
+      fetchDirectoryFiles(verifiedPassword, currentSubPath);
+      setUploadingFiles([]);
+    }, 1500);
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (shareData?.allowUploads) {
+        setIsDragging(true);
+      }
+    },
+    [shareData?.allowUploads]
+  );
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      if (!shareData?.allowUploads) return;
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleUpload(files);
+      }
+    },
+    [shareData?.allowUploads, currentSubPath, verifiedPassword]
+  );
+
   // Directory view
   if (shareData.isDirectory && directoryFiles) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-4xl mx-auto">
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-6xl mx-auto relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drag overlay */}
+        {isDragging && shareData.allowUploads && (
+          <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 rounded-lg z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg text-center">
+              <FiUpload className="text-indigo-600 mx-auto mb-2" size={48} />
+              <p className="text-lg font-medium text-gray-900 dark:text-white">Drop files to upload</p>
+            </div>
+          </div>
+        )}
+
+        {/* Upload progress overlay */}
+        {uploadingFiles.length > 0 && (
+          <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg w-80">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Uploading files...</h3>
+              <div className="space-y-2 max-h-48 overflow-auto">
+                {uploadingFiles.map((file) => (
+                  <div key={file.id} className="flex items-center gap-2 text-sm">
+                    {file.status === 'uploading' && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>}
+                    {file.status === 'done' && <div className="text-green-500">✓</div>}
+                    {file.status === 'error' && <div className="text-red-500">✗</div>}
+                    <span className="truncate text-gray-700 dark:text-gray-300">{file.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          multiple
+          onChange={(e) => {
+            if (e.target.files) {
+              handleUpload(e.target.files);
+              e.target.value = '';
+            }
+          }}
+        />
+
         {/* Header */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <FiFolder className="text-blue-500" size={32} />
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{shareData.fileName}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Shared by {shareData.ownerUsername}
-                {currentSubPath && ` • ${currentSubPath}`}
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FiFolder className="text-blue-500" size={32} />
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{shareData.fileName}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Shared by {shareData.ownerUsername}
+                  {currentSubPath && ` • ${currentSubPath}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Upload button */}
+              {shareData.allowUploads && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  title="Upload files"
+                >
+                  <FiUpload size={18} />
+                  <span className="hidden sm:inline">Upload</span>
+                </button>
+              )}
+
+              {/* View Toggle */}
+              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
+                  title="List View"
+                >
+                  <FiList size={18} />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 rounded ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
+                  title="Grid View"
+                >
+                  <FiGrid size={18} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -332,80 +540,161 @@ export default function SharePage({ params }) {
           )}
         </div>
 
-        {/* File list */}
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          {directoryFiles.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer select-none"
-              style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
-              onClick={() => {
-                if (file.isDirectory) {
-                  navigateToSubFolder(file.name);
-                } else if (canPreview(file)) {
-                  setViewingFile(file);
-                }
-              }}
-            >
-              <div className="flex items-center gap-3">
-                {getFileIcon(file)}
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
-                  {!file.isDirectory && <p className="text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {canPreview(file) && !file.isDirectory && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setViewingFile(file);
-                    }}
-                    className="p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded"
-                    title="Preview"
-                  >
-                    <FiEye size={18} />
-                  </button>
-                )}
-                {!file.isDirectory && (
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
-                      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-                      const downloadUrl = `/api/public/${token}/download?path=${encodeURIComponent(filePath)}`;
-                      try {
-                        const response = await fetch(downloadUrl, { headers });
-                        if (!response.ok) throw new Error('Download failed');
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = file.name;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        window.URL.revokeObjectURL(url);
-                      } catch (error) {
-                        console.error('Download error:', error);
+        {/* Grid View */}
+        {viewMode === 'grid' ? (
+          <div className="p-4">
+            {directoryFiles.length === 0 ? (
+              <div className="py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {directoryFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="group relative bg-gray-100 dark:bg-gray-700 rounded-lg p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors select-none"
+                    style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+                    onClick={() => {
+                      if (file.isDirectory) {
+                        navigateToSubFolder(file.name);
+                      } else if (canPreview(file)) {
+                        setViewingFile(file);
                       }
                     }}
-                    className="p-2 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded"
-                    title="Download"
                   >
-                    <FiDownload size={18} />
-                  </button>
-                )}
-                {file.isDirectory && <FiChevronRight className="text-gray-400" size={18} />}
-              </div>
-            </div>
-          ))}
+                    {/* Thumbnail/Icon */}
+                    <div className="aspect-square flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded-lg mb-2 overflow-hidden relative">
+                      {isImage(file.name) ? (
+                        <img
+                          src={getThumbnailUrl(file)}
+                          alt={file.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      {isImage(file.name) && (
+                        <div className="hidden items-center justify-center w-full h-full">
+                          <FiImage className="text-green-500" size={40} />
+                        </div>
+                      )}
+                      {isVideo(file.name) && (
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <FiVideo className="text-purple-500" size={40} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="bg-black/50 rounded-full p-2">
+                              <FiPlay className="text-white" size={20} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {file.isDirectory && <FiFolder className="text-blue-500" size={40} />}
+                      {is3dFile(file.name) && <FiBox className="text-orange-500" size={40} />}
+                      {isPdf(file.name) && <FiFileText className="text-red-500" size={40} />}
+                      {!file.isDirectory && !isImage(file.name) && !isVideo(file.name) && !is3dFile(file.name) && !isPdf(file.name) && (
+                        <FiFile className="text-gray-500" size={40} />
+                      )}
+                    </div>
 
-          {directoryFiles.length === 0 && (
-            <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>
-          )}
-        </div>
+                    {/* File name */}
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
+                      {file.name}
+                    </p>
+                    {!file.isDirectory && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>
+                    )}
+
+                    {/* Action buttons on hover */}
+                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {canPreview(file) && !file.isDirectory && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingFile(file);
+                          }}
+                          className="p-1.5 bg-white dark:bg-gray-800 rounded shadow text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                          title="Preview"
+                        >
+                          <FiEye size={14} />
+                        </button>
+                      )}
+                      {!file.isDirectory && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFileDownload(file);
+                          }}
+                          className="p-1.5 bg-white dark:bg-gray-800 rounded shadow text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          title="Download"
+                        >
+                          <FiDownload size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* List View */
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {directoryFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer select-none"
+                style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+                onClick={() => {
+                  if (file.isDirectory) {
+                    navigateToSubFolder(file.name);
+                  } else if (canPreview(file)) {
+                    setViewingFile(file);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  {getFileIcon(file)}
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
+                    {!file.isDirectory && <p className="text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {canPreview(file) && !file.isDirectory && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingFile(file);
+                      }}
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded"
+                      title="Preview"
+                    >
+                      <FiEye size={18} />
+                    </button>
+                  )}
+                  {!file.isDirectory && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFileDownload(file);
+                      }}
+                      className="p-2 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded"
+                      title="Download"
+                    >
+                      <FiDownload size={18} />
+                    </button>
+                  )}
+                  {file.isDirectory && <FiChevronRight className="text-gray-400" size={18} />}
+                </div>
+              </div>
+            ))}
+
+            {directoryFiles.length === 0 && (
+              <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>
+            )}
+          </div>
+        )}
 
         {/* Download all button */}
         <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
@@ -438,11 +727,14 @@ export default function SharePage({ params }) {
 
   // Inline preview for single files
   const renderPreview = () => {
+    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
+    const pwdParamFirst = verifiedPassword ? `?pwd=${encodeURIComponent(verifiedPassword)}` : '';
+
     if (isImage(shareData.fileName)) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
           <img
-            src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200`}
+            src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${pwdParam}`}
             alt={shareData.fileName}
             className="max-w-full max-h-[500px] mx-auto object-contain"
           />
@@ -453,7 +745,7 @@ export default function SharePage({ params }) {
     if (isVideo(shareData.fileName)) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <video controls className="w-full max-h-[500px]" src={`/api/public/${token}/stream`}>
+          <video controls className="w-full max-h-[500px]" src={`/api/public/${token}/stream${pwdParamFirst}`}>
             Your browser does not support video playback.
           </video>
         </div>
@@ -463,7 +755,7 @@ export default function SharePage({ params }) {
     if (isAudio(shareData.fileName)) {
       return (
         <div className="mt-6">
-          <audio controls className="w-full" src={`/api/public/${token}/stream`}>
+          <audio controls className="w-full" src={`/api/public/${token}/stream${pwdParamFirst}`}>
             Your browser does not support audio playback.
           </audio>
         </div>
@@ -473,7 +765,7 @@ export default function SharePage({ params }) {
     if (isPdf(shareData.fileName)) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <iframe src={`/api/public/${token}/stream`} className="w-full h-[500px]" title={shareData.fileName} />
+          <iframe src={`/api/public/${token}/stream${pwdParamFirst}`} className="w-full h-[500px]" title={shareData.fileName} />
         </div>
       );
     }
