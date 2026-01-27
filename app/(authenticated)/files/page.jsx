@@ -268,6 +268,7 @@ export default function FilesPage() {
                       initiateRename={handlers.initiateRename}
                       handleDownload={fileUtils.handleDownload}
                       initiateDelete={handlers.initiateDelete}
+                      initiateShare={handlers.initiateShare}
                     />
                   </Suspense>
                 </div>
@@ -317,6 +318,7 @@ export default function FilesPage() {
                     onCancelDelete={handlers.cancelDelete}
                     formatFileSize={fileUtils.formatFileSize}
                     onContextMenu={contextMenu.handleContextMenu}
+                    onInitiateShare={handlers.initiateShare}
                   />
                 </Suspense>
               )}

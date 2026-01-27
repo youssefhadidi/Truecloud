@@ -4,7 +4,7 @@
 
 import { useRef, useMemo, useCallback, useState } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -155,8 +155,8 @@ const GridView = ({
             </div>
           ) : (
             <div
-              className="group relative bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
+              className="group relative bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none"
+              style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
               onClick={(e) => {
                 // Only navigate to folder if not showing actions and clicking on folder
                 if (item.isDirectory && deletingFile?.id !== item.id && !shouldShowActions(item.id)) {
@@ -393,6 +393,20 @@ const GridView = ({
                   >
                     <FiTrash2 size={16} />
                   </button>
+                  {onInitiateShare && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowingActionsFor(null);
+                        onInitiateShare(item);
+                      }}
+                      className="p-1.5 text-green-400 hover:bg-green-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Share"
+                      disabled={processingFile === item.id}
+                    >
+                      <FiShare2 size={16} />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -436,6 +450,7 @@ const GridView = ({
       onInitiateRename,
       onHandleDownload,
       onInitiateDelete,
+      onInitiateShare,
       formatFileSize,
       showingActionsFor,
       handleTouchStart,

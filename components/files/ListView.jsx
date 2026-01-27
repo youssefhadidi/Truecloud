@@ -227,12 +227,15 @@ const ListView = ({
           return (
             <div
               key={virtualRow.key}
-              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-700 border-b border-gray-700 items-center cursor-pointer transition-colors`}
+              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-700 border-b border-gray-700 items-center cursor-pointer transition-colors select-none`}
               style={{
                 top: 0,
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
                 WebkitTapHighlightColor: 'transparent',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                WebkitTouchCallout: 'none',
               }}
               onClick={() => {
                 // Don't navigate if showing actions on mobile
@@ -336,6 +339,20 @@ const ListView = ({
                   >
                     <FiTrash2 size={18} />
                   </button>
+                  {initiateShare && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowingActionsFor(null);
+                        initiateShare(file);
+                      }}
+                      className="text-green-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-green-900/20 rounded"
+                      title="Share"
+                      disabled={processingFile === file.id}
+                    >
+                      <FiShare2 size={18} />
+                    </button>
+                  )}
                 </div>
               )}
 

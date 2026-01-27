@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
-export default function SkpViewer({ fileId, currentPath, fileName }) {
+export default function SkpViewer({ fileId, currentPath, fileName, shareToken, sharePassword }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -59,25 +59,53 @@ export default function SkpViewer({ fileId, currentPath, fileName }) {
         const fileNameLower = (fileName || '').toLowerCase();
         let object;
 
-        // For SKP files, use the conversion endpoint
-        if (fileNameLower.endsWith('.skp')) {
-          objectUrl = `/api/files/convert-skp?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
+        // Build headers for password-protected shares
+        const fetchHeaders = sharePassword ? { 'x-share-password': sharePassword } : {};
+
+        // Build URL based on share mode or authenticated mode
+        if (shareToken) {
+          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+          if (fileNameLower.endsWith('.skp')) {
+            objectUrl = `/api/public/${shareToken}/convert-skp?file=${encodeURIComponent(filePath)}`;
+          } else {
+            objectUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
+          }
         } else {
-          objectUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+          // For SKP files, use the conversion endpoint
+          if (fileNameLower.endsWith('.skp')) {
+            objectUrl = `/api/files/convert-skp?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
+          } else {
+            objectUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+          }
         }
 
         // Try GLB/GLTF first (includes converted SKP files)
         if (fileNameLower.endsWith('.glb') || fileNameLower.endsWith('.gltf') || fileNameLower.endsWith('.skp')) {
           const gltfLoader = new GLTFLoader();
-          object = await new Promise((resolve, reject) => {
-            gltfLoader.load(objectUrl, resolve, undefined, reject);
-          });
+
+          // For share mode with password, fetch first and use blob URL
+          if (shareToken && sharePassword) {
+            const response = await fetch(objectUrl, { headers: fetchHeaders });
+            if (!response.ok) throw new Error('Failed to load model');
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            object = await new Promise((resolve, reject) => {
+              gltfLoader.load(blobUrl, (gltf) => {
+                URL.revokeObjectURL(blobUrl);
+                resolve(gltf);
+              }, undefined, reject);
+            });
+          } else {
+            object = await new Promise((resolve, reject) => {
+              gltfLoader.load(objectUrl, resolve, undefined, reject);
+            });
+          }
           scene.add(object.scene);
         }
         // Try OBJ format
         else if (fileNameLower.endsWith('.obj')) {
           const objLoader = new OBJLoader();
-          const response = await fetch(objectUrl);
+          const response = await fetch(objectUrl, { headers: fetchHeaders });
           const text = await response.text();
           object = objLoader.parse(text);
           scene.add(object);
@@ -138,7 +166,7 @@ export default function SkpViewer({ fileId, currentPath, fileName }) {
       renderer.dispose();
       mountRef.current?.removeChild(renderer.domElement);
     };
-  }, [fileId, currentPath]);
+  }, [fileId, currentPath, fileName, shareToken, sharePassword]);
 
   return (
     <div className="w-full h-full flex flex-col gap-2 relative">

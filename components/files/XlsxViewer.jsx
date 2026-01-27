@@ -4,11 +4,19 @@
 
 import { useState } from 'react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { useParseXlsx } from '@/lib/api/viewers';
+import { useParseXlsx, useParseXlsxShare } from '@/lib/api/viewers';
 
-export default function XlsxViewer({ fileId, currentPath, fileName }) {
+export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, sharePassword }) {
   const [activeSheet, setActiveSheet] = useState(0);
-  const { data, isLoading, error } = useParseXlsx(fileId, currentPath);
+
+  // Build file path for share mode
+  const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+
+  // Use appropriate hook based on mode
+  const authQuery = useParseXlsx(fileId, currentPath);
+  const shareQuery = useParseXlsxShare(shareToken, filePath, sharePassword);
+
+  const { data, isLoading, error } = shareToken ? shareQuery : authQuery;
 
   if (isLoading) {
     return (

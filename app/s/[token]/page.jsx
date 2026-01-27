@@ -2,10 +2,18 @@
 
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, lazy, Suspense } from 'react';
 import { FiDownload, FiLock, FiFile, FiFolder, FiImage, FiVideo, FiBox, FiFileText, FiEye, FiChevronRight, FiArrowLeft } from 'react-icons/fi';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
+
+// Lazy load heavy viewer components
+const Viewer3D = lazy(() => import('@/components/files/Viewer3D'));
+const SkpViewer = lazy(() => import('@/components/files/SkpViewer'));
+const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
+
+// Check if file is SKP
+const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
 // Format file size
 function formatFileSize(bytes) {
@@ -93,32 +101,38 @@ export default function SharePage({ params }) {
     fetchShareData(password);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
     const downloadUrl = `/api/public/${token}/download`;
 
-    // Create a link and trigger download
-    const link = document.createElement('a');
-    link.href = downloadUrl;
+    try {
+      const response = await fetch(downloadUrl, { headers });
+      if (!response.ok) throw new Error('Download failed');
 
-    // Add password header via fetch for authenticated downloads
-    if (verifiedPassword) {
-      fetch(downloadUrl, { headers })
-        .then((res) => res.blob())
-        .then((blob) => {
-          const url = window.URL.createObjectURL(blob);
-          link.href = url;
-          link.download = shareData.fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-        });
-    } else {
-      link.download = shareData.fileName;
+      const blob = await response.blob();
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let fileName = shareData.fileName;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+        if (match) fileName = match[1];
+      } else if (shareData.isDirectory) {
+        // Fallback: add .zip extension for directories
+        fileName = `${shareData.fileName}.zip`;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download file');
     }
   };
 
@@ -254,19 +268,35 @@ export default function SharePage({ params }) {
               </audio>
             )}
             {isPdf(viewingFile.name) && <iframe src={getFileUrl()} className="w-full h-full" title={viewingFile.name} />}
-            {is3dFile(viewingFile.name) && (
-              <div className="text-center text-gray-400">
-                <FiBox size={64} className="mx-auto mb-4" />
-                <p>3D preview not available in shared view</p>
-                <p className="text-sm mt-2">Download the file to view it</p>
-              </div>
+            {is3dFile(viewingFile.name) && !isSkp(viewingFile.name) && (
+              <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
+                <Viewer3D
+                  fileName={viewingFile.name}
+                  currentPath={currentSubPath}
+                  shareToken={token}
+                  sharePassword={verifiedPassword}
+                />
+              </Suspense>
+            )}
+            {isSkp(viewingFile.name) && (
+              <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
+                <SkpViewer
+                  fileName={viewingFile.name}
+                  currentPath={currentSubPath}
+                  shareToken={token}
+                  sharePassword={verifiedPassword}
+                />
+              </Suspense>
             )}
             {isXlsx(viewingFile.name) && (
-              <div className="text-center text-gray-400">
-                <FiFileText size={64} className="mx-auto mb-4" />
-                <p>Spreadsheet preview not available in shared view</p>
-                <p className="text-sm mt-2">Download the file to view it</p>
-              </div>
+              <Suspense fallback={<div className="text-white">Loading spreadsheet...</div>}>
+                <XlsxViewer
+                  fileName={viewingFile.name}
+                  currentPath={currentSubPath}
+                  shareToken={token}
+                  sharePassword={verifiedPassword}
+                />
+              </Suspense>
             )}
           </div>
         </div>
@@ -307,7 +337,8 @@ export default function SharePage({ params }) {
           {directoryFiles.map((file) => (
             <div
               key={file.id}
-              className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+              className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer select-none"
+              style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
               onClick={() => {
                 if (file.isDirectory) {
                   navigateToSubFolder(file.name);
@@ -335,6 +366,35 @@ export default function SharePage({ params }) {
                     title="Preview"
                   >
                     <FiEye size={18} />
+                  </button>
+                )}
+                {!file.isDirectory && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
+                      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
+                      const downloadUrl = `/api/public/${token}/download?path=${encodeURIComponent(filePath)}`;
+                      try {
+                        const response = await fetch(downloadUrl, { headers });
+                        if (!response.ok) throw new Error('Download failed');
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = file.name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                      } catch (error) {
+                        console.error('Download error:', error);
+                      }
+                    }}
+                    className="p-2 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded"
+                    title="Download"
+                  >
+                    <FiDownload size={18} />
                   </button>
                 )}
                 {file.isDirectory && <FiChevronRight className="text-gray-400" size={18} />}
@@ -414,6 +474,51 @@ export default function SharePage({ params }) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
           <iframe src={`/api/public/${token}/stream`} className="w-full h-[500px]" title={shareData.fileName} />
+        </div>
+      );
+    }
+
+    if (is3dFile(shareData.fileName) && !isSkp(shareData.fileName)) {
+      return (
+        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
+            <Viewer3D
+              fileName={shareData.fileName}
+              currentPath=""
+              shareToken={token}
+              sharePassword={verifiedPassword}
+            />
+          </Suspense>
+        </div>
+      );
+    }
+
+    if (isSkp(shareData.fileName)) {
+      return (
+        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
+            <SkpViewer
+              fileName={shareData.fileName}
+              currentPath=""
+              shareToken={token}
+              sharePassword={verifiedPassword}
+            />
+          </Suspense>
+        </div>
+      );
+    }
+
+    if (isXlsx(shareData.fileName)) {
+      return (
+        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
+            <XlsxViewer
+              fileName={shareData.fileName}
+              currentPath=""
+              shareToken={token}
+              sharePassword={verifiedPassword}
+            />
+          </Suspense>
         </div>
       );
     }

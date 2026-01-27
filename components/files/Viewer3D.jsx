@@ -87,7 +87,7 @@ export function is3dFile(filename) {
   return SUPPORTED_FORMATS.includes(ext);
 }
 
-export default function Viewer3D({ fileId, currentPath, fileName }) {
+export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sharePassword }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -217,30 +217,58 @@ export default function Viewer3D({ fileId, currentPath, fileName }) {
         const fileExt = fileNameLower.split('.').pop();
         let object;
 
-        // Determine the conversion URL based on file type
+        // Determine the conversion URL based on file type and share mode
         let conversionUrl;
 
         // Files that need conversion to GLTF
         const needsConversion = !['glb', 'gltf', 'obj'].includes(fileExt);
 
-        if (needsConversion) {
-          conversionUrl = `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
+        // Use public routes for share mode
+        if (shareToken) {
+          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+          if (needsConversion) {
+            conversionUrl = `/api/public/${shareToken}/convert-3d?file=${encodeURIComponent(filePath)}`;
+          } else {
+            conversionUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
+          }
         } else {
-          conversionUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+          if (needsConversion) {
+            conversionUrl = `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
+          } else {
+            conversionUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+          }
         }
+
+        // Build headers for password-protected shares
+        const fetchHeaders = sharePassword ? { 'x-share-password': sharePassword } : {};
 
         // Load as GLTF/GLB
         if (fileNameLower.endsWith('.glb') || fileNameLower.endsWith('.gltf') || needsConversion) {
           const gltfLoader = new GLTFLoader();
-          object = await new Promise((resolve, reject) => {
-            gltfLoader.load(conversionUrl, resolve, undefined, reject);
-          });
+
+          // For share mode with password, fetch first and use blob URL
+          if (shareToken && sharePassword) {
+            const response = await fetch(conversionUrl, { headers: fetchHeaders });
+            if (!response.ok) throw new Error('Failed to load model');
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            object = await new Promise((resolve, reject) => {
+              gltfLoader.load(blobUrl, (gltf) => {
+                URL.revokeObjectURL(blobUrl);
+                resolve(gltf);
+              }, undefined, reject);
+            });
+          } else {
+            object = await new Promise((resolve, reject) => {
+              gltfLoader.load(conversionUrl, resolve, undefined, reject);
+            });
+          }
           scene.add(object.scene);
         }
         // Load as OBJ
         else if (fileNameLower.endsWith('.obj')) {
           const objLoader = new OBJLoader();
-          const response = await fetch(conversionUrl);
+          const response = await fetch(conversionUrl, { headers: fetchHeaders });
           const text = await response.text();
           object = objLoader.parse(text);
           scene.add(object);
@@ -334,7 +362,7 @@ export default function Viewer3D({ fileId, currentPath, fileName }) {
         }
       }
     };
-  }, [fileId, currentPath, fileName]);
+  }, [fileId, currentPath, fileName, shareToken, sharePassword]);
 
   return (
     <div className="w-full h-full flex flex-col gap-2 relative">
