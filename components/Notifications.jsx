@@ -24,13 +24,13 @@ export default function Notifications() {
   const getStyles = (type) => {
     switch (type) {
       case 'success':
-        return 'bg-green-100/95 dark:bg-green-900/90 border-green-300 dark:border-green-700';
+        return 'bg-green-900/90 border-green-700';
       case 'error':
-        return 'bg-red-100/95 dark:bg-red-900/90 border-red-300 dark:border-red-700';
+        return 'bg-red-900/90 border-red-700';
       case 'info':
-        return 'bg-blue-100/95 dark:bg-blue-900/90 border-blue-300 dark:border-blue-700';
+        return 'bg-blue-900/90 border-blue-700';
       default:
-        return 'bg-gray-100/95 dark:bg-gray-900/90 border-gray-300 dark:border-gray-700';
+        return 'bg-gray-900/90 border-gray-700';
     }
   };
 
@@ -46,10 +46,10 @@ export default function Notifications() {
         >
           <div className="flex-shrink-0 mt-0.5">{getIcon(notification.type)}</div>
           <div className="flex-1 min-w-0">
-            {notification.title && <p className=" font-medium text-gray-900 dark:text-white mb-1">{notification.title}</p>}
-            <p className=" text-gray-700 dark:text-gray-300">{notification.message}</p>
+            {notification.title && <p className=" font-medium text-white mb-1">{notification.title}</p>}
+            <p className=" text-gray-300">{notification.message}</p>
           </div>
-          <button onClick={() => dismissNotification(notification.id)} className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <button onClick={() => dismissNotification(notification.id)} className="flex-shrink-0 text-gray-400 hover:text-gray-200 transition-colors">
             <FiX size={18} />
           </button>
         </div>

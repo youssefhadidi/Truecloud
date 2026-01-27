@@ -52,24 +52,24 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   return (
     <div ref={menuRef} className="relative">
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors">
         <FiUser size={20} />
         <span className="hidden sm:inline text-sm font-medium truncate max-w-[150px]">{email}</span>
         <FiChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 z-50">
           {isAdmin && (
             <>
               <button
                 onClick={handleAdminPanel}
-                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
               >
                 <FiUser size={16} />
                 Admin Panel
               </button>
-              <hr className="my-1 border-gray-200 dark:border-gray-700" />
+              <hr className="my-1 border-gray-700" />
             </>
           )}
 
@@ -83,17 +83,17 @@ export default function UserMenu({ email, isAdmin = false }) {
 
           <button
             onClick={handleDownloads}
-            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
           >
             <FiDownload size={16} />
             Downloads
           </button>
 
-          <hr className="my-1 border-gray-200 dark:border-gray-700" />
+          <hr className="my-1 border-gray-700" />
 
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition-colors"
           >
             <FiLogOut size={16} />
             Sign Out

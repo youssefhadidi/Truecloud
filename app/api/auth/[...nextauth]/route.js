@@ -64,21 +64,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      console.log('[Auth] Session callback - token:', {
-        email: token.email,
-        role: token.role,
-        id: token.id,
-      });
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.username = token.username;
       }
-      console.log('[Auth] Session callback - returning session:', {
-        email: session.user?.email,
-        role: session.user?.role,
-        id: session.user?.id,
-      });
       return session;
     },
     async redirect({ url, baseUrl }) {

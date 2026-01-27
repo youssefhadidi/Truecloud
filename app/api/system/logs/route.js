@@ -16,7 +16,7 @@ async function getLogState() {
       return JSON.parse(content);
     }
   } catch {
-    // Return default state if file doesn't exist or is invalid
+    // Return deefault state if file doesn't exist or is invalid
   }
   return { lastOffset: 0, lastPath: null };
 }
