@@ -40,6 +40,33 @@ export default function SharePage({ params }) {
   const [uploadingFiles, setUploadingFiles] = useState([]);
   const fileInputRef = useRef(null);
 
+  // Drag and drop handlers - must be defined before any early returns
+  const handleDragOver = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (shareData?.allowUploads) {
+        setIsDragging(true);
+      }
+    },
+    [shareData?.allowUploads]
+  );
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+    },
+    []
+  );
+
   useEffect(() => {
     fetchShareData();
   }, [token]);
@@ -396,40 +423,6 @@ export default function SharePage({ params }) {
     }, 1500);
   };
 
-  // Drag and drop handlers
-  const handleDragOver = useCallback(
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (shareData?.allowUploads) {
-        setIsDragging(true);
-      }
-    },
-    [shareData?.allowUploads]
-  );
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-
-      if (!shareData?.allowUploads) return;
-
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        handleUpload(files);
-      }
-    },
-    [shareData?.allowUploads, currentSubPath, verifiedPassword]
-  );
-
   // Directory view
   if (shareData.isDirectory && directoryFiles) {
     return (
@@ -437,7 +430,12 @@ export default function SharePage({ params }) {
         className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-6xl mx-auto relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDrop={(e) => {
+          handleDrop(e);
+          if (shareData?.allowUploads && e.dataTransfer.files.length > 0) {
+            handleUpload(e.dataTransfer.files);
+          }
+        }}
       >
         {/* Drag overlay */}
         {isDragging && shareData.allowUploads && (
