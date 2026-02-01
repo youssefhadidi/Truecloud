@@ -457,6 +457,8 @@ const GridView = ({
       handleTouchEnd,
       handleTouchMove,
       shouldShowActions,
+      sharedPaths,
+      onContextMenu,
     ],
   );
 

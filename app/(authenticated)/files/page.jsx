@@ -266,9 +266,9 @@ function FilesPageContent() {
                       newFileName={state.newFileName}
                       setNewFileName={state.setNewFileName}
                       cancelDelete={handlers.cancelDelete}
-                      confirmDelete={handlers.confirmDelete}
+                      confirmDelete={() => handlers.confirmDelete(state.deletingFile)}
                       cancelRename={handlers.cancelRename}
-                      confirmRename={handlers.confirmRename}
+                      confirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
                       processingFile={state.processingFile}
                       handleContextMenu={contextMenu.handleContextMenu}
                       getFileIcon={fileUtils.getFileIcon}
@@ -318,7 +318,7 @@ function FilesPageContent() {
                     newFileName={state.newFileName}
                     onNewFileNameChange={state.setNewFileName}
                     onCancelRename={handlers.cancelRename}
-                    onConfirmRename={handlers.confirmRename}
+                    onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
                     processingFile={state.processingFile}
                     currentPath={state.currentPath}
                     onNavigateToFolder={navigation.navigateToFolder}
@@ -326,7 +326,7 @@ function FilesPageContent() {
                     onInitiateRename={handlers.initiateRename}
                     onHandleDownload={fileUtils.handleDownload}
                     onInitiateDelete={handlers.initiateDelete}
-                    onConfirmDelete={handlers.confirmDelete}
+                    onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
                     onCancelDelete={handlers.cancelDelete}
                     formatFileSize={fileUtils.formatFileSize}
                     onContextMenu={contextMenu.handleContextMenu}

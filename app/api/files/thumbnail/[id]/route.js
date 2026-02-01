@@ -319,7 +319,7 @@ export async function GET(req, { params }) {
     }
 
     // Supported file extensions
-    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', 'png', '.webp', '.svg', '.ico'];
+    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', '.png', '.webp', '.svg', '.ico'];
     const heicExtensions = ['.heic', '.heif'];
     const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
     const pdfExtensions = ['.pdf'];

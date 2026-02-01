@@ -104,6 +104,11 @@ export function useFileHandlers({
 
   // Delete operations
   const initiateDelete = (file, closeContextMenu) => {
+    if (!file || !file.id) {
+      console.error('initiateDelete: Invalid file object', file);
+      addNotification('error', 'Cannot delete: Invalid file data');
+      return;
+    }
     setDeletingFile(file);
     if (closeContextMenu) closeContextMenu();
   };
@@ -113,7 +118,12 @@ export function useFileHandlers({
   };
 
   const confirmDelete = (deletingFile) => {
-    if (!deletingFile) return;
+    if (!deletingFile || !deletingFile.id) {
+      console.error('confirmDelete: Invalid file object', deletingFile);
+      addNotification('error', 'Cannot delete file: Invalid file data');
+      setDeletingFile(null);
+      return;
+    }
     setProcessingFile(deletingFile.id);
     deleteMutation.mutate(deletingFile.id, {
       onSuccess: () => {
@@ -132,6 +142,11 @@ export function useFileHandlers({
 
   // Rename operations
   const initiateRename = (file, closeContextMenu) => {
+    if (!file || !file.id || !file.name) {
+      console.error('initiateRename: Invalid file object', file);
+      addNotification('error', 'Cannot rename: Invalid file data');
+      return;
+    }
     setRenamingFile(file);
     setNewFileName(file.name);
     if (closeContextMenu) closeContextMenu();
@@ -143,7 +158,14 @@ export function useFileHandlers({
   };
 
   const confirmRename = (renamingFile, newFileName) => {
-    if (!renamingFile || !newFileName.trim() || newFileName === renamingFile.name) {
+    if (!renamingFile || !renamingFile.id) {
+      console.error('confirmRename: Invalid file object', renamingFile);
+      addNotification('error', 'Cannot rename file: Invalid file data');
+      setRenamingFile(null);
+      setNewFileName('');
+      return;
+    }
+    if (!newFileName.trim() || newFileName === renamingFile.name) {
       cancelRename();
       return;
     }
@@ -169,6 +191,11 @@ export function useFileHandlers({
 
   // Share operations
   const initiateShare = (file, closeContextMenu) => {
+    if (!file || !file.id || !file.name) {
+      console.error('initiateShare: Invalid file object', file);
+      addNotification('error', 'Cannot share: Invalid file data');
+      return;
+    }
     setSharingFile(file);
     if (closeContextMenu) closeContextMenu();
   };

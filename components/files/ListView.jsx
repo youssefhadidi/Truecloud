@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
@@ -50,12 +50,18 @@ const ListView = ({
   }, []);
 
   // Add resize listener
-  if (typeof window !== 'undefined') {
+  useEffect(() => {
+    // Check on mount
+    checkMobile();
+
+    // Add resize listener
     window.addEventListener('resize', checkMobile);
-    if (!isMobile && window.innerWidth < MOBILE_BREAKPOINT) {
-      checkMobile();
-    }
-  }
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, [checkMobile]);
 
   const handleTouchStart = useCallback(
     (file) => {
