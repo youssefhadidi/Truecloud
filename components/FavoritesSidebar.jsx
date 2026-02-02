@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2 } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
@@ -33,10 +33,12 @@ export default function FavoritesSidebar({ onNavigate, currentPath }) {
     }
   };
 
+  const isInTrash = currentPath === 'trash' || currentPath.startsWith('trash/') || currentPath.startsWith('trash\\');
+
   // Collapsed state - just show toggle button
   if (isCollapsed) {
     return (
-      <div className="flex-shrink-0 w-10 bg-gray-800 border-r border-gray-700 flex flex-col">
+      <div className="flex-shrink-0 w-10 h-full bg-gray-800 border-r border-gray-700 flex flex-col">
         <button
           onClick={() => setIsCollapsed(false)}
           className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
@@ -60,12 +62,22 @@ export default function FavoritesSidebar({ onNavigate, currentPath }) {
             ))}
           </div>
         )}
+        {/* Trash button at bottom */}
+        <button
+          onClick={() => onNavigate('trash')}
+          className={`p-2 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors mt-auto ${
+            isInTrash ? 'bg-red-600/20 text-red-400' : ''
+          }`}
+          title="Trash"
+        >
+          <FiTrash2 size={20} />
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex-shrink-0 w-56 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+    <div className="flex-shrink-0 w-56 h-full bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
         <div className="flex items-center gap-2 text-gray-300">
@@ -126,6 +138,21 @@ export default function FavoritesSidebar({ onNavigate, currentPath }) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Trash link at bottom */}
+      <div className="border-t border-gray-700">
+        <button
+          onClick={() => onNavigate('trash')}
+          className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+            isInTrash
+              ? 'bg-red-600/20 text-red-400'
+              : 'text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+          }`}
+        >
+          <FiTrash2 size={16} />
+          <span>Trash</span>
+        </button>
       </div>
     </div>
   );
