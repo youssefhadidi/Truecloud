@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import UserMenu from '@/components/UserMenu';
+import UpdateChecker from '@/components/UpdateChecker';
 
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useSession();
@@ -41,6 +42,9 @@ function AuthenticatedLayoutContent({ children }) {
 
       {/* Page Content */}
       <main className="flex-1 flex overflow-y-auto w-full">{children}</main>
+
+      {/* Update notification - auto-checks on first load */}
+      <UpdateChecker />
     </div>
   );
 }

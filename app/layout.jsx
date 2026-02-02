@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import AuthProvider from '@/components/AuthProvider';
 import QueryProvider from '@/components/QueryProvider';
-import UpdateChecker from '@/components/UpdateChecker';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import Notifications from '@/components/Notifications';
 
@@ -31,7 +30,6 @@ export default function RootLayout({ children }) {
           <NotificationsProvider>
             <Notifications />
             <AuthProvider>{children}</AuthProvider>
-            <UpdateChecker />
           </NotificationsProvider>
         </QueryProvider>
       </body>

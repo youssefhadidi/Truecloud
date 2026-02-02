@@ -24,6 +24,7 @@ model User {
   permissions FilePermission[]
   sessions    Session[]
   shares      Share[]
+  favorites   Favorite[]
 }
 
 model Session {
@@ -88,4 +89,18 @@ model Share {
   @@index([token])
   @@index([ownerId])
   @@index([path, fileName])
+}
+
+model Favorite {
+  id          String   @id @default(cuid())
+  path        String   // Full path to file/folder
+  name        String   // Display name
+  isDirectory Boolean  @default(false)
+  ownerId     String
+  createdAt   DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([path, ownerId])
+  @@index([ownerId])
 }

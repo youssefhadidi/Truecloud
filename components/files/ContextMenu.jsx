@@ -2,12 +2,17 @@
 
 'use client';
 
-import { FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2 } from 'react-icons/fi';
+import { FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2, FiRotateCcw, FiStar } from 'react-icons/fi';
 import { isImage, isVideo, isAudio } from '@/lib/clientFileUtils';
 import { is3dFile } from './Viewer3D';
 
-export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onRename, onDownload, onView, onDelete, onShare, onClose }) {
+// Helper to check if path is in trash
+const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
+
+export default function ContextMenu({ contextMenu, file, currentPath = '', onNavigateToFolder, onRename, onDownload, onView, onDelete, onRestore, onShare, onToggleFavorite, isFavorite = false, onClose }) {
   if (!contextMenu || !file) return null;
+
+  const inTrash = isInTrash(currentPath);
 
   return (
     <div
@@ -24,14 +29,18 @@ export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onR
             <FiFolder size={16} />
             Open Folder
           </button>
-          <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <FiEdit size={16} />
-            Rename
-          </button>
-          <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <FiDownload size={16} />
-            Download as ZIP
-          </button>
+          {!inTrash && (
+            <>
+              <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                <FiEdit size={16} />
+                Rename
+              </button>
+              <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                <FiDownload size={16} />
+                Download as ZIP
+              </button>
+            </>
+          )}
         </>
       ) : (
         <>
@@ -39,10 +48,12 @@ export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onR
             <FiDownload size={16} />
             Download
           </button>
-          <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <FiEdit size={16} />
-            Rename
-          </button>
+          {!inTrash && (
+            <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <FiEdit size={16} />
+              Rename
+            </button>
+          )}
           {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name)) && (
             <button onClick={onView} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
               {is3dFile(file.name) && <FiBox size={16} />}
@@ -54,15 +65,38 @@ export default function ContextMenu({ contextMenu, file, onNavigateToFolder, onR
           )}
         </>
       )}
-      <button onClick={onShare} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-green-600 dark:text-green-400">
-        <FiShare2 size={16} />
-        Share
-      </button>
+      {!inTrash && (
+        <>
+          {onToggleFavorite && (
+            <button onClick={onToggleFavorite} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+              <FiStar size={16} className={isFavorite ? 'fill-current' : ''} />
+              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            </button>
+          )}
+          <button onClick={onShare} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-green-600 dark:text-green-400">
+            <FiShare2 size={16} />
+            Share
+          </button>
+        </>
+      )}
       <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-      <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
-        <FiTrash2 size={16} />
-        Delete
-      </button>
+      {inTrash ? (
+        <>
+          <button onClick={onRestore} className="w-full px-4 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2 text-blue-600 dark:text-blue-400">
+            <FiRotateCcw size={16} />
+            Restore
+          </button>
+          <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
+            <FiTrash2 size={16} />
+            Delete Permanently
+          </button>
+        </>
+      ) : (
+        <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
+          <FiTrash2 size={16} />
+          Delete
+        </button>
+      )}
     </div>
   );
 }

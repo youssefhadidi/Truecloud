@@ -8,9 +8,11 @@ import { Suspense, lazy } from 'react';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
+import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
+import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
@@ -59,6 +61,10 @@ function FilesPageContent() {
     folderDisplayNames: state.folderDisplayNames,
   });
 
+  // Favorites
+  const { data: favorites = [] } = useFavorites();
+  const { toggleFavorite, isPending: togglingFavorite } = useToggleFavorite();
+
   // File operation handlers
   const handlers = useFileHandlers({
     currentPath: state.currentPath,
@@ -73,6 +79,7 @@ function FilesPageContent() {
     setRenamingFile: state.setRenamingFile,
     setNewFileName: state.setNewFileName,
     setSharingFile: state.setSharingFile,
+    setRestoringFile: state.setRestoringFile,
   });
 
   if (status === 'loading') {
@@ -87,7 +94,15 @@ function FilesPageContent() {
   }
 
   return (
-    <div className="w-full h-full bg-gray-900 flex flex-col overflow-hidden" onClick={contextMenu.closeContextMenu}>
+    <div className="w-full h-full bg-gray-900 flex overflow-hidden" onClick={contextMenu.closeContextMenu}>
+      {/* Favorites Sidebar - hidden on mobile */}
+      <div className="hidden sm:block">
+        <FavoritesSidebar
+          onNavigate={(path) => state.setCurrentPath(path)}
+          currentPath={state.currentPath}
+        />
+      </div>
+
       {/* Main Content */}
       <main
         className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 pb-16 sm:pb-1 flex flex-col relative"
@@ -344,6 +359,7 @@ function FilesPageContent() {
       <ContextMenu
         contextMenu={state.contextMenu}
         file={state.selectedContextFile}
+        currentPath={state.currentPath}
         onNavigateToFolder={() => {
           navigation.navigateToFolder(state.selectedContextFile.name);
           contextMenu.closeContextMenu();
@@ -363,10 +379,33 @@ function FilesPageContent() {
           handlers.initiateDelete(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
+        onRestore={() => {
+          handlers.confirmRestore(state.selectedContextFile);
+          contextMenu.closeContextMenu();
+        }}
         onShare={() => {
           handlers.initiateShare(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
+        onToggleFavorite={async () => {
+          if (state.selectedContextFile) {
+            const fullPath = state.currentPath
+              ? `${state.currentPath}/${state.selectedContextFile.name}`
+              : state.selectedContextFile.name;
+            try {
+              await toggleFavorite({
+                path: fullPath,
+                name: state.selectedContextFile.name,
+                isDirectory: state.selectedContextFile.isDirectory,
+              });
+              state.addNotification('success', favorites.some(f => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites');
+            } catch (error) {
+              state.addNotification('error', 'Failed to update favorites');
+            }
+          }
+          contextMenu.closeContextMenu();
+        }}
+        isFavorite={state.selectedContextFile ? favorites.some(f => f.path === (state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name)) : false}
         onClose={contextMenu.closeContextMenu}
       />
 

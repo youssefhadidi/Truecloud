@@ -5,9 +5,8 @@
 import { useState } from 'react';
 import { FiPlus, FiEdit, FiTrash2, FiX, FiRefreshCw } from 'react-icons/fi';
 import DeleteConfirm from '@/components/DeleteConfirm';
-import Confirm from '@/components/Confirm';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/lib/api/users';
-import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
+import { useCheckUpdates } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function AccountsPage() {
@@ -22,7 +21,6 @@ export default function AccountsPage() {
     role: 'user',
     hasRootAccess: false,
   });
-  const [showConfirmUpdate, setShowConfirmUpdate] = useState(false);
 
   const { addNotification } = useNotifications();
 
@@ -32,7 +30,6 @@ export default function AccountsPage() {
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
   const { data: updateInfo, refetch: checkForUpdates, isFetching: checkingUpdates } = useCheckUpdates(false);
-  const runUpdateMutation = useRunUpdate();
 
   const handleCheckUpdates = async () => {
     try {
@@ -43,18 +40,6 @@ export default function AccountsPage() {
     } catch (error) {
       console.error('Error checking updates:', error);
       addNotification('error', 'Failed to check for updates');
-    }
-  };
-
-  const confirmRunUpdate = async () => {
-    try {
-      await runUpdateMutation.mutateAsync();
-      addNotification('success', 'Update started. The server will restart shortly...');
-    } catch (error) {
-      console.error('Error running update:', error);
-      addNotification('error', 'Failed to start update: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setShowConfirmUpdate(false);
     }
   };
 
@@ -326,21 +311,10 @@ export default function AccountsPage() {
               </button>
               {updateInfo?.hasUpdate && (
                 <div className="border border-blue-700 bg-blue-900/30 rounded-lg p-3">
-                  <p className="text-xs sm:text-sm font-semibold text-blue-300 mb-2">
-                    Update Available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
+                  <p className="text-xs sm:text-sm text-blue-300">
+                    Update available: {updateInfo.currentVersion} → {updateInfo.latestVersion}
                   </p>
-                  {!showConfirmUpdate ? (
-                    <button onClick={() => setShowConfirmUpdate(true)} className="w-full px-3 py-2 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded hover:bg-blue-700">
-                      Update Now
-                    </button>
-                  ) : (
-                    <Confirm
-                      message="Are you sure you want to update? The server will restart automatically."
-                      onCancel={() => setShowConfirmUpdate(false)}
-                      onConfirm={confirmRunUpdate}
-                      isLoading={runUpdateMutation.isPending}
-                    />
-                  )}
+                  <p className="text-xs text-blue-400 mt-1">Use the notification in the bottom right to update.</p>
                 </div>
               )}
             </div>
