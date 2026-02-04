@@ -417,6 +417,7 @@ function FilesPageContent() {
           currentPath={state.currentPath}
           onClose={mediaViewer.closeMediaViewer}
           onNavigate={mediaViewer.navigateViewer}
+          onSelectFile={mediaViewer.selectViewerFile}
         />
       </Suspense>
 

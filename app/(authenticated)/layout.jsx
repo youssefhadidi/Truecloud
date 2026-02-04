@@ -21,13 +21,15 @@ function AuthenticatedLayoutContent({ children }) {
   //   });
   // }, [status, session]);
 
-  if (status === 'unauthenticated') {
-    router.push('/auth/login');
-  }
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login');
+    }
+  }, [status, router]);
 
   // Show layout even while loading, instead of full-screen loading
   return (
-    <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
+    <div className="h-dvh bg-gray-900 flex flex-col overflow-hidden">
       {/* Persistent Header */}
       <header className="bg-gray-800 shadow flex-shrink-0">
         <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">

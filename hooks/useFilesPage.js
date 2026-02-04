@@ -26,18 +26,8 @@ export function useFilesPage(status) {
   const [pathHistory, setPathHistory] = useState([initialPath]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [isPopstateNavigation, setIsPopstateNavigation] = useState(false);
-  const [viewMode, setViewMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('fileViewMode') || 'grid';
-    }
-    return 'grid';
-  });
-  const [sortBy, setSortBy] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('fileSortBy') || 'name-asc';
-    }
-    return 'name-asc';
-  });
+  const [viewMode, setViewMode] = useState('grid');
+  const [sortBy, setSortBy] = useState('name-asc');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isDragging, setIsDragging] = useState(false);
