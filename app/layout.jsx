@@ -24,8 +24,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" style={{ height: '100dvh' }}>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-dvh`}>
+    <html lang="en" style={{ height: '100dvh', overflow: 'hidden' }}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-dvh overflow-hidden`}>
         <QueryProvider>
           <NotificationsProvider>
             <Notifications />

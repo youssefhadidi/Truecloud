@@ -101,13 +101,13 @@ const GridView = ({
     ({ columnIndex, key, rowIndex, style, parent }) => {
       const containerWidth = parent.props.width;
       const columns = getColumnsCount(containerWidth);
-      const gap = 4;
+      const gap = 8;
       const itemIndex = rowIndex * columns + columnIndex;
       const item = allItems[itemIndex];
 
       if (!item) return <div key={key} style={style} />;
 
-      const cellWidth = (containerWidth - (columns - 1) * gap) / columns;
+      const cellWidth = style.width - gap;
 
       return (
         <div
@@ -466,9 +466,9 @@ const GridView = ({
       <AutoSizer>
         {({ height, width }) => {
           const columns = getColumnsCount(width);
-          const gap = 8;
-          const columnWidth = (width - (columns - 1) * gap) / columns;
-          const rowHeight = columnWidth + gap;
+          const cellSize = Math.floor(width / columns);
+          const textHeight = 36; // space for filename + file size below thumbnail
+          const rowHeight = cellSize + textHeight;
           const rowCount = Math.ceil(allItems.length / columns);
 
           return (
@@ -476,7 +476,7 @@ const GridView = ({
               ref={gridRef}
               cellRenderer={(props) => cellRenderer({ ...props, parent: { props: { width } } })}
               columnCount={columns}
-              columnWidth={columnWidth + gap}
+              columnWidth={cellSize}
               height={height}
               rowCount={rowCount}
               rowHeight={rowHeight}

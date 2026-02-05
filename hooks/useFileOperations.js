@@ -71,10 +71,13 @@ export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
     let newIndex;
 
     if (direction === 'next') {
-      newIndex = (currentIndex + 1) % viewableFiles.length;
+      newIndex = currentIndex + 1;
     } else {
-      newIndex = (currentIndex - 1 + viewableFiles.length) % viewableFiles.length;
+      newIndex = currentIndex - 1;
     }
+
+    // Clamp at boundaries instead of wrapping
+    if (newIndex < 0 || newIndex >= viewableFiles.length) return;
 
     setViewerFile(viewableFiles[newIndex]);
   };
@@ -97,10 +100,17 @@ export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [viewerFile, viewableFiles]);
 
+  const selectViewerFile = (file) => {
+    if (file && file.id !== viewerFile?.id) {
+      setViewerFile(file);
+    }
+  };
+
   return {
     openMediaViewer,
     closeMediaViewer,
     navigateViewer,
+    selectViewerFile,
   };
 }
 

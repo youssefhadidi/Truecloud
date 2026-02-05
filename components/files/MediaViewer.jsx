@@ -2,20 +2,138 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FiArrowLeft, FiChevronRight, FiVideo, FiFileText, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { useState, useEffect, useRef } from 'react';
+import { FiArrowLeft, FiChevronRight, FiVideo, FiFileText, FiMaximize2, FiMinimize2, FiImage, FiMusic, FiBox, FiFile } from 'react-icons/fi';
 import Viewer3D, { is3dFile } from './Viewer3D';
 import XlsxViewer from './XlsxViewer';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
+import { useThumbnail } from '@/lib/api/files';
 
-export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate }) {
+// Preview shown in the main area (while scrolling strip) or in peek panels (prev/next)
+function PendingPreview({ file, currentPath, compact = false }) {
+  const fileType = (() => {
+    if (is3dFile(file.name)) return '3d';
+    if (isImage(file.name)) return 'image';
+    if (isVideo(file.name)) return 'video';
+    if (isAudio(file.name)) return 'audio';
+    if (isPdf(file.name)) return 'pdf';
+    if (isXlsx(file.name)) return 'xlsx';
+    return null;
+  })();
+
+  const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
+  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+  const hasThumbnail = canThumbnail && thumbnailData?.data;
+
+  const iconSize = compact ? 28 : 64;
+  const iconMap = {
+    '3d': <FiBox size={iconSize} className="text-orange-400" />,
+    video: <FiVideo size={iconSize} className="text-blue-400" />,
+    audio: <FiMusic size={iconSize} className="text-purple-400" />,
+    pdf: <FiFileText size={iconSize} className="text-red-400" />,
+    xlsx: <FiFile size={iconSize} className="text-green-400" />,
+    image: <FiImage size={iconSize} className="text-green-400" />,
+  };
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gray-900">
+      {hasThumbnail ? (
+        <img src={thumbnailData.data} alt={file.name} className="w-full h-full object-contain" draggable={false} />
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          {iconMap[fileType] || <FiFile size={iconSize} className="text-gray-500" />}
+          {!compact && <p className="text-gray-300 text-sm truncate max-w-[300px]">{file.name}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Image with thumbnail placeholder — shows thumbnail immediately, fades in full-res on load
+function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
+  const [fullLoaded, setFullLoaded] = useState(false);
+  const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
+  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+  const hasThumbnail = canThumbnail && thumbnailData?.data;
+
+  // Reset when file changes
+  useEffect(() => {
+    setFullLoaded(false);
+  }, [file.id]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
+      {/* Thumbnail as placeholder */}
+      {hasThumbnail && (
+        <img
+          src={thumbnailData.data}
+          alt=""
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-0' : 'opacity-100'}`}
+          draggable={false}
+        />
+      )}
+      {/* Full-res image on top */}
+      <img
+        src={getFileUrl(file, 'image')}
+        alt={file.name}
+        className={`w-full h-full object-contain relative z-10 transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setFullLoaded(true)}
+        onError={() => setFullLoaded(true)}
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+// Thumbnail item component — needs to be separate to use hooks per-item
+function ThumbnailItem({ file, currentPath, isActive, onClick }) {
+  const fileType = (() => {
+    if (is3dFile(file.name)) return '3d';
+    if (isImage(file.name)) return 'image';
+    if (isVideo(file.name)) return 'video';
+    if (isAudio(file.name)) return 'audio';
+    if (isPdf(file.name)) return 'pdf';
+    if (isXlsx(file.name)) return 'xlsx';
+    return null;
+  })();
+
+  const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
+  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+
+  const iconMap = {
+    '3d': <FiBox size={20} className="text-orange-400" />,
+    video: <FiVideo size={20} className="text-blue-400" />,
+    audio: <FiMusic size={20} className="text-purple-400" />,
+    pdf: <FiFileText size={20} className="text-red-400" />,
+    xlsx: <FiFile size={20} className="text-green-400" />,
+    image: <FiImage size={20} className="text-green-400" />,
+  };
+
+  const hasThumbnail = canThumbnail && thumbnailData?.data;
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+        isActive ? 'border-blue-500 ring-2 ring-blue-500/40 scale-105' : 'border-gray-700 hover:border-gray-500'
+      } bg-gray-800 flex items-center justify-center`}
+      title={file.name}
+    >
+      {hasThumbnail ? (
+        <img src={thumbnailData.data} alt={file.name} className="w-full h-full object-cover" draggable={false} />
+      ) : (
+        iconMap[fileType] || <FiFile size={20} className="text-gray-500" />
+      )}
+    </button>
+  );
+}
+
+export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [touchStartX, setTouchStartX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [translateX, setTranslateX] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const stripRef = useRef(null);
+  const scrollTimeoutRef = useRef(null);
+  const programmaticScrollRef = useRef(false);
 
   // Helper to check if file is HEIC
   const isHeic = (fileName) => {
@@ -66,18 +184,67 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Reset loading state when file changes
+  // Auto-center the active thumbnail in the strip
   useEffect(() => {
-    setIsLoading(true);
+    if (!stripRef.current || !viewerFile) return;
+    programmaticScrollRef.current = true;
+    const active = stripRef.current.querySelector('[data-active="true"]');
+    if (active) {
+      active.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+    }
+    setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 500);
   }, [viewerFile?.id]);
 
-  // Preload adjacent images for faster navigation
+  // Find the file whose thumbnail is closest to the strip center
+  const getCenteredFile = () => {
+    const strip = stripRef.current;
+    if (!strip) return null;
+    const centerX = strip.scrollLeft + strip.clientWidth / 2;
+    let closest = null;
+    let closestDist = Infinity;
+    for (const child of strip.children) {
+      const childCenter = child.offsetLeft + child.offsetWidth / 2;
+      const dist = Math.abs(childCenter - centerX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = child;
+      }
+    }
+    if (!closest) return null;
+    const fileId = closest.dataset.fileId;
+    return viewableFiles.find((f) => f.id === fileId) || null;
+  };
+
+  // Handle strip scroll - change viewed file when scrolling settles
+  const handleStripScroll = () => {
+    if (programmaticScrollRef.current) return;
+
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+
+    scrollTimeoutRef.current = setTimeout(() => {
+      const centeredFile = getCenteredFile();
+      if (centeredFile && centeredFile.id !== viewerFile?.id) {
+        onSelectFile(centeredFile);
+      }
+    }, 150);
+  };
+
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
+
+  // Preload adjacent full-res images for faster navigation
   useEffect(() => {
     if (!viewerFile || viewableFiles.length <= 1) return;
 
-    const currentIndex = viewableFiles.findIndex((f) => f.id === viewerFile.id);
-    const prevFile = currentIndex > 0 ? viewableFiles[currentIndex - 1] : null;
-    const nextFile = currentIndex < viewableFiles.length - 1 ? viewableFiles[currentIndex + 1] : null;
+    const idx = viewableFiles.findIndex((f) => f.id === viewerFile.id);
+    const prev = idx > 0 ? viewableFiles[idx - 1] : null;
+    const next = idx < viewableFiles.length - 1 ? viewableFiles[idx + 1] : null;
 
     const preloadImage = (file) => {
       if (!file || !isImage(file.name)) return;
@@ -96,8 +263,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       };
     };
 
-    const cleanupPrev = preloadImage(prevFile);
-    const cleanupNext = preloadImage(nextFile);
+    const cleanupPrev = preloadImage(prev);
+    const cleanupNext = preloadImage(next);
 
     return () => {
       if (cleanupPrev) cleanupPrev();
@@ -114,80 +281,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     }
   };
 
-  // Check if touch target is an interactive element
-  const isInteractiveElement = (target) => {
-    return (
-      target.tagName === 'VIDEO' ||
-      target.tagName === 'AUDIO' ||
-      target.tagName === 'BUTTON' ||
-      target.closest('iframe') || // PDF
-      target.closest('canvas') || // 3D viewer
-      target.closest('button') ||
-      target.closest('[data-no-swipe]')
-    );
-  };
-
-  // Handle touch start
-  const handleTouchStart = (e) => {
-    if (viewableFiles.length <= 1 || isInteractiveElement(e.target)) return;
-
-    setTouchStartX(e.touches[0].clientX);
-    setIsDragging(true);
-    setIsTransitioning(false);
-  };
-
-  // Handle touch move
-  const handleTouchMove = (e) => {
-    if (!isDragging || viewableFiles.length <= 1) return;
-
-    const currentX = e.touches[0].clientX;
-    const diff = currentX - touchStartX;
-
-    const currentIndex = viewableFiles.findIndex((f) => f.id === viewerFile.id);
-    const isAtStart = currentIndex === 0;
-    const isAtEnd = currentIndex === viewableFiles.length - 1;
-
-    // Apply resistance at boundaries (rubber-band effect)
-    let resistance = 1;
-    if ((isAtStart && diff > 0) || (isAtEnd && diff < 0)) {
-      resistance = 0.3; // Slow down at boundaries
-    }
-
-    setTranslateX(diff * resistance);
-  };
-
-  // Handle touch end
-  const handleTouchEnd = () => {
-    if (!isDragging) return;
-
-    const threshold = 100; // pixels
-    const velocity = Math.abs(translateX) > 30; // Fast swipe
-
-    if (Math.abs(translateX) > threshold || velocity) {
-      if (translateX > 0) {
-        onNavigate('prev');
-      } else {
-        onNavigate('next');
-      }
-    }
-
-    // Reset state
-    setIsDragging(false);
-    setTranslateX(0);
-    setIsTransitioning(true);
-
-    // Clear transitioning state after animation
-    const timer = setTimeout(() => setIsTransitioning(false), 300);
-    return () => clearTimeout(timer);
-  };
-
   if (!viewerFile) return null;
 
   const fileType = getFileType(viewerFile);
+  const effectiveFullscreen = isMobile || isFullscreen;
+
+  // Compute navigation state
+  const currentIndex = viewableFiles.findIndex((f) => f.id === viewerFile.id);
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < viewableFiles.length - 1;
 
   // Render media based on type
   const renderMedia = () => {
-    const containerClass = 'w-full h-full object-contain';
     const stopProp = (e) => e.stopPropagation();
 
     switch (fileType) {
@@ -195,30 +300,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} onClick={stopProp} />;
 
       case 'image':
-        return (
-          <div className="relative w-full h-full flex items-center justify-center">
-            {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
-                  <p className="text-gray-300 text-sm">Loading image...</p>
-                </div>
-              </div>
-            )}
-            <img 
-              src={getFileUrl(viewerFile, 'image')} 
-              alt={viewerFile.name} 
-              className={containerClass}
-              onClick={stopProp}
-              onLoad={() => setIsLoading(false)}
-              onError={() => setIsLoading(false)}
-            />
-          </div>
-        );
+        return <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} />;
 
       case 'video':
         return (
-          <video controls autoPlay className={containerClass} src={getFileUrl(viewerFile, 'video')} onClick={stopProp} style={{ width: '100%', height: '100%' }}>
+          <video controls autoPlay className="w-full h-full object-contain" src={getFileUrl(viewerFile, 'video')} onClick={stopProp} style={{ width: '100%', height: '100%' }}>
             Your browser does not support video playback.
           </video>
         );
@@ -227,7 +313,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return (
           <div className="flex flex-col items-center gap-4 w-full" onClick={stopProp}>
             <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center">
-              <FiVideo size={64} className="text-blue-400" />
+              <FiMusic size={64} className="text-purple-400" />
             </div>
             <audio controls className="w-full" src={getFileUrl(viewerFile, 'audio')} style={{ width: '100%' }}>
               Your browser does not support audio playback.
@@ -248,11 +334,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   return (
     <div
-      className={`${isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-1'}`}
-      onClick={isFullscreen ? null : onClose}
+      className={`${effectiveFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-1'}`}
+      onClick={effectiveFullscreen ? null : onClose}
     >
       <div
-        className={`${isFullscreen ? 'w-screen h-screen rounded-none' : 'relative bg-gray-900 rounded-lg shadow-xl w-full max-w-[1600px] h-[90vh]'} bg-gray-900 flex flex-col`}
+        className={`${effectiveFullscreen ? 'w-full h-full rounded-none' : 'relative bg-gray-900 rounded-lg shadow-xl w-full max-w-[1600px] h-[90vh]'} bg-gray-900 flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -260,19 +346,21 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           <div>
             <h3 className="text-lg font-semibold text-white">{viewerFile.name}</h3>
             {viewableFiles.length > 1 && (
-              <p className=" text-gray-400">
-                {viewableFiles.findIndex((f) => f.id === viewerFile.id) + 1} / {viewableFiles.length}
+              <p className="text-gray-400">
+                {currentIndex + 1} / {viewableFiles.length}
               </p>
             )}
           </div>
           <div className="flex items-center gap-0 bg-gray-800 rounded-lg border border-gray-700">
-            <button
-              onClick={toggleFullscreen}
-              className="px-3 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors first:rounded-l-md last:rounded-r-md border-r border-gray-700 last:border-r-0"
-              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            >
-              {isFullscreen ? <FiMinimize2 size={18} /> : <FiMaximize2 size={18} />}
-            </button>
+            {!isMobile && (
+              <button
+                onClick={toggleFullscreen}
+                className="px-3 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors first:rounded-l-md last:rounded-r-md border-r border-gray-700 last:border-r-0"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? <FiMinimize2 size={18} /> : <FiMaximize2 size={18} />}
+              </button>
+            )}
             <button onClick={onClose} className="px-3 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors first:rounded-l-md last:rounded-r-md" title="Close">
               ✕
             </button>
@@ -280,50 +368,50 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         </div>
 
         {/* Media Content */}
-        <div
-          className="flex-1 overflow-auto flex items-center justify-center p-1 relative select-none"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          style={{
-            touchAction: 'none',
-            WebkitTouchCallout: 'none',
-            WebkitUserSelect: 'none',
-          }}
-        >
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{
-              transform: isDragging ? `translateX(${translateX}px)` : 'translateX(0)',
-              transition: isTransitioning ? 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
-            }}
-          >
-            {renderMedia()}
-          </div>
+        <div className="flex-1 overflow-hidden flex items-center justify-center relative select-none">
+          <div className="w-full h-full flex items-center justify-center p-1">{renderMedia()}</div>
 
-          {/* Navigation Buttons - Only show on desktop if multiple viewable files */}
-          {viewableFiles.length > 1 && !isMobile && (
+          {/* Navigation Buttons - Show if multiple viewable files */}
+          {viewableFiles.length > 1 && (
             <>
               <button
                 onClick={() => onNavigate('prev')}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full p-3 transition-all opacity-0 hover:opacity-100"
-                title="Previous (← key or swipe)"
-                style={{ zIndex: 50 }}
+                disabled={!canGoPrev}
+                className="absolute top-1/2 -translate-y-1/2 text-white bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full p-3 transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                title="Previous (← key)"
+                style={{ zIndex: 50, left: '1rem' }}
               >
                 <FiArrowLeft size={24} />
               </button>
 
               <button
                 onClick={() => onNavigate('next')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full p-3 transition-all opacity-0 hover:opacity-100"
-                title="Next (→ key or swipe)"
-                style={{ zIndex: 50 }}
+                disabled={!canGoNext}
+                className="absolute top-1/2 -translate-y-1/2 text-white bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full p-3 transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                title="Next (→ key)"
+                style={{ zIndex: 50, right: '1rem' }}
               >
                 <FiChevronRight size={24} />
               </button>
             </>
           )}
         </div>
+
+        {/* Thumbnail Strip */}
+        {viewableFiles.length > 1 && (
+          <div
+            ref={stripRef}
+            className="flex items-center gap-2 px-4 py-3 border-t border-gray-700 bg-gray-900 overflow-x-auto"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onScroll={handleStripScroll}
+          >
+            {viewableFiles.map((file) => (
+              <div key={file.id} data-file-id={file.id} data-active={file.id === viewerFile.id ? 'true' : undefined}>
+                <ThumbnailItem file={file} currentPath={currentPath} isActive={file.id === viewerFile.id} onClick={() => onSelectFile(file)} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
