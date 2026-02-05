@@ -4,8 +4,6 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authCheck';
 import { resolve, join } from 'node:path';
 import fsPromises from 'fs/promises';
-import { fork } from 'child_process';
-
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
@@ -38,7 +36,8 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Directory not found' }, { status: 404 });
     }
 
-    // Spawn child process for generation
+    // Spawn child process for generation (dynamic import to bypass Turbopack)
+    const { fork } = await import('child_process');
     const workerPath = join(process.cwd(), 'lib', 'workers', 'generateCacheWorker.mjs');
     const child = fork(workerPath, [], {
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
