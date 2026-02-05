@@ -64,7 +64,7 @@ class Semaphore {
   }
 }
 
-const generationSemaphore = new Semaphore(5);
+const generationSemaphore = new Semaphore(15);
 
 // Helper to scan directory recursively
 async function scanDirectory(dirPath, basePath = '') {

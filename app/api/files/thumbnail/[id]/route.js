@@ -56,7 +56,7 @@ class Semaphore {
   }
 }
 
-const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prevent resource exhaustion
+const thumbnailSemaphore = new Semaphore(15); // Limited parallelization to prevent resource exhaustion
 
 export async function GET(req, { params }) {
   const startTime = Date.now();

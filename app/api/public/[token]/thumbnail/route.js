@@ -47,7 +47,7 @@ class Semaphore {
   }
 }
 
-const thumbnailSemaphore = new Semaphore(10);
+const thumbnailSemaphore = new Semaphore(15);
 
 export async function GET(req, { params }) {
   try {
