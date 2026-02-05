@@ -85,8 +85,29 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
   );
 }
 
-// Thumbnail item component — needs to be separate to use hooks per-item
+// Thumbnail item component — lazy-loads thumbnail only when scrolled into view
 function ThumbnailItem({ file, currentPath, isActive, onClick }) {
+  const itemRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = itemRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '100px' },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const fileType = (() => {
     if (is3dFile(file.name)) return '3d';
     if (isImage(file.name)) return 'image';
@@ -98,7 +119,7 @@ function ThumbnailItem({ file, currentPath, isActive, onClick }) {
   })();
 
   const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
-  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail && isVisible);
 
   const iconMap = {
     '3d': <FiBox size={20} className="text-orange-400" />,
@@ -113,6 +134,7 @@ function ThumbnailItem({ file, currentPath, isActive, onClick }) {
 
   return (
     <button
+      ref={itemRef}
       onClick={onClick}
       className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
         isActive ? 'border-blue-500 ring-2 ring-blue-500/40 scale-105' : 'border-gray-700 hover:border-gray-500'
@@ -190,7 +212,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     programmaticScrollRef.current = true;
     const active = stripRef.current.querySelector('[data-active="true"]');
     if (active) {
-      active.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      active.scrollIntoView({ inline: 'center', behavior: 'instant', block: 'nearest' });
     }
     setTimeout(() => {
       programmaticScrollRef.current = false;
