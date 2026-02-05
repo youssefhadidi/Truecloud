@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authCheck';
 import { resolve, join } from 'node:path';
 import fsPromises from 'fs/promises';
-import { Worker } from 'node:worker_threads';
+import { fork } from 'child_process';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -38,26 +38,29 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Directory not found' }, { status: 404 });
     }
 
-    // Spawn worker thread for generation
+    // Spawn child process for generation
     const workerPath = join(process.cwd(), 'lib', 'workers', 'generateCacheWorker.mjs');
-    const worker = new Worker(workerPath, {
-      workerData: {
-        scanDir,
-        targetPath,
-        type,
-        thumbnailDir: THUMBNAIL_DIR,
-        optiCacheDir: OPTI_CACHE_DIR,
-        streamCacheDir: STREAM_CACHE_DIR,
-        heicCacheDir: HEIC_JPEG_CACHE_DIR,
-        cwd: process.cwd(),
-      },
+    const child = fork(workerPath, [], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
 
-    // Create SSE stream that relays worker messages
+    // Send config to child process
+    child.send({
+      scanDir,
+      targetPath,
+      type,
+      thumbnailDir: THUMBNAIL_DIR,
+      optiCacheDir: OPTI_CACHE_DIR,
+      streamCacheDir: STREAM_CACHE_DIR,
+      heicCacheDir: HEIC_JPEG_CACHE_DIR,
+      cwd: process.cwd(),
+    });
+
+    // Create SSE stream that relays child process messages
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        worker.on('message', (data) => {
+        child.on('message', (data) => {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           } catch {
@@ -65,7 +68,7 @@ export async function POST(req) {
           }
         });
 
-        worker.on('error', (err) => {
+        child.on('error', (err) => {
           try {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ status: 'error', message: err.message })}\n\n`)
@@ -76,9 +79,9 @@ export async function POST(req) {
           }
         });
 
-        worker.on('exit', (code) => {
+        child.on('exit', (code) => {
           try {
-            if (code !== 0 && code !== 1) {
+            if (code !== 0 && code !== null) {
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({ status: 'error', message: `Worker exited with code ${code}` })}\n\n`
@@ -92,7 +95,7 @@ export async function POST(req) {
         });
       },
       cancel() {
-        worker.terminate();
+        child.kill();
       },
     });
 
