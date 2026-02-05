@@ -5,17 +5,21 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
-import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import {
+  applyExifRotation,
+  generateImageThumbnail,
+  generateVideoThumbnail,
+  generateHeicThumbnail,
+  generatePdfThumbnail,
+} from '@/lib/thumbnailUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
-const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
 
 // Increase timeout for thumbnail generation (HEIC and PDF processing can be slow)
 export const maxDuration = 60;
@@ -53,186 +57,6 @@ class Semaphore {
 }
 
 const thumbnailSemaphore = new Semaphore(10); // Limited parallelization to prevent resource exhaustion
-
-// Helper function to generate image thumbnails with Sharp
-async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
-  const startTime = Date.now();
-  const isBuffer = Buffer.isBuffer(filePathOrBuffer);
-  const inputType = isBuffer ? 'buffer' : 'file';
-  logger.debug('Starting Sharp thumbnail generation', { type: inputType });
-
-  const sharp = (await import('sharp')).default;
-
-  // Try to process the image with failOnError: false to handle corrupted images
-  await sharp(filePathOrBuffer, {
-    failOnError: false,
-    limitInputPixels: false,
-  })
-    .resize(300, 300, { fit: 'inside' })
-    .webp({ quality: 85 }) // WebP format for better compression
-    .toFile(thumbnailPath);
-
-  const duration = Date.now() - startTime;
-  logger.debug('Sharp thumbnail generated', { type: inputType, duration: `${duration}ms` });
-}
-
-// Helper function to generate video thumbnails with FFmpeg
-async function generateVideoThumbnail(filePath, thumbnailPath) {
-  const startTime = Date.now();
-  logger.debug('Starting FFmpeg thumbnail generation', { filePath });
-
-  const ffmpegArgs = [
-    '-y',
-    '-threads',
-    '1', // Limit threads per process for better parallelization
-    '-ss',
-    '00:00:01.000', // Seek before input for faster processing (skip black frames)
-    '-i',
-    filePath,
-    '-frames:v',
-    '1',
-    '-vf',
-    'scale=200:200:force_original_aspect_ratio=decrease:flags=fast_bilinear', // Fast scaling
-    '-q:v',
-    '80', // WebP quality (0-100, higher = better quality)
-    thumbnailPath,
-  ];
-
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-    let errorOutput = '';
-    let timedOut = false;
-
-    // Set 20 second timeout for videos (optimized FFmpeg should be faster)
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      ffmpeg.kill();
-      const duration = Date.now() - startTime;
-      logger.error('FFmpeg timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('FFmpeg timeout after 20 seconds'));
-    }, 20000);
-
-    ffmpeg.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    ffmpeg.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      if (code === 0) {
-        logger.debug('FFmpeg thumbnail generated', { filePath, duration: `${duration}ms` });
-        resolve();
-      } else {
-        logger.error('FFmpeg failed', { filePath, code, duration: `${duration}ms`, errorOutput });
-        reject(new Error(`FFmpeg exited with code ${code}: ${errorOutput}`));
-      }
-    });
-
-    ffmpeg.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('FFmpeg spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error(`FFmpeg spawn error: ${err.message}`));
-    });
-  });
-}
-
-// Helper function to generate HEIC/HEIF thumbnails from cached JPEG
-async function generateHeicThumbnail(filePath, thumbnailPath, fileId) {
-  const startTime = Date.now();
-  logger.debug('Starting HEIC thumbnail generation', { fileId });
-
-  try {
-    // Get or create cached JPEG version
-    const cachedJpegPath = await getOrConvertHeicToJpeg(filePath, fileId);
-
-    // Generate thumbnail from cached JPEG
-    const sharp = (await import('sharp')).default;
-    await sharp(cachedJpegPath, {
-      failOnError: false,
-      limitInputPixels: false,
-    })
-      .resize(300, 300, { fit: 'inside' })
-      .webp({ quality: 85 })
-      .toFile(thumbnailPath);
-
-    const duration = Date.now() - startTime;
-    logger.debug('HEIC thumbnail generated', { fileId, duration: `${duration}ms` });
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error('HEIC thumbnail generation failed', { fileId, error: error.message, duration: `${duration}ms` });
-    throw new Error(`HEIC thumbnail failed: ${error.message}`);
-  }
-}
-
-// Helper function to generate PDF thumbnails using ghostscript
-async function generatePdfThumbnail(filePath, thumbnailPath) {
-  const startTime = Date.now();
-  logger.debug('Starting PDF thumbnail generation', { filePath });
-
-  // Use JPEG as intermediate instead of PNG, then convert to WebP
-  const jpgPath = thumbnailPath.replace('.webp', '.jpg');
-
-  const gsArgs = ['-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=jpeg', '-dFirstPage=1', '-dLastPage=1', '-r150', `-sOutputFile=${jpgPath}`, filePath];
-
-  return new Promise((resolve, reject) => {
-    const gs = spawn('gs', gsArgs);
-    let errorOutput = '';
-    let timedOut = false;
-
-    // Set 60 second timeout for PDF processing
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      gs.kill();
-      const duration = Date.now() - startTime;
-      logger.error('Ghostscript timeout', { filePath, duration: `${duration}ms` });
-      reject(new Error('Ghostscript timeout after 60 seconds'));
-    }, 60000);
-
-    gs.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    gs.on('close', async (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-
-      if (code !== 0) {
-        const duration = Date.now() - startTime;
-        logger.error('Ghostscript failed', { filePath, code, duration: `${duration}ms`, errorOutput });
-        reject(new Error(`Ghostscript exited with code ${code}: ${errorOutput}`));
-        return;
-      }
-
-      try {
-        // Convert JPEG to WebP
-        const sharp = (await import('sharp')).default;
-        await sharp(jpgPath).resize(300, 300, { fit: 'inside' }).webp({ quality: 85 }).toFile(thumbnailPath);
-
-        // Clean up temporary JPEG
-        await fsPromises.unlink(jpgPath);
-
-        const duration = Date.now() - startTime;
-        logger.debug('PDF thumbnail generated', { filePath, duration: `${duration}ms` });
-        resolve();
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        logger.error('PDF thumbnail Sharp conversion failed', { filePath, error: error.message, duration: `${duration}ms` });
-        reject(new Error(`Sharp conversion failed: ${error.message}`));
-      }
-    });
-
-    gs.on('error', (err) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      const duration = Date.now() - startTime;
-      logger.error('Ghostscript spawn error', { filePath, error: err.message, duration: `${duration}ms` });
-      reject(new Error('Ghostscript is not installed or not in PATH. Install it with: sudo apt-get install ghostscript'));
-    });
-  });
-}
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
@@ -382,45 +206,17 @@ export async function GET(req, { params }) {
           const sharp = (await import('sharp')).default;
 
           try {
-            // Create a single Sharp instance and get metadata in one operation
             let sharpInstance = sharp(filePath, {
               failOnError: false,
               limitInputPixels: false,
             });
 
             const metadata = await sharpInstance.metadata();
+            sharpInstance = applyExifRotation(sharpInstance, metadata);
 
-            // Map EXIF orientation to transformation
-            const orientationRotations = {
-              2: { flop: true },
-              3: { rotate: 180 },
-              4: { flip: true },
-              5: { rotate: 90, flop: true },
-              6: { rotate: 90 },
-              7: { rotate: 270, flop: true },
-              8: { rotate: 270 },
-            };
-
-            const rotation = orientationRotations[metadata.orientation] || null;
-
-            // Apply rotation transformations if needed
-            if (rotation) {
-              if (rotation.rotate) {
-                sharpInstance = sharpInstance.rotate(rotation.rotate);
-              }
-              if (rotation.flip) {
-                sharpInstance = sharpInstance.flip();
-              }
-              if (rotation.flop) {
-                sharpInstance = sharpInstance.flop();
-              }
-            }
-
-            // Convert to buffer with metadata (without original orientation)
             const buffer = await sharpInstance.toBuffer();
             await generateImageThumbnail(buffer, thumbnailPath);
           } catch (error) {
-            // If orientation detection fails, process without rotation
             logger.warn('Orientation detection failed, processing without rotation', { fileId, error: error.message });
             await generateImageThumbnail(filePath, thumbnailPath);
           }

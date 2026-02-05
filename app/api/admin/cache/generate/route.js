@@ -8,6 +8,13 @@ import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { lookup } from 'mime-types';
 import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
+import {
+  applyExifRotation,
+  generateImageThumbnail,
+  generateVideoThumbnail as generateVideoThumb,
+  generateHeicThumbnail as generateHeicThumb,
+  generatePdfThumbnail as generatePdfThumb,
+} from '@/lib/thumbnailUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -112,135 +119,27 @@ async function generateThumbnail(file) {
   // Ensure thumbnails directory exists
   await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
-  const sharp = (await import('sharp')).default;
-
-  if (IMAGE_EXTENSIONS.includes(ext)) {
-    // Regular image
-    let sharpInstance = sharp(file.path, {
-      failOnError: false,
-      limitInputPixels: false,
-    });
-
-    const metadata = await sharpInstance.metadata();
-    const orientationRotations = {
-      2: { flop: true },
-      3: { rotate: 180 },
-      4: { flip: true },
-      5: { rotate: 90, flop: true },
-      6: { rotate: 90 },
-      7: { rotate: 270, flop: true },
-      8: { rotate: 270 },
-    };
-
-    const rotation = orientationRotations[metadata.orientation] || null;
-    if (rotation) {
-      if (rotation.rotate) sharpInstance = sharpInstance.rotate(rotation.rotate);
-      if (rotation.flip) sharpInstance = sharpInstance.flip();
-      if (rotation.flop) sharpInstance = sharpInstance.flop();
+  try {
+    if (IMAGE_EXTENSIONS.includes(ext)) {
+      const sharp = (await import('sharp')).default;
+      let sharpInstance = sharp(file.path, { failOnError: false, limitInputPixels: false });
+      const metadata = await sharpInstance.metadata();
+      sharpInstance = applyExifRotation(sharpInstance, metadata);
+      const buffer = await sharpInstance.toBuffer();
+      await generateImageThumbnail(buffer, thumbnailPath);
+      return { success: true };
+    } else if (HEIC_EXTENSIONS.includes(ext)) {
+      await generateHeicThumb(file.path, thumbnailPath, file.name);
+      return { success: true };
+    } else if (VIDEO_EXTENSIONS.includes(ext)) {
+      await generateVideoThumb(file.path, thumbnailPath, 30000);
+      return { success: true };
+    } else if (PDF_EXTENSIONS.includes(ext)) {
+      await generatePdfThumb(file.path, thumbnailPath);
+      return { success: true };
     }
-
-    const buffer = await sharpInstance.toBuffer();
-    await sharp(buffer, { failOnError: false, limitInputPixels: false })
-      .resize(300, 300, { fit: 'inside' })
-      .webp({ quality: 85 })
-      .toFile(thumbnailPath);
-
-    return { success: true };
-  } else if (HEIC_EXTENSIONS.includes(ext)) {
-    // HEIC image
-    const cachedJpegPath = await getOrConvertHeicToJpeg(file.path, file.name);
-    await sharp(cachedJpegPath, { failOnError: false, limitInputPixels: false })
-      .resize(300, 300, { fit: 'inside' })
-      .webp({ quality: 85 })
-      .toFile(thumbnailPath);
-
-    return { success: true };
-  } else if (VIDEO_EXTENSIONS.includes(ext)) {
-    // Video - use FFmpeg
-    return new Promise((resolve) => {
-      const ffmpegArgs = [
-        '-y',
-        '-threads', '1',
-        '-ss', '00:00:01.000',
-        '-i', file.path,
-        '-frames:v', '1',
-        '-vf', 'scale=200:200:force_original_aspect_ratio=decrease:flags=fast_bilinear',
-        '-q:v', '80',
-        thumbnailPath,
-      ];
-
-      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-      let timedOut = false;
-
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        ffmpeg.kill();
-        resolve({ success: false, error: 'FFmpeg timeout' });
-      }, 30000);
-
-      ffmpeg.on('close', (code) => {
-        clearTimeout(timeout);
-        if (timedOut) return;
-        if (code === 0) {
-          resolve({ success: true });
-        } else {
-          resolve({ success: false, error: `FFmpeg exited with code ${code}` });
-        }
-      });
-
-      ffmpeg.on('error', (err) => {
-        clearTimeout(timeout);
-        if (timedOut) return;
-        resolve({ success: false, error: err.message });
-      });
-    });
-  } else if (PDF_EXTENSIONS.includes(ext)) {
-    // PDF - use Ghostscript
-    const jpgPath = thumbnailPath.replace('.webp', '.jpg');
-
-    return new Promise((resolve) => {
-      const gsArgs = [
-        '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER',
-        '-sDEVICE=jpeg', '-dFirstPage=1', '-dLastPage=1',
-        '-r150', `-sOutputFile=${jpgPath}`, file.path
-      ];
-
-      const gs = spawn('gs', gsArgs);
-      let timedOut = false;
-
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        gs.kill();
-        resolve({ success: false, error: 'Ghostscript timeout' });
-      }, 60000);
-
-      gs.on('close', async (code) => {
-        clearTimeout(timeout);
-        if (timedOut) return;
-
-        if (code !== 0) {
-          resolve({ success: false, error: `Ghostscript exited with code ${code}` });
-          return;
-        }
-
-        try {
-          await sharp(jpgPath)
-            .resize(300, 300, { fit: 'inside' })
-            .webp({ quality: 85 })
-            .toFile(thumbnailPath);
-          await fsPromises.unlink(jpgPath);
-          resolve({ success: true });
-        } catch (err) {
-          resolve({ success: false, error: err.message });
-        }
-      });
-
-      gs.on('error', (err) => {
-        clearTimeout(timeout);
-        if (timedOut) return;
-        resolve({ success: false, error: err.message });
-      });
-    });
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 
   return { skipped: true, reason: 'unsupported' };

@@ -5,8 +5,13 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
-import { spawn } from 'child_process';
-import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
+import {
+  applyExifRotation,
+  generateImageThumbnail,
+  generateVideoThumbnail,
+  generateHeicThumbnail,
+  generatePdfThumbnail,
+} from '@/lib/thumbnailUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = process.env.HEIC_DIR || './heic';
@@ -43,106 +48,6 @@ class Semaphore {
 }
 
 const thumbnailSemaphore = new Semaphore(10);
-
-async function generateImageThumbnail(filePathOrBuffer, thumbnailPath) {
-  const sharp = (await import('sharp')).default;
-  await sharp(filePathOrBuffer, { failOnError: false, limitInputPixels: false })
-    .resize(150, 150, { fit: 'inside' })
-    .webp({ quality: 80 })
-    .toFile(thumbnailPath);
-}
-
-async function generateVideoThumbnail(filePath, thumbnailPath) {
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
-      '-y',
-      '-threads',
-      '1',
-      '-ss',
-      '00:00:01.000',
-      '-i',
-      filePath,
-      '-frames:v',
-      '1',
-      '-vf',
-      'scale=200:200:force_original_aspect_ratio=decrease:flags=fast_bilinear',
-      '-q:v',
-      '80',
-      thumbnailPath,
-    ]);
-
-    const timeout = setTimeout(() => {
-      ffmpeg.kill();
-      reject(new Error('FFmpeg timeout'));
-    }, 20000);
-
-    ffmpeg.on('close', (code) => {
-      clearTimeout(timeout);
-      if (code === 0) resolve();
-      else reject(new Error(`FFmpeg failed with code ${code}`));
-    });
-
-    ffmpeg.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
-}
-
-async function generateHeicThumbnail(filePath, thumbnailPath, fileId) {
-  const cachedJpegPath = await getOrConvertHeicToJpeg(filePath, fileId);
-  const sharp = (await import('sharp')).default;
-  await sharp(cachedJpegPath, { failOnError: false, limitInputPixels: false })
-    .resize(200, 200, { fit: 'inside' })
-    .webp({ quality: 80 })
-    .toFile(thumbnailPath);
-}
-
-async function generatePdfThumbnail(filePath, thumbnailPath) {
-  const jpgPath = thumbnailPath.replace('.webp', '.jpg');
-
-  return new Promise((resolve, reject) => {
-    const gs = spawn('gs', [
-      '-q',
-      '-dNOPAUSE',
-      '-dBATCH',
-      '-dSAFER',
-      '-sDEVICE=jpeg',
-      '-dFirstPage=1',
-      '-dLastPage=1',
-      '-r150',
-      `-sOutputFile=${jpgPath}`,
-      filePath,
-    ]);
-
-    const timeout = setTimeout(() => {
-      gs.kill();
-      reject(new Error('Ghostscript timeout'));
-    }, 60000);
-
-    gs.on('close', async (code) => {
-      clearTimeout(timeout);
-      if (code !== 0) {
-        reject(new Error(`Ghostscript failed with code ${code}`));
-        return;
-      }
-
-      try {
-        const sharp = (await import('sharp')).default;
-        await sharp(jpgPath).resize(200, 200, { fit: 'inside' }).webp({ quality: 90 }).toFile(thumbnailPath);
-        await fsPromises.unlink(jpgPath);
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-
-    gs.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
-}
 
 export async function GET(req, { params }) {
   try {
@@ -263,24 +168,7 @@ export async function GET(req, { params }) {
           try {
             let sharpInstance = sharp(filePath, { failOnError: false, limitInputPixels: false });
             const metadata = await sharpInstance.metadata();
-
-            const orientationRotations = {
-              2: { flop: true },
-              3: { rotate: 180 },
-              4: { flip: true },
-              5: { rotate: 90, flop: true },
-              6: { rotate: 90 },
-              7: { rotate: 270, flop: true },
-              8: { rotate: 270 },
-            };
-
-            const rotation = orientationRotations[metadata.orientation] || null;
-
-            if (rotation) {
-              if (rotation.rotate) sharpInstance = sharpInstance.rotate(rotation.rotate);
-              if (rotation.flip) sharpInstance = sharpInstance.flip();
-              if (rotation.flop) sharpInstance = sharpInstance.flop();
-            }
+            sharpInstance = applyExifRotation(sharpInstance, metadata);
 
             const buffer = await sharpInstance.toBuffer();
             await generateImageThumbnail(buffer, thumbnailPath);
