@@ -8,7 +8,6 @@ import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
-import 'react-virtualized/styles.css';
 
 // Breakpoints
 const BREAKPOINT = {
