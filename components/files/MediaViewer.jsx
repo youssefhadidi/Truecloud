@@ -64,11 +64,11 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
       {/* Thumbnail as placeholder */}
-      {hasThumbnail && (
+      {hasThumbnail && !fullLoaded && (
         <img
           src={thumbnailData.data}
           alt=""
-          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-0' : 'opacity-100'}`}
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
           draggable={false}
         />
       )}
@@ -76,7 +76,7 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
       <img
         src={getFileUrl(file, 'image')}
         alt={file.name}
-        className={`w-full h-full object-contain relative z-10 transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setFullLoaded(true)}
         onError={() => setFullLoaded(true)}
         onClick={(e) => e.stopPropagation()}
