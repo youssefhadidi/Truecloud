@@ -189,7 +189,10 @@ export async function GET(req) {
   }
 }
 
-// DELETE - Delete file or directory
+// Helper to check if a path is in the trash
+const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
+
+// DELETE - Delete file or directory (moves to trash, or permanently deletes if already in trash)
 export async function DELETE(req) {
   const startTime = Date.now();
   try {
@@ -203,6 +206,7 @@ export async function DELETE(req) {
     const { searchParams } = new URL(req.url);
     let relativePath = searchParams.get('path') || '';
     const fileName = searchParams.get('id');
+    const permanent = searchParams.get('permanent') === 'true';
 
     if (!fileName) {
       logger.warn('DELETE /api/files - Missing file name');
@@ -230,12 +234,6 @@ export async function DELETE(req) {
     // Use normalized path
     relativePath = accessCheck.normalizedPath;
 
-    logger.debug('DELETE /api/files - Deleting file', {
-      path: relativePath,
-      fileName,
-      user: session.user.email,
-    });
-
     // Construct file path
     const targetPath = join(UPLOAD_DIR, relativePath, fileName);
 
@@ -253,27 +251,83 @@ export async function DELETE(req) {
     // Check if it's a directory or file
     const stats = await stat(targetPath);
 
-    if (stats.isDirectory()) {
-      // Delete directory recursively
-      const { rm } = await import('fs/promises');
-      await rm(targetPath, { recursive: true, force: true });
-      logger.info('DELETE /api/files - Directory deleted', {
-        fileName,
-        path: relativePath,
-        duration: `${Date.now() - startTime}ms`,
-      });
-    } else {
-      // Delete file
-      const { unlink } = await import('fs/promises');
-      await unlink(targetPath);
-      logger.info('DELETE /api/files - File deleted', {
-        fileName,
-        path: relativePath,
-        duration: `${Date.now() - startTime}ms`,
-      });
-    }
+    // Determine if we should permanently delete or move to trash
+    const inTrash = isInTrash(relativePath);
+    const shouldPermanentDelete = inTrash || permanent;
 
-    return NextResponse.json({ success: true });
+    if (shouldPermanentDelete) {
+      // Permanent delete (already in trash or forced)
+      logger.debug('DELETE /api/files - Permanently deleting', {
+        path: relativePath,
+        fileName,
+        user: session.user.email,
+      });
+
+      if (stats.isDirectory()) {
+        const { rm } = await import('fs/promises');
+        await rm(targetPath, { recursive: true, force: true });
+        logger.info('DELETE /api/files - Directory permanently deleted', {
+          fileName,
+          path: relativePath,
+          duration: `${Date.now() - startTime}ms`,
+        });
+      } else {
+        const { unlink } = await import('fs/promises');
+        await unlink(targetPath);
+        logger.info('DELETE /api/files - File permanently deleted', {
+          fileName,
+          path: relativePath,
+          duration: `${Date.now() - startTime}ms`,
+        });
+      }
+
+      return NextResponse.json({ success: true, permanent: true });
+    } else {
+      // Move to trash (mirror the folder structure)
+      const { rename, mkdir } = await import('fs/promises');
+      const { existsSync } = await import('fs');
+
+      // Construct trash path: /trash/{original_path}/{filename}
+      const trashPath = join(UPLOAD_DIR, 'trash', relativePath, fileName);
+      const trashDir = join(UPLOAD_DIR, 'trash', relativePath);
+
+      // Security: ensure trash path is still within upload dir
+      const resolvedTrashPath = resolve(trashPath) + sep;
+      if (!resolvedTrashPath.startsWith(RESOLVED_UPLOAD_DIR)) {
+        logger.error('DELETE /api/files - Trash path traversal attempt', {
+          fileName,
+          trashPath: resolvedTrashPath,
+          user: session.user.email,
+        });
+        return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+      }
+
+      // Create trash directory structure if it doesn't exist
+      if (!existsSync(trashDir)) {
+        await mkdir(trashDir, { recursive: true });
+      }
+
+      // If file already exists in trash, add timestamp to avoid overwriting
+      let finalTrashPath = trashPath;
+      if (existsSync(trashPath)) {
+        const timestamp = Date.now();
+        const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
+        const nameWithoutExt = ext ? fileName.slice(0, -ext.length) : fileName;
+        finalTrashPath = join(trashDir, `${nameWithoutExt}_${timestamp}${ext}`);
+      }
+
+      // Move file to trash
+      await rename(targetPath, finalTrashPath);
+
+      logger.info('DELETE /api/files - Moved to trash', {
+        fileName,
+        originalPath: relativePath,
+        trashPath: finalTrashPath.replace(UPLOAD_DIR, ''),
+        duration: `${Date.now() - startTime}ms`,
+      });
+
+      return NextResponse.json({ success: true, movedToTrash: true });
+    }
   } catch (error) {
     logger.error('DELETE /api/files - Error deleting file', error);
     logger.error('DELETE /api/files - Request details', {

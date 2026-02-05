@@ -52,6 +52,7 @@ export function useFilesPage(status) {
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [sharingFile, setSharingFile] = useState(null);
+  const [restoringFile, setRestoringFile] = useState(null);
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -217,6 +218,7 @@ export function useFilesPage(status) {
     searchQuery,
     sharingFile,
     sharedPaths,
+    restoringFile,
 
     // Setters
     setViewMode,
@@ -238,6 +240,7 @@ export function useFilesPage(status) {
     setPathHistory,
     setHistoryIndex,
     setSharingFile,
+    setRestoringFile,
 
     // Helpers
     addNotification,

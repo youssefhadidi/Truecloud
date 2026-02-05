@@ -1,6 +1,9 @@
 /** @format */
 
-import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile } from '@/lib/api/files';
+import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
+
+// Helper to check if path is in trash
+const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
 
 export function useFileHandlers({
   currentPath,
@@ -15,6 +18,7 @@ export function useFileHandlers({
   setRenamingFile,
   setNewFileName,
   setSharingFile,
+  setRestoringFile,
 }) {
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
@@ -23,6 +27,7 @@ export function useFileHandlers({
   });
   const deleteMutation = useDeleteFile(currentPath);
   const renameMutation = useRenameFile(currentPath);
+  const restoreMutation = useRestoreFile(currentPath);
 
   // Folder operations
   const initiateCreateFolder = () => {
@@ -126,10 +131,14 @@ export function useFileHandlers({
     }
     setProcessingFile(deletingFile.id);
     deleteMutation.mutate(deletingFile.id, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         setDeletingFile(null);
         setProcessingFile(null);
-        addNotification('success', 'File deleted successfully');
+        if (data.movedToTrash) {
+          addNotification('success', 'Moved to trash');
+        } else {
+          addNotification('success', 'Permanently deleted');
+        }
       },
       onError: (error) => {
         console.error('Delete error:', error);
@@ -204,6 +213,48 @@ export function useFileHandlers({
     setSharingFile(null);
   };
 
+  // Restore operations (for trash)
+  const initiateRestore = (file, closeContextMenu) => {
+    if (!file || !file.id) {
+      console.error('initiateRestore: Invalid file object', file);
+      addNotification('error', 'Cannot restore: Invalid file data');
+      return;
+    }
+    if (setRestoringFile) {
+      setRestoringFile(file);
+    }
+    if (closeContextMenu) closeContextMenu();
+  };
+
+  const cancelRestore = () => {
+    if (setRestoringFile) {
+      setRestoringFile(null);
+    }
+  };
+
+  const confirmRestore = (restoringFile) => {
+    if (!restoringFile || !restoringFile.id) {
+      console.error('confirmRestore: Invalid file object', restoringFile);
+      addNotification('error', 'Cannot restore file: Invalid file data');
+      if (setRestoringFile) setRestoringFile(null);
+      return;
+    }
+    setProcessingFile(restoringFile.id);
+    restoreMutation.mutate(restoringFile.id, {
+      onSuccess: (data) => {
+        if (setRestoringFile) setRestoringFile(null);
+        setProcessingFile(null);
+        addNotification('success', `Restored to ${data.restoredTo || 'original location'}`);
+      },
+      onError: (error) => {
+        console.error('Restore error:', error);
+        addNotification('error', error.message || 'Failed to restore file', 'Restore Error');
+        if (setRestoringFile) setRestoringFile(null);
+        setProcessingFile(null);
+      },
+    });
+  };
+
   return {
     initiateCreateFolder,
     cancelCreateFolder,
@@ -219,5 +270,9 @@ export function useFileHandlers({
     confirmRename,
     initiateShare,
     cancelShare,
+    initiateRestore,
+    cancelRestore,
+    confirmRestore,
+    isInTrash: isInTrash(currentPath),
   };
 }

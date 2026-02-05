@@ -8,7 +8,7 @@ import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function UpdateChecker() {
-  const { data: updateInfo, isLoading } = useCheckUpdates();
+  const { data: updateInfo, isLoading } = useCheckUpdates(true); // Auto-check on first load
   const runUpdateMutation = useRunUpdate();
   const [showConfirm, setShowConfirm] = useState(false);
   const { addNotification } = useNotifications();

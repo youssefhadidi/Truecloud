@@ -343,11 +343,26 @@ export async function GET(req, { params }) {
 
     // Check if thumbnail already exists
     let thumbnailExists = false;
+    let actualThumbnailPath = thumbnailPath;
     try {
       await fsPromises.stat(thumbnailPath);
       thumbnailExists = true;
     } catch {
-      // Doesn't exist yet
+      // If in trash, check if thumbnail exists for the original path (without trash/)
+      const isTrashPath = relativePath === 'trash' || relativePath.startsWith('trash/') || relativePath.startsWith('trash\\');
+      if (isTrashPath) {
+        const originalPath = relativePath.replace(/^trash[/\\]?/, '');
+        const originalThumbnailFileName = `${originalPath.replace(/[/\\]/g, '_')}_${fileId}.webp`;
+        const originalThumbnailPath = join(thumbnailsDir, originalThumbnailFileName);
+        try {
+          await fsPromises.stat(originalThumbnailPath);
+          thumbnailExists = true;
+          actualThumbnailPath = originalThumbnailPath;
+          logger.debug('GET /api/files/thumbnail - Found thumbnail from original path', { fileId, originalPath });
+        } catch {
+          // Doesn't exist yet
+        }
+      }
     }
 
     // If thumbnail doesn't exist, generate it now (synchronously)
@@ -434,7 +449,7 @@ export async function GET(req, { params }) {
     }
 
     // Read thumbnail and convert to base64
-    const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
+    const thumbnailBuffer = await fsPromises.readFile(actualThumbnailPath);
     const base64 = thumbnailBuffer.toString('base64');
     const dataUrl = `data:image/webp;base64,${base64}`;
 
