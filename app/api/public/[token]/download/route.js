@@ -11,6 +11,9 @@ import archiver from 'archiver';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
+// Increase timeout for large folder downloads
+export const maxDuration = 300; // 5 minutes
+
 export async function GET(req, { params }) {
   try {
     const { token } = await params;
@@ -53,33 +56,39 @@ export async function GET(req, { params }) {
 
     const fileStats = await stat(filePath);
 
-    // If it's a directory, create a zip archive
+    // If it's a directory, create a streaming zip archive
     if (fileStats.isDirectory()) {
       const archive = archiver('zip', {
-        zlib: { level: 9 },
+        zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
       });
 
-      const chunks = [];
+      // Create a ReadableStream that pipes from the archive
+      const stream = new ReadableStream({
+        start(controller) {
+          archive.on('data', (chunk) => {
+            controller.enqueue(chunk);
+          });
 
-      const archivePromise = new Promise((resolve, reject) => {
-        archive.on('end', () => resolve());
-        archive.on('error', reject);
+          archive.on('end', () => {
+            controller.close();
+          });
+
+          archive.on('error', (err) => {
+            console.error('Archive error:', err);
+            controller.error(err);
+          });
+
+          // Add directory contents to archive
+          archive.directory(filePath, false);
+          archive.finalize();
+        },
       });
 
-      archive.on('data', (chunk) => chunks.push(chunk));
-
-      archive.directory(filePath, false);
-      archive.finalize();
-
-      await archivePromise;
-
-      const zipBuffer = Buffer.concat(chunks);
-
-      return new NextResponse(zipBuffer, {
+      return new Response(stream, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Length': zipBuffer.length.toString(),
-          'Content-Disposition': `attachment; filename="${basename(share.fileName)}.zip"`,
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(share.fileName))}.zip"`,
+          'Transfer-Encoding': 'chunked',
         },
       });
     }

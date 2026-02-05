@@ -14,6 +14,9 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
+// Track in-progress fixes to avoid duplicate work
+const inProgressFixes = new Map();
+
 // Check if MP4 has moov atom at the beginning (required for streaming)
 async function checkMoovAtom(filePath) {
   return new Promise((resolve) => {
@@ -148,18 +151,30 @@ export async function GET(req, { params }) {
         if (!hasMoovAtStart) {
           logger.info('GET /api/files/stream - MP4 needs moov atom fix', { fileId });
 
-          // Create cache directory
-          await fs.promises.mkdir(cacheDir, { recursive: true });
+          // Check if fix is already in progress
+          if (!inProgressFixes.has(pathHash)) {
+            // Start background fix - don't wait for it
+            inProgressFixes.set(pathHash, true);
 
-          // Fix the MP4 for streaming
-          try {
-            await fixMp4ForStreaming(fullPath, cachedPath);
-            streamPath = cachedPath;
-            logger.info('GET /api/files/stream - Using fixed MP4', { fileId });
-          } catch (err) {
-            logger.error('GET /api/files/stream - Failed to fix MP4, using original', { fileId, error: err.message });
-            // Fall back to original file
+            // Create cache directory and fix in background
+            fs.promises.mkdir(cacheDir, { recursive: true }).then(() => {
+              fixMp4ForStreaming(fullPath, cachedPath)
+                .then(() => {
+                  logger.info('GET /api/files/stream - Background MP4 fix complete', { fileId });
+                })
+                .catch((err) => {
+                  logger.error('GET /api/files/stream - Background MP4 fix failed', { fileId, error: err.message });
+                })
+                .finally(() => {
+                  inProgressFixes.delete(pathHash);
+                });
+            });
+
+            logger.info('GET /api/files/stream - Started background fix, streaming original', { fileId });
+          } else {
+            logger.debug('GET /api/files/stream - Fix already in progress, streaming original', { fileId });
           }
+          // Stream original file immediately (may buffer more but no wait)
         }
       }
     }

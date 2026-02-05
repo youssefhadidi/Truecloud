@@ -7,11 +7,13 @@ import { stat } from 'fs/promises';
 import { join, basename } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
-import { Readable } from 'stream';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+
+// Increase timeout for large folder downloads
+export const maxDuration = 300; // 5 minutes
 
 export async function GET(req, { params }) {
   try {
@@ -56,37 +58,39 @@ export async function GET(req, { params }) {
 
     const fileStats = await stat(filePath);
 
-    // If it's a directory, create a zip archive
+    // If it's a directory, create a streaming zip archive
     if (fileStats.isDirectory()) {
       const archive = archiver('zip', {
-        zlib: { level: 9 }, // Maximum compression
+        zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
       });
 
-      // Collect the archive data
-      const chunks = [];
+      // Create a ReadableStream that pipes from the archive
+      const stream = new ReadableStream({
+        start(controller) {
+          archive.on('data', (chunk) => {
+            controller.enqueue(chunk);
+          });
 
-      // Set up promise before starting archive
-      const archivePromise = new Promise((resolve, reject) => {
-        archive.on('end', () => resolve());
-        archive.on('error', reject);
+          archive.on('end', () => {
+            controller.close();
+          });
+
+          archive.on('error', (err) => {
+            console.error('Archive error:', err);
+            controller.error(err);
+          });
+
+          // Add directory contents to archive
+          archive.directory(filePath, false);
+          archive.finalize();
+        },
       });
 
-      archive.on('data', (chunk) => chunks.push(chunk));
-
-      // Add directory contents to archive
-      archive.directory(filePath, false);
-      archive.finalize();
-
-      // Wait for archive to complete
-      await archivePromise;
-
-      const zipBuffer = Buffer.concat(chunks);
-
-      return new NextResponse(zipBuffer, {
+      return new Response(stream, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Length': zipBuffer.length.toString(),
-          'Content-Disposition': `attachment; filename="${basename(fileName)}.zip"`,
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(fileName))}.zip"`,
+          'Transfer-Encoding': 'chunked',
         },
       });
     }
