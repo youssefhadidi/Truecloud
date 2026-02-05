@@ -364,15 +364,6 @@ export async function POST(req) {
                 successful++;
               } else {
                 failed++;
-                send({
-                  status: 'progress',
-                  processed,
-                  total,
-                  current: file.name,
-                  type: file.generateType,
-                  error: result.error,
-                });
-                continue;
               }
 
               // Send progress every 10 files or at the end
