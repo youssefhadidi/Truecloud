@@ -45,12 +45,12 @@ export async function POST(req) {
     const packages = {
       ffmpeg: 'ffmpeg',
       aria2: 'aria2',
-      libheif: 'libheif1',
       ghostscript: 'ghostscript',
+      'sharp hevc': 'build-essential pkg-config libde265-dev libheif-dev libvips-dev',
     };
 
-    const packageInfo = packages[name.toLowerCase()];
-    if (!packageInfo) {
+    const packageName = packages[name.toLowerCase()];
+    if (!packageName) {
       return NextResponse.json({ error: 'Unknown package' }, { status: 400 });
     }
 
@@ -71,16 +71,25 @@ export async function POST(req) {
       logger.warn('Could not detect OS type');
     }
 
-    const packageName = packages[name.toLowerCase()];
-    if (!packageName) {
-      return NextResponse.json({ error: 'Unknown package' }, { status: 400 });
-    }
-
     // Install the package
     try {
       logger.info('Executing install command for:', { name, packageName });
 
-      await execAsync(`sudo apt-get update && sudo apt-get install -y ${packageName}`);
+      await execAsync(`sudo apt-get update && sudo apt-get install -y ${packageName}`, { timeout: 120000 });
+
+      // Sharp HEVC requires rebuilding sharp from source after installing system libs
+      if (name.toLowerCase() === 'sharp hevc') {
+        logger.info('Rebuilding sharp from source with HEVC support...');
+        const projectDir = process.cwd();
+        await execAsync('npm rebuild sharp --build-from-source', { cwd: projectDir, timeout: 300000 });
+        logger.info('Sharp rebuilt successfully with HEVC support');
+
+        return NextResponse.json({
+          message: 'Sharp HEVC support installed. Restart the application for changes to take effect.',
+          success: true,
+          restartRequired: true,
+        });
+      }
 
       logger.info('Successfully installed:', { name, packageName });
 
@@ -91,11 +100,10 @@ export async function POST(req) {
     } catch (installError) {
       logger.error('Installation error:', { name, error: installError.message });
 
-      // If installation failed but the command ran (sudo issue, permission denied, etc.)
       if (installError.message.includes('sudo')) {
         return NextResponse.json(
           {
-            message: `Installation requires sudo access. Please run: sudo apt-get install -y ${packageName}`,
+            message: `Installation requires sudo access. Run manually: sudo apt-get install -y ${packageName}`,
             error: 'Sudo access required',
           },
           { status: 400 },

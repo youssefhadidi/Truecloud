@@ -62,6 +62,25 @@ function getCommandVersion(command, versionFlag = '--version') {
   });
 }
 
+/**
+ * Check if sharp can decode HEIC/HEIF via HEVC codec
+ */
+async function checkSharpHevcSupport() {
+  try {
+    const sharp = (await import('sharp')).default;
+    const heifInput = sharp.format?.heif?.input;
+    if (!heifInput) return { installed: false, version: 'HEIF not available' };
+    const suffixes = heifInput.fileSuffix || [];
+    const hasHevc = suffixes.includes('.heic') || suffixes.includes('.heif');
+    return {
+      installed: hasHevc,
+      version: `HEIF codecs: ${suffixes.join(', ') || 'none'}`,
+    };
+  } catch {
+    return { installed: false, version: null };
+  }
+}
+
 // List of required system programs (Debian only)
 const REQUIRED_PROGRAMS = [
   {
@@ -79,11 +98,11 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y aria2',
   },
   {
-    name: 'libheif1',
-    command: 'heif-convert',
-    description: 'HEIC/HEIF image format support',
+    name: 'Sharp HEVC',
+    checkType: 'sharp-hevc',
+    description: 'HEIC/HEIF image support (requires libde265 + libheif + libvips)',
     installable: true,
-    installCommand: 'sudo apt-get install -y libheif1',
+    installCommand: 'sudo apt-get install -y build-essential pkg-config libde265-dev libheif-dev libvips-dev',
   },
   {
     name: 'Ghostscript',
@@ -108,11 +127,15 @@ export async function GET(req) {
 
     const requirements = await Promise.all(
       REQUIRED_PROGRAMS.map(async (prog) => {
-        const installed = await checkCommand(prog.command);
-        let version = null;
+        let installed, version;
 
-        if (installed) {
-          version = await getCommandVersion(prog.command);
+        if (prog.checkType === 'sharp-hevc') {
+          const result = await checkSharpHevcSupport();
+          installed = result.installed;
+          version = result.version;
+        } else {
+          installed = await checkCommand(prog.command);
+          version = installed ? await getCommandVersion(prog.command) : null;
         }
 
         return {
