@@ -86,7 +86,7 @@ export async function POST(req) {
         await execAsync(
           `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apt-utils build-essential pkg-config meson ninja-build \
             libde265-dev libheif-dev libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
-            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev libcgif-dev libspng-dev 2>&1`,
+            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
           longOpts,
         );
 
