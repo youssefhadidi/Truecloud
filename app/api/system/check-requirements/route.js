@@ -83,7 +83,7 @@ async function checkSharpHevcSupport() {
       timeout: 10000,
       encoding: 'utf-8',
       cwd: process.cwd(),
-      env: { ...process.env, LD_LIBRARY_PATH: '/usr/local/lib:' + (process.env.LD_LIBRARY_PATH || '') },
+      env: { ...process.env, LD_LIBRARY_PATH: '/usr/local/lib:' + (process.env.LD_LIBRARY_PATH || ''), SHARP_FORCE_GLOBAL_LIBVIPS: '1' },
     });
     return JSON.parse(result.trim());
   } catch {

@@ -11,6 +11,8 @@ Environment="PORT=3000"
 Environment="PATH=/root/.nvm/versions/node/v25.6.0/bin:/usr/bin:/bin"
 Environment="UPLOAD_DIR=/mnt/nextcloud"
 Environment="THUMBNAIL_DIR=/mnt/Truenas/Truecloud/thumbnails"
+Environment="SHARP_FORCE_GLOBAL_LIBVIPS=1"
+Environment="LD_LIBRARY_PATH=/usr/local/lib"
 ExecStart=/root/.nvm/versions/node/v20.10.0/bin/pnpm start
 PrivateMounts=no
 Restart=always
