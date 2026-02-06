@@ -36,10 +36,10 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Directory not found' }, { status: 404 });
     }
 
-    // Spawn child process for generation (dynamic import to bypass Turbopack)
-    const { fork } = await import('child_process');
+    // Spawn child process for generation (spawn avoids Turbopack resolving the worker path)
+    const { spawn } = await import('child_process');
     const workerPath = join(process.cwd(), 'lib', 'workers', 'generateCacheWorker.mjs');
-    const child = fork(workerPath, [], {
+    const child = spawn(process.execPath, [workerPath], {
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
 
