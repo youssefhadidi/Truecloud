@@ -86,7 +86,9 @@ export async function POST(req) {
       if (name.toLowerCase() === 'sharp hevc') {
         logger.info('Rebuilding sharp from source with HEVC support...');
         const projectDir = process.cwd();
-        await execAsync('npm rebuild sharp --build-from-source', { ...execOpts, cwd: projectDir, timeout: 300000 });
+        const rebuildOpts = { ...execOpts, cwd: projectDir, timeout: 300000, env: { ...process.env, SHARP_FORCE_GLOBAL_LIBVIPS: '1' } };
+        // Remove and reinstall sharp so pnpm rebuilds it against the system libvips
+        await execAsync('pnpm remove sharp && pnpm add sharp 2>&1', rebuildOpts);
         logger.info('Sharp rebuilt successfully with HEVC support');
 
         return NextResponse.json({
