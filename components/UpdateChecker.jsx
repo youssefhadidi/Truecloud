@@ -2,16 +2,31 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Confirm from '@/components/Confirm';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
+
+const DISMISSED_VERSION_KEY = 'update_dismissed_version';
 
 export default function UpdateChecker() {
   const { data: updateInfo, isLoading } = useCheckUpdates(true); // Auto-check on first load
   const runUpdateMutation = useRunUpdate();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const { addNotification } = useNotifications();
+
+  useEffect(() => {
+    if (updateInfo?.latestVersion) {
+      const dismissedVersion = localStorage.getItem(DISMISSED_VERSION_KEY);
+      setDismissed(dismissedVersion === updateInfo.latestVersion);
+    }
+  }, [updateInfo]);
+
+  const handleDismiss = () => {
+    localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.latestVersion);
+    setDismissed(true);
+  };
 
   const handleUpdate = async () => {
     try {
@@ -26,13 +41,22 @@ export default function UpdateChecker() {
     }
   };
 
-  if (!updateInfo?.hasUpdate) {
-    return null; // Don't show anything if no update available
+  if (!updateInfo?.hasUpdate || dismissed) {
+    return null;
   }
 
   return (
     <>
       <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 rounded-lg shadow-lg p-4 max-w-sm z-50">
+        <button
+          onClick={handleDismiss}
+          className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 transition-colors"
+          aria-label="Dismiss"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <h3 className="font-semibold text-blue-900">Update Available</h3>

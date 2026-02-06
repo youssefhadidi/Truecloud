@@ -33,6 +33,7 @@ export default function AccountsPage() {
 
   const handleCheckUpdates = async () => {
     try {
+      localStorage.removeItem('update_dismissed_version');
       const result = await checkForUpdates();
       if (result.data && !result.data.hasUpdate) {
         addNotification('info', `You are up to date! (Version ${result.data.currentVersion})`);
