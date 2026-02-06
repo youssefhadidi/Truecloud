@@ -14,6 +14,9 @@ const nextConfig = {
   publicRuntimeConfig: {
     staticFolder: '/mnt/Truenas/truecloud/uploads',
   },
+  outputFileTracingIncludes: {
+    '/api/admin/cache/generate': ['./lib/workers/generateCacheWorker.mjs'],
+  },
   // Increase request body size limit for file uploads (5GB)
   api: {
     bodyParser: {
