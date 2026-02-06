@@ -72,16 +72,21 @@ export async function POST(req) {
     }
 
     // Install the package
+    const execOpts = { timeout: 120000, maxBuffer: 1024 * 1024, env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' } };
+
     try {
       logger.info('Executing install command for:', { name, packageName });
 
-      await execAsync(`sudo apt-get update && sudo apt-get install -y ${packageName}`, { timeout: 120000 });
+      await execAsync(
+        `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apt-utils ${packageName} 2>&1`,
+        execOpts,
+      );
 
       // Sharp HEVC requires rebuilding sharp from source after installing system libs
       if (name.toLowerCase() === 'sharp hevc') {
         logger.info('Rebuilding sharp from source with HEVC support...');
         const projectDir = process.cwd();
-        await execAsync('npm rebuild sharp --build-from-source', { cwd: projectDir, timeout: 300000 });
+        await execAsync('npm rebuild sharp --build-from-source', { ...execOpts, cwd: projectDir, timeout: 300000 });
         logger.info('Sharp rebuilt successfully with HEVC support');
 
         return NextResponse.json({
@@ -98,21 +103,24 @@ export async function POST(req) {
         success: true,
       });
     } catch (installError) {
-      logger.error('Installation error:', { name, error: installError.message });
+      const stderr = installError.stderr?.trim() || '';
+      const stdout = installError.stdout?.trim() || '';
+      logger.error('Installation error:', { name, stderr, stdout, code: installError.code });
 
-      if (installError.message.includes('sudo')) {
+      if (stderr.includes('sudo') || installError.message.includes('sudo')) {
         return NextResponse.json(
           {
-            message: `Installation requires sudo access. Run manually: sudo apt-get install -y ${packageName}`,
+            message: `Sudo access required. Run manually: sudo apt-get install -y ${packageName}`,
             error: 'Sudo access required',
           },
           { status: 400 },
         );
       }
 
+      // Return the actual stderr so the admin can see what failed
       return NextResponse.json(
         {
-          message: `Installation failed: ${installError.message}`,
+          message: `Installation failed: ${stderr || stdout || installError.message}`,
           error: 'Installation error',
         },
         { status: 400 },
