@@ -9,10 +9,8 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import {
-  applyExifRotation,
   generateImageThumbnail,
   generateVideoThumbnail,
-  generateHeicThumbnail,
   generatePdfThumbnail,
 } from '@/lib/thumbnailUtils';
 
@@ -197,29 +195,11 @@ export async function GET(req, { params }) {
       try {
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
-        } else if (isHeic) {
-          await generateHeicThumbnail(filePath, thumbnailPath, fileId);
         } else if (isVideo) {
           await generateVideoThumbnail(filePath, thumbnailPath);
         } else {
-          // Image: auto-rotate based on EXIF orientation
-          const sharp = (await import('sharp')).default;
-
-          try {
-            let sharpInstance = sharp(filePath, {
-              failOnError: false,
-              limitInputPixels: false,
-            });
-
-            const metadata = await sharpInstance.metadata();
-            sharpInstance = applyExifRotation(sharpInstance, metadata);
-
-            const buffer = await sharpInstance.toBuffer();
-            await generateImageThumbnail(buffer, thumbnailPath);
-          } catch (error) {
-            logger.warn('Orientation detection failed, processing without rotation', { fileId, error: error.message });
-            await generateImageThumbnail(filePath, thumbnailPath);
-          }
+          // Image (including HEIC/HEIF): sharp handles all formats + auto-rotation
+          await generateImageThumbnail(filePath, thumbnailPath);
         }
         logger.info('GET /api/files/thumbnail - Generation complete', { fileId });
       } catch (error) {

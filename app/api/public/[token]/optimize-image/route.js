@@ -4,10 +4,9 @@ import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat } from 'fs/promises';
-import { join, resolve, extname, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
-import { getOrConvertHeicToJpeg } from '@/lib/heicUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -86,53 +85,18 @@ export async function GET(req, { params }) {
     }
 
     try {
-      // For HEIC files, use cached JPEG version
-      let optimizePath = filePath;
-      const fileExt = extname(fileName).toLowerCase();
-      const isHeic = fileExt === '.heic' || fileExt === '.heif';
-
-      if (isHeic) {
-        optimizePath = await getOrConvertHeicToJpeg(filePath);
-      }
-
-      // Optimize image using sharp
-      let pipeline = sharp(optimizePath, {
+      // Optimize image using sharp (handles HEIC/HEIF natively via libheif)
+      const optimizedBuffer = await sharp(filePath, {
         failOnError: false,
         limitInputPixels: false,
-      });
-
-      const metadata = await pipeline.metadata();
-
-      // Auto-rotate based on EXIF orientation
-      const orientationRotations = {
-        2: { flop: true },
-        3: { rotate: 180 },
-        4: { flip: true },
-        5: { rotate: 90, flop: true },
-        6: { rotate: 90 },
-        7: { rotate: 270, flop: true },
-        8: { rotate: 270 },
-      };
-
-      const rotation = orientationRotations[metadata.orientation];
-      if (rotation) {
-        if (rotation.rotate) pipeline = pipeline.rotate(rotation.rotate);
-        if (rotation.flip) pipeline = pipeline.flip();
-        if (rotation.flop) pipeline = pipeline.flop();
-      }
-
-      // Resize if needed
-      const shouldResize = metadata.width > maxWidth || metadata.height > maxHeight;
-
-      if (shouldResize) {
-        pipeline = pipeline.resize(maxWidth, maxHeight, {
+      })
+        .rotate()
+        .resize(maxWidth, maxHeight, {
           fit: 'inside',
           withoutEnlargement: true,
-        });
-      }
-
-      // Convert to WebP for better compression
-      const optimizedBuffer = await pipeline.toFormat('webp', { quality }).toBuffer();
+        })
+        .webp({ quality })
+        .toBuffer();
 
       return new NextResponse(optimizedBuffer, {
         headers: {

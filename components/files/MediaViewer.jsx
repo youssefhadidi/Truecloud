@@ -157,19 +157,9 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const scrollTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
 
-  // Helper to check if file is HEIC
-  const isHeic = (fileName) => {
-    const ext = fileName.toLowerCase();
-    return ext.endsWith('.heic') || ext.endsWith('.heif');
-  };
-
   // Helper to build download URL
   const getFileUrl = (file, type) => {
-    // Use conversion endpoint for HEIC files
-    if (type === 'image' && isHeic(file.name)) {
-      return `/api/files/convert-heic?id=${encodeURIComponent(file.name)}&path=${encodeURIComponent(currentPath)}`;
-    }
-    // Use optimization endpoint for images for faster loading
+    // Use optimization endpoint for all images (sharp handles HEIC/HEIF natively)
     if (type === 'image') {
       return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
     }

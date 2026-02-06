@@ -6,10 +6,8 @@ import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import {
-  applyExifRotation,
   generateImageThumbnail,
   generateVideoThumbnail,
-  generateHeicThumbnail,
   generatePdfThumbnail,
 } from '@/lib/thumbnailUtils';
 
@@ -159,22 +157,11 @@ export async function GET(req, { params }) {
       try {
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
-        } else if (isHeic) {
-          await generateHeicThumbnail(filePath, thumbnailPath, fileName);
         } else if (isVideo) {
           await generateVideoThumbnail(filePath, thumbnailPath);
         } else {
-          const sharp = (await import('sharp')).default;
-          try {
-            let sharpInstance = sharp(filePath, { failOnError: false, limitInputPixels: false });
-            const metadata = await sharpInstance.metadata();
-            sharpInstance = applyExifRotation(sharpInstance, metadata);
-
-            const buffer = await sharpInstance.toBuffer();
-            await generateImageThumbnail(buffer, thumbnailPath);
-          } catch {
-            await generateImageThumbnail(filePath, thumbnailPath);
-          }
+          // Image (including HEIC/HEIF): sharp handles all formats + auto-rotation
+          await generateImageThumbnail(filePath, thumbnailPath);
         }
       } catch (error) {
         return NextResponse.json({ error: 'Thumbnail generation failed', details: error.message }, { status: 500 });
