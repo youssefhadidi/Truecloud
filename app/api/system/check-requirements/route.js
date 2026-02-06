@@ -64,18 +64,27 @@ function getCommandVersion(command, versionFlag = '--version') {
 
 /**
  * Check if sharp can decode HEIC/HEIF via HEVC codec
+ * Uses a subprocess to avoid Node.js module cache returning stale results
  */
 async function checkSharpHevcSupport() {
   try {
-    const sharp = (await import('sharp')).default;
-    const heifInput = sharp.format?.heif?.input;
-    if (!heifInput) return { installed: false, version: 'HEIF not available' };
-    const suffixes = heifInput.fileSuffix || [];
-    const hasHevc = suffixes.includes('.heic') || suffixes.includes('.heif');
-    return {
-      installed: hasHevc,
-      version: `HEIF codecs: ${suffixes.join(', ') || 'none'}`,
-    };
+    const { execSync } = await import('child_process');
+    const script = `
+      const sharp = require('sharp');
+      const heif = sharp.format && sharp.format.heif && sharp.format.heif.input;
+      if (!heif) { process.stdout.write(JSON.stringify({ installed: false, version: 'HEIF not available' })); }
+      else {
+        const s = heif.fileSuffix || [];
+        const ok = s.includes('.heic') || s.includes('.heif');
+        process.stdout.write(JSON.stringify({ installed: ok, version: 'HEIF codecs: ' + (s.join(', ') || 'none') }));
+      }
+    `;
+    const result = execSync(`node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
+      timeout: 10000,
+      encoding: 'utf-8',
+      cwd: process.cwd(),
+    });
+    return JSON.parse(result.trim());
   } catch {
     return { installed: false, version: null };
   }
