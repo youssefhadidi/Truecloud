@@ -77,85 +77,101 @@ export async function POST(req) {
     try {
       logger.info('Executing install command for:', { name, packageName });
 
-      // Sharp HEVC requires building libvips from source with HEIF/HEVC support
+      // Sharp HEVC requires building libde265 + libheif + libvips from source
       if (name.toLowerCase() === 'sharp hevc') {
         const projectDir = process.cwd();
         const longOpts = { ...execOpts, timeout: 600000 };
         const arch = (await execAsync('dpkg --print-architecture 2>/dev/null || echo amd64')).stdout.trim();
-        const pkgConfigPath = `/usr/local/lib/pkgconfig:/usr/local/lib/${arch === 'arm64' ? 'aarch64' : 'x86_64'}-linux-gnu/pkgconfig:/usr/lib/${arch === 'arm64' ? 'aarch64' : 'x86_64'}-linux-gnu/pkgconfig:${process.env.PKG_CONFIG_PATH || ''}`;
+        const triplet = arch === 'arm64' ? 'aarch64-linux-gnu' : 'x86_64-linux-gnu';
+        const pkgConfigPath = `/usr/local/lib/pkgconfig:/usr/local/lib/${triplet}/pkgconfig:/usr/lib/${triplet}/pkgconfig:${process.env.PKG_CONFIG_PATH || ''}`;
         const ldPath = `/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
         const buildEnv = { ...process.env, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
-        logger.info('Step 1/4: Installing build dependencies for libvips with HEIF/HEVC...');
+        // Step 1: Install build dependencies
+        logger.info('Step 1/6: Installing build dependencies...');
         await execAsync(
-          `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apt-utils build-essential pkg-config meson ninja-build \
-            libde265-dev libheif-dev libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
+          `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            apt-utils build-essential pkg-config cmake meson ninja-build \
+            libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
             libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
           longOpts,
         );
 
-        // Check if libvips already exists with heif support
-        let needsVipsBuild = true;
+        // Step 2: Build libde265 from source (HEVC decoder)
+        const de265Dir = '/tmp/libde265-build';
+        logger.info('Step 2/6: Building libde265 (HEVC decoder) from source...');
+        await execAsync(
+          `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
+          curl -sSL https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
+          tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.15 && \
+          mkdir build && cd build && \
+          cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. 2>&1 && \
+          make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
+          { ...longOpts, env: buildEnv },
+        );
+        logger.info('libde265 built successfully');
+
+        // Step 3: Build libheif from source (needs newer version than system's 1.11.0)
+        const heifDir = '/tmp/libheif-build';
+        logger.info('Step 3/6: Building libheif from source with HEVC support...');
+        await execAsync(
+          `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
+          curl -sSL https://github.com/strukturag/libheif/releases/download/v1.17.6/libheif-1.17.6.tar.gz -o libheif.tar.gz 2>&1 && \
+          tar xzf libheif.tar.gz 2>&1 && cd libheif-1.17.6 && \
+          mkdir build && cd build && \
+          cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
+            -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF .. 2>&1 && \
+          make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
+          { ...longOpts, env: buildEnv },
+        );
+
+        // Verify libheif was installed
         try {
-          const { stdout: vipsVer } = await execAsync('pkg-config --modversion vips 2>/dev/null || echo 0.0.0', { env: buildEnv });
-          const [major, minor] = vipsVer.trim().split('.').map(Number);
-          if (major >= 8 && minor >= 15) {
-            // Version is good, but check if heif is actually enabled
-            const { stdout: heifCheck } = await execAsync('vips -l 2>&1 | grep -i heifload || true', { env: buildEnv });
-            if (heifCheck.trim().length > 0) {
-              logger.info(`System libvips ${vipsVer.trim()} already has HEIF support`);
-              needsVipsBuild = false;
-            } else {
-              logger.info(`System libvips ${vipsVer.trim()} lacks HEIF support, rebuilding...`);
-            }
-          }
-        } catch {}
-
-        if (needsVipsBuild) {
-          // Verify libheif is detectable by pkg-config
-          try {
-            const { stdout: heifVer } = await execAsync('pkg-config --modversion libheif 2>&1', { env: buildEnv });
-            logger.info(`Found libheif version: ${heifVer.trim()}`);
-          } catch {
-            logger.error('libheif not found by pkg-config! HEIF support will fail.');
-          }
-
-          const VIPS_VERSION = '8.16.0';
-          const buildDir = '/tmp/libvips-build';
-
-          logger.info('Step 2/4: Downloading libvips source...');
-          await execAsync(
-            `rm -rf ${buildDir} && mkdir -p ${buildDir} && cd ${buildDir} && \
-            curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
-            longOpts,
-          );
-
-          logger.info('Step 3/4: Building libvips with HEIF support (this may take a few minutes)...');
-          // Use -Dheif=enabled to force heif — meson will error if libheif is not found
-          await execAsync(
-            `cd ${buildDir}/vips-${VIPS_VERSION} && \
-            PKG_CONFIG_PATH="${pkgConfigPath}" meson setup build --prefix=/usr/local --buildtype=release \
-              -Dintrospection=disabled -Dheif=enabled 2>&1 && \
-            cd build && ninja 2>&1 && sudo ninja install 2>&1 && \
-            sudo ldconfig 2>&1`,
-            { ...longOpts, timeout: 900000, env: buildEnv },
-          );
-
-          // Verify libvips has heif support
-          try {
-            const { stdout } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF"');
-            logger.info(`libvips heif verification: ${stdout.trim()}`);
-            if (stdout.includes('NO HEIF')) {
-              logger.error('libvips was built but HEIF support is still missing!');
-            }
-          } catch {}
-
-          await execAsync(`rm -rf ${buildDir} 2>&1`).catch(() => {});
-        } else {
-          logger.info('Steps 2-3/4: Skipped (libvips already has HEIF support)');
+          const { stdout: heifVer } = await execAsync('PKG_CONFIG_PATH="' + pkgConfigPath + '" pkg-config --modversion libheif 2>&1');
+          logger.info(`libheif installed: ${heifVer.trim()}`);
+        } catch (e) {
+          logger.error('libheif pkg-config check failed:', e.message);
         }
 
-        logger.info('Step 4/4: Rebuilding sharp with system libvips...');
+        // Step 4: Build libvips from source
+        const VIPS_VERSION = '8.16.0';
+        const vipsDir = '/tmp/libvips-build';
+
+        logger.info('Step 4/6: Downloading libvips source...');
+        await execAsync(
+          `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
+          curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
+          longOpts,
+        );
+
+        logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
+        // Run meson setup separately and log the output for diagnostics
+        const mesonResult = await execAsync(
+          `cd ${vipsDir}/vips-${VIPS_VERSION} && \
+          PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
+          meson setup build --prefix=/usr/local --buildtype=release \
+            -Dintrospection=disabled -Dheif=enabled 2>&1`,
+          { ...longOpts, env: buildEnv },
+        );
+        logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
+
+        await execAsync(
+          `cd ${vipsDir}/vips-${VIPS_VERSION}/build && \
+          ninja 2>&1 && sudo ninja install 2>&1 && sudo ldconfig 2>&1`,
+          { ...longOpts, timeout: 900000, env: buildEnv },
+        );
+
+        // Verify libvips has heif
+        try {
+          const { stdout } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"');
+          logger.info(`libvips heif verification: ${stdout.trim()}`);
+        } catch {}
+
+        // Cleanup build dirs
+        await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
+
+        // Step 6: Rebuild sharp
+        logger.info('Step 6/6: Rebuilding sharp with system libvips...');
         const rebuildOpts = {
           ...longOpts,
           cwd: projectDir,
