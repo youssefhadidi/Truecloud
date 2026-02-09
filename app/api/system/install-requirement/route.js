@@ -144,7 +144,7 @@ export async function POST(req) {
           logger.info(`Step 2/6: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
           await execAsync(
             `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
-            curl -sSL https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
+            curl -fsSL --retry 3 https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
             tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.15 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. 2>&1 && \
@@ -166,7 +166,7 @@ export async function POST(req) {
           // Version OK, but check if libde265 is linked IN (not a plugin)
           try {
             const { stdout: lddHeif } = await execAsync(
-              `ldd $(find /usr/local/lib -name "libheif.so.1" -type f 2>/dev/null | head -1) 2>/dev/null | grep -q de265 && echo "BUILTIN" || echo "PLUGIN"`,
+              `ldd $(find /usr/local/lib -name "libheif.so.1" \\( -type f -o -type l \\) 2>/dev/null | head -1) 2>/dev/null | grep -q de265 && echo "BUILTIN" || echo "PLUGIN"`,
               { env: buildEnv },
             );
             heifHasBuiltinDe265 = lddHeif.trim() === 'BUILTIN';
@@ -181,7 +181,7 @@ export async function POST(req) {
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
-            curl -sSL https://github.com/strukturag/libheif/releases/download/v1.19.8/libheif-1.19.8.tar.gz -o libheif.tar.gz 2>&1 && \
+            curl -fsSL --retry 3 https://github.com/strukturag/libheif/releases/download/v1.19.8/libheif-1.19.8.tar.gz -o libheif.tar.gz 2>&1 && \
             tar xzf libheif.tar.gz 2>&1 && cd libheif-1.19.8 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
@@ -227,7 +227,7 @@ export async function POST(req) {
           }
           await execAsync(
             `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
-            curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
+            curl -fsSL --retry 3 https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
             longOpts,
           );
 
