@@ -11,6 +11,41 @@ const execAsync = promisify(exec);
 // Only available on Linux systems
 const isLinux = process.platform === 'linux';
 
+// Minimum required versions for HEVC support
+const MIN_VERSIONS = {
+  libde265: '1.0.15',
+  libheif: '1.17.0',
+  vips: '8.15.3',
+};
+
+/**
+ * Compare two semver-like version strings (e.g. "1.0.15" vs "1.0.12")
+ * Returns true if `current` >= `required`
+ */
+function versionSatisfies(current, required) {
+  const c = current.split('.').map(Number);
+  const r = required.split('.').map(Number);
+  for (let i = 0; i < Math.max(c.length, r.length); i++) {
+    const cv = c[i] || 0;
+    const rv = r[i] || 0;
+    if (cv > rv) return true;
+    if (cv < rv) return false;
+  }
+  return true; // equal
+}
+
+/**
+ * Get the installed version of a pkg-config package, or null if not found
+ */
+async function getPkgVersion(pkg, env) {
+  try {
+    const { stdout } = await execAsync(`pkg-config --modversion ${pkg} 2>/dev/null`, { env, timeout: 5000 });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req) {
   try {
     const session = await auth();
@@ -97,80 +132,97 @@ export async function POST(req) {
           longOpts,
         );
 
-        // Step 2: Build libde265 from source (HEVC decoder)
+        // Step 2: Build libde265 if needed (HEVC decoder)
         const de265Dir = '/tmp/libde265-build';
-        logger.info('Step 2/6: Building libde265 (HEVC decoder) from source...');
-        await execAsync(
-          `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
-          curl -sSL https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
-          tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.15 && \
-          mkdir build && cd build && \
-          cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. 2>&1 && \
-          make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
-          { ...longOpts, env: buildEnv },
-        );
-        logger.info('libde265 built successfully');
-
-        // Step 3: Build libheif from source (needs newer version than system's 1.11.0)
-        const heifDir = '/tmp/libheif-build';
-        logger.info('Step 3/6: Building libheif from source with HEVC support...');
-        await execAsync(
-          `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
-          curl -sSL https://github.com/strukturag/libheif/releases/download/v1.17.6/libheif-1.17.6.tar.gz -o libheif.tar.gz 2>&1 && \
-          tar xzf libheif.tar.gz 2>&1 && cd libheif-1.17.6 && \
-          mkdir build && cd build && \
-          cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF .. 2>&1 && \
-          make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
-          { ...longOpts, env: buildEnv },
-        );
-
-        // Verify libheif was installed
-        try {
-          const { stdout: heifVer } = await execAsync('PKG_CONFIG_PATH="' + pkgConfigPath + '" pkg-config --modversion libheif 2>&1');
-          logger.info(`libheif installed: ${heifVer.trim()}`);
-        } catch (e) {
-          logger.error('libheif pkg-config check failed:', e.message);
+        const de265Ver = await getPkgVersion('libde265', buildEnv);
+        if (de265Ver && versionSatisfies(de265Ver, MIN_VERSIONS.libde265)) {
+          logger.info(`Step 2/6: Skipped — libde265 ${de265Ver} >= ${MIN_VERSIONS.libde265}`);
+        } else {
+          logger.info(`Step 2/6: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
+          await execAsync(
+            `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
+            curl -sSL https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
+            tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.15 && \
+            mkdir build && cd build && \
+            cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. 2>&1 && \
+            make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
+            { ...longOpts, env: buildEnv },
+          );
+          logger.info('libde265 built successfully');
         }
 
-        // Step 4: Build libvips from source
+        // Step 3: Build libheif if needed
+        const heifDir = '/tmp/libheif-build';
+        const heifVer = await getPkgVersion('libheif', buildEnv);
+        if (heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif)) {
+          logger.info(`Step 3/6: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif}`);
+        } else {
+          logger.info(`Step 3/6: Building libheif from source (current: ${heifVer || 'not found'}, need >= ${MIN_VERSIONS.libheif})...`);
+          await execAsync(
+            `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
+            curl -sSL https://github.com/strukturag/libheif/releases/download/v1.17.6/libheif-1.17.6.tar.gz -o libheif.tar.gz 2>&1 && \
+            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.17.6 && \
+            mkdir build && cd build && \
+            cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
+              -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF .. 2>&1 && \
+            make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
+            { ...longOpts, env: buildEnv },
+          );
+          // Verify
+          const newHeifVer = await getPkgVersion('libheif', buildEnv);
+          logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
+        }
+
+        // Step 4-5: Build libvips if needed or if it lacks heif support
         const VIPS_VERSION = '8.16.0';
         const vipsDir = '/tmp/libvips-build';
+        const vipsVer = await getPkgVersion('vips', buildEnv);
+        let vipsHasHeif = false;
+        if (vipsVer && versionSatisfies(vipsVer, MIN_VERSIONS.vips)) {
+          // Version is sufficient, check if HEIF is actually enabled
+          try {
+            const { stdout: heifCheck } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" vips -l 2>&1 | grep -i heifload || true', { env: buildEnv });
+            vipsHasHeif = heifCheck.trim().length > 0;
+          } catch {}
+        }
 
-        logger.info('Step 4/6: Downloading libvips source...');
-        await execAsync(
-          `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
-          curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
-          longOpts,
-        );
+        if (vipsHasHeif) {
+          logger.info(`Steps 4-5/6: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
+        } else {
+          logger.info(`Step 4/6: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
+          await execAsync(
+            `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
+            curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
+            longOpts,
+          );
 
-        logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
-        // Run meson setup separately and log the output for diagnostics
-        const mesonResult = await execAsync(
-          `cd ${vipsDir}/vips-${VIPS_VERSION} && \
-          PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
-          meson setup build --prefix=/usr/local --buildtype=release \
-            -Dintrospection=disabled -Dheif=enabled 2>&1`,
-          { ...longOpts, env: buildEnv },
-        );
-        logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
+          logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
+          const mesonResult = await execAsync(
+            `cd ${vipsDir}/vips-${VIPS_VERSION} && \
+            PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
+            meson setup build --prefix=/usr/local --buildtype=release \
+              -Dintrospection=disabled -Dheif=enabled 2>&1`,
+            { ...longOpts, env: buildEnv },
+          );
+          logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
 
-        await execAsync(
-          `cd ${vipsDir}/vips-${VIPS_VERSION}/build && \
-          ninja 2>&1 && sudo ninja install 2>&1 && sudo ldconfig 2>&1`,
-          { ...longOpts, timeout: 900000, env: buildEnv },
-        );
+          await execAsync(
+            `cd ${vipsDir}/vips-${VIPS_VERSION}/build && \
+            ninja 2>&1 && sudo ninja install 2>&1 && sudo ldconfig 2>&1`,
+            { ...longOpts, timeout: 900000, env: buildEnv },
+          );
 
-        // Verify libvips has heif
-        try {
-          const { stdout } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"');
-          logger.info(`libvips heif verification: ${stdout.trim()}`);
-        } catch {}
+          // Verify libvips has heif
+          try {
+            const { stdout } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"');
+            logger.info(`libvips heif verification: ${stdout.trim()}`);
+          } catch {}
+        }
 
         // Cleanup build dirs
         await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
-        // Step 6: Rebuild sharp
+        // Step 6: Rebuild sharp with system libvips
         logger.info('Step 6/6: Rebuilding sharp with system libvips...');
         const rebuildOpts = {
           ...longOpts,
@@ -181,11 +233,36 @@ export async function POST(req) {
             npm_config_sharp_force_global_libvips: '1',
           },
         };
-        // Clear any cached prebuilt binaries and @img platform packages
-        await execAsync('rm -rf node_modules/.pnpm/sharp@*/node_modules/sharp/build 2>&1; rm -rf node_modules/.pnpm/@img* 2>&1; rm -rf node_modules/@img 2>&1', {
-          cwd: projectDir,
-        }).catch(() => {});
-        await execAsync('pnpm remove sharp 2>&1 && pnpm add sharp 2>&1', rebuildOpts);
+
+        // Install sharp (this will also pull @img prebuilt packages)
+        await execAsync('pnpm remove sharp 2>&1 || true', rebuildOpts);
+        await execAsync('pnpm add sharp 2>&1', rebuildOpts);
+
+        // Remove the @img prebuilt packages AFTER install so sharp falls back to system libvips
+        // pnpm stores them in .pnpm/@img+sharp-* symlinked from node_modules/@img/
+        await execAsync(
+          `find node_modules -path "*/@img/sharp-*/sharp.node" -delete 2>&1; \
+           find node_modules -path "*/@img/sharp-*/lib" -type d -exec rm -rf {} + 2>&1; \
+           rm -rf node_modules/.pnpm/@img+sharp-*/node_modules/@img/*/build 2>&1`,
+          { cwd: projectDir },
+        ).catch(() => {});
+        logger.info('Removed @img prebuilt binaries');
+
+        // Now rebuild sharp's native addon from source against system libvips
+        // Find sharp's actual location in the pnpm store
+        const { stdout: sharpDir } = await execAsync(`find node_modules/.pnpm -maxdepth 4 -name "sharp" -path "*/node_modules/sharp" -type d | head -1 2>&1`, { cwd: projectDir });
+        const sharpPath = sharpDir.trim();
+        if (sharpPath) {
+          logger.info(`Found sharp at: ${sharpPath}, rebuilding native addon...`);
+          await execAsync(`cd "${projectDir}/${sharpPath}" && npm run build 2>&1`, { ...rebuildOpts, cwd: `${projectDir}/${sharpPath}` }).catch(async (buildErr) => {
+            // Fallback: try node-gyp rebuild directly
+            logger.warn('npm run build failed, trying node-gyp rebuild:', buildErr.message?.slice(0, 200));
+            await execAsync(`cd "${projectDir}/${sharpPath}" && npx node-gyp rebuild 2>&1`, rebuildOpts);
+          });
+          logger.info('Sharp native addon rebuilt from source');
+        } else {
+          logger.error('Could not find sharp directory in node_modules');
+        }
 
         // Write env vars to .env.local so they persist across restarts
         const envFile = `${projectDir}/.env.local`;
@@ -227,10 +304,11 @@ export async function POST(req) {
         // Verify sharp has HEVC support
         let hevcWorking = false;
         try {
-          const { stdout: verifyResult } = await execAsync(
-            `LD_LIBRARY_PATH="/usr/local/lib" node -e "const s=require('sharp');const h=s.format?.heif?.input;console.log(JSON.stringify(h?.fileSuffix||[]))" 2>&1`,
-            { ...longOpts, cwd: projectDir, env: buildEnv },
-          );
+          const { stdout: verifyResult } = await execAsync(`node -e "const s=require('sharp');const h=s.format?.heif?.input;console.log(JSON.stringify(h?.fileSuffix||[]))" 2>&1`, {
+            ...longOpts,
+            cwd: projectDir,
+            env: { ...buildEnv, SHARP_FORCE_GLOBAL_LIBVIPS: '1' },
+          });
           hevcWorking = verifyResult.includes('.heic');
           logger.info('Sharp HEIF verification:', verifyResult.trim());
         } catch (e) {
