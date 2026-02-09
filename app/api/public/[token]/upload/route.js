@@ -5,7 +5,6 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 
 export const maxDuration = 1800;
@@ -74,7 +73,7 @@ export async function POST(req, { params }) {
       });
 
       busboy.on('file', async (_fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
-        const name = decodeURIComponent(filename || '') || 'unknown';
+        const name = filename || 'unknown';
         const mime = fileMimeType || 'application/octet-stream';
         writtenFilePath = join(targetDir, name);
 
@@ -111,8 +110,8 @@ export async function POST(req, { params }) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      const nodeStream = Readable.fromWeb(req.body);
-      nodeStream.pipe(busboy);
+      // Pipe the Web ReadableStream directly to busboy
+      req.body.pipeTo(busboy);
     });
 
     await fileHandle.close();

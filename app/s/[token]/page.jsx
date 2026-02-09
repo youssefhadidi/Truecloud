@@ -398,13 +398,13 @@ export default function SharePage({ params }) {
 
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).slice(2);
 
-    // Build multipart body manually with proper \r\n line endings
+    // Build multipart body per RFC 1341
     const headerParts = [
       `--${boundary}\r\n`,
       `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n`,
       `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
     ];
-    const footer = `\r\n--${boundary}--`;
+    const footer = `\r\n--${boundary}--\r\n`;
 
     headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
 
