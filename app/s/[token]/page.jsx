@@ -401,7 +401,7 @@ export default function SharePage({ params }) {
     // Build multipart body manually with proper \r\n line endings
     const headerParts = [
       `--${boundary}\r\n`,
-      `Content-Disposition: form-data; name="file"; filename="${encodeURIComponent(file.name)}"\r\n`,
+      `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n`,
       `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
     ];
     const footer = `\r\n--${boundary}--`;
