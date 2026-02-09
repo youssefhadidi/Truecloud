@@ -90,7 +90,6 @@ export async function POST(req) {
     }
 
     // Parse multipart FormData via busboy — streams file directly to disk
-    const reader = req.body.getReader();
     const { size, mimeType } = await new Promise((resolve, reject) => {
       let resolved = false;
       const busboy = Busboy({
@@ -136,21 +135,8 @@ export async function POST(req) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      // Manually pump Web ReadableStream into busboy
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              busboy.end();
-              return;
-            }
-            busboy.write(value);
-          }
-        } catch (err) {
-          busboy.destroy(err);
-        }
-      })();
+      // req.body is already a Node.js Readable stream in Next.js
+      req.body.pipe(busboy);
     });
 
     await fileHandle.close();
