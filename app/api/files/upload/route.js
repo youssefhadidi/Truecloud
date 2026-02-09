@@ -130,6 +130,14 @@ export async function POST(req) {
       bytesMatch: bodyBuffer.length === parseInt(contentLength),
     });
 
+    // Log first 2000 characters of body to inspect structure
+    const bodyString = bodyBuffer.toString('utf-8', 0, Math.min(2000, bodyBuffer.length));
+    logger.info('DEBUG: First 2000 chars of body:', { preview: bodyString });
+
+    // Log last 500 chars too to see closing boundary
+    const bodyStringEnd = bodyBuffer.length > 500 ? bodyBuffer.toString('utf-8', Math.max(0, bodyBuffer.length - 500)) : '';
+    logger.info('DEBUG: Last 500 chars of body:', { preview: bodyStringEnd });
+
     // Create Node.js Readable from Buffer
     logger.info('DEBUG: Creating Readable from Buffer');
     const nodeReadable = Readable.from([bodyBuffer]);
