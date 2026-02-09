@@ -110,8 +110,23 @@ export async function POST(req, { params }) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      // Pipe the Web ReadableStream directly to busboy
-      req.body.pipeTo(busboy);
+      // Pump Web ReadableStream to busboy manually (busboy requires Node.js stream protocol)
+      const reader = req.body.getReader();
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              busboy.end();
+              break;
+            }
+            busboy.write(Buffer.from(value));
+          }
+        } catch (err) {
+          busboy.destroy(err);
+          reject(err);
+        }
+      })();
     });
 
     await fileHandle.close();
