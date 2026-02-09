@@ -2,10 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
-import { mkdir, unlink } from 'fs/promises';
-import { existsSync, createWriteStream } from 'fs';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import Busboy from 'busboy';
 
 export const maxDuration = 1800;
 
@@ -60,99 +59,35 @@ export async function POST(req, { params }) {
       await mkdir(targetDir, { recursive: true });
     }
 
-    // Parse multipart upload with busboy — streams file data directly to disk
-    const contentType = req.headers.get('content-type') || '';
-    const result = await new Promise((resolvePromise, rejectPromise) => {
-      let fileInfo = null;
-      let fileProcessed = false;
+    // Use Next.js native formData() parsing — handles multipart reliably
+    const formData = await req.formData();
+    const file = formData.get('file');
 
-      const bb = Busboy({
-        headers: { 'content-type': contentType },
-        limits: { files: 1 },
-      });
+    if (!file || typeof file === 'string') {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
 
-      bb.on('file', (fieldName, stream, { filename, mimeType }) => {
-        if (fileProcessed) {
-          stream.resume(); // Discard extra files
-          return;
-        }
-        fileProcessed = true;
+    const fileName = file.name || 'unknown';
+    writtenFilePath = join(targetDir, fileName);
 
-        const fileName = filename || 'unknown';
-        writtenFilePath = join(targetDir, fileName);
-        let size = 0;
+    // Write file to disk
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await writeFile(writtenFilePath, buffer);
 
-        const ws = createWriteStream(writtenFilePath);
-
-        ws.on('error', (err) => {
-          stream.resume();
-          rejectPromise(err);
-        });
-
-        stream.on('data', (chunk) => {
-          size += chunk.length;
-        });
-
-        stream.pipe(ws);
-
-        stream.on('end', () => {
-          fileInfo = { name: fileName, size, mimeType: mimeType || 'application/octet-stream' };
-        });
-
-        stream.on('error', (err) => {
-          ws.destroy();
-          rejectPromise(err);
-        });
-      });
-
-      bb.on('finish', () => {
-        if (!fileInfo) {
-          rejectPromise(new Error('No file provided'));
-        } else {
-          resolvePromise(fileInfo);
-        }
-      });
-
-      bb.on('error', (err) => {
-        rejectPromise(err);
-      });
-
-      // Manually pump the Web ReadableStream into busboy.
-      // Readable.fromWeb() has backpressure bugs in Node 18-21 that truncate data.
-      const reader = req.body.getReader();
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              bb.end();
-              return;
-            }
-            if (!bb.write(value)) {
-              await new Promise((r) => bb.once('drain', r));
-            }
-          }
-        } catch (err) {
-          bb.destroy(err);
-        }
-      })();
-    });
-
+    const fileSize = buffer.length;
     writtenFilePath = null; // Success — don't clean up
 
     return NextResponse.json({
       success: true,
       file: {
-        name: result.name,
-        size: result.size,
-        mimeType: result.mimeType,
+        name: fileName,
+        size: fileSize,
+        mimeType: file.type || 'application/octet-stream',
       },
     });
   } catch (error) {
     console.error('POST /api/public/[token]/upload - Error:', error);
-    const message = error.message || 'Upload failed';
-    const status = message === 'No file provided' ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
     // Clean up partially written file on error
     if (writtenFilePath) {
