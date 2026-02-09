@@ -155,23 +155,46 @@ export async function POST(req) {
         }
 
         // Step 3: Build libheif if needed
+        // IMPORTANT: Build with -DWITH_LIBDE265_PLUGIN=OFF so libde265 is linked
+        // directly into libheif.so. Otherwise libde265 becomes a separate plugin
+        // file in /usr/local/lib/libheif/ that can't be found at runtime inside
+        // Node.js, meaning only AVIF (via AOM) works but not HEIC (via HEVC).
         const heifDir = '/tmp/libheif-build';
         const heifVer = await getPkgVersion('libheif', buildEnv);
+        let heifHasBuiltinDe265 = false;
         if (heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif)) {
-          logger.info(`Step 3/6: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif}`);
+          // Version OK, but check if libde265 is linked IN (not a plugin)
+          try {
+            const { stdout: lddHeif } = await execAsync(
+              `ldd $(find /usr/local/lib -name "libheif.so.1" -type f 2>/dev/null | head -1) 2>/dev/null | grep -q de265 && echo "BUILTIN" || echo "PLUGIN"`,
+              { env: buildEnv },
+            );
+            heifHasBuiltinDe265 = lddHeif.trim() === 'BUILTIN';
+          } catch {}
+        }
+
+        if (heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265) {
+          logger.info(`Step 3/6: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif} with built-in libde265`);
         } else {
-          logger.info(`Step 3/6: Building libheif from source (current: ${heifVer || 'not found'}, need >= ${MIN_VERSIONS.libheif})...`);
+          logger.info(
+            `Step 3/6: Building libheif from source (current: ${heifVer || 'not found'}, de265 built-in: ${heifHasBuiltinDe265}, need >= ${MIN_VERSIONS.libheif} with built-in de265)...`,
+          );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
             curl -sSL https://github.com/strukturag/libheif/releases/download/v1.17.6/libheif-1.17.6.tar.gz -o libheif.tar.gz 2>&1 && \
             tar xzf libheif.tar.gz 2>&1 && cd libheif-1.17.6 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
-              -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF .. 2>&1 && \
+              -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
+              -DWITH_LIBDE265=ON -DWITH_LIBDE265_PLUGIN=OFF .. 2>&1 && \
             make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
             { ...longOpts, env: buildEnv },
           );
-          // Verify
+          // Verify libde265 is now linked into libheif
+          try {
+            const { stdout: verifyLink } = await execAsync(`ldd /usr/local/lib/libheif.so 2>/dev/null | grep de265 || echo "WARNING: de265 NOT linked"`);
+            logger.info(`libheif de265 linkage: ${verifyLink.trim()}`);
+          } catch {}
           const newHeifVer = await getPkgVersion('libheif', buildEnv);
           logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
         }
