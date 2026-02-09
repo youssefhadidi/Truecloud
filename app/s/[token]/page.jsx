@@ -396,14 +396,24 @@ export default function SharePage({ params }) {
       headers['x-share-password'] = verifiedPassword;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).slice(2);
+
+    // Build multipart body manually with proper \r\n line endings
+    const headerParts = [
+      `--${boundary}\r\n`,
+      `Content-Disposition: form-data; name="file"; filename="${encodeURIComponent(file.name)}"\r\n`,
+      `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
+    ];
+    const footer = `\r\n--${boundary}--`;
+
+    headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
 
     try {
+      const body = new Blob([headerParts.join(''), file, footer]);
       const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
         method: 'POST',
         headers,
-        body: formData,
+        body,
       });
 
       if (!response.ok) {
