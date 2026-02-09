@@ -5,7 +5,6 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
@@ -91,7 +90,7 @@ export async function POST(req) {
     }
 
     // Parse multipart FormData via busboy — streams file directly to disk
-    const nodeStream = Readable.fromWeb(req.body);
+    const reader = req.body.getReader();
     const { size, mimeType } = await new Promise((resolve, reject) => {
       let resolved = false;
       const busboy = Busboy({
@@ -107,7 +106,7 @@ export async function POST(req) {
         try {
           fileHandle = await open(writtenFilePath, 'w');
         } catch (err) {
-          fileStream.resume(); // drain the stream
+          fileStream.resume();
           return reject(err);
         }
 
@@ -137,7 +136,23 @@ export async function POST(req) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      nodeStream.pipe(busboy);
+      // Manually pump Web ReadableStream into busboy
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              busboy.end();
+              break;
+            }
+            if (!busboy.write(value)) {
+              await new Promise((r) => busboy.once('drain', r));
+            }
+          }
+        } catch (err) {
+          busboy.destroy(err);
+        }
+      })();
     });
 
     await fileHandle.close();

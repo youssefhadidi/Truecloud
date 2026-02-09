@@ -5,7 +5,6 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 
 export const maxDuration = 1800;
@@ -67,7 +66,7 @@ export async function POST(req, { params }) {
     }
 
     // Parse multipart FormData via busboy — streams file directly to disk
-    const nodeStream = Readable.fromWeb(req.body);
+    const reader = req.body.getReader();
     const { fileName, size, mimeType } = await new Promise((resolve, reject) => {
       let resolved = false;
       const busboy = Busboy({
@@ -112,7 +111,23 @@ export async function POST(req, { params }) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      nodeStream.pipe(busboy);
+      // Manually pump Web ReadableStream into busboy
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              busboy.end();
+              break;
+            }
+            if (!busboy.write(value)) {
+              await new Promise((r) => busboy.once('drain', r));
+            }
+          }
+        } catch (err) {
+          busboy.destroy(err);
+        }
+      })();
     });
 
     await fileHandle.close();
