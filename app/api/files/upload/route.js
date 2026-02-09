@@ -12,6 +12,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 // Allow large file uploads (set timeout to 30 minutes)
 export const maxDuration = 1800;
+export const runtime = 'nodejs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -107,6 +108,14 @@ export async function POST(req) {
     }
 
     const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
+      let aborted = false;
+      const handleAbort = () => {
+        aborted = true;
+        reject(new Error('Client aborted upload'));
+      };
+
+      req.signal?.addEventListener('abort', handleAbort, { once: true });
+
       const busboy = Busboy({
         headers: { 'content-type': contentType },
         limits: fileLimits,
@@ -155,6 +164,9 @@ export async function POST(req) {
 
       busboy.on('finish', async () => {
         try {
+          if (aborted) {
+            return;
+          }
           if (!fileReceived) {
             reject(new Error('No file provided in multipart data'));
             return;
@@ -170,6 +182,11 @@ export async function POST(req) {
 
       const nodeStream = Readable.fromWeb(req.body);
       nodeStream.on('error', reject);
+      nodeStream.on('close', () => {
+        if (!fileReceived) {
+          reject(new Error('Request stream closed before file was received'));
+        }
+      });
       nodeStream.pipe(busboy);
     });
 
