@@ -143,11 +143,9 @@ export async function POST(req) {
             const { done, value } = await reader.read();
             if (done) {
               busboy.end();
-              break;
+              return;
             }
-            if (!busboy.write(value)) {
-              await new Promise((r) => busboy.once('drain', r));
-            }
+            busboy.write(value);
           }
         } catch (err) {
           busboy.destroy(err);
