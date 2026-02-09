@@ -83,9 +83,7 @@ export async function GET(req, { params }) {
 
     try {
       // Generate cache key based on file path, quality, and dimensions
-      const cacheKey = createHash('md5')
-        .update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`)
-        .digest('hex');
+      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
 
       // Create cache path preserving directory structure
       const relativeCacheDir = join(relativePath);
@@ -112,6 +110,7 @@ export async function GET(req, { params }) {
 
       // Optimize image using sharp (handles HEIC/HEIF natively via libheif)
       const optimizedBuffer = await sharp(filePath, {
+        failOn: 'none',
         failOnError: false,
         limitInputPixels: false,
       })

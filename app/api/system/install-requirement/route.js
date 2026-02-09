@@ -199,6 +199,11 @@ export async function POST(req) {
           logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
         }
 
+        // Track whether libheif was just rebuilt — if so, force libvips rebuild
+        // so it compiles with the new libheif headers (needed for
+        // heif_context_set_strict_decoding support to handle metadata quirks).
+        const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
+
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
         const VIPS_VERSION = '8.17.3';
         const vipsDir = '/tmp/libvips-build';
@@ -212,10 +217,14 @@ export async function POST(req) {
           } catch {}
         }
 
-        if (vipsHasHeif) {
+        if (vipsHasHeif && !heifWasRebuilt) {
           logger.info(`Steps 4-5/6: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
         } else {
-          logger.info(`Step 4/6: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
+          if (heifWasRebuilt) {
+            logger.info(`Step 4/6: Forcing libvips rebuild because libheif was just rebuilt...`);
+          } else {
+            logger.info(`Step 4/6: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
+          }
           await execAsync(
             `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
             curl -sSL https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.xz | tar xJ 2>&1`,
