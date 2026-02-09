@@ -5,8 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { createWriteStream } from 'node:fs';
-import Busboy from 'busboy';
+import formidable from 'formidable';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
@@ -20,7 +19,6 @@ export async function POST(req) {
   const startTime = Date.now();
   let fileName = 'unknown';
   let writtenFilePath = null; // Track for cleanup on error
-  let fileHandle = null;
   try {
     logger.info('POST /api/files/upload - Upload request received', {
       contentType: req.headers.get('content-type'),
@@ -90,72 +88,26 @@ export async function POST(req) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Parse multipart FormData via busboy — streams file directly to disk
-    const { size, mimeType } = await new Promise((resolve, reject) => {
-      let fileReceived = false;
-
-      const busboy = Busboy({
-        headers: { 'content-type': req.headers.get('content-type') },
-      });
-
-      busboy.on('file', (fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
-        fileReceived = true;
-        const name = filename || 'unknown';
-        const mime = fileMimeType || 'application/octet-stream';
-        fileName = name;
-        writtenFilePath = join(targetDir, name);
-
-        let sz = 0;
-
-        // Create write stream and pipe file directly to disk
-        const writeStream = createWriteStream(writtenFilePath);
-
-        writeStream.on('error', (err) => {
-          fileStream.destroy();
-          reject(err);
-        });
-
-        fileStream.on('data', (chunk) => {
-          sz += chunk.length;
-        });
-
-        fileStream.on('error', (err) => {
-          writeStream.destroy();
-          reject(err);
-        });
-
-        fileStream.pipe(writeStream);
-
-        writeStream.on('finish', () => {
-          resolve({ fileName: name, size: sz, mimeType: mime });
-        });
-      });
-
-      busboy.on('error', reject);
-      busboy.on('finish', () => {
-        if (!fileReceived) {
-          reject(new Error('No file received in multipart form data'));
-        }
-      });
-
-      // Manually pump Web ReadableStream to busboy
-      const reader = req.body.getReader();
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              busboy.end();
-              break;
-            }
-            busboy.write(Buffer.from(value));
-          }
-        } catch (err) {
-          busboy.destroy(err);
-          reject(err);
-        }
-      })();
+    // Parse multipart FormData via formidable — streams file directly to disk
+    const form = formidable({
+      uploadDir: targetDir,
+      keepExtensions: true,
+      multiples: false,
     });
+
+    const [fields, files] = await form.parse(req);
+    const uploadedFiles = files.file;
+
+    if (!uploadedFiles || uploadedFiles.length === 0) {
+      logger.warn('POST /api/files/upload - No file provided in multipart data');
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    const uploadedFile = uploadedFiles[0];
+    fileName = uploadedFile.originalFilename || 'unknown';
+    writtenFilePath = uploadedFile.filepath;
+    const size = uploadedFile.size;
+    const mimeType = uploadedFile.mimetype || 'application/octet-stream';
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
@@ -197,12 +149,6 @@ export async function POST(req) {
     });
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
-    // Close file handle if still open
-    if (fileHandle) {
-      try {
-        await fileHandle.close();
-      } catch {}
-    }
     // Clean up partially written file on error
     if (writtenFilePath) {
       try {
