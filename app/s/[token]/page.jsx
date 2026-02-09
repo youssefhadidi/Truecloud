@@ -396,28 +396,15 @@ export default function SharePage({ params }) {
       headers['x-share-password'] = verifiedPassword;
     }
 
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).slice(2);
-
-    // Build multipart body per RFC 1341
-    const headerParts = [
-      `--${boundary}\r\n`,
-      `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n`,
-      `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
-    ];
-    const footer = `\r\n--${boundary}--\r\n`;
-
-    headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
-
     try {
-      // Encode strings as UTF-8 bytes and concatenate with file as a Blob for streaming
-      const encoder = new TextEncoder();
-      const headerBytes = encoder.encode(headerParts.join(''));
-      const footerBytes = encoder.encode(footer);
-      const body = new Blob([headerBytes, file, footerBytes]);
+      // Use native FormData - browser handles multipart encoding correctly
+      const formData = new FormData();
+      formData.append('file', file);
+
       const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
         method: 'POST',
         headers,
-        body,
+        body: formData,
       });
 
       if (!response.ok) {
