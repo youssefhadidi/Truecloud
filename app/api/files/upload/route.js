@@ -5,6 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
@@ -90,6 +91,7 @@ export async function POST(req) {
     }
 
     // Parse multipart FormData via busboy — streams file directly to disk
+    const nodeStream = Readable.fromWeb(req.body);
     const { size, mimeType } = await new Promise((resolve, reject) => {
       let resolved = false;
       const busboy = Busboy({
@@ -135,8 +137,7 @@ export async function POST(req) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      // req.body is already a Node.js Readable stream in Next.js
-      req.body.pipe(busboy);
+      nodeStream.pipe(busboy);
     });
 
     await fileHandle.close();

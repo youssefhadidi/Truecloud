@@ -5,6 +5,7 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 
 export const maxDuration = 1800;
@@ -110,8 +111,8 @@ export async function POST(req, { params }) {
         if (!resolved) reject(new Error('No file provided in form data'));
       });
 
-      // req.body is already a Node.js Readable stream in Next.js
-      req.body.pipe(busboy);
+      const nodeStream = Readable.fromWeb(req.body);
+      nodeStream.pipe(busboy);
     });
 
     await fileHandle.close();
