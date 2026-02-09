@@ -5,6 +5,7 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
 import formidable from 'formidable';
 
 export const maxDuration = 1800;
@@ -65,13 +66,21 @@ export async function POST(req, { params }) {
     }
 
     // Parse multipart FormData via formidable — streams file directly to disk
+    // Convert Web ReadableStream to Node.js Readable for formidable
+    const nodeReadable = Readable.fromWeb(req.body);
+
+    // Create a pseudo-request object with headers for formidable
+    const pseudoReq = Object.assign(nodeReadable, {
+      headers: Object.fromEntries(req.headers),
+    });
+
     const form = formidable({
       uploadDir: targetDir,
       keepExtensions: true,
       multiples: false,
     });
 
-    const [, files] = await form.parse(req);
+    const [, files] = await form.parse(pseudoReq);
     const uploadedFiles = files.file;
 
     if (!uploadedFiles || uploadedFiles.length === 0) {
