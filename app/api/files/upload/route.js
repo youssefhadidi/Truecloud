@@ -89,75 +89,24 @@ export async function POST(req) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // DEBUG: Log incoming request details
     const contentType = req.headers.get('content-type');
     const contentLength = req.headers.get('content-length');
-    logger.info('DEBUG: Request details', {
+    logger.info('POST /api/files/upload - Incoming request', {
       contentType,
       contentLength,
-      hasBody: !!req.body,
-      bodyType: req.body?.constructor?.name,
+      path: relativePath,
     });
 
-    // Read entire body as Buffer to verify we get all data
-    logger.info('DEBUG: Starting to read request body as Buffer');
-    const bufferReadStart = Date.now();
-    const chunks = [];
-    const reader = req.body.getReader();
-    let totalBytesRead = 0;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(Buffer.from(value));
-        totalBytesRead += value.length;
-        if (totalBytesRead % (1024 * 1024) === 0) {
-          logger.info('DEBUG: Read progress', { bytesRead: totalBytesRead });
-        }
-      }
-    } catch (err) {
-      logger.error('DEBUG: Error reading body', { message: err.message });
-      throw err;
-    }
-
-    const bufferReadDuration = Date.now() - bufferReadStart;
-    const bodyBuffer = Buffer.concat(chunks);
-    logger.info('DEBUG: Body read complete', {
-      duration: `${bufferReadDuration}ms`,
-      totalBytes: bodyBuffer.length,
-      declaredBytes: contentLength,
-      bytesMatch: bodyBuffer.length === parseInt(contentLength),
-    });
-
-    // Log first 2000 characters of body to inspect structure
-    const bodyString = bodyBuffer.toString('utf-8', 0, Math.min(2000, bodyBuffer.length));
-    logger.info('DEBUG: First 2000 chars of body:', { preview: bodyString });
-
-    // Log last 500 chars too to see closing boundary
-    const bodyStringEnd = bodyBuffer.length > 500 ? bodyBuffer.toString('utf-8', Math.max(0, bodyBuffer.length - 500)) : '';
-    logger.info('DEBUG: Last 500 chars of body:', { preview: bodyStringEnd });
-
-    // Create Node.js Readable from Buffer
-    logger.info('DEBUG: Creating Readable from Buffer');
-    const nodeReadable = Readable.from([bodyBuffer]);
+    // Convert Web ReadableStream to Node.js Readable stream for formidable
+    const nodeStream = Readable.fromWeb(req.body);
 
     // Create a pseudo-request object with headers for formidable
     const headersObj = Object.fromEntries(req.headers);
-    logger.info('DEBUG: Headers object created', {
-      contentType: headersObj['content-type'],
-      contentLength: headersObj['content-length'],
-    });
-
-    const pseudoReq = Object.assign(nodeReadable, {
+    const pseudoReq = Object.assign(nodeStream, {
       headers: headersObj,
     });
 
-    logger.info('DEBUG: Pseudo request created from Buffer', {
-      hasHeaders: !!pseudoReq.headers,
-      hasOn: typeof pseudoReq.on === 'function',
-      bufferSize: bodyBuffer.length,
-    });
+    logger.debug('POST /api/files/upload - Stream prepared for parsing');
 
     const form = formidable({
       uploadDir: targetDir,
@@ -165,44 +114,13 @@ export async function POST(req) {
       multiples: false,
     });
 
-    // Add formidable event listeners for debugging
-    form.on('file', (fieldname, file) => {
-      logger.info('DEBUG: Formidable file event', {
-        fieldname,
-        filename: file.filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      });
-    });
-
-    form.on('error', (err) => {
-      logger.error('DEBUG: Formidable error event', {
-        message: err.message,
-        code: err.code,
-        stack: err.stack,
-      });
-    });
-
-    // Wrap callback-based API in Promise (more reliable than form.parse())
-    logger.info('DEBUG: Starting form.parse()');
-    let parseStartTime = Date.now();
-
-    const { fileName: parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      form.parse(pseudoReq, (err, fields, files) => {
-        const parseDuration = Date.now() - parseStartTime;
-        logger.info('DEBUG: form.parse() callback fired', {
-          duration: `${parseDuration}ms`,
-          hasError: !!err,
-          errorMessage: err?.message,
-          fileCount: files?.file?.length || 0,
-          fieldsCount: Object.keys(fields || {}).length,
-        });
-
+    // Parse the multipart form - streams data directly to disk without buffering
+    const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
+      form.parse(pseudoReq, (err, _, files) => {
         if (err) {
-          logger.error('DEBUG: form.parse() error', {
+          logger.error('POST /api/files/upload - Parse error', {
             message: err.message,
             code: err.code,
-            stack: err.stack,
           });
           reject(err);
           return;
@@ -210,9 +128,6 @@ export async function POST(req) {
 
         const uploadedFiles = files.file;
         if (!uploadedFiles || uploadedFiles.length === 0) {
-          logger.warn('DEBUG: No file in parsed data', {
-            fileKeys: Object.keys(files || {}),
-          });
           reject(new Error('No file provided in multipart data'));
           return;
         }
@@ -221,15 +136,13 @@ export async function POST(req) {
         fileName = uploadedFile.originalFilename || 'unknown';
         writtenFilePath = uploadedFile.filepath;
 
-        logger.info('DEBUG: File parsed successfully', {
+        logger.debug('POST /api/files/upload - File parsed', {
           originalFilename: uploadedFile.originalFilename,
-          filepath: uploadedFile.filepath,
           size: uploadedFile.size,
           mimetype: uploadedFile.mimetype,
         });
 
         resolve({
-          fileName: uploadedFile.originalFilename || 'unknown',
           fileSize: uploadedFile.size,
           fileMimeType: uploadedFile.mimetype || 'application/octet-stream',
         });
