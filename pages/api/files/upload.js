@@ -1,13 +1,8 @@
 /** @format */
 
-import Busboy from 'busboy';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { logger } from '@/lib/logger';
-import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
 export const config = {
   api: {
@@ -21,7 +16,30 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export default async function handler(req, res) {
   try {
-    logger.info('POST /api/files/upload - Request received (pages api)', {
+    let logger = null;
+    try {
+      ({ logger } = await import('@/lib/logger'));
+    } catch {
+      logger = null;
+    }
+
+    const logInfo = (message, data) => {
+      if (logger?.info) {
+        logger.info(message, data);
+      } else {
+        console.log(message, data);
+      }
+    };
+
+    const logError = (message, data) => {
+      if (logger?.error) {
+        logger.error(message, data);
+      } else {
+        console.error(message, data);
+      }
+    };
+
+    logInfo('POST /api/files/upload - Request received (pages api)', {
       contentType: req.headers['content-type'],
       contentLength: req.headers['content-length'],
     });
@@ -31,6 +49,8 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const { getServerSession } = await import('next-auth/next');
+    const { authOptions } = await import('@/lib/authOptions');
     const session = await getServerSession(req, res, authOptions);
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -39,6 +59,7 @@ export default async function handler(req, res) {
     const queryPath = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path || '';
     let relativePath = queryPath;
 
+    const { hasRootAccess, checkPathAccess } = await import('@/lib/pathPermissions');
     const isRoot = await hasRootAccess(session.user.id);
     const accessCheck = checkPathAccess({
       userId: session.user.id,
@@ -67,12 +88,13 @@ export default async function handler(req, res) {
       return res.status(415).json({ error: 'Invalid content type' });
     }
 
-    logger.info('POST /api/files/upload - Incoming request (pages api)', {
+    logInfo('POST /api/files/upload - Incoming request (pages api)', {
       contentType,
       contentLength: req.headers['content-length'],
       path: relativePath,
     });
 
+    const { default: Busboy } = await import('busboy');
     const busboy = Busboy({
       headers: req.headers,
       limits: {
@@ -141,7 +163,7 @@ export default async function handler(req, res) {
     });
 
     busboy.on('error', async (error) => {
-      logger.error('POST /api/files/upload - Busboy error (pages api)', {
+      logError('POST /api/files/upload - Busboy error (pages api)', {
         message: error?.message,
         stack: error?.stack,
       });
@@ -160,7 +182,7 @@ export default async function handler(req, res) {
           await writePromise;
         }
       } catch (error) {
-        logger.error('POST /api/files/upload - Write failed (pages api)', {
+        logError('POST /api/files/upload - Write failed (pages api)', {
           message: error?.message,
           stack: error?.stack,
         });
@@ -192,7 +214,7 @@ export default async function handler(req, res) {
 
     req.pipe(busboy);
   } catch (error) {
-    logger.error('POST /api/files/upload - Handler error (pages api)', {
+    console.error('POST /api/files/upload - Handler error (pages api)', {
       message: error?.message,
       stack: error?.stack,
     });
