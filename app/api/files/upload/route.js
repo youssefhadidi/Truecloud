@@ -89,7 +89,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Parse multipart FormData via formidable — streams file directly to disk
+    // Parse multipart FormData via formidable using callback API (more reliable than promise API)
     // Convert Web ReadableStream to Node.js Readable for formidable
     const nodeReadable = Readable.fromWeb(req.body);
 
@@ -104,19 +104,34 @@ export async function POST(req) {
       multiples: false,
     });
 
-    const [, files] = await form.parse(pseudoReq);
-    const uploadedFiles = files.file;
+    // Wrap callback-based API in Promise (more reliable than form.parse())
+    const { fileName: parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
+      form.parse(pseudoReq, (err, fields, files) => {
+        if (err) {
+          reject(err);
+          return;
+        }
 
-    if (!uploadedFiles || uploadedFiles.length === 0) {
-      logger.warn('POST /api/files/upload - No file provided in multipart data');
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+        const uploadedFiles = files.file;
+        if (!uploadedFiles || uploadedFiles.length === 0) {
+          reject(new Error('No file provided in multipart data'));
+          return;
+        }
 
-    const uploadedFile = uploadedFiles[0];
-    fileName = uploadedFile.originalFilename || 'unknown';
-    writtenFilePath = uploadedFile.filepath;
-    const size = uploadedFile.size;
-    const mimeType = uploadedFile.mimetype || 'application/octet-stream';
+        const uploadedFile = uploadedFiles[0];
+        fileName = uploadedFile.originalFilename || 'unknown';
+        writtenFilePath = uploadedFile.filepath;
+
+        resolve({
+          fileName: uploadedFile.originalFilename || 'unknown',
+          fileSize: uploadedFile.size,
+          fileMimeType: uploadedFile.mimetype || 'application/octet-stream',
+        });
+      });
+    });
+
+    const size = fileSize;
+    const mimeType = fileMimeType;
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
