@@ -8,7 +8,6 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
-const HEIC_JPEG_CACHE_DIR = process.env.HEIC_JPEG_CACHE_DIR || './.heic-jpeg-cache';
 
 export async function POST(req) {
   const { error } = await requireAdmin();
@@ -51,7 +50,6 @@ export async function POST(req) {
       thumbnailDir: THUMBNAIL_DIR,
       optiCacheDir: OPTI_CACHE_DIR,
       streamCacheDir: STREAM_CACHE_DIR,
-      heicCacheDir: HEIC_JPEG_CACHE_DIR,
       cwd: process.cwd(),
     });
 
@@ -69,9 +67,7 @@ export async function POST(req) {
 
         child.on('error', (err) => {
           try {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ status: 'error', message: err.message })}\n\n`)
-            );
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: err.message })}\n\n`));
             controller.close();
           } catch {
             // Stream already closed
@@ -81,11 +77,7 @@ export async function POST(req) {
         child.on('exit', (code) => {
           try {
             if (code !== 0 && code !== null) {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ status: 'error', message: `Worker exited with code ${code}` })}\n\n`
-                )
-              );
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: `Worker exited with code ${code}` })}\n\n`));
             }
             controller.close();
           } catch {
@@ -102,7 +94,7 @@ export async function POST(req) {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {

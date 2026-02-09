@@ -8,14 +8,10 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import {
-  generateImageThumbnail,
-  generateVideoThumbnail,
-  generatePdfThumbnail,
-} from '@/lib/thumbnailUtils';
+import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = process.env.HEIC_DIR || './heic'; // Store original HEIC files
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 
@@ -100,20 +96,10 @@ export async function GET(req, { params }) {
     }
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
-    const heicDir = resolve(process.cwd(), HEIC_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
 
-    // Try HEIC directory first, then uploads directory (matches convert-heic and optimize-image behavior)
-    let filePath = join(heicDir, relativePath, fileId);
-    try {
-      await fsPromises.access(filePath);
-      logger.debug('GET /api/files/thumbnail - Found in heic directory', { filePath });
-    } catch {
-      // Not in heic directory, try uploads
-      filePath = join(uploadsDir, relativePath, fileId);
-      logger.debug('GET /api/files/thumbnail - Trying uploads directory', { filePath });
-    }
+    let filePath = join(uploadsDir, relativePath, fileId);
 
     // Check if file exists
     try {
@@ -140,18 +126,12 @@ export async function GET(req, { params }) {
       }
     }
 
-    // Supported file extensions
-    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', '.png', '.webp', '.svg', '.ico'];
-    const heicExtensions = ['.heic', '.heif'];
-    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
-    const pdfExtensions = ['.pdf'];
+    // Classify file type
+    const isImage = IMAGE_EXTENSIONS.includes(fileExt);
+    const isVideo = VIDEO_EXTENSIONS.includes(fileExt);
+    const isPdf = PDF_EXTENSIONS.includes(fileExt);
 
-    const isImage = imageExtensions.includes(fileExt);
-    const isHeic = heicExtensions.includes(fileExt);
-    const isVideo = videoExtensions.includes(fileExt);
-    const isPdf = pdfExtensions.includes(fileExt);
-
-    if (!isImage && !isHeic && !isVideo && !isPdf) {
+    if (!isImage && !isVideo && !isPdf) {
       logger.debug('GET /api/files/thumbnail - Unsupported file type', { fileId, fileExt });
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
@@ -189,7 +169,7 @@ export async function GET(req, { params }) {
 
     // If thumbnail doesn't exist, generate it now (synchronously)
     if (!thumbnailExists) {
-      logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isHeic, isVideo, isImage });
+      logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isVideo, isImage });
 
       await thumbnailSemaphore.acquire();
       try {
@@ -198,7 +178,7 @@ export async function GET(req, { params }) {
         } else if (isVideo) {
           await generateVideoThumbnail(filePath, thumbnailPath);
         } else {
-          // Image (including HEIC/HEIF): sharp handles all formats + auto-rotation
+          // Image — sharp handles all formats + auto-rotation
           await generateImageThumbnail(filePath, thumbnailPath);
         }
         logger.info('GET /api/files/thumbnail - Generation complete', { fileId });

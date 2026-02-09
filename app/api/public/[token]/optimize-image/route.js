@@ -85,7 +85,7 @@ export async function GET(req, { params }) {
     }
 
     try {
-      // Optimize image using sharp (handles HEIC/HEIF natively via libheif)
+      // Optimize image using sharp
       const optimizedBuffer = await sharp(filePath, {
         failOn: 'none',
         failOnError: false,

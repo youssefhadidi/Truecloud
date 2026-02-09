@@ -5,14 +5,10 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
-import {
-  generateImageThumbnail,
-  generateVideoThumbnail,
-  generatePdfThumbnail,
-} from '@/lib/thumbnailUtils';
+import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = process.env.HEIC_DIR || './heic';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -84,17 +80,10 @@ export async function GET(req, { params }) {
     }
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
-    const heicDir = resolve(process.cwd(), HEIC_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
 
-    // Try HEIC directory first, then uploads
-    let filePath = join(heicDir, pathCheck.fullPath);
-    try {
-      await fsPromises.access(filePath);
-    } catch {
-      filePath = join(uploadsDir, pathCheck.fullPath);
-    }
+    let filePath = join(uploadsDir, pathCheck.fullPath);
 
     // Check file exists
     try {
@@ -105,7 +94,7 @@ export async function GET(req, { params }) {
 
     // Security check
     const resolvedPath = resolve(filePath) + sep;
-    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR) && !resolvedPath.startsWith(resolve(process.cwd(), HEIC_DIR) + sep)) {
+    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -123,17 +112,11 @@ export async function GET(req, { params }) {
       }
     }
 
-    const imageExtensions = ['.jpg', '.jpeg', '.gif', '.bmp', '.png', '.webp', '.svg', '.ico'];
-    const heicExtensions = ['.heic', '.heif'];
-    const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'];
-    const pdfExtensions = ['.pdf'];
+    const isImage = IMAGE_EXTENSIONS.includes(fileExt);
+    const isVideo = VIDEO_EXTENSIONS.includes(fileExt);
+    const isPdf = PDF_EXTENSIONS.includes(fileExt);
 
-    const isImage = imageExtensions.includes(fileExt);
-    const isHeic = heicExtensions.includes(fileExt);
-    const isVideo = videoExtensions.includes(fileExt);
-    const isPdf = pdfExtensions.includes(fileExt);
-
-    if (!isImage && !isHeic && !isVideo && !isPdf) {
+    if (!isImage && !isVideo && !isPdf) {
       return NextResponse.json({ error: 'Thumbnail not supported for this file type' }, { status: 404 });
     }
 

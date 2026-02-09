@@ -3,8 +3,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink, open } from 'fs/promises';
-import { existsSync, mkdirSync } from 'fs';
-import { join, resolve, sep, extname } from 'node:path';
+import { existsSync } from 'fs';
+import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
@@ -12,9 +12,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 export const maxDuration = 1800;
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = './heic'; // Separate directory for HEIC files
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
-const RESOLVED_HEIC_DIR = resolve(process.cwd(), HEIC_DIR) + sep;
 
 export async function POST(req) {
   const startTime = Date.now();
@@ -69,38 +67,25 @@ export async function POST(req) {
       });
     }
 
-    // Pre-compute both possible target directories
-    const regularTargetDir = join(UPLOAD_DIR, relativePath);
-    const heicTargetDir = join(HEIC_DIR, relativePath);
+    const targetDir = join(UPLOAD_DIR, relativePath);
 
     // Security: prevent directory traversal
-    if (!(resolve(regularTargetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
+    if (!(resolve(targetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('POST /api/files/upload - Directory traversal attempt', {
-        targetDir: regularTargetDir,
+        targetDir,
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Ensure the regular target directory exists
-    if (!existsSync(regularTargetDir)) {
-      await mkdir(regularTargetDir, { recursive: true });
+    // Ensure the target directory exists
+    if (!existsSync(targetDir)) {
+      await mkdir(targetDir, { recursive: true });
     }
 
     // File metadata comes from headers (body is raw binary, not multipart)
     fileName = decodeURIComponent(req.headers.get('x-file-name') || '') || 'unknown';
     const mimeType = req.headers.get('content-type') || 'application/octet-stream';
-
-    // Track which directory the file goes to
-    const ext = extname(fileName).toLowerCase();
-    const isHeic = ['.heic', '.heif'].includes(ext);
-    const targetDir = isHeic ? heicTargetDir : regularTargetDir;
-    const storedBaseDir = isHeic ? HEIC_DIR : UPLOAD_DIR;
-
-    // Create HEIC target dir on demand
-    if (isHeic && !existsSync(heicTargetDir)) {
-      mkdirSync(heicTargetDir, { recursive: true });
-    }
 
     writtenFilePath = join(targetDir, fileName);
 
@@ -137,12 +122,10 @@ export async function POST(req) {
       fileName,
       fileSize: size,
       path: relativePath,
-      isHeic,
-      storedIn: storedBaseDir,
       duration: `${duration}ms`,
     });
 
-    const normalizedFilePath = writtenFilePath.replace(/\\/g, '/').replace(new RegExp(`^${storedBaseDir.replace(/\\/g, '/')}/`), '');
+    const normalizedFilePath = writtenFilePath.replace(/\\/g, '/').replace(new RegExp(`^${UPLOAD_DIR.replace(/\\/g, '/')}/`), '');
 
     writtenFilePath = null; // Success — don't clean up
 

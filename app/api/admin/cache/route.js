@@ -19,18 +19,6 @@ const CACHE_DIRS = {
     envVar: 'OPTI_CACHE_DIR',
     defaultPath: './opti-cache',
   },
-  heic: {
-    name: 'HEIC Conversions',
-    description: 'HEIC to WebP converted images',
-    envVar: 'HEIC_CACHE_DIR',
-    defaultPath: './.heic-cache',
-  },
-  'heic-jpeg': {
-    name: 'HEIC Intermediate',
-    description: 'HEIC to JPEG intermediate files',
-    envVar: 'HEIC_JPEG_CACHE_DIR',
-    defaultPath: './.heic-jpeg-cache',
-  },
   stream: {
     name: 'Stream Cache',
     description: 'Fixed MP4 files for streaming',

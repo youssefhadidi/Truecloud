@@ -64,14 +64,7 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
       {/* Thumbnail as placeholder */}
-      {hasThumbnail && !fullLoaded && (
-        <img
-          src={thumbnailData.data}
-          alt=""
-          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-          draggable={false}
-        />
-      )}
+      {hasThumbnail && !fullLoaded && <img src={thumbnailData.data} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />}
       {/* Full-res image on top */}
       <img
         src={getFileUrl(file, 'image')}
@@ -159,7 +152,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   // Helper to build download URL
   const getFileUrl = (file, type) => {
-    // Use optimization endpoint for all images (sharp handles HEIC/HEIF natively)
+    // Use optimization endpoint for all images
     if (type === 'image') {
       return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
     }

@@ -32,6 +32,61 @@ const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 // Check if file is SKP
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
+// Thumbnail component that fetches base64 from the public thumbnail API
+function ShareThumbnail({ url, alt, className, children }) {
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(false);
+  const imgRef = useRef(null);
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px', threshold: 0.01 },
+    );
+    if (imgRef.current) observer.observe(imgRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isInView || !url) return;
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data?.data) setSrc(data.data);
+        else if (!cancelled) setError(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isInView, url]);
+
+  return (
+    <div ref={imgRef} className="relative w-full h-full">
+      {src && !error ? (
+        <>
+          <img src={src} alt={alt} className={className} onError={() => setError(true)} />
+          {children}
+        </>
+      ) : error ? (
+        children || null
+      ) : (
+        // Loading placeholder
+        <div className="w-full h-full flex items-center justify-center">{children || <div className="animate-pulse bg-gray-300 dark:bg-gray-500 rounded w-10 h-10" />}</div>
+      )}
+    </div>
+  );
+}
+
 // Format file size
 function formatFileSize(bytes) {
   if (bytes === 0) return '0 Bytes';
@@ -325,11 +380,18 @@ export default function SharePage({ params }) {
     );
   }
 
-  // Helper to get thumbnail URL for images/videos in share
+  // Helper to get thumbnail URL for images in share (optimize-image returns a direct image)
   const getThumbnailUrl = (file) => {
     const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
     const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
     return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=60&w=300&h=300${pwdParam}`;
+  };
+
+  // Helper to get the public thumbnail API URL (returns base64 JSON, works for videos/PDFs/images)
+  const getPublicThumbnailUrl = (file) => {
+    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
+    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
+    return `/api/public/${token}/thumbnail?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(currentSubPath)}${pwdParam}`;
   };
 
   // Helper to download a single file
@@ -413,7 +475,7 @@ export default function SharePage({ params }) {
   if (shareData.isDirectory && directoryFiles) {
     return (
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-6xl mx-auto relative"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-visible max-w-6xl mx-auto relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={(e) => {
@@ -563,18 +625,21 @@ export default function SharePage({ params }) {
                         </div>
                       )}
                       {isVideo(file.name) && (
-                        <div className="relative w-full h-full flex items-center justify-center">
-                          <FiVideo className="text-purple-500" size={40} />
+                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover">
                           <div className="absolute inset-0 flex items-center justify-center">
                             <div className="bg-black/50 rounded-full p-2">
                               <FiPlay className="text-white" size={20} />
                             </div>
                           </div>
-                        </div>
+                        </ShareThumbnail>
+                      )}
+                      {isPdf(file.name) && (
+                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover">
+                          <FiFileText className="text-red-500" size={40} />
+                        </ShareThumbnail>
                       )}
                       {file.isDirectory && <FiFolder className="text-blue-500" size={40} />}
                       {is3dFile(file.name) && <FiBox className="text-orange-500" size={40} />}
-                      {isPdf(file.name) && <FiFileText className="text-red-500" size={40} />}
                       {!file.isDirectory && !isImage(file.name) && !isVideo(file.name) && !is3dFile(file.name) && !isPdf(file.name) && (
                         <FiFile className="text-gray-500" size={40} />
                       )}
