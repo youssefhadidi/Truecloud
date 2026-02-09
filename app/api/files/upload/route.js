@@ -108,10 +108,39 @@ export async function POST(req) {
 
     logger.debug('POST /api/files/upload - Stream prepared for parsing');
 
+    // Custom filename function to preserve original names
     const form = formidable({
       uploadDir: targetDir,
       keepExtensions: true,
       multiples: false,
+      filename: (name, _, info) => {
+        // Use the original filename sent by the client
+        logger.debug('formidable filename callback', {
+          name,
+          originalFilename: info.originalFilename,
+          mimetype: info.mimetype,
+        });
+        // Return the original filename as-is
+        return info.originalFilename || `upload_${Date.now()}`;
+      },
+    });
+
+    // Add debugging for file events
+    form.on('file', (fieldname, file) => {
+      logger.info('DEBUG: Formidable file event', {
+        fieldname,
+        originalFilename: file.originalFilename,
+        filename: file.filename,
+        size: file.size,
+        mimetype: file.mimetype,
+      });
+    });
+
+    form.on('error', (err) => {
+      logger.error('DEBUG: Formidable error event', {
+        message: err.message,
+        code: err.code,
+      });
     });
 
     // Parse the multipart form - streams data directly to disk without buffering
@@ -121,13 +150,22 @@ export async function POST(req) {
           logger.error('POST /api/files/upload - Parse error', {
             message: err.message,
             code: err.code,
+            stack: err.stack,
           });
           reject(err);
           return;
         }
 
+        logger.info('DEBUG: Parse callback - files object:', {
+          fileKeys: Object.keys(files || {}),
+          fileCount: files?.file?.length || 0,
+        });
+
         const uploadedFiles = files.file;
         if (!uploadedFiles || uploadedFiles.length === 0) {
+          logger.warn('DEBUG: No files in parsed data', {
+            allKeys: Object.keys(files || {}),
+          });
           reject(new Error('No file provided in multipart data'));
           return;
         }
@@ -136,8 +174,10 @@ export async function POST(req) {
         fileName = uploadedFile.originalFilename || 'unknown';
         writtenFilePath = uploadedFile.filepath;
 
-        logger.debug('POST /api/files/upload - File parsed', {
+        logger.info('DEBUG: File parsed successfully', {
           originalFilename: uploadedFile.originalFilename,
+          filename: uploadedFile.filename,
+          filepath: uploadedFile.filepath,
           size: uploadedFile.size,
           mimetype: uploadedFile.mimetype,
         });

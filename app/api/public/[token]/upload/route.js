@@ -74,15 +74,20 @@ export async function POST(req, { params }) {
       headers: headersObj,
     });
 
+    // Custom filename function to preserve original names
     const form = formidable({
       uploadDir: targetDir,
       keepExtensions: true,
       multiples: false,
+      filename: (_, __, info) => {
+        // Use the original filename sent by the client
+        return info.originalFilename || `upload_${Date.now()}`;
+      },
     });
 
     // Parse the multipart form - streams data directly to disk without buffering
     const { parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      form.parse(pseudoReq, (err, _, files) => {
+      form.parse(pseudoReq, (err, __, files) => {
         if (err) {
           reject(err);
           return;
