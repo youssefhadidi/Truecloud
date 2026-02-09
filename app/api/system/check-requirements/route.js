@@ -63,29 +63,46 @@ function getCommandVersion(command, versionFlag = '--version') {
 }
 
 /**
- * Check if sharp can decode HEIC/HEIF via HEVC codec
- * Uses a subprocess to avoid Node.js module cache returning stale results
+ * Check if sharp can decode HEIC/HEIF via HEVC codec.
+ * We check two things at runtime:
+ * 1. The patched libvips-cpp in sharp's bundled dir has libheif linked
+ * 2. The system vips binary reports heifload with .heic support
+ *
+ * NOTE: sharp.format.heif.input.fileSuffix is hardcoded at npm publish time
+ * and always shows [".avif"] regardless of actual runtime capabilities.
  */
 async function checkSharpHevcSupport() {
   try {
     const { execSync } = await import('child_process');
-    const script = `
-      const sharp = require('sharp');
-      const heif = sharp.format && sharp.format.heif && sharp.format.heif.input;
-      if (!heif) { process.stdout.write(JSON.stringify({ installed: false, version: 'HEIF not available' })); }
-      else {
-        const s = heif.fileSuffix || [];
-        const ok = s.includes('.heic') || s.includes('.heif');
-        process.stdout.write(JSON.stringify({ installed: ok, version: 'HEIF codecs: ' + (s.join(', ') || 'none') }));
+    const ldPath = '/usr/local/lib/x86_64-linux-gnu:/usr/local/lib:' + (process.env.LD_LIBRARY_PATH || '');
+
+    // Check 1: Does the bundled libvips-cpp have libheif linked?
+    let hasLibheif = false;
+    try {
+      const fatLib = execSync(`find node_modules -path "*/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.*.*.*" -type f 2>/dev/null | head -1`, {
+        encoding: 'utf-8',
+        timeout: 5000,
+        cwd: process.cwd(),
+      }).trim();
+      if (fatLib) {
+        const lddOut = execSync(`ldd "${fatLib}" 2>/dev/null | grep heif || true`, {
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim();
+        hasLibheif = lddOut.includes('libheif');
       }
-    `;
-    const result = execSync(`node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
-      timeout: 10000,
-      encoding: 'utf-8',
-      cwd: process.cwd(),
-      env: { ...process.env, LD_LIBRARY_PATH: '/usr/local/lib:' + (process.env.LD_LIBRARY_PATH || ''), SHARP_FORCE_GLOBAL_LIBVIPS: '1' },
-    });
-    return JSON.parse(result.trim());
+    } catch {}
+
+    // Check 2: Does vips report heifload with .heic?
+    let vipsHeic = false;
+    try {
+      const vipsOut = execSync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep "heifload)" | grep ".heic" || true`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      vipsHeic = vipsOut.includes('.heic');
+    } catch {}
+
+    const installed = hasLibheif && vipsHeic;
+    const version = installed ? 'HEIC/HEIF/AVIF support active' : `libheif linked: ${hasLibheif}, vips .heic: ${vipsHeic}`;
+    return { installed, version };
   } catch {
     return { installed: false, version: null };
   }

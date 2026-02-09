@@ -408,16 +408,26 @@ export async function POST(req) {
           logger.warn('Could not update systemd service:', svcErr.message);
         }
 
-        // Verify sharp has HEVC support
+        // Verify HEVC support by checking if the patched libvips-cpp can load HEIC
+        // NOTE: sharp.format.heif.input.fileSuffix is hardcoded at npm publish time
+        // and always shows [".avif"] regardless of runtime libvips capabilities.
+        // Instead, we check: (a) ldd confirms libheif is linked, and
+        // (b) vips reports heifload with .heic support.
         let hevcWorking = false;
         try {
-          const { stdout: verifyResult } = await execAsync(`node -e "const s=require('sharp');const h=s.format?.heif?.input;console.log(JSON.stringify(h?.fileSuffix||[]))" 2>&1`, {
-            ...longOpts,
+          // Find the patched fat lib (same find logic as check-requirements)
+          const { stdout: patchedLib } = await execAsync(`find node_modules -path "*/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.*.*.*" -type f 2>/dev/null | head -1`, {
             cwd: projectDir,
-            env: buildEnv,
           });
-          hevcWorking = verifyResult.includes('.heic');
-          logger.info('Sharp HEIF verification:', verifyResult.trim());
+          if (patchedLib.trim()) {
+            const { stdout: lddCheck } = await execAsync(`ldd "${patchedLib.trim()}" 2>/dev/null | grep -q heif && echo "LINKED" || echo "MISSING"`);
+            const { stdout: vipsCheck } = await execAsync(
+              `LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i "heifload)" | grep -q ".heic" && echo "HEIC_OK" || echo "NO_HEIC"`,
+              { env: buildEnv },
+            );
+            hevcWorking = lddCheck.trim() === 'LINKED' && vipsCheck.trim() === 'HEIC_OK';
+            logger.info(`Sharp HEVC verification: libheif=${lddCheck.trim()}, vips_heic=${vipsCheck.trim()}, result=${hevcWorking}`);
+          }
         } catch (e) {
           logger.error('Sharp verification failed:', e.message);
         }
@@ -425,7 +435,7 @@ export async function POST(req) {
         return NextResponse.json({
           message: hevcWorking
             ? 'Sharp HEVC support installed and verified! Restart the application for changes to take effect.'
-            : 'Installation completed but HEVC not yet detected. Restart the application and check again. If still not working, the system libheif may be too old.',
+            : 'Installation completed but HEVC not yet detected. Restart the application and check again.',
           success: true,
           restartRequired: true,
           hevcVerified: hevcWorking,
