@@ -33,7 +33,7 @@ const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
 // Thumbnail component that fetches base64 from the public thumbnail API
-function ShareThumbnail({ url, alt, className, children }) {
+function ShareThumbnail({ url, alt, className, children, password }) {
   const [src, setSrc] = useState(null);
   const [error, setError] = useState(false);
   const imgRef = useRef(null);
@@ -56,7 +56,9 @@ function ShareThumbnail({ url, alt, className, children }) {
   useEffect(() => {
     if (!isInView || !url) return;
     let cancelled = false;
-    fetch(url)
+    const headers = {};
+    if (password) headers['x-share-password'] = password;
+    fetch(url, { headers })
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled && data?.data) setSrc(data.data);
@@ -380,18 +382,10 @@ export default function SharePage({ params }) {
     );
   }
 
-  // Helper to get thumbnail URL for images in share (optimize-image returns a direct image)
-  const getThumbnailUrl = (file) => {
-    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
-    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
-    return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=60&w=300&h=300${pwdParam}`;
-  };
-
-  // Helper to get the public thumbnail API URL (returns base64 JSON, works for videos/PDFs/images)
+  // Helper to get the public thumbnail API URL (returns base64 JSON, works for all file types)
   const getPublicThumbnailUrl = (file) => {
     const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
-    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
-    return `/api/public/${token}/thumbnail?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(currentSubPath)}${pwdParam}`;
+    return `/api/public/${token}/thumbnail?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(currentSubPath)}`;
   };
 
   // Helper to download a single file
@@ -608,24 +602,13 @@ export default function SharePage({ params }) {
                   >
                     {/* Thumbnail/Icon */}
                     <div className="aspect-square flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded-lg mb-2 overflow-hidden relative">
-                      {isImage(file.name) ? (
-                        <img
-                          src={getThumbnailUrl(file)}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
                       {isImage(file.name) && (
-                        <div className="hidden items-center justify-center w-full h-full">
+                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
                           <FiImage className="text-green-500" size={40} />
-                        </div>
+                        </ShareThumbnail>
                       )}
                       {isVideo(file.name) && (
-                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover">
+                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
                           <div className="absolute inset-0 flex items-center justify-center">
                             <div className="bg-black/50 rounded-full p-2">
                               <FiPlay className="text-white" size={20} />
@@ -634,7 +617,7 @@ export default function SharePage({ params }) {
                         </ShareThumbnail>
                       )}
                       {isPdf(file.name) && (
-                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover">
+                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
                           <FiFileText className="text-red-500" size={40} />
                         </ShareThumbnail>
                       )}
