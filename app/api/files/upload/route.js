@@ -5,10 +5,39 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, rename, unlink, copyFile, stat } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, PassThrough } from 'node:stream';
 import formidable from 'formidable';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+
+/**
+ * Convert a Web ReadableStream to a Node.js Readable stream reliably.
+ * Readable.fromWeb() has backpressure bugs in Node 21 that can truncate data.
+ */
+function webStreamToNodeStream(webStream, headers) {
+  const passthrough = new PassThrough();
+  // Attach headers so formidable can read content-type / content-length
+  passthrough.headers = headers;
+  const reader = webStream.getReader();
+  (async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          passthrough.end();
+          break;
+        }
+        // Respect backpressure: if push returns false, wait for drain
+        if (!passthrough.write(value)) {
+          await new Promise((resolve) => passthrough.once('drain', resolve));
+        }
+      }
+    } catch (err) {
+      passthrough.destroy(err);
+    }
+  })();
+  return passthrough;
+}
 
 // Allow large file uploads (set timeout to 30 minutes)
 export const maxDuration = 1800;
@@ -58,8 +87,8 @@ export async function POST(req) {
     }
 
     // Convert Web Request body to Node.js stream for formidable (streams to disk, not RAM)
-    const nodeStream = Readable.fromWeb(req.body);
-    nodeStream.headers = Object.fromEntries(req.headers.entries());
+    const headers = Object.fromEntries(req.headers.entries());
+    const nodeStream = webStreamToNodeStream(req.body, headers);
 
     const form = formidable({
       uploadDir: TEMP_DIR,
