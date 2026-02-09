@@ -24,18 +24,26 @@ export default async function handler(req, res) {
     }
 
     const logInfo = (message, data) => {
-      if (logger?.info) {
-        logger.info(message, data);
-      } else {
-        console.log(message, data);
+      try {
+        if (logger?.info) {
+          logger.info(message, data);
+        } else {
+          console.log(message, data);
+        }
+      } catch (error) {
+        console.log('[Logger fallback]', message, data, error?.message);
       }
     };
 
     const logError = (message, data) => {
-      if (logger?.error) {
-        logger.error(message, data);
-      } else {
-        console.error(message, data);
+      try {
+        if (logger?.error) {
+          logger.error(message, data);
+        } else {
+          console.error(message, data);
+        }
+      } catch (error) {
+        console.error('[Logger fallback]', message, data, error?.message);
       }
     };
 
@@ -49,6 +57,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    logInfo('POST /api/files/upload - Session check start (pages api)');
     const { getServerSession } = await import('next-auth/next');
     const { authOptions } = await import('@/lib/authOptions');
     const session = await getServerSession(req, res, authOptions);
