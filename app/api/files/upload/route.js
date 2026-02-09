@@ -129,16 +129,21 @@ export async function POST(req) {
 
     // Parse the multipart form - formidable handles streaming automatically
     const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      form.parse(req, (err, _, files) => {
-        if (err) {
-          logger.error('POST /api/files/upload - Parse error', {
-            message: err.message,
-            code: err.code,
-            stack: err.stack,
-          });
-          reject(err);
-          return;
-        }
+      try {
+        form.parse(req, (err, _, files) => {
+          logger.info('DEBUG: form.parse callback invoked', { hasError: !!err });
+
+          if (err) {
+            logger.error('POST /api/files/upload - Parse error', {
+              message: err?.message || 'No message',
+              code: err?.code || 'No code',
+              stack: err?.stack || 'No stack',
+              errorKeys: err ? Object.keys(err) : [],
+              errorString: String(err),
+            });
+            reject(err);
+            return;
+          }
 
         logger.info('DEBUG: Parse callback - files object:', {
           fileKeys: Object.keys(files || {}),
@@ -170,7 +175,14 @@ export async function POST(req) {
           fileSize: uploadedFile.size,
           fileMimeType: uploadedFile.mimetype || 'application/octet-stream',
         });
-      });
+        });
+      } catch (parseError) {
+        logger.error('POST /api/files/upload - Sync parse error', {
+          message: parseError?.message,
+          stack: parseError?.stack,
+        });
+        reject(parseError);
+      }
     });
 
     const size = fileSize;
