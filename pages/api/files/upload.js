@@ -58,33 +58,32 @@ export default async function handler(req, res) {
     }
 
     logInfo('POST /api/files/upload - Session check start (pages api)');
-    const { getServerSession } = await import('next-auth/next');
-    const { authOptions } = await import('@/lib/authOptions');
-    let session = null;
+    const { getToken } = await import('next-auth/jwt');
+    let token = null;
     try {
-      session = await getServerSession(req, res, authOptions);
+      token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     } catch (error) {
-      logError('POST /api/files/upload - Session check failed (pages api)', {
+      logError('POST /api/files/upload - Token check failed (pages api)', {
         message: error?.message,
         stack: error?.stack,
       });
       return res.status(500).json({ error: 'Session check failed' });
     }
-    if (!session) {
+    if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     logInfo('POST /api/files/upload - Session ok (pages api)', {
-      userId: session.user?.id,
-      email: session.user?.email,
+      userId: token?.id,
+      email: token?.email,
     });
 
     const queryPath = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path || '';
     let relativePath = queryPath;
 
     const { hasRootAccess, checkPathAccess } = await import('@/lib/pathPermissions');
-    const isRoot = await hasRootAccess(session.user.id);
+    const isRoot = await hasRootAccess(token.id);
     const accessCheck = checkPathAccess({
-      userId: session.user.id,
+      userId: token.id,
       path: relativePath,
       operation: 'write',
       isRootUser: isRoot,
