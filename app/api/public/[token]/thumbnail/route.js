@@ -120,8 +120,12 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail not supported for this file type' }, { status: 404 });
     }
 
-    // Create thumbnail path
-    const thumbnailFileName = `public_${token}_${fileName.replace(/[/\\]/g, '_')}.webp`;
+    // Use the same naming scheme as the authenticated thumbnail route
+    // so both routes share cached thumbnails for the same file
+    const lastSlash = pathCheck.fullPath.lastIndexOf('/');
+    const relativePath = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
+    const fileBaseName = lastSlash >= 0 ? pathCheck.fullPath.substring(lastSlash + 1) : pathCheck.fullPath;
+    const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileBaseName}.webp`;
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     await fsPromises.mkdir(thumbnailsDir, { recursive: true });

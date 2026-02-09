@@ -3,12 +3,14 @@
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import fs from 'fs';
-import { stat } from 'fs/promises';
+import { stat, mkdir } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
+import { createHash } from 'crypto';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export const maxDuration = 30;
@@ -35,8 +37,8 @@ export async function GET(req, { params }) {
     const subPath = url.searchParams.get('path') || '';
     const fileName = url.searchParams.get('file') || share.fileName;
     const quality = Math.min(Math.max(parseInt(url.searchParams.get('quality') || '80'), 30), 100);
-    const maxWidth = parseInt(url.searchParams.get('w') || '2000');
-    const maxHeight = parseInt(url.searchParams.get('h') || '2000');
+    const maxWidth = parseInt(url.searchParams.get('w') || '1440');
+    const maxHeight = parseInt(url.searchParams.get('h') || '1440');
 
     // Build the path
     let pathCheck;
@@ -85,6 +87,33 @@ export async function GET(req, { params }) {
     }
 
     try {
+      // Generate cache key based on file path, quality, and dimensions
+      // Uses the same scheme as the authenticated route so both share the cache
+      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
+
+      // Build cache path: split fullPath into directory and filename
+      const lastSlash = pathCheck.fullPath.lastIndexOf('/');
+      const relativeCacheDir = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
+      const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
+      const cacheFileName = `${cacheKey}.webp`;
+      const cachePath = join(cacheDir, cacheFileName);
+
+      // Check if cached version exists and is newer than source file
+      if (fs.existsSync(cachePath)) {
+        const cacheStats = await stat(cachePath);
+        if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
+          const cachedBuffer = fs.readFileSync(cachePath);
+          return new NextResponse(cachedBuffer, {
+            headers: {
+              'Content-Type': 'image/webp',
+              'Content-Length': cachedBuffer.length.toString(),
+              'Cache-Control': 'public, max-age=31536000',
+              'X-Cache': 'HIT',
+            },
+          });
+        }
+      }
+
       // Optimize image using sharp
       const optimizedBuffer = await sharp(filePath, {
         failOn: 'none',
@@ -99,11 +128,20 @@ export async function GET(req, { params }) {
         .webp({ quality })
         .toBuffer();
 
+      // Cache the optimized image
+      try {
+        await mkdir(cacheDir, { recursive: true });
+        fs.writeFileSync(cachePath, optimizedBuffer);
+      } catch (cacheError) {
+        console.error('Failed to cache optimized image:', cacheError);
+      }
+
       return new NextResponse(optimizedBuffer, {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': optimizedBuffer.length.toString(),
           'Cache-Control': 'public, max-age=31536000',
+          'X-Cache': 'MISS',
         },
       });
     } catch (sharpError) {
