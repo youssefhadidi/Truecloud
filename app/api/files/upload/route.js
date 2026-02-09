@@ -5,64 +5,10 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync, createWriteStream, mkdirSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
-import { PassThrough } from 'node:stream';
-import formidable from 'formidable';
+import { Readable } from 'node:stream';
+import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-
-/**
- * Convert a Web ReadableStream to a Node.js Readable stream reliably.
- * Readable.fromWeb() has backpressure bugs in Node 21 that can truncate data.
- */
-function webStreamToNodeStream(webStream, headers) {
-  const passthrough = new PassThrough({ highWaterMark: 1024 * 1024 }); // 1 MB buffer
-  // Attach headers so formidable can read content-type / content-length
-  passthrough.headers = headers;
-  const reader = webStream.getReader();
-  let destroyed = false;
-
-  const cancel = () => {
-    destroyed = true;
-    reader.cancel().catch(() => {});
-  };
-  passthrough.on('error', cancel);
-
-  (async () => {
-    try {
-      while (!destroyed) {
-        const { done, value } = await reader.read();
-        if (done) {
-          passthrough.end();
-          break;
-        }
-        if (destroyed) break;
-        // Respect backpressure: if push returns false, wait for drain
-        if (!passthrough.write(value)) {
-          // Wait for drain but bail out if the stream dies
-          await new Promise((res, rej) => {
-            const onDrain = () => {
-              passthrough.removeListener('close', onFail);
-              passthrough.removeListener('error', onFail);
-              res();
-            };
-            const onFail = (err) => {
-              passthrough.removeListener('drain', onDrain);
-              rej(err || new Error('Stream closed'));
-            };
-            passthrough.once('drain', onDrain);
-            passthrough.once('close', onFail);
-            passthrough.once('error', onFail);
-          });
-        }
-      }
-    } catch (err) {
-      if (!destroyed) passthrough.destroy(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      cancel();
-    }
-  })();
-  return passthrough;
-}
 
 // Allow large file uploads (set timeout to 30 minutes)
 export const maxDuration = 1800;
@@ -146,53 +92,85 @@ export async function POST(req) {
     let storedBaseDir = UPLOAD_DIR;
     let isHeic = false;
 
-    // Configure formidable to write directly to the target directory (no temp files)
-    const form = formidable({
-      maxFileSize: 200 * 1024 * 1024 * 1024, // 200 GB
-      maxTotalFileSize: 200 * 1024 * 1024 * 1024,
-      allowEmptyFiles: false,
-      multiples: false,
-      fileWriteStreamHandler: (file) => {
-        const ext = extname(file.originalFilename || '').toLowerCase();
+    // Parse multipart upload with busboy — streams file data directly to disk
+    const contentType = req.headers.get('content-type') || '';
+    const result = await new Promise((resolvePromise, rejectPromise) => {
+      let fileInfo = null;
+      let fileProcessed = false;
+
+      const bb = Busboy({
+        headers: { 'content-type': contentType },
+        limits: { files: 1 },
+      });
+
+      bb.on('file', (fieldName, stream, { filename, mimeType }) => {
+        if (fileProcessed) {
+          stream.resume(); // Discard extra files
+          return;
+        }
+        fileProcessed = true;
+
+        fileName = filename || 'unknown';
+        const ext = extname(fileName).toLowerCase();
         isHeic = ['.heic', '.heif'].includes(ext);
         const targetDir = isHeic ? heicTargetDir : regularTargetDir;
         storedBaseDir = isHeic ? HEIC_DIR : UPLOAD_DIR;
 
-        // Create HEIC target dir on demand (sync — this callback is synchronous)
+        // Create HEIC target dir on demand
         if (isHeic && !existsSync(heicTargetDir)) {
           mkdirSync(heicTargetDir, { recursive: true });
         }
 
-        fileName = file.originalFilename || 'unknown';
         writtenFilePath = join(targetDir, fileName);
-        return createWriteStream(writtenFilePath);
-      },
-    });
+        let size = 0;
 
-    // Stream request body directly to formidable → disk (no buffering in RAM)
-    const headers = Object.fromEntries(req.headers.entries());
-    const nodeStream = webStreamToNodeStream(req.body, headers);
+        const ws = createWriteStream(writtenFilePath);
 
-    let files;
-    try {
-      [, files] = await form.parse(nodeStream);
-    } catch (parseError) {
-      logger.error('POST /api/files/upload - Streaming parse failed', {
-        error: parseError.message,
+        ws.on('error', (err) => {
+          stream.resume();
+          rejectPromise(err);
+        });
+
+        stream.on('data', (chunk) => {
+          size += chunk.length;
+        });
+
+        stream.pipe(ws);
+
+        stream.on('end', () => {
+          fileInfo = { name: fileName, size, mimeType: mimeType || 'application/octet-stream' };
+        });
+
+        stream.on('error', (err) => {
+          ws.destroy();
+          rejectPromise(err);
+        });
       });
-      return NextResponse.json({ error: 'Upload parsing failed', details: parseError.message }, { status: 400 });
-    }
 
-    const uploadedFile = files.file?.[0];
-    if (!uploadedFile) {
-      logger.warn('POST /api/files/upload - No file provided in request');
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+      bb.on('finish', () => {
+        if (!fileInfo) {
+          rejectPromise(new Error('No file provided'));
+        } else {
+          resolvePromise(fileInfo);
+        }
+      });
+
+      bb.on('error', (err) => {
+        rejectPromise(err);
+      });
+
+      // Pipe the Web ReadableStream into busboy via Readable.fromWeb
+      const nodeStream = Readable.fromWeb(req.body);
+      nodeStream.on('error', (err) => {
+        bb.destroy(err);
+      });
+      nodeStream.pipe(bb);
+    });
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
-      fileSize: uploadedFile.size,
-      fileType: uploadedFile.mimetype,
+      fileSize: result.size,
+      fileType: result.mimeType,
       path: relativePath,
       user: session.user.email,
     });
@@ -200,7 +178,7 @@ export async function POST(req) {
     const duration = Date.now() - startTime;
     logger.info('POST /api/files/upload - File uploaded successfully', {
       fileName,
-      fileSize: uploadedFile.size,
+      fileSize: result.size,
       path: relativePath,
       isHeic,
       storedIn: storedBaseDir,
@@ -214,9 +192,9 @@ export async function POST(req) {
     return NextResponse.json({
       success: true,
       file: {
-        name: fileName,
-        size: uploadedFile.size,
-        mimeType: uploadedFile.mimetype,
+        name: result.name,
+        size: result.size,
+        mimeType: result.mimeType,
         path: normalizedFilePath,
       },
     });
@@ -229,7 +207,9 @@ export async function POST(req) {
       errorMessage: error.message,
       errorStack: error.stack,
     });
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+    const message = error.message || 'Upload failed';
+    const status = message === 'No file provided' ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   } finally {
     // Clean up partially written file on error
     if (writtenFilePath) {
