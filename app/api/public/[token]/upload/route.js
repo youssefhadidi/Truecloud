@@ -5,7 +5,6 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import Busboy from 'busboy';
 
 export const maxDuration = 1800;
@@ -118,12 +117,25 @@ export async function POST(req, { params }) {
         rejectPromise(err);
       });
 
-      // Pipe the Web ReadableStream into busboy via Readable.fromWeb
-      const nodeStream = Readable.fromWeb(req.body);
-      nodeStream.on('error', (err) => {
-        bb.destroy(err);
-      });
-      nodeStream.pipe(bb);
+      // Manually pump the Web ReadableStream into busboy.
+      // Readable.fromWeb() has backpressure bugs in Node 18-21 that truncate data.
+      const reader = req.body.getReader();
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              bb.end();
+              return;
+            }
+            if (!bb.write(value)) {
+              await new Promise((r) => bb.once('drain', r));
+            }
+          }
+        } catch (err) {
+          bb.destroy(err);
+        }
+      })();
     });
 
     writtenFilePath = null; // Success — don't clean up
