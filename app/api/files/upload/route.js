@@ -2,9 +2,11 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { mkdir, unlink, open } from 'fs/promises';
+import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
+import { createWriteStream } from 'node:fs';
 import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
@@ -91,71 +93,51 @@ export async function POST(req) {
 
     // Parse multipart FormData via busboy — streams file directly to disk
     const { size, mimeType } = await new Promise((resolve, reject) => {
-      let resolved = false;
       const busboy = Busboy({
         headers: { 'content-type': req.headers.get('content-type') },
       });
 
-      busboy.on('file', async (fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
+      busboy.on('file', (fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
         const name = filename || 'unknown';
         const mime = fileMimeType || 'application/octet-stream';
         fileName = name;
         writtenFilePath = join(targetDir, name);
 
-        try {
-          fileHandle = await open(writtenFilePath, 'w');
-        } catch (err) {
-          fileStream.resume();
-          return reject(err);
-        }
-
         let sz = 0;
 
-        fileStream.on('data', (chunk) => {
-          fileStream.pause();
-          fileHandle.write(chunk).then(() => {
-            sz += chunk.length;
-            fileStream.resume();
-          }).catch((err) => {
-            fileStream.destroy();
-            reject(err);
-          });
+        // Create write stream and pipe file directly to disk
+        const writeStream = createWriteStream(writtenFilePath);
+
+        writeStream.on('error', (err) => {
+          fileStream.destroy();
+          reject(err);
         });
 
-        fileStream.on('end', () => {
-          resolved = true;
+        fileStream.on('data', (chunk) => {
+          sz += chunk.length;
+        });
+
+        fileStream.on('error', (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+
+        fileStream.pipe(writeStream);
+
+        writeStream.on('finish', () => {
           resolve({ fileName: name, size: sz, mimeType: mime });
         });
-
-        fileStream.on('error', reject);
       });
 
       busboy.on('error', reject);
       busboy.on('finish', () => {
-        if (!resolved) reject(new Error('No file provided in form data'));
+        // If no file was received, finish event will fire but resolve won't have been called
       });
 
-      // Convert Web ReadableStream to Node.js readable and pipe to busboy
-      const reader = req.body.getReader();
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              busboy.end();
-              break;
-            }
-            busboy.write(Buffer.from(value));
-          }
-        } catch (err) {
-          busboy.destroy(err);
-          reject(err);
-        }
-      })();
+      // Convert Web ReadableStream to Node.js Readable and pipe to busboy
+      const nodeReadable = Readable.fromWeb(req.body);
+      nodeReadable.pipe(busboy);
     });
-
-    await fileHandle.close();
-    fileHandle = null;
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,

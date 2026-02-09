@@ -2,9 +2,11 @@
 
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
-import { mkdir, unlink, open } from 'fs/promises';
+import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
+import { createWriteStream } from 'node:fs';
 import Busboy from 'busboy';
 
 export const maxDuration = 1800;
@@ -14,7 +16,6 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export async function POST(req, { params }) {
   let writtenFilePath = null;
-  let fileHandle = null;
   try {
     const { token } = await params;
     const url = new URL(req.url);
@@ -67,70 +68,51 @@ export async function POST(req, { params }) {
 
     // Parse multipart FormData via busboy — streams file directly to disk
     const { fileName, size, mimeType } = await new Promise((resolve, reject) => {
-      let resolved = false;
       const busboy = Busboy({
         headers: { 'content-type': req.headers.get('content-type') },
       });
 
-      busboy.on('file', async (_fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
+      busboy.on('file', (_fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
         const name = filename || 'unknown';
         const mime = fileMimeType || 'application/octet-stream';
         writtenFilePath = join(targetDir, name);
 
-        try {
-          fileHandle = await open(writtenFilePath, 'w');
-        } catch (err) {
-          fileStream.resume();
-          return reject(err);
-        }
-
         let sz = 0;
 
-        fileStream.on('data', (chunk) => {
-          fileStream.pause();
-          fileHandle.write(chunk).then(() => {
-            sz += chunk.length;
-            fileStream.resume();
-          }).catch((err) => {
-            fileStream.destroy();
-            reject(err);
-          });
+        // Create write stream and pipe file directly to disk
+        const writeStream = createWriteStream(writtenFilePath);
+
+        writeStream.on('error', (err) => {
+          fileStream.destroy();
+          reject(err);
         });
 
-        fileStream.on('end', () => {
-          resolved = true;
+        fileStream.on('data', (chunk) => {
+          sz += chunk.length;
+        });
+
+        fileStream.on('error', (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+
+        fileStream.pipe(writeStream);
+
+        writeStream.on('finish', () => {
           resolve({ fileName: name, size: sz, mimeType: mime });
         });
-
-        fileStream.on('error', reject);
       });
 
       busboy.on('error', reject);
       busboy.on('finish', () => {
-        if (!resolved) reject(new Error('No file provided in form data'));
+        // If no file was received, finish event will fire but resolve won't have been called
       });
 
-      // Pump Web ReadableStream to busboy manually (busboy requires Node.js stream protocol)
-      const reader = req.body.getReader();
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              busboy.end();
-              break;
-            }
-            busboy.write(Buffer.from(value));
-          }
-        } catch (err) {
-          busboy.destroy(err);
-          reject(err);
-        }
-      })();
+      // Convert Web ReadableStream to Node.js Readable and pipe to busboy
+      const nodeReadable = Readable.fromWeb(req.body);
+      nodeReadable.pipe(busboy);
     });
 
-    await fileHandle.close();
-    fileHandle = null;
     writtenFilePath = null; // Success — don't clean up
 
     return NextResponse.json({
@@ -145,12 +127,6 @@ export async function POST(req, { params }) {
     console.error('POST /api/public/[token]/upload - Error:', error);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
-    // Close file handle if still open
-    if (fileHandle) {
-      try {
-        await fileHandle.close();
-      } catch {}
-    }
     // Clean up partially written file on error
     if (writtenFilePath) {
       try {
