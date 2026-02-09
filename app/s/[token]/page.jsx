@@ -391,18 +391,19 @@ export default function SharePage({ params }) {
 
   // Upload file
   const uploadFile = async (file) => {
-    const headers = {
-      'X-File-Name': encodeURIComponent(file.name),
-    };
+    const headers = {};
     if (verifiedPassword) {
       headers['x-share-password'] = verifiedPassword;
     }
+
+    const formData = new FormData();
+    formData.append('file', file);
 
     try {
       const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
         method: 'POST',
         headers,
-        body: file,
+        body: formData,
       });
 
       if (!response.ok) {

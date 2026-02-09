@@ -5,6 +5,8 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
+import Busboy from 'busboy';
 
 export const maxDuration = 1800;
 
@@ -60,26 +62,58 @@ export async function POST(req, { params }) {
       await mkdir(targetDir, { recursive: true });
     }
 
-    // File metadata comes from headers (body is raw binary, not multipart)
-    const fileName = decodeURIComponent(req.headers.get('x-file-name') || '') || 'unknown';
-    const mimeType = req.headers.get('content-type') || 'application/octet-stream';
-    writtenFilePath = join(targetDir, fileName);
-
     if (!req.body) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Stream the raw body directly to disk — no multipart parsing needed
-    const reader = req.body.getReader();
-    fileHandle = await open(writtenFilePath, 'w');
-    let size = 0;
+    // Parse multipart FormData via busboy — streams file directly to disk
+    const nodeStream = Readable.fromWeb(req.body);
+    const { fileName, size, mimeType } = await new Promise((resolve, reject) => {
+      let resolved = false;
+      const busboy = Busboy({
+        headers: { 'content-type': req.headers.get('content-type') },
+      });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      await fileHandle.write(value);
-      size += value.length;
-    }
+      busboy.on('file', async (fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
+        const name = decodeURIComponent(filename || '') || 'unknown';
+        const mime = fileMimeType || 'application/octet-stream';
+        writtenFilePath = join(targetDir, name);
+
+        try {
+          fileHandle = await open(writtenFilePath, 'w');
+        } catch (err) {
+          fileStream.resume();
+          return reject(err);
+        }
+
+        let sz = 0;
+
+        fileStream.on('data', (chunk) => {
+          fileStream.pause();
+          fileHandle.write(chunk).then(() => {
+            sz += chunk.length;
+            fileStream.resume();
+          }).catch((err) => {
+            fileStream.destroy();
+            reject(err);
+          });
+        });
+
+        fileStream.on('end', () => {
+          resolved = true;
+          resolve({ fileName: name, size: sz, mimeType: mime });
+        });
+
+        fileStream.on('error', reject);
+      });
+
+      busboy.on('error', reject);
+      busboy.on('finish', () => {
+        if (!resolved) reject(new Error('No file provided in form data'));
+      });
+
+      nodeStream.pipe(busboy);
+    });
 
     await fileHandle.close();
     fileHandle = null;
