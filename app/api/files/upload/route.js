@@ -99,27 +99,56 @@ export async function POST(req) {
       bodyType: req.body?.constructor?.name,
     });
 
-    // Parse multipart FormData via formidable using callback API (more reliable than promise API)
-    // Convert Web ReadableStream to Node.js Readable for formidable
-    logger.info('DEBUG: Converting Web ReadableStream to Node.js Readable');
-    const nodeReadable = Readable.fromWeb(req.body);
+    // Read entire body as Buffer to verify we get all data
+    logger.info('DEBUG: Starting to read request body as Buffer');
+    const bufferReadStart = Date.now();
+    const chunks = [];
+    const reader = req.body.getReader();
+    let totalBytesRead = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(Buffer.from(value));
+        totalBytesRead += value.length;
+        if (totalBytesRead % (1024 * 1024) === 0) {
+          logger.info('DEBUG: Read progress', { bytesRead: totalBytesRead });
+        }
+      }
+    } catch (err) {
+      logger.error('DEBUG: Error reading body', { message: err.message });
+      throw err;
+    }
+
+    const bufferReadDuration = Date.now() - bufferReadStart;
+    const bodyBuffer = Buffer.concat(chunks);
+    logger.info('DEBUG: Body read complete', {
+      duration: `${bufferReadDuration}ms`,
+      totalBytes: bodyBuffer.length,
+      declaredBytes: contentLength,
+      bytesMatch: bodyBuffer.length === parseInt(contentLength),
+    });
+
+    // Create Node.js Readable from Buffer
+    logger.info('DEBUG: Creating Readable from Buffer');
+    const nodeReadable = Readable.from([bodyBuffer]);
 
     // Create a pseudo-request object with headers for formidable
     const headersObj = Object.fromEntries(req.headers);
     logger.info('DEBUG: Headers object created', {
       contentType: headersObj['content-type'],
       contentLength: headersObj['content-length'],
-      keys: Object.keys(headersObj),
     });
 
     const pseudoReq = Object.assign(nodeReadable, {
       headers: headersObj,
     });
 
-    logger.info('DEBUG: Pseudo request created', {
+    logger.info('DEBUG: Pseudo request created from Buffer', {
       hasHeaders: !!pseudoReq.headers,
       hasOn: typeof pseudoReq.on === 'function',
-      hasRead: typeof pseudoReq.read === 'function',
+      bufferSize: bodyBuffer.length,
     });
 
     const form = formidable({
