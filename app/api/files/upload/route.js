@@ -3,9 +3,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import formidable from 'formidable';
+import { Readable } from 'node:stream';
+import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
@@ -96,93 +97,80 @@ export async function POST(req) {
       path: relativePath,
     });
 
-    // Use formidable directly with the Web request object
-    // Formidable can work with Web API Request objects natively
-    const form = formidable({
-      uploadDir: targetDir,
-      keepExtensions: true,
-      multiples: false,
-      maxFileSize: 100 * 1024 * 1024 * 1024, // 100GB limit
-      filename: (_, __, info) => {
-        // Use the original filename sent by the client
-        return info.originalFilename || `upload_${Date.now()}`;
-      },
-    });
+    const fileLimits = {
+      files: 1,
+      fileSize: 100 * 1024 * 1024 * 1024, // 100GB
+    };
 
-    // Add debugging for file events
-    form.on('file', (fieldname, file) => {
-      logger.info('DEBUG: Formidable file event', {
-        fieldname,
-        originalFilename: file.originalFilename,
-        filename: file.filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      });
-    });
+    if (!contentType || !contentType.includes('multipart/form-data')) {
+      return NextResponse.json({ error: 'Invalid content type' }, { status: 415 });
+    }
 
-    form.on('error', (err) => {
-      logger.error('DEBUG: Formidable error event', {
-        message: err.message,
-        code: err.code,
-      });
-    });
-
-    // Parse the multipart form - formidable handles streaming automatically
     const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      try {
-        form.parse(req, (err, _, files) => {
-          logger.info('DEBUG: form.parse callback invoked', { hasError: !!err });
+      const busboy = Busboy({
+        headers: { 'content-type': contentType },
+        limits: fileLimits,
+      });
 
-          if (err) {
-            logger.error('POST /api/files/upload - Parse error', {
-              message: err?.message || 'No message',
-              code: err?.code || 'No code',
-              stack: err?.stack || 'No stack',
-              errorKeys: err ? Object.keys(err) : [],
-              errorString: String(err),
-            });
-            reject(err);
-            return;
-          }
+      let fileMimeTypeLocal = 'application/octet-stream';
+      let fileSizeLocal = 0;
+      let fileReceived = false;
+      let writePromise = null;
 
-        logger.info('DEBUG: Parse callback - files object:', {
-          fileKeys: Object.keys(files || {}),
-          fileCount: files?.file?.length || 0,
-        });
-
-        const uploadedFiles = files.file;
-        if (!uploadedFiles || uploadedFiles.length === 0) {
-          logger.warn('DEBUG: No files in parsed data', {
-            allKeys: Object.keys(files || {}),
-          });
-          reject(new Error('No file provided in multipart data'));
+      busboy.on('file', (fieldname, file, info) => {
+        if (fieldname !== 'file') {
+          file.resume();
           return;
         }
 
-        const uploadedFile = uploadedFiles[0];
-        fileName = uploadedFile.originalFilename || 'unknown';
-        writtenFilePath = uploadedFile.filepath;
+        fileReceived = true;
+        const originalName = info?.filename || `upload_${Date.now()}`;
+        const safeName = originalName.split(/[/\\]/).pop() || `upload_${Date.now()}`;
+        fileName = safeName;
+        fileMimeTypeLocal = info?.mimeType || 'application/octet-stream';
+        writtenFilePath = join(targetDir, safeName);
 
-        logger.info('DEBUG: File parsed successfully', {
-          originalFilename: uploadedFile.originalFilename,
-          filename: uploadedFile.filename,
-          filepath: uploadedFile.filepath,
-          size: uploadedFile.size,
-          mimetype: uploadedFile.mimetype,
+        const writeStream = createWriteStream(writtenFilePath);
+        writePromise = new Promise((res, rej) => {
+          writeStream.on('finish', res);
+          writeStream.on('error', rej);
         });
 
-        resolve({
-          fileSize: uploadedFile.size,
-          fileMimeType: uploadedFile.mimetype || 'application/octet-stream',
+        file.on('data', (chunk) => {
+          fileSizeLocal += chunk.length;
         });
+
+        file.on('limit', () => {
+          const limitError = new Error('File too large');
+          limitError.code = 'LIMIT_FILE_SIZE';
+          writeStream.destroy(limitError);
+          reject(limitError);
         });
-      } catch (parseError) {
-        logger.error('POST /api/files/upload - Sync parse error', {
-          message: parseError?.message,
-          stack: parseError?.stack,
-        });
-        reject(parseError);
-      }
+
+        file.on('error', reject);
+        file.pipe(writeStream);
+      });
+
+      busboy.on('error', reject);
+
+      busboy.on('finish', async () => {
+        try {
+          if (!fileReceived) {
+            reject(new Error('No file provided in multipart data'));
+            return;
+          }
+          if (writePromise) {
+            await writePromise;
+          }
+          resolve({ fileSize: fileSizeLocal, fileMimeType: fileMimeTypeLocal });
+        } catch (finishError) {
+          reject(finishError);
+        }
+      });
+
+      const nodeStream = Readable.fromWeb(req.body);
+      nodeStream.on('error', reject);
+      nodeStream.pipe(busboy);
     });
 
     const size = fileSize;
