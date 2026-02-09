@@ -60,7 +60,16 @@ export default async function handler(req, res) {
     logInfo('POST /api/files/upload - Session check start (pages api)');
     const { getServerSession } = await import('next-auth/next');
     const { authOptions } = await import('@/lib/authOptions');
-    const session = await getServerSession(req, res, authOptions);
+    let session = null;
+    try {
+      session = await getServerSession(req, res, authOptions);
+    } catch (error) {
+      logError('POST /api/files/upload - Session check failed (pages api)', {
+        message: error?.message,
+        stack: error?.stack,
+      });
+      return res.status(500).json({ error: 'Session check failed' });
+    }
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
