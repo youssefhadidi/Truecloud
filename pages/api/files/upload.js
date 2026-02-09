@@ -19,6 +19,8 @@ export const config = {
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
+console.log('Pages API upload module loaded');
+
 export default async function handler(req, res) {
   try {
     logger.info('POST /api/files/upload - Request received (pages api)', {
