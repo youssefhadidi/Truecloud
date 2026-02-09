@@ -122,10 +122,13 @@ export async function POST(req) {
         const ldPath = `/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
         const buildEnv = { ...process.env, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
-        // Step 1: Install build dependencies
+        // Step 1: Install build dependencies and remove conflicting system packages
         logger.info('Step 1/6: Installing build dependencies...');
+        // Remove old system libheif/libde265/libvips dev packages to prevent conflicts
         await execAsync(
-          `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+          `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && \
+            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq libheif-dev libde265-dev libvips-dev libvips42 2>&1 || true && \
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             apt-utils build-essential pkg-config cmake meson ninja-build \
             libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
             libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
@@ -197,6 +200,16 @@ export async function POST(req) {
           );
 
           logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
+          // Verify pkg-config finds our /usr/local libheif before building
+          try {
+            const { stdout: heifPc } = await execAsync('pkg-config --modversion libheif 2>&1 && pkg-config --libs libheif 2>&1', { env: buildEnv });
+            logger.info('pkg-config libheif before vips build:', heifPc.trim().replace(/\n/g, ' | '));
+          } catch (e) {
+            logger.error('libheif not found by pkg-config before vips build:', e.message);
+          }
+          // Also remove any previously installed libvips to avoid stale cached .so
+          await execAsync('sudo rm -f /usr/local/lib/libvips*.so* 2>&1 && sudo ldconfig 2>&1').catch(() => {});
+
           const mesonResult = await execAsync(
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
             PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
@@ -222,8 +235,13 @@ export async function POST(req) {
         // Cleanup build dirs
         await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
-        // Step 6: Rebuild sharp with system libvips
-        logger.info('Step 6/6: Rebuilding sharp with system libvips...');
+        // Step 6: Reinstall sharp to use system libvips
+        // Sharp 0.33+ uses prebuilt native addons from @img/sharp-linux-x64
+        // which dynamically link to libvips. We need to:
+        //   - Remove @img/sharp-libvips-* (the BUNDLED libvips, which lacks HEIF)
+        //   - Keep @img/sharp-linux-x64 (the prebuilt sharp.node native addon)
+        //   - At runtime, LD_LIBRARY_PATH=/usr/local/lib makes sharp.node load OUR libvips
+        logger.info('Step 6/6: Configuring sharp to use system libvips...');
         const rebuildOpts = {
           ...longOpts,
           cwd: projectDir,
@@ -234,35 +252,18 @@ export async function POST(req) {
           },
         };
 
-        // Install sharp (this will also pull @img prebuilt packages)
+        // Reinstall sharp with SHARP_FORCE_GLOBAL_LIBVIPS=1
+        // This prevents @img/sharp-libvips-* from being downloaded
         await execAsync('pnpm remove sharp 2>&1 || true', rebuildOpts);
         await execAsync('pnpm add sharp 2>&1', rebuildOpts);
 
-        // Remove the @img prebuilt packages AFTER install so sharp falls back to system libvips
-        // pnpm stores them in .pnpm/@img+sharp-* symlinked from node_modules/@img/
+        // Also remove any leftover bundled libvips packages (but keep @img/sharp-linux-x64!)
         await execAsync(
-          `find node_modules -path "*/@img/sharp-*/sharp.node" -delete 2>&1; \
-           find node_modules -path "*/@img/sharp-*/lib" -type d -exec rm -rf {} + 2>&1; \
-           rm -rf node_modules/.pnpm/@img+sharp-*/node_modules/@img/*/build 2>&1`,
+          `rm -rf node_modules/.pnpm/@img+sharp-libvips-* 2>&1; \
+           rm -rf node_modules/@img/sharp-libvips-* 2>&1`,
           { cwd: projectDir },
         ).catch(() => {});
-        logger.info('Removed @img prebuilt binaries');
-
-        // Now rebuild sharp's native addon from source against system libvips
-        // Find sharp's actual location in the pnpm store
-        const { stdout: sharpDir } = await execAsync(`find node_modules/.pnpm -maxdepth 4 -name "sharp" -path "*/node_modules/sharp" -type d | head -1 2>&1`, { cwd: projectDir });
-        const sharpPath = sharpDir.trim();
-        if (sharpPath) {
-          logger.info(`Found sharp at: ${sharpPath}, rebuilding native addon...`);
-          await execAsync(`cd "${projectDir}/${sharpPath}" && npm run build 2>&1`, { ...rebuildOpts, cwd: `${projectDir}/${sharpPath}` }).catch(async (buildErr) => {
-            // Fallback: try node-gyp rebuild directly
-            logger.warn('npm run build failed, trying node-gyp rebuild:', buildErr.message?.slice(0, 200));
-            await execAsync(`cd "${projectDir}/${sharpPath}" && npx node-gyp rebuild 2>&1`, rebuildOpts);
-          });
-          logger.info('Sharp native addon rebuilt from source');
-        } else {
-          logger.error('Could not find sharp directory in node_modules');
-        }
+        logger.info('Removed bundled @img/sharp-libvips packages (keeping prebuilt sharp.node addon)');
 
         // Write env vars to .env.local so they persist across restarts
         const envFile = `${projectDir}/.env.local`;
