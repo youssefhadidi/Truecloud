@@ -162,7 +162,14 @@ export async function GET(req, { params }) {
     const base64 = thumbnailBuffer.toString('base64');
     const dataUrl = `data:image/webp;base64,${base64}`;
 
-    return NextResponse.json({ data: dataUrl, generated: !thumbnailExists });
+    return NextResponse.json(
+      { data: dataUrl, generated: !thumbnailExists },
+      {
+        headers: {
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      },
+    );
   } catch (error) {
     console.error('GET /api/public/[token]/thumbnail - Error:', error);
     return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });

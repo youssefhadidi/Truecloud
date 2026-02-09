@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState, useEffect, use, lazy, Suspense, useRef, useCallback } from 'react';
+import { useState, useEffect, use, lazy, Suspense, useRef, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FiDownload,
   FiLock,
@@ -32,10 +33,9 @@ const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 // Check if file is SKP
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
-// Thumbnail component that fetches base64 from the public thumbnail API
+// Thumbnail component that fetches base64 from the public thumbnail API using React Query
 function ShareThumbnail({ url, alt, className, children, password }) {
-  const [src, setSrc] = useState(null);
-  const [error, setError] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const imgRef = useRef(null);
   const [isInView, setIsInView] = useState(false);
 
@@ -53,36 +53,38 @@ function ShareThumbnail({ url, alt, className, children, password }) {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isInView || !url) return;
-    let cancelled = false;
-    const headers = {};
-    if (password) headers['x-share-password'] = password;
-    fetch(url, { headers })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled && data?.data) setSrc(data.data);
-        else if (!cancelled) setError(true);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isInView, url]);
+  const headers = useMemo(() => {
+    const h = {};
+    if (password) h['x-share-password'] = password;
+    return h;
+  }, [password]);
+
+  const { data, isError } = useQuery({
+    queryKey: ['share-thumbnail', url],
+    queryFn: async () => {
+      const res = await fetch(url, { headers });
+      const json = await res.json();
+      if (!json?.data) throw new Error('No thumbnail data');
+      return json.data;
+    },
+    enabled: isInView && !!url && !hasError,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  });
+
+  const showError = isError || hasError;
 
   return (
     <div ref={imgRef} className="relative w-full h-full">
-      {src && !error ? (
+      {data && !showError ? (
         <>
-          <img src={src} alt={alt} className={className} onError={() => setError(true)} />
+          <img src={data} alt={alt} className={className} onError={() => setHasError(true)} />
           {children}
         </>
-      ) : error ? (
+      ) : showError ? (
         children || null
       ) : (
-        // Loading placeholder
         <div className="w-full h-full flex items-center justify-center">{children || <div className="animate-pulse bg-gray-300 dark:bg-gray-500 rounded w-10 h-10" />}</div>
       )}
     </div>
@@ -100,19 +102,57 @@ function formatFileSize(bytes) {
 
 export default function SharePage({ params }) {
   const { token } = use(params);
-  const [shareData, setShareData] = useState(null);
+  const queryClient = useQueryClient();
   const [password, setPassword] = useState('');
-  const [requiresPassword, setRequiresPassword] = useState(false);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [verifiedPassword, setVerifiedPassword] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
-  const [directoryFiles, setDirectoryFiles] = useState(null);
   const [currentSubPath, setCurrentSubPath] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState([]);
   const fileInputRef = useRef(null);
+
+  // Fetch share metadata
+  const {
+    data: shareResponse,
+    isLoading: loading,
+    error: shareError,
+  } = useQuery({
+    queryKey: ['share', token, verifiedPassword],
+    queryFn: async () => {
+      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
+      const res = await fetch(`/api/public/${token}`, { headers });
+      const data = await res.json();
+
+      if (data.requiresPassword) {
+        return { requiresPassword: true, fileName: data.fileName, isDirectory: data.isDirectory };
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Share not found');
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const requiresPassword = shareResponse?.requiresPassword === true;
+  const shareData = shareResponse ?? null;
+  const error = shareError?.message ?? null;
+
+  // Fetch directory listing
+  const { data: directoryFiles = null } = useQuery({
+    queryKey: ['share-files', token, verifiedPassword, currentSubPath],
+    queryFn: async () => {
+      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
+      const url = `/api/public/${token}/files${currentSubPath ? `?path=${encodeURIComponent(currentSubPath)}` : ''}`;
+      const res = await fetch(url, { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load files');
+      return data.files;
+    },
+    enabled: !!shareResponse && !requiresPassword && !!shareResponse.isDirectory,
+    staleTime: 30 * 1000,
+  });
 
   // Drag and drop handlers - must be defined before any early returns
   const handleDragOver = useCallback(
@@ -138,69 +178,9 @@ export default function SharePage({ params }) {
     setIsDragging(false);
   }, []);
 
-  useEffect(() => {
-    fetchShareData();
-  }, [token]);
-
-  const fetchShareData = async (pwd = null) => {
-    setLoading(true);
-    setError(null);
-
-    const headers = pwd ? { 'x-share-password': pwd } : {};
-
-    try {
-      const res = await fetch(`/api/public/${token}`, { headers });
-      const data = await res.json();
-
-      if (data.requiresPassword) {
-        setRequiresPassword(true);
-        setShareData({ fileName: data.fileName, isDirectory: data.isDirectory });
-        setLoading(false);
-        return;
-      }
-
-      if (!res.ok) {
-        setError(data.error || 'Share not found');
-        setLoading(false);
-        return;
-      }
-
-      setShareData(data);
-      setRequiresPassword(false);
-      setVerifiedPassword(pwd);
-
-      // If it's a directory, fetch the file listing
-      if (data.isDirectory) {
-        await fetchDirectoryFiles(pwd);
-      }
-
-      setLoading(false);
-    } catch (e) {
-      setError('Failed to load share');
-      setLoading(false);
-    }
-  };
-
-  const fetchDirectoryFiles = async (pwd = null, subPath = '') => {
-    const headers = pwd || verifiedPassword ? { 'x-share-password': pwd || verifiedPassword } : {};
-    const url = `/api/public/${token}/files${subPath ? `?path=${encodeURIComponent(subPath)}` : ''}`;
-
-    try {
-      const res = await fetch(url, { headers });
-      const data = await res.json();
-
-      if (res.ok) {
-        setDirectoryFiles(data.files);
-        setCurrentSubPath(subPath);
-      }
-    } catch (e) {
-      console.error('Failed to fetch directory files:', e);
-    }
-  };
-
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    fetchShareData(password);
+    setVerifiedPassword(password);
   };
 
   const handleDownload = async () => {
@@ -240,14 +220,13 @@ export default function SharePage({ params }) {
 
   const navigateToSubFolder = (folderName) => {
     const newPath = currentSubPath ? `${currentSubPath}/${folderName}` : folderName;
-    fetchDirectoryFiles(verifiedPassword, newPath);
+    setCurrentSubPath(newPath);
   };
 
   const navigateUp = () => {
     const parts = currentSubPath.split('/');
     parts.pop();
-    const newPath = parts.join('/');
-    fetchDirectoryFiles(verifiedPassword, newPath);
+    setCurrentSubPath(parts.join('/'));
   };
 
   const getFileIcon = (file) => {
@@ -286,7 +265,7 @@ export default function SharePage({ params }) {
   }
 
   // Password entry form
-  if (requiresPassword && !verifiedPassword) {
+  if (requiresPassword) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md mx-auto">
         <div className="text-center mb-6">
@@ -460,7 +439,7 @@ export default function SharePage({ params }) {
 
     // Refresh file list after upload
     setTimeout(() => {
-      fetchDirectoryFiles(verifiedPassword, currentSubPath);
+      queryClient.invalidateQueries({ queryKey: ['share-files', token] });
       setUploadingFiles([]);
     }, 1500);
   };
