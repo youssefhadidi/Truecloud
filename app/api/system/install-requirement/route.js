@@ -235,35 +235,47 @@ export async function POST(req) {
         // Cleanup build dirs
         await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
-        // Step 6: Reinstall sharp to use system libvips
-        // Sharp 0.33+ uses prebuilt native addons from @img/sharp-linux-x64
-        // which dynamically link to libvips. We need to:
-        //   - Remove @img/sharp-libvips-* (the BUNDLED libvips, which lacks HEIF)
-        //   - Keep @img/sharp-linux-x64 (the prebuilt sharp.node native addon)
-        //   - At runtime, LD_LIBRARY_PATH=/usr/local/lib makes sharp.node load OUR libvips
-        logger.info('Step 6/6: Configuring sharp to use system libvips...');
-        const rebuildOpts = {
-          ...longOpts,
-          cwd: projectDir,
-          env: {
-            ...buildEnv,
-            SHARP_FORCE_GLOBAL_LIBVIPS: '1',
-            npm_config_sharp_force_global_libvips: '1',
-          },
-        };
+        // Step 6: Patch sharp's bundled libvips with our HEIF-enabled version
+        // Sharp 0.33+ ships @img/sharp-libvips-linux-x64 with bundled .so files.
+        // The prebuilt sharp.node in @img/sharp-linux-x64 loads libvips from there.
+        // We replace the bundled libvips .so files with our HEIF-enabled ones
+        // and add the HEIF/HEVC libraries (libheif, libde265).
+        logger.info('Step 6/6: Patching sharp bundled libvips with HEIF-enabled version...');
 
-        // Reinstall sharp with SHARP_FORCE_GLOBAL_LIBVIPS=1
-        // This prevents @img/sharp-libvips-* from being downloaded
-        await execAsync('pnpm remove sharp 2>&1 || true', rebuildOpts);
-        await execAsync('pnpm add sharp 2>&1', rebuildOpts);
+        // Ensure sharp is installed normally first
+        await execAsync('pnpm remove sharp 2>&1 || true', { ...longOpts, cwd: projectDir });
+        await execAsync('pnpm add sharp 2>&1', { ...longOpts, cwd: projectDir });
 
-        // Also remove any leftover bundled libvips packages (but keep @img/sharp-linux-x64!)
-        await execAsync(
-          `rm -rf node_modules/.pnpm/@img+sharp-libvips-* 2>&1; \
-           rm -rf node_modules/@img/sharp-libvips-* 2>&1`,
+        // Find the bundled libvips directory
+        const { stdout: libvipsDir } = await execAsync(
+          `find node_modules -path "*/@img/sharp-libvips-linux-x64/lib" -type d 2>/dev/null | head -1 || \
+           find node_modules -path "*/@img/sharp-libvips-*/lib" -type d 2>/dev/null | head -1`,
           { cwd: projectDir },
-        ).catch(() => {});
-        logger.info('Removed bundled @img/sharp-libvips packages (keeping prebuilt sharp.node addon)');
+        );
+        const bundledLibDir = libvipsDir.trim();
+
+        if (bundledLibDir) {
+          logger.info(`Found bundled libvips at: ${bundledLibDir}`);
+
+          // Replace bundled libvips with our HEIF-enabled build
+          // Copy our libvips .so files (replacing the originals)
+          await execAsync(
+            `cp -f /usr/local/lib/libvips.so* "${bundledLibDir}/" 2>&1; \
+             cp -f /usr/local/lib/libvips-cpp.so* "${bundledLibDir}/" 2>&1`,
+            { cwd: projectDir },
+          );
+
+          // Add HEIF/HEVC runtime libraries that the bundled version lacks
+          await execAsync(
+            `cp -f /usr/local/lib/libheif.so* "${bundledLibDir}/" 2>&1; \
+             cp -f /usr/local/lib/libde265.so* "${bundledLibDir}/" 2>&1`,
+            { cwd: projectDir },
+          );
+
+          logger.info('Patched bundled libvips with HEIF-enabled libraries');
+        } else {
+          logger.error('Could not find @img/sharp-libvips lib directory! Sharp may not work.');
+        }
 
         // Write env vars to .env.local so they persist across restarts
         const envFile = `${projectDir}/.env.local`;
@@ -308,7 +320,7 @@ export async function POST(req) {
           const { stdout: verifyResult } = await execAsync(`node -e "const s=require('sharp');const h=s.format?.heif?.input;console.log(JSON.stringify(h?.fileSuffix||[]))" 2>&1`, {
             ...longOpts,
             cwd: projectDir,
-            env: { ...buildEnv, SHARP_FORCE_GLOBAL_LIBVIPS: '1' },
+            env: buildEnv,
           });
           hevcWorking = verifyResult.includes('.heic');
           logger.info('Sharp HEIF verification:', verifyResult.trim());
