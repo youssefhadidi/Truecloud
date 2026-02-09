@@ -409,7 +409,11 @@ export default function SharePage({ params }) {
     headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
 
     try {
-      const body = new Blob([headerParts.join(''), file, footer]);
+      // Encode strings as UTF-8 bytes and concatenate with file as a Blob for streaming
+      const encoder = new TextEncoder();
+      const headerBytes = encoder.encode(headerParts.join(''));
+      const footerBytes = encoder.encode(footer);
+      const body = new Blob([headerBytes, file, footerBytes]);
       const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
         method: 'POST',
         headers,
