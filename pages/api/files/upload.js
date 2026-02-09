@@ -55,6 +55,10 @@ export default async function handler(req, res) {
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    logInfo('POST /api/files/upload - Session ok (pages api)', {
+      userId: session.user?.id,
+      email: session.user?.email,
+    });
 
     const queryPath = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path || '';
     let relativePath = queryPath;
@@ -71,6 +75,10 @@ export default async function handler(req, res) {
     if (!accessCheck.allowed) {
       return res.status(accessCheck.status).json({ error: accessCheck.error });
     }
+    logInfo('POST /api/files/upload - Access ok (pages api)', {
+      path: accessCheck.normalizedPath,
+      isRoot,
+    });
 
     relativePath = accessCheck.normalizedPath;
     const targetDir = join(UPLOAD_DIR, relativePath);
@@ -82,6 +90,9 @@ export default async function handler(req, res) {
     if (!existsSync(targetDir)) {
       await mkdir(targetDir, { recursive: true });
     }
+    logInfo('POST /api/files/upload - Target dir ready (pages api)', {
+      targetDir,
+    });
 
     const contentType = req.headers['content-type'];
     if (!contentType || !contentType.includes('multipart/form-data')) {
@@ -102,6 +113,7 @@ export default async function handler(req, res) {
         fileSize: 100 * 1024 * 1024 * 1024,
       },
     });
+    logInfo('POST /api/files/upload - Busboy initialized (pages api)');
 
     let fileName = 'unknown';
     let fileMimeType = 'application/octet-stream';
@@ -114,6 +126,12 @@ export default async function handler(req, res) {
     const respond = (status, payload) => {
       if (responded) return;
       responded = true;
+      if (status >= 500) {
+        logError('POST /api/files/upload - Responding with error (pages api)', {
+          status,
+          payload,
+        });
+      }
       res.status(status).json(payload);
     };
 
@@ -160,6 +178,14 @@ export default async function handler(req, res) {
       });
 
       file.pipe(writeStream);
+    });
+
+    busboy.on('finish', () => {
+      logInfo('POST /api/files/upload - Busboy finished (pages api)', {
+        fileReceived,
+        fileName,
+        fileSize,
+      });
     });
 
     busboy.on('error', async (error) => {
@@ -209,7 +235,15 @@ export default async function handler(req, res) {
     });
 
     req.on('aborted', async () => {
+      logError('POST /api/files/upload - Request aborted (pages api)');
       await cleanup();
+    });
+
+    req.on('error', (error) => {
+      logError('POST /api/files/upload - Request error (pages api)', {
+        message: error?.message,
+        stack: error?.stack,
+      });
     });
 
     req.pipe(busboy);
