@@ -5,7 +5,6 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import { createWriteStream } from 'node:fs';
 import Busboy from 'busboy';
 import { logger } from '@/lib/logger';
@@ -93,11 +92,14 @@ export async function POST(req) {
 
     // Parse multipart FormData via busboy — streams file directly to disk
     const { size, mimeType } = await new Promise((resolve, reject) => {
+      let fileReceived = false;
+
       const busboy = Busboy({
         headers: { 'content-type': req.headers.get('content-type') },
       });
 
       busboy.on('file', (fieldname, fileStream, { filename, mimeType: fileMimeType }) => {
+        fileReceived = true;
         const name = filename || 'unknown';
         const mime = fileMimeType || 'application/octet-stream';
         fileName = name;
@@ -131,12 +133,28 @@ export async function POST(req) {
 
       busboy.on('error', reject);
       busboy.on('finish', () => {
-        // If no file was received, finish event will fire but resolve won't have been called
+        if (!fileReceived) {
+          reject(new Error('No file received in multipart form data'));
+        }
       });
 
-      // Convert Web ReadableStream to Node.js Readable and pipe to busboy
-      const nodeReadable = Readable.fromWeb(req.body);
-      nodeReadable.pipe(busboy);
+      // Manually pump Web ReadableStream to busboy
+      const reader = req.body.getReader();
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              busboy.end();
+              break;
+            }
+            busboy.write(Buffer.from(value));
+          }
+        } catch (err) {
+          busboy.destroy(err);
+          reject(err);
+        }
+      })();
     });
 
     logger.debug('POST /api/files/upload - Processing file', {
