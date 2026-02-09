@@ -2,8 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
-import { mkdir, rename, unlink, copyFile } from 'fs/promises';
-import { existsSync } from 'fs';
+import { mkdir, unlink } from 'fs/promises';
+import { existsSync, createWriteStream, mkdirSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
 import { PassThrough } from 'node:stream';
 import formidable from 'formidable';
@@ -39,32 +39,16 @@ export const maxDuration = 1800;
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = './heic';
-const TEMP_DIR = resolve(process.cwd(), '.upload-tmp');
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 const RESOLVED_HEIC_DIR = resolve(process.cwd(), HEIC_DIR) + sep;
 
-/**
- * Move a file, falling back to copy+delete if cross-device (EXDEV)
- */
-async function moveFile(src, dest) {
-  try {
-    await rename(src, dest);
-  } catch (err) {
-    if (err.code === 'EXDEV') {
-      await copyFile(src, dest);
-      await unlink(src);
-    } else {
-      throw err;
-    }
-  }
-}
-
 export async function POST(req, { params }) {
-  let tempFilePath = null;
+  let writtenFilePath = null;
   try {
     const { token } = await params;
     const url = new URL(req.url);
     const password = req.headers.get('x-share-password') || url.searchParams.get('pwd');
+    const subPath = url.searchParams.get('path') || '';
 
     // Verify share
     const verification = await verifyShare(token, password);
@@ -88,78 +72,72 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Uploads only allowed for directory shares' }, { status: 400 });
     }
 
-    // Ensure directories exist
-    for (const dir of [UPLOAD_DIR, HEIC_DIR, TEMP_DIR]) {
-      if (!existsSync(dir)) {
-        await mkdir(dir, { recursive: true });
-      }
-    }
-
-    // Convert Web Request body to Node.js stream for formidable (streams to disk, not RAM)
-    const headers = Object.fromEntries(req.headers.entries());
-    const nodeStream = webStreamToNodeStream(req.body, headers);
-
-    const form = formidable({
-      uploadDir: TEMP_DIR,
-      keepExtensions: true,
-      maxFileSize: 200 * 1024 * 1024 * 1024, // 200 GB
-      maxTotalFileSize: 200 * 1024 * 1024 * 1024,
-      allowEmptyFiles: false,
-      multiples: false,
-    });
-
-    let fields, files;
-    try {
-      [fields, files] = await form.parse(nodeStream);
-    } catch (parseError) {
-      return NextResponse.json({ error: 'Upload parsing failed', details: parseError.message }, { status: 400 });
-    }
-
-    const uploadedFile = files.file?.[0];
-    const subPath = fields.path?.[0] || '';
-
-    if (!uploadedFile) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    tempFilePath = uploadedFile.filepath;
-
     // Validate the upload path is within share scope
     const pathCheck = validateSharePath(share, subPath);
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
-    // Check file extension for HEIC
-    const fileExt = extname(uploadedFile.originalFilename).toLowerCase();
-    const isHeic = ['.heic', '.heif'].includes(fileExt);
-
-    const baseDir = isHeic ? HEIC_DIR : UPLOAD_DIR;
-    const resolvedBaseDir = isHeic ? RESOLVED_HEIC_DIR : RESOLVED_UPLOAD_DIR;
-
-    // Build target directory
-    const targetDir = join(baseDir, pathCheck.fullPath);
-    const resolvedTarget = resolve(targetDir) + sep;
+    // Pre-compute both possible target directories
+    const regularTargetDir = join(UPLOAD_DIR, pathCheck.fullPath);
+    const heicTargetDir = join(HEIC_DIR, pathCheck.fullPath);
 
     // Security: prevent directory traversal
-    if (!resolvedTarget.startsWith(resolvedBaseDir)) {
+    if (!(resolve(regularTargetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Ensure directories exist
-    if (!existsSync(targetDir)) {
-      await mkdir(targetDir, { recursive: true });
+    // Ensure the regular target directory exists
+    if (!existsSync(regularTargetDir)) {
+      await mkdir(regularTargetDir, { recursive: true });
     }
 
-    // Move file from temp to final location (atomic on same filesystem)
-    const filePath = join(targetDir, uploadedFile.originalFilename);
-    await moveFile(tempFilePath, filePath);
-    tempFilePath = null; // Successfully moved, no cleanup needed
+    let isHeic = false;
+    let fileName = '';
+
+    // Configure formidable to write directly to the target directory (no temp files)
+    const form = formidable({
+      maxFileSize: 200 * 1024 * 1024 * 1024, // 200 GB
+      maxTotalFileSize: 200 * 1024 * 1024 * 1024,
+      allowEmptyFiles: false,
+      multiples: false,
+      fileWriteStreamHandler: (file) => {
+        const ext = extname(file.originalFilename || '').toLowerCase();
+        isHeic = ['.heic', '.heif'].includes(ext);
+        const targetDir = isHeic ? heicTargetDir : regularTargetDir;
+
+        if (isHeic && !existsSync(heicTargetDir)) {
+          mkdirSync(heicTargetDir, { recursive: true });
+        }
+
+        fileName = file.originalFilename || 'unknown';
+        writtenFilePath = join(targetDir, fileName);
+        return createWriteStream(writtenFilePath);
+      },
+    });
+
+    // Stream request body directly to formidable → disk
+    const headers = Object.fromEntries(req.headers.entries());
+    const nodeStream = webStreamToNodeStream(req.body, headers);
+
+    let files;
+    try {
+      [, files] = await form.parse(nodeStream);
+    } catch (parseError) {
+      return NextResponse.json({ error: 'Upload parsing failed', details: parseError.message }, { status: 400 });
+    }
+
+    const uploadedFile = files.file?.[0];
+    if (!uploadedFile) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    writtenFilePath = null; // Success — don't clean up
 
     return NextResponse.json({
       success: true,
       file: {
-        name: uploadedFile.originalFilename,
+        name: fileName,
         size: uploadedFile.size,
         mimeType: uploadedFile.mimetype,
       },
@@ -168,10 +146,10 @@ export async function POST(req, { params }) {
     console.error('POST /api/public/[token]/upload - Error:', error);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
-    // Clean up temp file if it still exists (e.g. error after formidable wrote it)
-    if (tempFilePath) {
+    // Clean up partially written file on error
+    if (writtenFilePath) {
       try {
-        await unlink(tempFilePath);
+        await unlink(writtenFilePath);
       } catch {}
     }
   }

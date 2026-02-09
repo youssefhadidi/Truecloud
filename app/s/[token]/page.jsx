@@ -3,7 +3,24 @@
 'use client';
 
 import { useState, useEffect, use, lazy, Suspense, useRef, useCallback } from 'react';
-import { FiDownload, FiLock, FiFile, FiFolder, FiImage, FiVideo, FiBox, FiFileText, FiEye, FiChevronRight, FiArrowLeft, FiGrid, FiList, FiPlay, FiUpload, FiX } from 'react-icons/fi';
+import {
+  FiDownload,
+  FiLock,
+  FiFile,
+  FiFolder,
+  FiImage,
+  FiVideo,
+  FiBox,
+  FiFileText,
+  FiEye,
+  FiChevronRight,
+  FiArrowLeft,
+  FiGrid,
+  FiList,
+  FiPlay,
+  FiUpload,
+  FiX,
+} from 'react-icons/fi';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
@@ -49,7 +66,7 @@ export default function SharePage({ params }) {
         setIsDragging(true);
       }
     },
-    [shareData?.allowUploads]
+    [shareData?.allowUploads],
   );
 
   const handleDragLeave = useCallback((e) => {
@@ -58,14 +75,11 @@ export default function SharePage({ params }) {
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback(
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-    },
-    []
-  );
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
 
   useEffect(() => {
     fetchShareData();
@@ -223,9 +237,7 @@ export default function SharePage({ params }) {
             <FiLock className="text-indigo-500" size={32} />
           </div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Password Protected</h2>
-          <p className="text-gray-500 dark:text-gray-400">
-            This {shareData?.isDirectory ? 'folder' : 'file'} is password protected.
-          </p>
+          <p className="text-gray-500 dark:text-gray-400">This {shareData?.isDirectory ? 'folder' : 'file'} is password protected.</p>
           {shareData?.fileName && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 font-medium">{shareData.fileName}</p>}
         </div>
 
@@ -244,10 +256,7 @@ export default function SharePage({ params }) {
               autoFocus
             />
           </div>
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-          >
+          <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">
             Unlock
           </button>
         </form>
@@ -283,9 +292,7 @@ export default function SharePage({ params }) {
 
           {/* Content */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4">
-            {isImage(viewingFile.name) && (
-              <img src={getFileUrl()} alt={viewingFile.name} className="max-w-full max-h-full object-contain" />
-            )}
+            {isImage(viewingFile.name) && <img src={getFileUrl()} alt={viewingFile.name} className="max-w-full max-h-full object-contain" />}
             {isVideo(viewingFile.name) && (
               <video controls autoPlay className="max-w-full max-h-full" src={getFileUrl()}>
                 Your browser does not support video playback.
@@ -299,32 +306,17 @@ export default function SharePage({ params }) {
             {isPdf(viewingFile.name) && <iframe src={getFileUrl()} className="w-full h-full" title={viewingFile.name} />}
             {is3dFile(viewingFile.name) && !isSkp(viewingFile.name) && (
               <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
-                <Viewer3D
-                  fileName={viewingFile.name}
-                  currentPath={currentSubPath}
-                  shareToken={token}
-                  sharePassword={verifiedPassword}
-                />
+                <Viewer3D fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
               </Suspense>
             )}
             {isSkp(viewingFile.name) && (
               <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
-                <SkpViewer
-                  fileName={viewingFile.name}
-                  currentPath={currentSubPath}
-                  shareToken={token}
-                  sharePassword={verifiedPassword}
-                />
+                <SkpViewer fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
               </Suspense>
             )}
             {isXlsx(viewingFile.name) && (
               <Suspense fallback={<div className="text-white">Loading spreadsheet...</div>}>
-                <XlsxViewer
-                  fileName={viewingFile.name}
-                  currentPath={currentSubPath}
-                  shareToken={token}
-                  sharePassword={verifiedPassword}
-                />
+                <XlsxViewer fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
               </Suspense>
             )}
           </div>
@@ -366,7 +358,6 @@ export default function SharePage({ params }) {
   const uploadFile = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('path', currentSubPath);
 
     const headers = {};
     if (verifiedPassword) {
@@ -374,7 +365,7 @@ export default function SharePage({ params }) {
     }
 
     try {
-      const response = await fetch(`/api/public/${token}/upload`, {
+      const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
         method: 'POST',
         headers,
         body: formData,
@@ -409,11 +400,7 @@ export default function SharePage({ params }) {
       const file = fileList[i];
       const result = await uploadFile(file);
 
-      setUploadingFiles((prev) =>
-        prev.map((item) =>
-          item.id === uploadItems[i].id ? { ...item, status: result.success ? 'done' : 'error', error: result.error } : item
-        )
-      );
+      setUploadingFiles((prev) => prev.map((item) => (item.id === uploadItems[i].id ? { ...item, status: result.success ? 'done' : 'error', error: result.error } : item)));
     }
 
     // Refresh file list after upload
@@ -598,9 +585,7 @@ export default function SharePage({ params }) {
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
                       {file.name}
                     </p>
-                    {!file.isDirectory && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>
-                    )}
+                    {!file.isDirectory && <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>}
 
                     {/* Action buttons on hover */}
                     <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -688,9 +673,7 @@ export default function SharePage({ params }) {
               </div>
             ))}
 
-            {directoryFiles.length === 0 && (
-              <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>
-            )}
+            {directoryFiles.length === 0 && <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>}
           </div>
         )}
 
@@ -772,12 +755,7 @@ export default function SharePage({ params }) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
           <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-            <Viewer3D
-              fileName={shareData.fileName}
-              currentPath=""
-              shareToken={token}
-              sharePassword={verifiedPassword}
-            />
+            <Viewer3D fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
           </Suspense>
         </div>
       );
@@ -787,12 +765,7 @@ export default function SharePage({ params }) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
           <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-            <SkpViewer
-              fileName={shareData.fileName}
-              currentPath=""
-              shareToken={token}
-              sharePassword={verifiedPassword}
-            />
+            <SkpViewer fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
           </Suspense>
         </div>
       );
@@ -802,12 +775,7 @@ export default function SharePage({ params }) {
       return (
         <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
           <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
-            <XlsxViewer
-              fileName={shareData.fileName}
-              currentPath=""
-              shareToken={token}
-              sharePassword={verifiedPassword}
-            />
+            <XlsxViewer fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
           </Suspense>
         </div>
       );
@@ -819,9 +787,7 @@ export default function SharePage({ params }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
       <div className="text-center">
-        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-          {fileIcon}
-        </div>
+        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">{fileIcon}</div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">{shareData.fileName}</h2>
         <p className="text-gray-500 dark:text-gray-400">
           {formatFileSize(shareData.size)} • Shared by {shareData.ownerUsername}
