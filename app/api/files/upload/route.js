@@ -2,26 +2,47 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { writeFile, mkdir } from 'fs/promises';
+import { mkdir, rename, unlink, copyFile, stat } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
+import { Readable } from 'node:stream';
+import formidable from 'formidable';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 
-// Allow large file uploads (set timeout to 10 minutes)
-export const maxDuration = 600;
+// Allow large file uploads (set timeout to 30 minutes)
+export const maxDuration = 1800;
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HEIC_DIR = './heic'; // Separate directory for HEIC files
+const TEMP_DIR = resolve(process.cwd(), '.upload-tmp');
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 const RESOLVED_HEIC_DIR = resolve(process.cwd(), HEIC_DIR) + sep;
+
+/**
+ * Move a file, falling back to copy+delete if cross-device (EXDEV)
+ */
+async function moveFile(src, dest) {
+  try {
+    await rename(src, dest);
+  } catch (err) {
+    if (err.code === 'EXDEV') {
+      await copyFile(src, dest);
+      await unlink(src);
+    } else {
+      throw err;
+    }
+  }
+}
 
 export async function POST(req) {
   const startTime = Date.now();
   let fileName = 'unknown';
+  let tempFilePath = null; // Track temp file for cleanup on error
   try {
     logger.info('POST /api/files/upload - Upload request received', {
       contentType: req.headers.get('content-type'),
+      contentLength: req.headers.get('content-length'),
     });
     const session = await auth();
     if (!session) {
@@ -29,42 +50,46 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Ensure upload directory exists
-    if (!existsSync(UPLOAD_DIR)) {
-      logger.info('POST /api/files/upload - Creating upload directory', { dir: UPLOAD_DIR });
-      await mkdir(UPLOAD_DIR, { recursive: true });
+    // Ensure directories exist
+    for (const dir of [UPLOAD_DIR, HEIC_DIR, TEMP_DIR]) {
+      if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true });
+      }
     }
 
-    // Ensure HEIC directory exists
-    if (!existsSync(HEIC_DIR)) {
-      logger.info('POST /api/files/upload - Creating HEIC directory', { dir: HEIC_DIR });
-      await mkdir(HEIC_DIR, { recursive: true });
-    }
+    // Convert Web Request body to Node.js stream for formidable (streams to disk, not RAM)
+    const nodeStream = Readable.fromWeb(req.body);
+    nodeStream.headers = Object.fromEntries(req.headers.entries());
 
-    let formData;
+    const form = formidable({
+      uploadDir: TEMP_DIR,
+      keepExtensions: true,
+      maxFileSize: 200 * 1024 * 1024 * 1024, // 200 GB
+      maxTotalFileSize: 200 * 1024 * 1024 * 1024,
+      allowEmptyFiles: false,
+      multiples: false,
+    });
+
+    let fields, files;
     try {
-      logger.debug('POST /api/files/upload - Attempting to parse FormData', {
-        contentType: req.headers.get('content-type'),
-        contentLength: req.headers.get('content-length'),
-      });
-      formData = await req.formData();
+      [fields, files] = await form.parse(nodeStream);
     } catch (parseError) {
-      logger.error('POST /api/files/upload - FormData parsing failed', {
-        contentType: req.headers.get('content-type'),
-        contentLength: req.headers.get('content-length'),
+      logger.error('POST /api/files/upload - Streaming parse failed', {
         error: parseError.message,
-        errorStack: parseError.stack,
       });
-      return NextResponse.json({ error: 'Invalid FormData format', details: parseError.message }, { status: 400 });
+      return NextResponse.json({ error: 'Upload parsing failed', details: parseError.message }, { status: 400 });
     }
 
-    const file = formData.get('file');
-    let relativePath = formData.get('path') || '';
+    const uploadedFile = files.file?.[0];
+    let relativePath = fields.path?.[0] || '';
 
-    if (!file) {
+    if (!uploadedFile) {
       logger.warn('POST /api/files/upload - No file provided in request');
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
+
+    tempFilePath = uploadedFile.filepath;
+    fileName = uploadedFile.originalFilename || 'unknown';
 
     // Check user permissions
     const isRoot = await hasRootAccess(session.user.id);
@@ -100,20 +125,16 @@ export async function POST(req) {
       });
     }
 
-    fileName = file.name;
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
-      fileSize: file.size,
-      fileType: file.type,
+      fileSize: uploadedFile.size,
+      fileType: uploadedFile.mimetype,
       path: relativePath,
       user: session.user.email,
     });
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
     // Check if file is HEIC/HEIF
-    const fileExt = extname(file.name).toLowerCase();
+    const fileExt = extname(fileName).toLowerCase();
     const isHeic = ['.heic', '.heif'].includes(fileExt);
 
     // Use HEIC directory for HEIC files, otherwise use uploads directory
@@ -137,14 +158,15 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Save file directly to storage with original name
-    const filePath = join(targetDir, file.name);
-    await writeFile(filePath, buffer);
+    // Move file from temp to final location (atomic on same filesystem)
+    const filePath = join(targetDir, fileName);
+    await moveFile(tempFilePath, filePath);
+    tempFilePath = null; // Successfully moved, no cleanup needed
 
     const duration = Date.now() - startTime;
     logger.info('POST /api/files/upload - File uploaded successfully', {
       fileName,
-      fileSize: file.size,
+      fileSize: uploadedFile.size,
       path: relativePath,
       isHeic,
       storedIn: baseDir,
@@ -157,9 +179,9 @@ export async function POST(req) {
     return NextResponse.json({
       success: true,
       file: {
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
+        name: fileName,
+        size: uploadedFile.size,
+        mimeType: uploadedFile.mimetype,
         path: normalizedFilePath,
       },
     });
@@ -173,5 +195,12 @@ export async function POST(req) {
       errorStack: error.stack,
     });
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+  } finally {
+    // Clean up temp file if it still exists (e.g. error after formidable wrote it)
+    if (tempFilePath) {
+      try {
+        await unlink(tempFilePath);
+      } catch {}
+    }
   }
 }

@@ -14,12 +14,7 @@ const nextConfig = {
   publicRuntimeConfig: {
     staticFolder: '/mnt/Truenas/truecloud/uploads',
   },
-  // Increase request body size limit for file uploads (5GB)
-  api: {
-    bodyParser: {
-      sizeLimit: false ,
-    },
-  },
+
   // Enable more detailed logging
   logging: {
     fetches: {
