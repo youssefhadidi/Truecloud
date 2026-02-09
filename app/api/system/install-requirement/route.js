@@ -429,7 +429,11 @@ export async function POST(req) {
             cwd: projectDir,
           });
           if (patchedLib.trim()) {
-            const { stdout: lddCheck } = await execAsync(`ldd "${patchedLib.trim()}" 2>/dev/null | grep -q heif && echo "LINKED" || echo "MISSING"`);
+            // Use LD_LIBRARY_PATH so ldd can resolve transitive deps (libvips → libheif)
+            // from both the bundled dir and /usr/local/lib
+            const bundledDir = patchedLib.trim().substring(0, patchedLib.trim().lastIndexOf('/'));
+            const lddLdPath = `${bundledDir}:${ldPath}`;
+            const { stdout: lddCheck } = await execAsync(`LD_LIBRARY_PATH="${lddLdPath}" ldd "${patchedLib.trim()}" 2>/dev/null | grep -q heif && echo "LINKED" || echo "MISSING"`);
             const { stdout: vipsCheck } = await execAsync(
               `LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i "heifload)" | grep -q ".heic" && echo "HEIC_OK" || echo "NO_HEIC"`,
               { env: buildEnv },

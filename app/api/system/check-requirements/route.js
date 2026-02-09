@@ -85,7 +85,10 @@ async function checkSharpHevcSupport() {
         cwd: process.cwd(),
       }).trim();
       if (fatLib) {
-        const lddOut = execSync(`ldd "${fatLib}" 2>/dev/null | grep heif || true`, {
+        // Set LD_LIBRARY_PATH so ldd can resolve transitive deps (libvips → libheif)
+        const bundledDir = fatLib.substring(0, fatLib.lastIndexOf('/'));
+        const lddLdPath = `${bundledDir}:${ldPath}`;
+        const lddOut = execSync(`LD_LIBRARY_PATH="${lddLdPath}" ldd "${fatLib}" 2>/dev/null | grep heif || true`, {
           encoding: 'utf-8',
           timeout: 5000,
         }).trim();
