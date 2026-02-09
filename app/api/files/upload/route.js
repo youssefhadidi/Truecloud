@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { mkdir, unlink, writeFile } from 'fs/promises';
+import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import { join, resolve, sep, extname } from 'node:path';
 import { logger } from '@/lib/logger';
@@ -20,6 +20,7 @@ export async function POST(req) {
   const startTime = Date.now();
   let fileName = 'unknown';
   let writtenFilePath = null; // Track for cleanup on error
+  let fileHandle = null;
   try {
     logger.info('POST /api/files/upload - Upload request received', {
       contentType: req.headers.get('content-type'),
@@ -86,17 +87,11 @@ export async function POST(req) {
       await mkdir(regularTargetDir, { recursive: true });
     }
 
-    // Use Next.js native formData() parsing — handles multipart reliably
-    const formData = await req.formData();
-    const file = formData.get('file');
-
-    if (!file || typeof file === 'string') {
-      logger.warn('POST /api/files/upload - No file provided in request');
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+    // File metadata comes from headers (body is raw binary, not multipart)
+    fileName = decodeURIComponent(req.headers.get('x-file-name') || '') || 'unknown';
+    const mimeType = req.headers.get('content-type') || 'application/octet-stream';
 
     // Track which directory the file goes to
-    fileName = file.name || 'unknown';
     const ext = extname(fileName).toLowerCase();
     const isHeic = ['.heic', '.heif'].includes(ext);
     const targetDir = isHeic ? heicTargetDir : regularTargetDir;
@@ -109,16 +104,30 @@ export async function POST(req) {
 
     writtenFilePath = join(targetDir, fileName);
 
-    // Write file to disk
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(writtenFilePath, buffer);
+    if (!req.body) {
+      logger.warn('POST /api/files/upload - No file provided in request');
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
 
-    const fileSize = buffer.length;
+    // Stream the raw body directly to disk — no multipart parsing needed
+    const reader = req.body.getReader();
+    fileHandle = await open(writtenFilePath, 'w');
+    let size = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      await fileHandle.write(value);
+      size += value.length;
+    }
+
+    await fileHandle.close();
+    fileHandle = null;
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
-      fileSize,
-      fileType: file.type,
+      fileSize: size,
+      fileType: mimeType,
       path: relativePath,
       user: session.user.email,
     });
@@ -126,7 +135,7 @@ export async function POST(req) {
     const duration = Date.now() - startTime;
     logger.info('POST /api/files/upload - File uploaded successfully', {
       fileName,
-      fileSize,
+      fileSize: size,
       path: relativePath,
       isHeic,
       storedIn: storedBaseDir,
@@ -141,8 +150,8 @@ export async function POST(req) {
       success: true,
       file: {
         name: fileName,
-        size: fileSize,
-        mimeType: file.type || 'application/octet-stream',
+        size,
+        mimeType,
         path: normalizedFilePath,
       },
     });
@@ -157,6 +166,12 @@ export async function POST(req) {
     });
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
+    // Close file handle if still open
+    if (fileHandle) {
+      try {
+        await fileHandle.close();
+      } catch {}
+    }
     // Clean up partially written file on error
     if (writtenFilePath) {
       try {

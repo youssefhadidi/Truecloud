@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
-import { mkdir, unlink, writeFile } from 'fs/promises';
+import { mkdir, unlink, open } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
 
@@ -13,6 +13,7 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export async function POST(req, { params }) {
   let writtenFilePath = null;
+  let fileHandle = null;
   try {
     const { token } = await params;
     const url = new URL(req.url);
@@ -59,36 +60,49 @@ export async function POST(req, { params }) {
       await mkdir(targetDir, { recursive: true });
     }
 
-    // Use Next.js native formData() parsing — handles multipart reliably
-    const formData = await req.formData();
-    const file = formData.get('file');
+    // File metadata comes from headers (body is raw binary, not multipart)
+    const fileName = decodeURIComponent(req.headers.get('x-file-name') || '') || 'unknown';
+    const mimeType = req.headers.get('content-type') || 'application/octet-stream';
+    writtenFilePath = join(targetDir, fileName);
 
-    if (!file || typeof file === 'string') {
+    if (!req.body) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const fileName = file.name || 'unknown';
-    writtenFilePath = join(targetDir, fileName);
+    // Stream the raw body directly to disk — no multipart parsing needed
+    const reader = req.body.getReader();
+    fileHandle = await open(writtenFilePath, 'w');
+    let size = 0;
 
-    // Write file to disk
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(writtenFilePath, buffer);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      await fileHandle.write(value);
+      size += value.length;
+    }
 
-    const fileSize = buffer.length;
+    await fileHandle.close();
+    fileHandle = null;
     writtenFilePath = null; // Success — don't clean up
 
     return NextResponse.json({
       success: true,
       file: {
         name: fileName,
-        size: fileSize,
-        mimeType: file.type || 'application/octet-stream',
+        size,
+        mimeType,
       },
     });
   } catch (error) {
     console.error('POST /api/public/[token]/upload - Error:', error);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   } finally {
+    // Close file handle if still open
+    if (fileHandle) {
+      try {
+        await fileHandle.close();
+      } catch {}
+    }
     // Clean up partially written file on error
     if (writtenFilePath) {
       try {
