@@ -469,7 +469,7 @@ export default function SharePage({ params }) {
   if (shareData.isDirectory && directoryFiles) {
     return (
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-visible max-w-6xl mx-auto relative"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-6xl mx-auto relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={(e) => {
