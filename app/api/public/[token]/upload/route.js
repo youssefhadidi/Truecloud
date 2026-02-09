@@ -65,13 +65,35 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    // DEBUG: Log incoming request details
+    const contentType = req.headers.get('content-type');
+    const contentLength = req.headers.get('content-length');
+    console.log('DEBUG: Request details', {
+      contentType,
+      contentLength,
+      hasBody: !!req.body,
+      bodyType: req.body?.constructor?.name,
+    });
+
     // Parse multipart FormData via formidable using callback API (more reliable than promise API)
     // Convert Web ReadableStream to Node.js Readable for formidable
+    console.log('DEBUG: Converting Web ReadableStream to Node.js Readable');
     const nodeReadable = Readable.fromWeb(req.body);
 
     // Create a pseudo-request object with headers for formidable
+    const headersObj = Object.fromEntries(req.headers);
+    console.log('DEBUG: Headers object created', {
+      contentType: headersObj['content-type'],
+      contentLength: headersObj['content-length'],
+    });
+
     const pseudoReq = Object.assign(nodeReadable, {
-      headers: Object.fromEntries(req.headers),
+      headers: headersObj,
+    });
+
+    console.log('DEBUG: Pseudo request created', {
+      hasHeaders: !!pseudoReq.headers,
+      hasOn: typeof pseudoReq.on === 'function',
     });
 
     const form = formidable({
@@ -80,22 +102,59 @@ export async function POST(req, { params }) {
       multiples: false,
     });
 
+    // Add formidable event listeners for debugging
+    form.on('file', (fieldname, file) => {
+      console.log('DEBUG: Formidable file event', {
+        fieldname,
+        filename: file.filename,
+        size: file.size,
+      });
+    });
+
+    form.on('error', (err) => {
+      console.log('DEBUG: Formidable error event', {
+        message: err.message,
+        code: err.code,
+      });
+    });
+
     // Wrap callback-based API in Promise (more reliable than form.parse())
+    console.log('DEBUG: Starting form.parse()');
+    let parseStartTime = Date.now();
+
     const { parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
       form.parse(pseudoReq, (err, _, files) => {
+        const parseDuration = Date.now() - parseStartTime;
+        console.log('DEBUG: form.parse() callback fired', {
+          duration: `${parseDuration}ms`,
+          hasError: !!err,
+          errorMessage: err?.message,
+          fileCount: files?.file?.length || 0,
+        });
+
         if (err) {
+          console.log('DEBUG: form.parse() error', {
+            message: err.message,
+            code: err.code,
+          });
           reject(err);
           return;
         }
 
         const uploadedFiles = files.file;
         if (!uploadedFiles || uploadedFiles.length === 0) {
+          console.log('DEBUG: No file in parsed data');
           reject(new Error('No file provided in multipart data'));
           return;
         }
 
         const uploadedFile = uploadedFiles[0];
         writtenFilePath = uploadedFile.filepath;
+
+        console.log('DEBUG: File parsed successfully', {
+          filepath: uploadedFile.filepath,
+          size: uploadedFile.size,
+        });
 
         resolve({
           parsedFileName: uploadedFile.originalFilename || 'unknown',
@@ -108,6 +167,7 @@ export async function POST(req, { params }) {
     const fileName = parsedFileName;
     const size = fileSize;
     const mimeType = fileMimeType;
+    console.log('DEBUG: Parse complete');
 
     writtenFilePath = null; // Success — don't clean up
 

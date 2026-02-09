@@ -89,13 +89,37 @@ export async function POST(req) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    // DEBUG: Log incoming request details
+    const contentType = req.headers.get('content-type');
+    const contentLength = req.headers.get('content-length');
+    logger.info('DEBUG: Request details', {
+      contentType,
+      contentLength,
+      hasBody: !!req.body,
+      bodyType: req.body?.constructor?.name,
+    });
+
     // Parse multipart FormData via formidable using callback API (more reliable than promise API)
     // Convert Web ReadableStream to Node.js Readable for formidable
+    logger.info('DEBUG: Converting Web ReadableStream to Node.js Readable');
     const nodeReadable = Readable.fromWeb(req.body);
 
     // Create a pseudo-request object with headers for formidable
+    const headersObj = Object.fromEntries(req.headers);
+    logger.info('DEBUG: Headers object created', {
+      contentType: headersObj['content-type'],
+      contentLength: headersObj['content-length'],
+      keys: Object.keys(headersObj),
+    });
+
     const pseudoReq = Object.assign(nodeReadable, {
-      headers: Object.fromEntries(req.headers),
+      headers: headersObj,
+    });
+
+    logger.info('DEBUG: Pseudo request created', {
+      hasHeaders: !!pseudoReq.headers,
+      hasOn: typeof pseudoReq.on === 'function',
+      hasRead: typeof pseudoReq.read === 'function',
     });
 
     const form = formidable({
@@ -104,16 +128,54 @@ export async function POST(req) {
       multiples: false,
     });
 
+    // Add formidable event listeners for debugging
+    form.on('file', (fieldname, file) => {
+      logger.info('DEBUG: Formidable file event', {
+        fieldname,
+        filename: file.filename,
+        size: file.size,
+        mimetype: file.mimetype,
+      });
+    });
+
+    form.on('error', (err) => {
+      logger.error('DEBUG: Formidable error event', {
+        message: err.message,
+        code: err.code,
+        stack: err.stack,
+      });
+    });
+
     // Wrap callback-based API in Promise (more reliable than form.parse())
+    logger.info('DEBUG: Starting form.parse()');
+    let parseStartTime = Date.now();
+
     const { fileName: parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
       form.parse(pseudoReq, (err, fields, files) => {
+        const parseDuration = Date.now() - parseStartTime;
+        logger.info('DEBUG: form.parse() callback fired', {
+          duration: `${parseDuration}ms`,
+          hasError: !!err,
+          errorMessage: err?.message,
+          fileCount: files?.file?.length || 0,
+          fieldsCount: Object.keys(fields || {}).length,
+        });
+
         if (err) {
+          logger.error('DEBUG: form.parse() error', {
+            message: err.message,
+            code: err.code,
+            stack: err.stack,
+          });
           reject(err);
           return;
         }
 
         const uploadedFiles = files.file;
         if (!uploadedFiles || uploadedFiles.length === 0) {
+          logger.warn('DEBUG: No file in parsed data', {
+            fileKeys: Object.keys(files || {}),
+          });
           reject(new Error('No file provided in multipart data'));
           return;
         }
@@ -121,6 +183,13 @@ export async function POST(req) {
         const uploadedFile = uploadedFiles[0];
         fileName = uploadedFile.originalFilename || 'unknown';
         writtenFilePath = uploadedFile.filepath;
+
+        logger.info('DEBUG: File parsed successfully', {
+          originalFilename: uploadedFile.originalFilename,
+          filepath: uploadedFile.filepath,
+          size: uploadedFile.size,
+          mimetype: uploadedFile.mimetype,
+        });
 
         resolve({
           fileName: uploadedFile.originalFilename || 'unknown',
@@ -132,6 +201,11 @@ export async function POST(req) {
 
     const size = fileSize;
     const mimeType = fileMimeType;
+    logger.info('DEBUG: Parse complete, proceeding with upload', {
+      fileName,
+      size,
+      mimeType,
+    });
 
     logger.debug('POST /api/files/upload - Processing file', {
       fileName,
