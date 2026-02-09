@@ -3,8 +3,8 @@
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink } from 'fs/promises';
-import { existsSync, createWriteStream, mkdirSync } from 'fs';
-import { join, resolve, sep, extname } from 'node:path';
+import { existsSync, createWriteStream } from 'fs';
+import { join, resolve, sep } from 'node:path';
 import { PassThrough } from 'node:stream';
 import formidable from 'formidable';
 
@@ -13,23 +13,48 @@ import formidable from 'formidable';
  * Readable.fromWeb() has backpressure bugs in Node 21 that can truncate data.
  */
 function webStreamToNodeStream(webStream, headers) {
-  const passthrough = new PassThrough();
+  const passthrough = new PassThrough({ highWaterMark: 1024 * 1024 }); // 1 MB buffer
   passthrough.headers = headers;
   const reader = webStream.getReader();
+  let destroyed = false;
+
+  const cancel = () => {
+    destroyed = true;
+    reader.cancel().catch(() => {});
+  };
+  passthrough.on('error', cancel);
+
   (async () => {
     try {
-      while (true) {
+      while (!destroyed) {
         const { done, value } = await reader.read();
         if (done) {
           passthrough.end();
           break;
         }
+        if (destroyed) break;
         if (!passthrough.write(value)) {
-          await new Promise((resolve) => passthrough.once('drain', resolve));
+          // Wait for drain but bail out if the stream dies
+          await new Promise((res, rej) => {
+            const onDrain = () => {
+              passthrough.removeListener('close', onFail);
+              passthrough.removeListener('error', onFail);
+              res();
+            };
+            const onFail = (err) => {
+              passthrough.removeListener('drain', onDrain);
+              rej(err || new Error('Stream closed'));
+            };
+            passthrough.once('drain', onDrain);
+            passthrough.once('close', onFail);
+            passthrough.once('error', onFail);
+          });
         }
       }
     } catch (err) {
-      passthrough.destroy(err);
+      if (!destroyed) passthrough.destroy(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      cancel();
     }
   })();
   return passthrough;
@@ -38,9 +63,7 @@ function webStreamToNodeStream(webStream, headers) {
 export const maxDuration = 1800;
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const HEIC_DIR = './heic';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
-const RESOLVED_HEIC_DIR = resolve(process.cwd(), HEIC_DIR) + sep;
 
 export async function POST(req, { params }) {
   let writtenFilePath = null;
@@ -78,21 +101,18 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
-    // Pre-compute both possible target directories
-    const regularTargetDir = join(UPLOAD_DIR, pathCheck.fullPath);
-    const heicTargetDir = join(HEIC_DIR, pathCheck.fullPath);
+    const targetDir = join(UPLOAD_DIR, pathCheck.fullPath);
 
     // Security: prevent directory traversal
-    if (!(resolve(regularTargetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
+    if (!(resolve(targetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Ensure the regular target directory exists
-    if (!existsSync(regularTargetDir)) {
-      await mkdir(regularTargetDir, { recursive: true });
+    // Ensure the target directory exists
+    if (!existsSync(targetDir)) {
+      await mkdir(targetDir, { recursive: true });
     }
 
-    let isHeic = false;
     let fileName = '';
 
     // Configure formidable to write directly to the target directory (no temp files)
@@ -102,14 +122,6 @@ export async function POST(req, { params }) {
       allowEmptyFiles: false,
       multiples: false,
       fileWriteStreamHandler: (file) => {
-        const ext = extname(file.originalFilename || '').toLowerCase();
-        isHeic = ['.heic', '.heif'].includes(ext);
-        const targetDir = isHeic ? heicTargetDir : regularTargetDir;
-
-        if (isHeic && !existsSync(heicTargetDir)) {
-          mkdirSync(heicTargetDir, { recursive: true });
-        }
-
         fileName = file.originalFilename || 'unknown';
         writtenFilePath = join(targetDir, fileName);
         return createWriteStream(writtenFilePath);

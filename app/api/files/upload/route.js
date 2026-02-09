@@ -15,25 +15,50 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
  * Readable.fromWeb() has backpressure bugs in Node 21 that can truncate data.
  */
 function webStreamToNodeStream(webStream, headers) {
-  const passthrough = new PassThrough();
+  const passthrough = new PassThrough({ highWaterMark: 1024 * 1024 }); // 1 MB buffer
   // Attach headers so formidable can read content-type / content-length
   passthrough.headers = headers;
   const reader = webStream.getReader();
+  let destroyed = false;
+
+  const cancel = () => {
+    destroyed = true;
+    reader.cancel().catch(() => {});
+  };
+  passthrough.on('error', cancel);
+
   (async () => {
     try {
-      while (true) {
+      while (!destroyed) {
         const { done, value } = await reader.read();
         if (done) {
           passthrough.end();
           break;
         }
+        if (destroyed) break;
         // Respect backpressure: if push returns false, wait for drain
         if (!passthrough.write(value)) {
-          await new Promise((resolve) => passthrough.once('drain', resolve));
+          // Wait for drain but bail out if the stream dies
+          await new Promise((res, rej) => {
+            const onDrain = () => {
+              passthrough.removeListener('close', onFail);
+              passthrough.removeListener('error', onFail);
+              res();
+            };
+            const onFail = (err) => {
+              passthrough.removeListener('drain', onDrain);
+              rej(err || new Error('Stream closed'));
+            };
+            passthrough.once('drain', onDrain);
+            passthrough.once('close', onFail);
+            passthrough.once('error', onFail);
+          });
         }
       }
     } catch (err) {
-      passthrough.destroy(err);
+      if (!destroyed) passthrough.destroy(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      cancel();
     }
   })();
   return passthrough;
