@@ -14,7 +14,7 @@ const isLinux = process.platform === 'linux';
 // Minimum required versions for HEVC support
 const MIN_VERSIONS = {
   libde265: '1.0.15',
-  libheif: '1.17.0',
+  libheif: '1.19.0',
   vips: '8.15.3',
 };
 
@@ -181,8 +181,8 @@ export async function POST(req) {
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
-            curl -sSL https://github.com/strukturag/libheif/releases/download/v1.17.6/libheif-1.17.6.tar.gz -o libheif.tar.gz 2>&1 && \
-            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.17.6 && \
+            curl -sSL https://github.com/strukturag/libheif/releases/download/v1.19.8/libheif-1.19.8.tar.gz -o libheif.tar.gz 2>&1 && \
+            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.19.8 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
               -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
