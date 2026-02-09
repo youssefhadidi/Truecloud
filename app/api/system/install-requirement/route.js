@@ -227,7 +227,8 @@ export async function POST(req) {
 
           // Verify libvips has heif
           try {
-            const { stdout } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"');
+            const vipsBin = existsSync('/usr/local/bin/vips') ? '/usr/local/bin/vips' : 'vips';
+            const { stdout } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" ${vipsBin} -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"`, { env: buildEnv });
             logger.info(`libvips heif verification: ${stdout.trim()}`);
           } catch {}
         }
@@ -257,20 +258,38 @@ export async function POST(req) {
         if (bundledLibDir) {
           logger.info(`Found bundled libvips at: ${bundledLibDir}`);
 
+          // Find where our libvips was actually installed (could be /usr/local/lib or /usr/local/lib/x86_64-linux-gnu)
+          const { stdout: vipsLibPath } = await execAsync(`find /usr/local/lib -name "libvips.so" -o -name "libvips.so.*" 2>/dev/null | head -1`);
+          const vipsLibFile = vipsLibPath.trim();
+          const localLibDir = vipsLibFile ? vipsLibFile.substring(0, vipsLibFile.lastIndexOf('/')) : '/usr/local/lib';
+          logger.info(`System libvips libraries found in: ${localLibDir}`);
+
           // Replace bundled libvips with our HEIF-enabled build
-          // Copy our libvips .so files (replacing the originals)
+          // Use shell glob (no quotes around the glob pattern)
           await execAsync(
-            `cp -f /usr/local/lib/libvips.so* "${bundledLibDir}/" 2>&1; \
-             cp -f /usr/local/lib/libvips-cpp.so* "${bundledLibDir}/" 2>&1`,
+            `cp -fL ${localLibDir}/libvips.so* "${bundledLibDir}/" 2>&1 && \
+             cp -fL ${localLibDir}/libvips-cpp.so* "${bundledLibDir}/" 2>&1`,
             { cwd: projectDir },
           );
 
-          // Add HEIF/HEVC runtime libraries that the bundled version lacks
+          // Find and copy HEIF/HEVC runtime libraries
+          const { stdout: heifLibPath } = await execAsync(`find /usr/local/lib -name "libheif.so" -o -name "libheif.so.*" 2>/dev/null | head -1`);
+          const heifLibDir = heifLibPath.trim() ? heifLibPath.trim().substring(0, heifLibPath.trim().lastIndexOf('/')) : localLibDir;
+
+          const { stdout: de265LibPath } = await execAsync(`find /usr/local/lib -name "libde265.so" -o -name "libde265.so.*" 2>/dev/null | head -1`);
+          const de265LibDir = de265LibPath.trim() ? de265LibPath.trim().substring(0, de265LibPath.trim().lastIndexOf('/')) : localLibDir;
+
           await execAsync(
-            `cp -f /usr/local/lib/libheif.so* "${bundledLibDir}/" 2>&1; \
-             cp -f /usr/local/lib/libde265.so* "${bundledLibDir}/" 2>&1`,
+            `cp -fL ${heifLibDir}/libheif.so* "${bundledLibDir}/" 2>&1; \
+             cp -fL ${de265LibDir}/libde265.so* "${bundledLibDir}/" 2>&1`,
             { cwd: projectDir },
           );
+
+          // List what we copied for verification
+          try {
+            const { stdout: lsList } = await execAsync(`ls -la "${bundledLibDir}/"libvips* "${bundledLibDir}/"libheif* "${bundledLibDir}/"libde265* 2>&1`);
+            logger.info('Patched libraries:', lsList.trim());
+          } catch {}
 
           logger.info('Patched bundled libvips with HEIF-enabled libraries');
         } else {
