@@ -214,7 +214,7 @@ export async function POST(req) {
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
             PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
             meson setup build --prefix=/usr/local --buildtype=release \
-              -Dintrospection=disabled -Dheif=enabled 2>&1`,
+              -Dintrospection=disabled -Dheif=enabled -Dmodules=disabled 2>&1`,
             { ...longOpts, env: buildEnv },
           );
           logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
@@ -277,10 +277,16 @@ export async function POST(req) {
           const localLibDir = vipsCppSearch.trim() ? vipsCppSearch.trim().substring(0, vipsCppSearch.trim().lastIndexOf('/')) : `/usr/local/lib/${triplet}`;
           logger.info(`Source-built libraries in: ${localLibDir}`);
 
-          // Detect what fat library filename sharp.node expects
-          // (e.g. "libvips-cpp.so.8.17.3" — uses project version, not standard soversion)
-          const { stdout: fatSearch } = await execAsync(`ls "${bundledLibDir}/" | grep -E "^libvips-cpp\\.so\\.[0-9]+\\.[0-9]+\\.[0-9]+" | head -1`);
-          const fatLibName = fatSearch.trim() || 'libvips-cpp.so.8.17.3';
+          // Detect what library filename sharp.node actually loads using ldd
+          // (avoids matching wrong files from previous patch artifacts in ls output)
+          let fatLibName = 'libvips-cpp.so.8.17.3'; // fallback
+          try {
+            const { stdout: sharpNodePath } = await execAsync(`find node_modules -path "*/@img/sharp-linux-x64/lib/sharp*.node" 2>/dev/null | head -1`, { cwd: projectDir });
+            if (sharpNodePath.trim()) {
+              const { stdout: lddName } = await execAsync(`ldd "${sharpNodePath.trim()}" 2>/dev/null | grep "libvips-cpp" | awk '{print $1}'`, { cwd: projectDir });
+              if (lddName.trim()) fatLibName = lddName.trim();
+            }
+          } catch {}
           logger.info(`Sharp expects: ${fatLibName} (replacing with HEIF-enabled build)`);
 
           // Get the real path of our source-built libvips-cpp.so
@@ -288,10 +294,11 @@ export async function POST(req) {
           const realCppFile = realCppPath.trim();
 
           if (realCppFile) {
-            // 1) Remove the fat bundled library (16MB+, no HEIC support)
-            await execAsync(`rm -f "${bundledLibDir}/${fatLibName}"`);
+            // Clean ALL .so files from bundled dir (removes stock fat lib + old patch artifacts)
+            // Preserves index.js and glib-2.0/ directory
+            await execAsync(`find "${bundledLibDir}" -maxdepth 1 -name "*.so*" -delete 2>/dev/null || true`);
 
-            // 2) Copy our thin HEIF-enabled wrapper, renamed to the expected filename
+            // 1) Copy our HEIF-enabled wrapper, renamed to the filename sharp expects
             await execAsync(`cp -fL "${realCppFile}" "${bundledLibDir}/${fatLibName}"`);
             logger.info(`Replaced ${fatLibName} with ${realCppFile}`);
 
