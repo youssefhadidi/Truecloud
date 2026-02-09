@@ -109,6 +109,7 @@ export async function POST(req) {
 
     const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
       let aborted = false;
+      let totalBytes = 0;
       const handleAbort = () => {
         aborted = true;
         reject(new Error('Client aborted upload'));
@@ -117,7 +118,7 @@ export async function POST(req) {
       req.signal?.addEventListener('abort', handleAbort, { once: true });
 
       const busboy = Busboy({
-        headers: { 'content-type': contentType },
+        headers: Object.fromEntries(req.headers.entries()),
         limits: fileLimits,
       });
 
@@ -181,10 +182,22 @@ export async function POST(req) {
       });
 
       const nodeStream = Readable.fromWeb(req.body);
+      nodeStream.on('data', (chunk) => {
+        totalBytes += chunk.length;
+      });
       nodeStream.on('error', reject);
       nodeStream.on('close', () => {
         if (!fileReceived) {
           reject(new Error('Request stream closed before file was received'));
+        }
+      });
+      nodeStream.on('end', () => {
+        const expected = contentLength ? Number(contentLength) : null;
+        if (expected !== null && totalBytes !== expected) {
+          logger.error('POST /api/files/upload - Stream size mismatch', {
+            expected,
+            received: totalBytes,
+          });
         }
       });
       nodeStream.pipe(busboy);
