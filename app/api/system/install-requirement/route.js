@@ -119,7 +119,7 @@ export async function POST(req) {
         const arch = (await execAsync('dpkg --print-architecture 2>/dev/null || echo amd64')).stdout.trim();
         const triplet = arch === 'arm64' ? 'aarch64-linux-gnu' : 'x86_64-linux-gnu';
         const pkgConfigPath = `/usr/local/lib/pkgconfig:/usr/local/lib/${triplet}/pkgconfig:/usr/lib/${triplet}/pkgconfig:${process.env.PKG_CONFIG_PATH || ''}`;
-        const ldPath = `/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
+        const ldPath = `/usr/local/lib/${triplet}:/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
         const buildEnv = { ...process.env, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
         // Step 1: Install build dependencies and remove conflicting system packages
@@ -176,15 +176,15 @@ export async function POST(req) {
           logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
         }
 
-        // Step 4-5: Build libvips if needed or if it lacks heif support
-        const VIPS_VERSION = '8.16.0';
+        // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
+        const VIPS_VERSION = '8.17.3';
         const vipsDir = '/tmp/libvips-build';
         const vipsVer = await getPkgVersion('vips', buildEnv);
         let vipsHasHeif = false;
         if (vipsVer && versionSatisfies(vipsVer, MIN_VERSIONS.vips)) {
           // Version is sufficient, check if HEIF is actually enabled
           try {
-            const { stdout: heifCheck } = await execAsync('LD_LIBRARY_PATH="/usr/local/lib" vips -l 2>&1 | grep -i heifload || true', { env: buildEnv });
+            const { stdout: heifCheck } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || true`, { env: buildEnv });
             vipsHasHeif = heifCheck.trim().length > 0;
           } catch {}
         }
@@ -208,7 +208,7 @@ export async function POST(req) {
             logger.error('libheif not found by pkg-config before vips build:', e.message);
           }
           // Also remove any previously installed libvips to avoid stale cached .so
-          await execAsync('sudo rm -f /usr/local/lib/libvips*.so* 2>&1 && sudo ldconfig 2>&1').catch(() => {});
+          await execAsync(`sudo rm -f /usr/local/lib/libvips*.so* /usr/local/lib/${triplet}/libvips*.so* 2>&1 && sudo ldconfig 2>&1`).catch(() => {});
 
           const mesonResult = await execAsync(
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
@@ -227,8 +227,7 @@ export async function POST(req) {
 
           // Verify libvips has heif
           try {
-            const vipsBin = existsSync('/usr/local/bin/vips') ? '/usr/local/bin/vips' : 'vips';
-            const { stdout } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" ${vipsBin} -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"`, { env: buildEnv });
+            const { stdout } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"`, { env: buildEnv });
             logger.info(`libvips heif verification: ${stdout.trim()}`);
           } catch {}
         }
@@ -237,13 +236,28 @@ export async function POST(req) {
         await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
         // Step 6: Patch sharp's bundled libvips with our HEIF-enabled version
-        // Sharp 0.33+ ships @img/sharp-libvips-linux-x64 with bundled .so files.
-        // The prebuilt sharp.node in @img/sharp-linux-x64 loads libvips from there.
-        // We replace the bundled libvips .so files with our HEIF-enabled ones
-        // and add the HEIF/HEVC libraries (libheif, libde265).
+        //
+        // Key insight: sharp.node links to a fat bundled "libvips-cpp.so.X.Y.Z"
+        // (16MB+ single file with ALL deps statically linked, but compiled
+        // WITHOUT HEIC/HEVC — only AVIF via AOM).
+        //
+        // Our source-built libvips-cpp is a thin dynamic wrapper (~330KB) with
+        // a different soname (e.g. libvips-cpp.so.42). Simply copying it next
+        // to the fat library doesn't help — sharp.node never loads it.
+        //
+        // Solution: REPLACE the fat library file with our thin HEIF-enabled
+        // wrapper RENAMED to the same filename. Transitive deps are resolved
+        // via ldconfig cache and LD_LIBRARY_PATH.
         logger.info('Step 6/6: Patching sharp bundled libvips with HEIF-enabled version...');
 
-        // Ensure sharp is installed normally first
+        // Register custom lib dirs in the system linker cache
+        await execAsync(
+          `echo "/usr/local/lib/${triplet}" | sudo tee /etc/ld.so.conf.d/truecloud-vips.conf >/dev/null 2>&1; \
+           echo "/usr/local/lib" | sudo tee -a /etc/ld.so.conf.d/truecloud-vips.conf >/dev/null 2>&1; \
+           sudo ldconfig 2>&1`,
+        ).catch((e) => logger.warn('ldconfig registration:', e.message));
+
+        // Ensure sharp is installed normally first (resets bundled dir to stock)
         await execAsync('pnpm remove sharp 2>&1 || true', { ...longOpts, cwd: projectDir });
         await execAsync('pnpm add sharp 2>&1', { ...longOpts, cwd: projectDir });
 
@@ -258,40 +272,58 @@ export async function POST(req) {
         if (bundledLibDir) {
           logger.info(`Found bundled libvips at: ${bundledLibDir}`);
 
-          // Find where our libvips was actually installed (could be /usr/local/lib or /usr/local/lib/x86_64-linux-gnu)
-          const { stdout: vipsLibPath } = await execAsync(`find /usr/local/lib -name "libvips.so" -o -name "libvips.so.*" 2>/dev/null | head -1`);
-          const vipsLibFile = vipsLibPath.trim();
-          const localLibDir = vipsLibFile ? vipsLibFile.substring(0, vipsLibFile.lastIndexOf('/')) : '/usr/local/lib';
-          logger.info(`System libvips libraries found in: ${localLibDir}`);
+          // Find where our source-built libvips was installed
+          const { stdout: vipsCppSearch } = await execAsync(`find /usr/local/lib -name "libvips-cpp.so" \\( -type f -o -type l \\) 2>/dev/null | head -1`);
+          const localLibDir = vipsCppSearch.trim() ? vipsCppSearch.trim().substring(0, vipsCppSearch.trim().lastIndexOf('/')) : `/usr/local/lib/${triplet}`;
+          logger.info(`Source-built libraries in: ${localLibDir}`);
 
-          // Replace bundled libvips with our HEIF-enabled build
-          // Use shell glob (no quotes around the glob pattern)
-          await execAsync(
-            `cp -fL ${localLibDir}/libvips.so* "${bundledLibDir}/" 2>&1 && \
-             cp -fL ${localLibDir}/libvips-cpp.so* "${bundledLibDir}/" 2>&1`,
-            { cwd: projectDir },
-          );
+          // Detect what fat library filename sharp.node expects
+          // (e.g. "libvips-cpp.so.8.17.3" — uses project version, not standard soversion)
+          const { stdout: fatSearch } = await execAsync(`ls "${bundledLibDir}/" | grep -E "^libvips-cpp\\.so\\.[0-9]+\\.[0-9]+\\.[0-9]+" | head -1`);
+          const fatLibName = fatSearch.trim() || 'libvips-cpp.so.8.17.3';
+          logger.info(`Sharp expects: ${fatLibName} (replacing with HEIF-enabled build)`);
 
-          // Find and copy HEIF/HEVC runtime libraries
-          const { stdout: heifLibPath } = await execAsync(`find /usr/local/lib -name "libheif.so" -o -name "libheif.so.*" 2>/dev/null | head -1`);
-          const heifLibDir = heifLibPath.trim() ? heifLibPath.trim().substring(0, heifLibPath.trim().lastIndexOf('/')) : localLibDir;
+          // Get the real path of our source-built libvips-cpp.so
+          const { stdout: realCppPath } = await execAsync(`readlink -f "${localLibDir}/libvips-cpp.so" 2>/dev/null`);
+          const realCppFile = realCppPath.trim();
 
-          const { stdout: de265LibPath } = await execAsync(`find /usr/local/lib -name "libde265.so" -o -name "libde265.so.*" 2>/dev/null | head -1`);
-          const de265LibDir = de265LibPath.trim() ? de265LibPath.trim().substring(0, de265LibPath.trim().lastIndexOf('/')) : localLibDir;
+          if (realCppFile) {
+            // 1) Remove the fat bundled library (16MB+, no HEIC support)
+            await execAsync(`rm -f "${bundledLibDir}/${fatLibName}"`);
 
-          await execAsync(
-            `cp -fL ${heifLibDir}/libheif.so* "${bundledLibDir}/" 2>&1; \
-             cp -fL ${de265LibDir}/libde265.so* "${bundledLibDir}/" 2>&1`,
-            { cwd: projectDir },
-          );
+            // 2) Copy our thin HEIF-enabled wrapper, renamed to the expected filename
+            await execAsync(`cp -fL "${realCppFile}" "${bundledLibDir}/${fatLibName}"`);
+            logger.info(`Replaced ${fatLibName} with ${realCppFile}`);
 
-          // List what we copied for verification
-          try {
-            const { stdout: lsList } = await execAsync(`ls -la "${bundledLibDir}/"libvips* "${bundledLibDir}/"libheif* "${bundledLibDir}/"libde265* 2>&1`);
-            logger.info('Patched libraries:', lsList.trim());
-          } catch {}
+            // 3) Copy core libvips.so and its soname links (needed by our thin wrapper)
+            await execAsync(`cp -fL ${localLibDir}/libvips.so* "${bundledLibDir}/" 2>/dev/null || true`);
 
-          logger.info('Patched bundled libvips with HEIF-enabled libraries');
+            // 4) Copy HEIF/HEVC runtime libraries
+            await execAsync(
+              `for dir in "${localLibDir}" "/usr/local/lib"; do \
+                 cp -fL $dir/libheif.so* "${bundledLibDir}/" 2>/dev/null || true; \
+                 cp -fL $dir/libde265.so* "${bundledLibDir}/" 2>/dev/null || true; \
+               done`,
+            );
+
+            // 5) Verify the patched library resolves its dependencies
+            try {
+              const { stdout: lddOut } = await execAsync(
+                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|not found" | head -10`,
+              );
+              logger.info(`Dependency check:\n${lddOut.trim()}`);
+            } catch {}
+
+            // List final directory contents
+            try {
+              const { stdout: lsList } = await execAsync(`ls -lah "${bundledLibDir}/" 2>&1`);
+              logger.info('Final bundled lib dir:', lsList.trim());
+            } catch {}
+
+            logger.info('Successfully patched sharp with HEIF-enabled libvips');
+          } else {
+            logger.error('Could not find source-built libvips-cpp.so — build may have failed');
+          }
         } else {
           logger.error('Could not find @img/sharp-libvips lib directory! Sharp may not work.');
         }
@@ -307,8 +339,11 @@ export async function POST(req) {
           if (!envContent.includes('SHARP_FORCE_GLOBAL_LIBVIPS')) {
             envContent += '\nSHARP_FORCE_GLOBAL_LIBVIPS=1\n';
           }
+          const ldLibPathVal = `/usr/local/lib/${triplet}:/usr/local/lib`;
           if (!envContent.includes('LD_LIBRARY_PATH')) {
-            envContent += 'LD_LIBRARY_PATH=/usr/local/lib\n';
+            envContent += `LD_LIBRARY_PATH=${ldLibPathVal}\n`;
+          } else {
+            envContent = envContent.replace(/^LD_LIBRARY_PATH=.*/m, `LD_LIBRARY_PATH=${ldLibPathVal}`);
           }
           writeFileSync(envFile, envContent);
           logger.info('Added SHARP_FORCE_GLOBAL_LIBVIPS and LD_LIBRARY_PATH to .env.local');
@@ -322,11 +357,21 @@ export async function POST(req) {
           const { readFileSync, writeFileSync, existsSync } = await import('fs');
           if (existsSync(serviceFile)) {
             let svc = readFileSync(serviceFile, 'utf-8');
+            const svcLdPath = `/usr/local/lib/${triplet}:/usr/local/lib`;
+            let svcChanged = false;
             if (!svc.includes('SHARP_FORCE_GLOBAL_LIBVIPS')) {
-              svc = svc.replace(/^(ExecStart=.*)$/m, 'Environment="SHARP_FORCE_GLOBAL_LIBVIPS=1"\nEnvironment="LD_LIBRARY_PATH=/usr/local/lib"\n$1');
+              svc = svc.replace(/^(ExecStart=.*)$/m, `Environment="SHARP_FORCE_GLOBAL_LIBVIPS=1"\nEnvironment="LD_LIBRARY_PATH=${svcLdPath}"\n$1`);
+              svcChanged = true;
+            }
+            // Update LD_LIBRARY_PATH if it exists but is missing the triplet dir
+            if (svc.includes('LD_LIBRARY_PATH') && !svc.includes(triplet)) {
+              svc = svc.replace(/Environment="LD_LIBRARY_PATH=.*"/m, `Environment="LD_LIBRARY_PATH=${svcLdPath}"`);
+              svcChanged = true;
+            }
+            if (svcChanged) {
               writeFileSync(serviceFile, svc);
               await execAsync('sudo systemctl daemon-reload 2>&1').catch(() => {});
-              logger.info('Updated systemd service with SHARP_FORCE_GLOBAL_LIBVIPS');
+              logger.info('Updated systemd service with correct LD_LIBRARY_PATH');
             }
           }
         } catch (svcErr) {
