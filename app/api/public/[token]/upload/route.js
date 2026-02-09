@@ -5,7 +5,6 @@ import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import formidable from 'formidable';
 
 export const maxDuration = 1800;
@@ -65,29 +64,21 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Convert Web ReadableStream to Node.js Readable stream for formidable
-    const nodeStream = Readable.fromWeb(req.body);
-
-    // Create a pseudo-request object with headers for formidable
-    const headersObj = Object.fromEntries(req.headers);
-    const pseudoReq = Object.assign(nodeStream, {
-      headers: headersObj,
-    });
-
-    // Custom filename function to preserve original names
+    // Use formidable directly with the Web request object
     const form = formidable({
       uploadDir: targetDir,
       keepExtensions: true,
       multiples: false,
+      maxFileSize: 100 * 1024 * 1024 * 1024, // 100GB limit
       filename: (_, __, info) => {
         // Use the original filename sent by the client
         return info.originalFilename || `upload_${Date.now()}`;
       },
     });
 
-    // Parse the multipart form - streams data directly to disk without buffering
+    // Parse the multipart form - formidable handles streaming automatically
     const { parsedFileName, fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      form.parse(pseudoReq, (err, __, files) => {
+      form.parse(req, (err, __, files) => {
         if (err) {
           reject(err);
           return;

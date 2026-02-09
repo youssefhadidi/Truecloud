@@ -5,7 +5,6 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 import formidable from 'formidable';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
@@ -97,30 +96,15 @@ export async function POST(req) {
       path: relativePath,
     });
 
-    // Convert Web ReadableStream to Node.js Readable stream for formidable
-    const nodeStream = Readable.fromWeb(req.body);
-
-    // Create a pseudo-request object with headers for formidable
-    const headersObj = Object.fromEntries(req.headers);
-    const pseudoReq = Object.assign(nodeStream, {
-      headers: headersObj,
-    });
-
-    logger.debug('POST /api/files/upload - Stream prepared for parsing');
-
-    // Custom filename function to preserve original names
+    // Use formidable directly with the Web request object
+    // Formidable can work with Web API Request objects natively
     const form = formidable({
       uploadDir: targetDir,
       keepExtensions: true,
       multiples: false,
-      filename: (name, _, info) => {
+      maxFileSize: 100 * 1024 * 1024 * 1024, // 100GB limit
+      filename: (_, __, info) => {
         // Use the original filename sent by the client
-        logger.debug('formidable filename callback', {
-          name,
-          originalFilename: info.originalFilename,
-          mimetype: info.mimetype,
-        });
-        // Return the original filename as-is
         return info.originalFilename || `upload_${Date.now()}`;
       },
     });
@@ -143,9 +127,9 @@ export async function POST(req) {
       });
     });
 
-    // Parse the multipart form - streams data directly to disk without buffering
+    // Parse the multipart form - formidable handles streaming automatically
     const { fileSize, fileMimeType } = await new Promise((resolve, reject) => {
-      form.parse(pseudoReq, (err, _, files) => {
+      form.parse(req, (err, _, files) => {
         if (err) {
           logger.error('POST /api/files/upload - Parse error', {
             message: err.message,
