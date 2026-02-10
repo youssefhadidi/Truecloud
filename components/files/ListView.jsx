@@ -136,42 +136,27 @@ const ListView = ({
                 key={virtualRow.key}
                 className="absolute left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
                 style={{
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      className="absolute left-0 w-full flex items-center justify-between px-4 py-3 hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700"
-                      style={{
-                        top: 0,
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      onClick={() => {
-                        if (selectionMode) {
-                          onToggleSelect?.(file);
-                          return;
-                        }
-                        onFileClick(file);
-                      }}
-                      onContextMenu={(e) => handleContextMenu(e, file)}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {selectionMode && (
-                          <input
-                            type="checkbox"
-                            checked={!!selectedFiles?.has(file.name)}
-                            onChange={() => onToggleSelect?.(file)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-4 w-4 rounded border-gray-500 bg-gray-800"
-                          />
-                        )}
-                        {file.isDirectory ? <FiFolder className="text-blue-400" size={24} /> : <FiFile className="text-gray-400" size={24} />}
-                        <div className="min-w-0">
-                          <p className="font-medium text-white truncate" title={file.name}>
-                            {file.name}
-                          </p>
-                          {!file.isDirectory && <p className="text-xs text-gray-400">{formatFileSize(file.size)}</p>}
-                        </div>
-                      </div>
+                  top: 0,
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
+                  <FiFolder className="text-blue-400" size={20} />
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => onNewFolderNameChange(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') onConfirmCreateFolder();
+                      if (e.key === 'Escape') onCancelCreateFolder();
+                    }}
+                    className="flex-1 px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white text-sm"
+                    placeholder="Folder name..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={onCancelCreateFolder} className="px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600">
                       Cancel
                     </button>
                     <button onClick={onConfirmCreateFolder} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
