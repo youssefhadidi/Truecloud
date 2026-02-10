@@ -160,13 +160,19 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   // Helper to build download URL
   const getFileUrl = (file, type) => {
     if (isShareMode) {
-      // For share mode, use public API endpoints
       const params = new URLSearchParams();
       const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
       params.append('path', filePath);
       if (sharePassword) {
         params.append('pwd', sharePassword);
       }
+      if (type === 'image') {
+        params.append('quality', '85');
+        params.append('w', '2000');
+        params.append('h', '2000');
+        return `/api/public/${shareToken}/optimize-image?${params.toString()}`;
+      }
+      // For share mode, use public API endpoints
       return `/api/public/${shareToken}/download?${params.toString()}`;
     }
 

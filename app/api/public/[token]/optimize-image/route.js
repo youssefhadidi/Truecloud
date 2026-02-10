@@ -4,10 +4,11 @@ import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, mkdir } from 'fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { createHash } from 'crypto';
+import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
@@ -69,13 +70,15 @@ export async function GET(req, { params }) {
     const fileStats = await stat(filePath);
 
     // Only process image files
-    const mimeType = lookup(fileName) || 'application/octet-stream';
-    if (!mimeType.startsWith('image/')) {
+    const fileExt = extname(fileName).toLowerCase();
+    const isImageExt = IMAGE_EXTENSIONS.includes(fileExt);
+    const mimeType = lookup(fileName) || (isImageExt ? `image/${fileExt.slice(1)}` : 'application/octet-stream');
+    if (!mimeType.startsWith('image/') && !isImageExt) {
       return NextResponse.json({ error: 'Only images can be optimized' }, { status: 400 });
     }
 
     // Skip optimization for very small files or SVG
-    if (mimeType === 'image/svg+xml' || fileStats.size < 100000) {
+    if (mimeType === 'image/svg+xml' || fileExt === '.svg' || fileStats.size < 100000) {
       const fileBuffer = fs.readFileSync(filePath);
       return new NextResponse(fileBuffer, {
         headers: {
