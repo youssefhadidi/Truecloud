@@ -1,6 +1,7 @@
 /** @format */
 
 import { useCallback, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 
@@ -33,6 +34,13 @@ export function useShareOperations({
   addNotification,
   allowUploads,
 }) {
+  const queryClient = useQueryClient();
+
+  const refreshListing = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['share-files', token] });
+    queryClient.invalidateQueries({ queryKey: ['share', token] });
+  }, [queryClient, token]);
+
   // ============ Folder Creation ============
   const initiateCreateFolder = useCallback(() => {
     if (!allowUploads) {
@@ -80,15 +88,14 @@ export function useShareOperations({
         setProcessingFile(null);
         addNotification('success', 'Folder created successfully');
 
-        // Refresh share data by reloading
-        window.location.reload();
+        refreshListing();
       } catch (error) {
         console.error('Create folder error:', error);
         addNotification('error', error.message || 'Failed to create folder', 'Error');
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder],
+    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder, refreshListing],
   );
 
   // ============ File Deletion ============
@@ -142,8 +149,7 @@ export function useShareOperations({
         setProcessingFile(null);
         addNotification('success', deletingFile.isDirectory ? 'Folder deleted' : 'File deleted');
 
-        // Refresh share data by reloading
-        window.location.reload();
+        refreshListing();
       } catch (error) {
         console.error('Delete error:', error);
         addNotification('error', error.message || 'Failed to delete file', 'Delete Error');
@@ -151,7 +157,7 @@ export function useShareOperations({
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification],
+    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification, refreshListing],
   );
 
   // ============ File Rename ============
@@ -213,8 +219,7 @@ export function useShareOperations({
         setProcessingFile(null);
         addNotification('success', 'File renamed successfully');
 
-        // Refresh share data by reloading
-        window.location.reload();
+        refreshListing();
       } catch (error) {
         console.error('Rename error:', error);
         addNotification('error', error.message || 'Failed to rename file', 'Rename Error');
@@ -222,7 +227,7 @@ export function useShareOperations({
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename],
+    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename, refreshListing],
   );
 
   // ============ File Upload ============
@@ -276,8 +281,7 @@ export function useShareOperations({
 
           addNotification('success', `${file.name} uploaded`);
 
-          // Refresh share data by reloading
-          setTimeout(() => window.location.reload(), 2500);
+          refreshListing();
         } catch (error) {
           console.error('Upload error:', error);
           setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
@@ -285,7 +289,7 @@ export function useShareOperations({
         }
       }
     },
-    [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification],
+    [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification, refreshListing],
   );
 
   const handleUploadFromInput = useCallback(
