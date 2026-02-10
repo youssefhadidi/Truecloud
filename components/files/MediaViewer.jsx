@@ -163,6 +163,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const programmaticScrollRef = useRef(false);
   // plyr-react does not require refs for player instance
   const isShareMode = !!shareToken;
+  // For image zoom reset
+  const transformRef = useRef();
 
   // Helper to build download URL
   const getFileUrl = (file, type) => {
@@ -330,24 +332,22 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
   if (!viewerFile) return null;
 
+  // Reset zoom when image changes
+  useEffect(() => {
+    if (transformRef.current) {
+      transformRef.current.resetTransform && transformRef.current.resetTransform();
+    }
+  }, [viewerFile?.id]);
+
   // Render media based on type
   const renderMedia = () => {
     const stopProp = (e) => e.stopPropagation();
-
 
     switch (fileType) {
       case '3d':
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
-      case 'image': {
-        // Use ref to access TransformWrapper's resetTransform
-        const transformRef = useRef();
-        // Reset zoom when image changes
-        useEffect(() => {
-          if (transformRef.current) {
-            transformRef.current.resetTransform();
-          }
-        }, [viewerFile?.id]);
+      case 'image':
         return (
           <TransformWrapper
             minScale={0.5}
@@ -364,13 +364,12 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 shareToken={shareToken}
                 sharePassword={sharePassword}
                 onImageLoad={() => {
-                  if (transformRef.current) transformRef.current.resetTransform();
+                  if (transformRef.current) transformRef.current.resetTransform && transformRef.current.resetTransform();
                 }}
               />
             </TransformComponent>
           </TransformWrapper>
         );
-      }
 
 
       case 'video':
