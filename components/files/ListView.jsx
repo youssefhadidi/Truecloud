@@ -247,6 +247,10 @@ const ListView = ({
                 WebkitTouchCallout: 'none',
               }}
               onClick={() => {
+                if (selectionMode) {
+                  onToggleSelect?.(file);
+                  return;
+                }
                 // Don't navigate if showing actions on mobile
                 if (shouldShowActions(file.id)) return;
 
@@ -257,11 +261,22 @@ const ListView = ({
                 }
               }}
               onContextMenu={(e) => handleContextMenu(e, file)}
-              onTouchStart={() => handleTouchStart(file)}
+              onTouchStart={() => {
+                if (!selectionMode) handleTouchStart(file);
+              }}
               onTouchEnd={handleTouchEnd}
               onTouchMove={handleTouchMove}
             >
               <div className="flex items-center gap-3 min-w-0">
+                {selectionMode && (
+                  <input
+                    type="checkbox"
+                    checked={!!selectedFiles?.has(file.name)}
+                    onChange={() => onToggleSelect?.(file)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-gray-500 bg-gray-800"
+                  />
+                )}
                 {processingFile === file.id ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 flex-shrink-0"></div>
                 ) : (

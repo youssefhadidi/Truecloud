@@ -4,7 +4,7 @@
 
 import { use, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare, FiX } from 'react-icons/fi';
+import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -345,23 +345,14 @@ export default function SharePage({ params }) {
                 )}
 
                 {shareResponse.allowUploads && shareState.selectionMode && (
-                  <>
-                    <button
-                      onClick={() => setMoveModalOpen(true)}
-                      disabled={shareState.selectedFiles.length === 0}
-                      className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <FiFolder size={18} />
-                      <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
-                    </button>
-                    <button
-                      onClick={() => shareState.setSelectionMode(false)}
-                      className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors"
-                    >
-                      <FiX size={18} />
-                      <span className="hidden sm:inline">Cancel</span>
-                    </button>
-                  </>
+                  <button
+                    onClick={() => setMoveModalOpen(true)}
+                    disabled={shareState.selectedFiles.length === 0}
+                    className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FiFolder size={18} />
+                    <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
+                  </button>
                 )}
               </div>
 

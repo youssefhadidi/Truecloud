@@ -5,7 +5,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState } from 'react';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiX } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
@@ -190,23 +190,14 @@ function FilesPageContent() {
               </button>
 
               {state.selectionMode && (
-                <>
-                  <button
-                    onClick={() => setMoveModalOpen(true)}
-                    disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FiFolder size={16} />
-                    <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
-                  </button>
-                  <button
-                    onClick={() => state.setSelectionMode(false)}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors"
-                  >
-                    <FiX size={16} />
-                    <span className="hidden sm:inline">Cancel</span>
-                  </button>
-                </>
+                <button
+                  onClick={() => setMoveModalOpen(true)}
+                  disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FiFolder size={16} />
+                  <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                </button>
               )}
 
               {/* New Folder Button */}
