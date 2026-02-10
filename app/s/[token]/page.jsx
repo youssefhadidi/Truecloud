@@ -363,6 +363,19 @@ export default function SharePage({ params }) {
                 </>
               )}
 
+              <select
+                value={shareState.sortBy}
+                onChange={(e) => shareState.setSortBy(e.target.value)}
+                className="px-3 py-2 text-sm bg-gray-800 text-gray-300 border border-gray-700 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="date-desc">Date (New)</option>
+                <option value="date-asc">Date (Old)</option>
+                <option value="size-desc">Size (Big)</option>
+                <option value="size-asc">Size (Small)</option>
+              </select>
+
               <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => shareState.setViewMode('grid')}
