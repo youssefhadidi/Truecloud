@@ -2,9 +2,56 @@
 
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
 import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
+
+function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) {
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(false);
+  const ref = useRef(null);
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px', threshold: 0.01 },
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isInView) return;
+    const url = `/api/public/${token}/thumbnail?file=${encodeURIComponent(fileName)}&path=${encodeURIComponent(currentSubPath)}${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data) setSrc(data.data);
+        else setError(true);
+      })
+      .catch(() => setError(true));
+  }, [isInView, token, fileName, currentSubPath, submittedPassword]);
+
+  if (error) return null;
+
+  return (
+    <div ref={ref} className="w-full h-full">
+      {src && <img src={src} alt={fileName} className="w-full h-full object-cover" />}
+      {!src && isInView && !error && (
+        <div className="w-full h-full flex items-center justify-center">
+          <FiImage className="text-gray-400 animate-spin" size={24} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ShareGrid({
   files = [],
@@ -33,11 +80,11 @@ export default function ShareGrid({
             {file.isDirectory ? (
               <FiFolder className="text-blue-400" size={40} />
             ) : isImage(file.name) ? (
-              <img
-                src={`/api/public/${token}/thumbnail?file=${encodeURIComponent(file.name)}&path=${encodeURIComponent(currentSubPath)}${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                alt={file.name}
-                className="w-full h-full object-cover"
-                onError={(e) => (e.target.style.display = 'none')}
+              <ShareThumbnail
+                token={token}
+                fileName={file.name}
+                currentSubPath={currentSubPath}
+                submittedPassword={submittedPassword}
               />
             ) : isVideo(file.name) ? (
               <FiVideo className="text-purple-400" size={40} />
