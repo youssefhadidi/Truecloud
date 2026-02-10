@@ -2,9 +2,9 @@
 
 'use client';
 
-import { use, lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight } from 'react-icons/fi';
+import { use, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare, FiX } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -18,6 +18,7 @@ const SkpViewer = lazy(() => import('@/components/files/SkpViewer'));
 const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
+const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
@@ -27,6 +28,7 @@ export default function SharePage({ params }) {
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [shareFiles, setShareFiles] = useState([]);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
 
   // Fetch share metadata
   const {
@@ -108,6 +110,44 @@ export default function SharePage({ params }) {
     allowUploads: shareResponse?.allowUploads ?? false,
     setIsDragging: shareState.setIsDragging,
   });
+
+  const selectedFileSet = useMemo(() => new Set(shareState.selectedFiles), [shareState.selectedFiles]);
+
+  const toggleSelection = (file) => {
+    shareState.setSelectedFiles((prev) => {
+      if (prev.includes(file.name)) {
+        return prev.filter((name) => name !== file.name);
+      }
+      return [...prev, file.name];
+    });
+  };
+
+  const fetchShareFolders = async (path) => {
+    const params = new URLSearchParams();
+    if (path) {
+      params.append('path', path);
+    }
+    const url = params.toString() ? `/api/public/${token}/files?${params.toString()}` : `/api/public/${token}/files`;
+    const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
+    const res = await fetch(url, { headers });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load folders');
+    }
+    return (data.files || []).filter((file) => file.isDirectory);
+  };
+
+  const handleConfirmMove = async (destinationPath) => {
+    if (destinationPath === shareState.currentSubPath) {
+      shareState.addNotification('error', 'Select a different destination');
+      return;
+    }
+    const ok = await operations.moveFiles(shareState.selectedFiles, destinationPath);
+    if (ok) {
+      shareState.setSelectionMode(false);
+      setMoveModalOpen(false);
+    }
+  };
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -293,6 +333,36 @@ export default function SharePage({ params }) {
                 </button>
               )}
 
+              {shareResponse.allowUploads && (
+                <button
+                  onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${shareState.selectionMode ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'}`}
+                >
+                  <FiCheckSquare size={18} />
+                  <span className="hidden sm:inline">{shareState.selectionMode ? 'Selecting' : 'Select'}</span>
+                </button>
+              )}
+
+              {shareResponse.allowUploads && shareState.selectionMode && (
+                <>
+                  <button
+                    onClick={() => setMoveModalOpen(true)}
+                    disabled={shareState.selectedFiles.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FiFolder size={18} />
+                    <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
+                  </button>
+                  <button
+                    onClick={() => shareState.setSelectionMode(false)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 hover:text-white rounded-lg transition-colors"
+                  >
+                    <FiX size={18} />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </button>
+                </>
+              )}
+
               <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => shareState.setViewMode('grid')}
@@ -374,6 +444,9 @@ export default function SharePage({ params }) {
                     onInitiateDelete={operations.initiateDelete}
                     onOpenMediaViewer={operations.openMediaViewer}
                     formatFileSize={operations.formatFileSize}
+                    selectionMode={shareState.selectionMode}
+                    selectedFiles={selectedFileSet}
+                    onToggleSelect={toggleSelection}
                   />
                 ) : (
                   <ShareList
@@ -401,6 +474,9 @@ export default function SharePage({ params }) {
                     onInitiateDelete={operations.initiateDelete}
                     onOpenMediaViewer={operations.openMediaViewer}
                     formatFileSize={operations.formatFileSize}
+                    selectionMode={shareState.selectionMode}
+                    selectedFiles={selectedFileSet}
+                    onToggleSelect={toggleSelection}
                   />
                 )}
               </div>
@@ -469,6 +545,20 @@ export default function SharePage({ params }) {
                     }
                   : undefined
               }
+            />
+          </Suspense>
+        )}
+
+        {/* Move Modal */}
+        {moveModalOpen && (
+          <Suspense fallback={null}>
+            <MoveModal
+              open={moveModalOpen}
+              title={`Move ${shareState.selectedFiles.length} item(s)`}
+              initialPath={shareState.currentSubPath}
+              fetchFolders={fetchShareFolders}
+              onConfirm={handleConfirmMove}
+              onClose={() => setMoveModalOpen(false)}
             />
           </Suspense>
         )}

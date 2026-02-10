@@ -43,6 +43,8 @@ export function useFilesPage(status) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sharingFile, setSharingFile] = useState(null);
   const [restoringFile, setRestoringFile] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Redirect if unauthenticated
   useEffect(() => {
@@ -98,6 +100,17 @@ export function useFilesPage(status) {
     window.addEventListener('popstate', handlePopstate);
     return () => window.removeEventListener('popstate', handlePopstate);
   }, []);
+
+  // Reset selection on path change or when selection mode is off
+  useEffect(() => {
+    setSelectedFiles([]);
+  }, [currentPath]);
+
+  useEffect(() => {
+    if (!selectionMode) {
+      setSelectedFiles([]);
+    }
+  }, [selectionMode]);
 
   // Fetch and sort files
   const { data: filesData, isLoading } = useFiles(currentPath, status === 'authenticated');
@@ -209,6 +222,8 @@ export function useFilesPage(status) {
     sharingFile,
     sharedPaths,
     restoringFile,
+    selectionMode,
+    selectedFiles,
 
     // Setters
     setViewMode,
@@ -231,6 +246,8 @@ export function useFilesPage(status) {
     setHistoryIndex,
     setSharingFile,
     setRestoringFile,
+    setSelectionMode,
+    setSelectedFiles,
 
     // Helpers
     addNotification,

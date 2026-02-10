@@ -27,6 +27,9 @@ export default function ShareList({
   onInitiateDelete,
   onOpenMediaViewer,
   formatFileSize,
+  selectionMode,
+  selectedFiles,
+  onToggleSelect,
 }) {
   const parentRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
@@ -124,10 +127,25 @@ export default function ShareList({
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              onClick={() => onFileClick(file)}
+              onClick={() => {
+                if (selectionMode) {
+                  onToggleSelect?.(file);
+                  return;
+                }
+                onFileClick(file);
+              }}
               onContextMenu={(e) => onContextMenu(e, file)}
             >
               <div className="flex items-center gap-3 min-w-0">
+                {selectionMode && (
+                  <input
+                    type="checkbox"
+                    checked={!!selectedFiles?.has(file.name)}
+                    onChange={() => onToggleSelect?.(file)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-gray-500 bg-gray-800"
+                  />
+                )}
                 {file.isDirectory ? <FiFolder className="text-blue-400" size={24} /> : <FiFile className="text-gray-400" size={24} />}
                 <div className="min-w-0">
                   <p className="font-medium text-white truncate" title={file.name}>

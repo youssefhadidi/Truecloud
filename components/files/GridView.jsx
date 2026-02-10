@@ -53,6 +53,9 @@ const GridView = ({
   onInitiateShare,
   sharedPaths,
   onContextMenu,
+  selectionMode,
+  selectedFiles,
+  onToggleSelect,
 }) => {
   const gridRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -157,16 +160,33 @@ const GridView = ({
               className="group relative bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none"
               style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
               onClick={(e) => {
+                if (selectionMode) {
+                  onToggleSelect?.(item);
+                  return;
+                }
                 // Only navigate to folder if not showing actions and clicking on folder
                 if (item.isDirectory && deletingFile?.id !== item.id && !shouldShowActions(item.id)) {
                   onNavigateToFolder(item.name);
                 }
               }}
               onContextMenu={(e) => onContextMenu?.(e, item)}
-              onTouchStart={() => handleTouchStart(item)}
+              onTouchStart={() => {
+                if (!selectionMode) handleTouchStart(item);
+              }}
               onTouchEnd={handleTouchEnd}
               onTouchMove={handleTouchMove}
             >
+              {selectionMode && !item.isCreating && (
+                <div className="absolute left-2 top-2 z-20">
+                  <input
+                    type="checkbox"
+                    checked={!!selectedFiles?.has(item.name)}
+                    onChange={() => onToggleSelect?.(item)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-gray-500 bg-gray-800"
+                  />
+                </div>
+              )}
               {deletingFile?.id === item.id ? (
                 <div className="absolute inset-0 bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
                   <p className="text-red-200 font-medium text-center ">Delete {item.isDirectory ? 'folder' : 'file'}?</p>

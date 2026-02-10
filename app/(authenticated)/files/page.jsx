@@ -4,8 +4,8 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Suspense, lazy } from 'react';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { Suspense, lazy, useMemo, useState } from 'react';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiX } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
@@ -13,12 +13,14 @@ import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
+import { useMoveFiles } from '@/lib/api/files';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
 const ShareModal = lazy(() => import('@/components/files/ShareModal'));
+const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 function FilesPageContent() {
   const { data: session, status } = useSession();
@@ -64,6 +66,8 @@ function FilesPageContent() {
   // Favorites
   const { data: favorites = [] } = useFavorites();
   const { toggleFavorite, isPending: togglingFavorite } = useToggleFavorite();
+  const moveMutation = useMoveFiles();
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
 
   // File operation handlers
   const handlers = useFileHandlers({
@@ -81,6 +85,47 @@ function FilesPageContent() {
     setSharingFile: state.setSharingFile,
     setRestoringFile: state.setRestoringFile,
   });
+
+  const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
+
+  const toggleSelection = (file) => {
+    state.setSelectedFiles((prev) => {
+      if (prev.includes(file.name)) {
+        return prev.filter((name) => name !== file.name);
+      }
+      return [...prev, file.name];
+    });
+  };
+
+  const fetchMoveFolders = async (path) => {
+    const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load folders');
+    }
+    return (data.files || []).filter((file) => file.isDirectory);
+  };
+
+  const handleConfirmMove = async (destinationPath) => {
+    if (destinationPath === state.currentPath) {
+      state.addNotification('error', 'Select a different destination');
+      return;
+    }
+
+    try {
+      await moveMutation.mutateAsync({
+        items: state.selectedFiles,
+        sourcePath: state.currentPath,
+        destinationPath,
+      });
+      state.addNotification('success', `Moved ${state.selectedFiles.length} item(s)`);
+      state.setSelectionMode(false);
+      setMoveModalOpen(false);
+    } catch (error) {
+      const message = error?.response?.data?.error || error.message || 'Failed to move items';
+      state.addNotification('error', message, 'Move Error');
+    }
+  };
 
   if (status === 'loading') {
     return (
@@ -133,6 +178,35 @@ function FilesPageContent() {
               <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
               <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
             </label>
+
+            {/* Selection Mode */}
+            <button
+              onClick={() => state.setSelectionMode(!state.selectionMode)}
+              className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600 ${state.selectionMode ? 'bg-gray-600' : ''}`}
+            >
+              <FiCheckSquare size={16} />
+              <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
+            </button>
+
+            {state.selectionMode && (
+              <>
+                <button
+                  onClick={() => setMoveModalOpen(true)}
+                  disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FiFolder size={16} />
+                  <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                </button>
+                <button
+                  onClick={() => state.setSelectionMode(false)}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600"
+                >
+                  <FiX size={16} />
+                  <span className="hidden sm:inline">Cancel</span>
+                </button>
+              </>
+            )}
 
             {/* New Folder Button */}
             <button
@@ -296,6 +370,9 @@ function FilesPageContent() {
                       initiateShare={handlers.initiateShare}
                       sharedPaths={state.sharedPaths}
                       currentPath={state.currentPath}
+                      selectionMode={state.selectionMode}
+                      selectedFiles={selectedFileSet}
+                      onToggleSelect={toggleSelection}
                     />
                   </Suspense>
                 </div>
@@ -347,6 +424,9 @@ function FilesPageContent() {
                     onContextMenu={contextMenu.handleContextMenu}
                     onInitiateShare={handlers.initiateShare}
                     sharedPaths={state.sharedPaths}
+                    selectionMode={state.selectionMode}
+                    selectedFiles={selectedFileSet}
+                    onToggleSelect={toggleSelection}
                   />
                 </Suspense>
               )}
@@ -445,6 +525,20 @@ function FilesPageContent() {
             file={state.sharingFile}
             currentPath={state.currentPath}
             onClose={handlers.cancelShare}
+          />
+        </Suspense>
+      )}
+
+      {/* Move Modal */}
+      {moveModalOpen && (
+        <Suspense fallback={null}>
+          <MoveModal
+            open={moveModalOpen}
+            title={`Move ${state.selectedFiles.length} item(s)`}
+            initialPath={state.currentPath}
+            fetchFolders={fetchMoveFolders}
+            onConfirm={handleConfirmMove}
+            onClose={() => setMoveModalOpen(false)}
           />
         </Suspense>
       )}

@@ -231,6 +231,53 @@ export function useShareOperations({
     [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename, refreshListing],
   );
 
+  // ============ Move Files/Folders ============
+  const moveFiles = useCallback(
+    async (items, destinationPath) => {
+      if (!allowUploads) {
+        addNotification('error', 'Uploads are not allowed for this share');
+        return false;
+      }
+
+      if (!items || items.length === 0) {
+        addNotification('error', 'No items selected');
+        return false;
+      }
+
+      setProcessingFile('moving');
+      try {
+        const response = await fetch(`/api/public/${token}/move`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sharePassword && { 'x-share-password': sharePassword }),
+          },
+          body: JSON.stringify({
+            items,
+            sourcePath: currentSubPath,
+            destinationPath,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to move items');
+        }
+
+        setProcessingFile(null);
+        addNotification('success', `Moved ${items.length} item(s)`);
+        refreshListing();
+        return true;
+      } catch (error) {
+        console.error('Move error:', error);
+        addNotification('error', error.message || 'Failed to move items', 'Move Error');
+        setProcessingFile(null);
+        return false;
+      }
+    },
+    [token, sharePassword, currentSubPath, allowUploads, setProcessingFile, addNotification, refreshListing],
+  );
+
   // ============ File Upload ============
   const handleUpload = useCallback(
     async (files) => {
@@ -508,6 +555,9 @@ export function useShareOperations({
     // Upload operations
     handleUpload,
     handleUploadFromInput,
+
+    // Move operations
+    moveFiles,
 
     // Download operations
     handleDownload,

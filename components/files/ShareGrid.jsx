@@ -96,6 +96,9 @@ export default function ShareGrid({
   onInitiateDelete,
   onOpenMediaViewer,
   formatFileSize,
+  selectionMode,
+  selectedFiles,
+  onToggleSelect,
 }) {
   const gridRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -156,14 +159,31 @@ export default function ShareGrid({
           <div
             className="group relative bg-gray-700 rounded-lg p-1 cursor-pointer hover:bg-gray-600 transition-colors flex flex-col h-full select-none"
             onClick={() => {
+              if (selectionMode) {
+                onToggleSelect?.(file);
+                return;
+              }
               if (isDeleting || isRenaming || shouldShowActions(file.name)) return;
               onFileClick(file);
             }}
             onContextMenu={(e) => onContextMenu(e, file)}
-            onTouchStart={() => handleTouchStart(file)}
+            onTouchStart={() => {
+              if (!selectionMode) handleTouchStart(file);
+            }}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
           >
+            {selectionMode && (
+              <div className="absolute left-2 top-2 z-20">
+                <input
+                  type="checkbox"
+                  checked={!!selectedFiles?.has(file.name)}
+                  onChange={() => onToggleSelect?.(file)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-4 w-4 rounded border-gray-500 bg-gray-800"
+                />
+              </div>
+            )}
             {isDeleting && (
               <div className="absolute inset-0 bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
                 <p className="text-red-200 font-medium text-center">Delete {file.isDirectory ? 'folder' : 'file'}?</p>

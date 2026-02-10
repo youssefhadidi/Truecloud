@@ -50,6 +50,8 @@ export function useSharePage(token, shareData = null) {
   const [isLoading, setIsLoading] = useState(true);
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [verifiedPassword, setVerifiedPassword] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Persist view mode to localStorage
   useEffect(() => {
@@ -99,6 +101,17 @@ export function useSharePage(token, shareData = null) {
     window.addEventListener('popstate', handlePopstate);
     return () => window.removeEventListener('popstate', handlePopstate);
   }, []);
+
+  // Reset selection on path change or when selection mode is off
+  useEffect(() => {
+    setSelectedFiles([]);
+  }, [currentSubPath]);
+
+  useEffect(() => {
+    if (!selectionMode) {
+      setSelectedFiles([]);
+    }
+  }, [selectionMode]);
 
   // Filter and sort files based on search query and sort criteria
   const sortedFilteredFiles = useMemo(() => {
@@ -206,6 +219,8 @@ export function useSharePage(token, shareData = null) {
 
     // Upload state
     uploadingFiles,
+    selectionMode,
+    selectedFiles,
 
     // File data
     sortedFilteredFiles,
@@ -245,6 +260,8 @@ export function useSharePage(token, shareData = null) {
 
     // Upload setters
     setUploadingFiles,
+    setSelectionMode,
+    setSelectedFiles,
 
     // Authentication setters
     setRequiresPassword,
