@@ -4,7 +4,7 @@
 
 import { use, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList } from 'react-icons/fi';
+import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
@@ -306,6 +306,28 @@ export default function SharePage({ params }) {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Breadcrumb */}
+        <div className="px-6 py-2 border-b border-gray-800">
+          <div className="flex items-center gap-2 text-gray-400">
+            <button onClick={() => operations.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap">
+              <FiHome size={16} />
+              <span className="hidden sm:inline">{shareResponse.fileName}</span>
+            </button>
+            {shareState.currentSubPath &&
+              shareState.currentSubPath.split('/').map((folder, index, arr) => (
+                <div key={`${folder}-${index}`} className="flex items-center gap-1.5">
+                  <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
+                  <button
+                    onClick={() => operations.navigateToBreadcrumb(index + 1)}
+                    className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
+                  >
+                    {folder}
+                  </button>
+                </div>
+              ))}
           </div>
         </div>
 
