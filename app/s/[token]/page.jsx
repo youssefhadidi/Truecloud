@@ -312,53 +312,73 @@ export default function SharePage({ params }) {
         <input type="file" ref={fileInputRef} className="hidden" multiple onChange={operations.handleUploadFromInput} />
 
         {/* Main content area */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-hidden p-4">
           {(shareState.sortedFilteredFiles || []).length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-400">
               <p>This folder is empty</p>
             </div>
           ) : (
             <Suspense fallback={<div className="text-center text-gray-400">Loading...</div>}>
-              {shareState.viewMode === 'grid' ? (
-                <ShareGrid
-                  files={shareState.sortedFilteredFiles || []}
-                  token={token}
-                  submittedPassword={submittedPassword}
-                  currentSubPath={shareState.currentSubPath}
-                  allowUploads={shareResponse.allowUploads}
-                  onFileClick={(file) => {
-                    if (file.isDirectory) {
-                      operations.navigateToSubFolder(file.name);
-                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
-                      operations.openMediaViewer(file);
-                    }
-                  }}
-                  onContextMenu={operations.handleContextMenu}
-                  onDownload={operations.handleDownload}
-                  onInitiateRename={operations.initiateRename}
-                  onInitiateDelete={operations.initiateDelete}
-                  onOpenMediaViewer={operations.openMediaViewer}
-                  formatFileSize={operations.formatFileSize}
-                />
-              ) : (
-                <ShareList
-                  files={shareState.sortedFilteredFiles || []}
-                  allowUploads={shareResponse.allowUploads}
-                  onFileClick={(file) => {
-                    if (file.isDirectory) {
-                      operations.navigateToSubFolder(file.name);
-                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
-                      operations.openMediaViewer(file);
-                    }
-                  }}
-                  onDownload={operations.handleDownload}
-                  onContextMenu={operations.handleContextMenu}
-                  onInitiateRename={operations.initiateRename}
-                  onInitiateDelete={operations.initiateDelete}
-                  onOpenMediaViewer={operations.openMediaViewer}
-                  formatFileSize={operations.formatFileSize}
-                />
-              )}
+              <div className="h-full">
+                {shareState.viewMode === 'grid' ? (
+                  <ShareGrid
+                    files={shareState.sortedFilteredFiles || []}
+                    token={token}
+                    submittedPassword={submittedPassword}
+                    currentSubPath={shareState.currentSubPath}
+                    allowUploads={shareResponse.allowUploads}
+                    deletingFile={shareState.deletingFile}
+                    renamingFile={shareState.renamingFile}
+                    newFileName={shareState.newFileName}
+                    onNewFileNameChange={shareState.setNewFileName}
+                    onCancelRename={operations.cancelRename}
+                    onConfirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
+                    onCancelDelete={operations.cancelDelete}
+                    onConfirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
+                    processingFile={shareState.processingFile}
+                    onFileClick={(file) => {
+                      if (file.isDirectory) {
+                        operations.navigateToSubFolder(file.name);
+                      } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                        operations.openMediaViewer(file);
+                      }
+                    }}
+                    onContextMenu={operations.handleContextMenu}
+                    onDownload={operations.handleDownload}
+                    onInitiateRename={operations.initiateRename}
+                    onInitiateDelete={operations.initiateDelete}
+                    onOpenMediaViewer={operations.openMediaViewer}
+                    formatFileSize={operations.formatFileSize}
+                  />
+                ) : (
+                  <ShareList
+                    files={shareState.sortedFilteredFiles || []}
+                    allowUploads={shareResponse.allowUploads}
+                    deletingFile={shareState.deletingFile}
+                    renamingFile={shareState.renamingFile}
+                    newFileName={shareState.newFileName}
+                    setNewFileName={shareState.setNewFileName}
+                    cancelDelete={operations.cancelDelete}
+                    confirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
+                    cancelRename={operations.cancelRename}
+                    confirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
+                    processingFile={shareState.processingFile}
+                    onFileClick={(file) => {
+                      if (file.isDirectory) {
+                        operations.navigateToSubFolder(file.name);
+                      } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                        operations.openMediaViewer(file);
+                      }
+                    }}
+                    onDownload={operations.handleDownload}
+                    onContextMenu={operations.handleContextMenu}
+                    onInitiateRename={operations.initiateRename}
+                    onInitiateDelete={operations.initiateDelete}
+                    onOpenMediaViewer={operations.openMediaViewer}
+                    formatFileSize={operations.formatFileSize}
+                  />
+                )}
+              </div>
             </Suspense>
           )}
         </div>
