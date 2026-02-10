@@ -7,10 +7,16 @@ import { FiArrowLeft, FiChevronRight, FiVideo, FiFileText, FiMaximize2, FiMinimi
 import Viewer3D, { is3dFile } from './Viewer3D';
 import XlsxViewer from './XlsxViewer';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
-import { useThumbnail } from '@/lib/api/files';
+import { useShareThumbnail, useThumbnail } from '@/lib/api/files';
+
+function useShareAwareThumbnail(file, currentPath, enabled, shareToken, sharePassword) {
+  const authenticated = useThumbnail(file.id, currentPath, enabled && !shareToken);
+  const shared = useShareThumbnail(shareToken, file.name, currentPath, sharePassword, enabled && !!shareToken);
+  return shareToken ? shared : authenticated;
+}
 
 // Preview shown in the main area (while scrolling strip) or in peek panels (prev/next)
-function PendingPreview({ file, currentPath, compact = false }) {
+function PendingPreview({ file, currentPath, compact = false, shareToken, sharePassword }) {
   const fileType = (() => {
     if (is3dFile(file.name)) return '3d';
     if (isImage(file.name)) return 'image';
@@ -22,7 +28,7 @@ function PendingPreview({ file, currentPath, compact = false }) {
   })();
 
   const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
-  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
   const hasThumbnail = canThumbnail && thumbnailData?.data;
 
   const iconSize = compact ? 28 : 64;
@@ -50,10 +56,10 @@ function PendingPreview({ file, currentPath, compact = false }) {
 }
 
 // Image with thumbnail placeholder — shows thumbnail immediately, fades in full-res on load
-function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
+function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
-  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail);
+  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
   const hasThumbnail = canThumbnail && thumbnailData?.data;
 
   // Reset when file changes
@@ -79,7 +85,7 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl }) {
 }
 
 // Thumbnail item component — lazy-loads thumbnail only when scrolled into view
-function ThumbnailItem({ file, currentPath, isActive, onClick }) {
+function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken, sharePassword }) {
   const itemRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -112,7 +118,7 @@ function ThumbnailItem({ file, currentPath, isActive, onClick }) {
   })();
 
   const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
-  const { data: thumbnailData } = useThumbnail(file.id, currentPath, canThumbnail && isVisible);
+  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail && isVisible, shareToken, sharePassword);
 
   const iconMap = {
     '3d': <FiBox size={20} className="text-orange-400" />,
@@ -317,7 +323,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} onClick={stopProp} />;
 
       case 'image':
-        return <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} />;
+        return <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
 
       case 'video':
         return (
@@ -424,7 +430,14 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           >
             {viewableFiles.map((file) => (
               <div key={file.id} data-file-id={file.id} data-active={file.id === viewerFile.id ? 'true' : undefined}>
-                <ThumbnailItem file={file} currentPath={currentPath} isActive={file.id === viewerFile.id} onClick={() => onSelectFile(file)} />
+                <ThumbnailItem
+                  file={file}
+                  currentPath={currentPath}
+                  isActive={file.id === viewerFile.id}
+                  onClick={() => onSelectFile(file)}
+                  shareToken={shareToken}
+                  sharePassword={sharePassword}
+                />
               </div>
             ))}
           </div>

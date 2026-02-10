@@ -26,6 +26,7 @@ export default function SharePage({ params }) {
   const fileInputRef = useRef(null);
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
+  const [shareFiles, setShareFiles] = useState([]);
 
   // Fetch share metadata
   const {
@@ -48,26 +49,29 @@ export default function SharePage({ params }) {
     retry: false,
   });
 
+  // Use share hooks for state management
+  const shareState = useSharePage(token, shareResponse ? { ...shareResponse, files: shareFiles } : null);
+
   // Fetch directory listing
-  const {
-    data: directoryFiles = null,
-  } = useQuery({
-    queryKey: ['share-files', token, submittedPassword],
+  const { data: directoryFiles = null } = useQuery({
+    queryKey: ['share-files', token, submittedPassword, shareState.currentSubPath],
     queryFn: async () => {
       const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
-      const res = await fetch(`/api/public/${token}/files`, { headers });
+      const params = new URLSearchParams();
+      if (shareState.currentSubPath) {
+        params.append('path', shareState.currentSubPath);
+      }
+      const url = params.toString() ? `/api/public/${token}/files?${params.toString()}` : `/api/public/${token}/files`;
+      const res = await fetch(url, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load files');
       return data.files;
     },
     enabled: !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory,
     staleTime: 30 * 1000,
-  });
-
-  // Use share hooks for state management
-  const shareState = useSharePage(token, {
-    ...shareResponse,
-    files: directoryFiles || [],
+    onSuccess: (files) => {
+      setShareFiles(files || []);
+    },
   });
 
   // Create operations hook
@@ -184,20 +188,12 @@ export default function SharePage({ params }) {
             {(isVideo(shareResponse.fileName) || isAudio(shareResponse.fileName) || isPdf(shareResponse.fileName)) && (
               <div className="mb-6 rounded overflow-hidden">
                 {isVideo(shareResponse.fileName) && (
-                  <video
-                    controls
-                    className="w-full max-h-[500px]"
-                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                  >
+                  <video controls className="w-full max-h-[500px]" src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
                     Your browser does not support video playback.
                   </video>
                 )}
                 {isAudio(shareResponse.fileName) && (
-                  <audio
-                    controls
-                    className="w-full"
-                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                  >
+                  <audio controls className="w-full" src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
                     Your browser does not support audio playback.
                   </audio>
                 )}
@@ -251,7 +247,13 @@ export default function SharePage({ params }) {
   // Directory view
   if (shareResponse?.isDirectory && directoryFiles) {
     return (
-      <div className="h-dvh flex flex-col bg-gray-900 text-white" onClick={operations.closeContextMenu} onDragOver={operations.handleDragOver} onDragLeave={operations.handleDragLeave} onDrop={operations.handleDropEvent}>
+      <div
+        className="h-dvh flex flex-col bg-gray-900 text-white"
+        onClick={operations.closeContextMenu}
+        onDragOver={operations.handleDragOver}
+        onDragLeave={operations.handleDragLeave}
+        onDrop={operations.handleDropEvent}
+      >
         {/* Drag overlay */}
         {shareState.isDragging && shareResponse.allowUploads && (
           <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 z-50 flex items-center justify-center">
@@ -275,10 +277,7 @@ export default function SharePage({ params }) {
 
             <div className="flex items-center gap-3">
               {shareResponse.allowUploads && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-                >
+                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
                   <FiUpload size={18} />
                   <span className="hidden sm:inline">Upload</span>
                 </button>
@@ -303,13 +302,7 @@ export default function SharePage({ params }) {
         </div>
 
         {/* File input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          multiple
-          onChange={operations.handleUploadFromInput}
-        />
+        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={operations.handleUploadFromInput} />
 
         {/* Main content area */}
         <div className="flex-1 overflow-auto p-4">
@@ -329,7 +322,7 @@ export default function SharePage({ params }) {
                   onFileClick={(file) => {
                     if (file.isDirectory) {
                       operations.navigateToSubFolder(file.name);
-                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name)) {
+                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
                       operations.openMediaViewer(file);
                     }
                   }}
@@ -347,7 +340,7 @@ export default function SharePage({ params }) {
                   onFileClick={(file) => {
                     if (file.isDirectory) {
                       operations.navigateToSubFolder(file.name);
-                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name)) {
+                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
                       operations.openMediaViewer(file);
                     }
                   }}
@@ -367,12 +360,14 @@ export default function SharePage({ params }) {
         {shareState.viewerFile && (
           <Suspense fallback={null}>
             <MediaViewer
-              file={shareState.viewerFile}
-              files={shareState.viewableFiles}
+              viewerFile={shareState.viewerFile}
+              viewableFiles={shareState.viewableFiles}
+              currentPath={shareState.currentSubPath}
               shareToken={token}
               sharePassword={submittedPassword}
               onClose={operations.closeMediaViewer}
               onNavigate={operations.navigateViewer}
+              onSelectFile={operations.selectViewerFile}
             />
           </Suspense>
         )}
@@ -402,18 +397,26 @@ export default function SharePage({ params }) {
                 }
                 operations.closeContextMenu();
               }}
-              onRename={shareResponse.allowUploads ? () => {
-                if (shareState.selectedContextFile) {
-                  operations.initiateRename(shareState.selectedContextFile);
-                }
-                operations.closeContextMenu();
-              } : undefined}
-              onDelete={shareResponse.allowUploads ? () => {
-                if (shareState.selectedContextFile) {
-                  operations.initiateDelete(shareState.selectedContextFile);
-                }
-                operations.closeContextMenu();
-              } : undefined}
+              onRename={
+                shareResponse.allowUploads
+                  ? () => {
+                      if (shareState.selectedContextFile) {
+                        operations.initiateRename(shareState.selectedContextFile);
+                      }
+                      operations.closeContextMenu();
+                    }
+                  : undefined
+              }
+              onDelete={
+                shareResponse.allowUploads
+                  ? () => {
+                      if (shareState.selectedContextFile) {
+                        operations.initiateDelete(shareState.selectedContextFile);
+                      }
+                      operations.closeContextMenu();
+                    }
+                  : undefined
+              }
             />
           </Suspense>
         )}

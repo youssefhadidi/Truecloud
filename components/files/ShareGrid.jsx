@@ -2,14 +2,13 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2, FiPlay } from 'react-icons/fi';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
 function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) {
-  const [src, setSrc] = useState(null);
-  const [error, setError] = useState(false);
   const ref = useRef(null);
   const [isInView, setIsInView] = useState(false);
 
@@ -27,24 +26,27 @@ function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) 
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isInView) return;
-    const url = `/api/public/${token}/thumbnail?file=${encodeURIComponent(fileName)}&path=${encodeURIComponent(currentSubPath)}${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`;
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.data) setSrc(data.data);
-        else setError(true);
-      })
-      .catch(() => setError(true));
-  }, [isInView, token, fileName, currentSubPath, submittedPassword]);
+  const { data, isError } = useQuery({
+    queryKey: ['share-thumbnail', token, fileName, currentSubPath],
+    queryFn: async () => {
+      const url = `/api/public/${token}/thumbnail?file=${encodeURIComponent(fileName)}&path=${encodeURIComponent(currentSubPath)}${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!res.ok || !json.data) throw new Error('No thumbnail');
+      return json;
+    },
+    enabled: isInView,
+    retry: 1,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 
-  if (error) return null;
+  if (isError) return null;
 
   return (
     <div ref={ref} className="w-full h-full">
-      {src && <img src={src} alt={fileName} className="w-full h-full object-cover" />}
-      {!src && isInView && !error && (
+      {data?.data && <img src={data.data} alt={fileName} className="w-full h-full object-cover" />}
+      {!data?.data && isInView && !isError && (
         <div className="w-full h-full flex items-center justify-center">
           <FiImage className="text-gray-400 animate-spin" size={24} />
         </div>
@@ -80,18 +82,20 @@ export default function ShareGrid({
             {file.isDirectory ? (
               <FiFolder className="text-blue-400" size={40} />
             ) : isImage(file.name) ? (
-              <ShareThumbnail
-                token={token}
-                fileName={file.name}
-                currentSubPath={currentSubPath}
-                submittedPassword={submittedPassword}
-              />
+              <ShareThumbnail token={token} fileName={file.name} currentSubPath={currentSubPath} submittedPassword={submittedPassword} />
             ) : isVideo(file.name) ? (
-              <FiVideo className="text-purple-400" size={40} />
+              <div className="relative w-full h-full">
+                <ShareThumbnail token={token} fileName={file.name} currentSubPath={currentSubPath} submittedPassword={submittedPassword} />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-gray-800/50 rounded-full p-3">
+                    <FiPlay className="text-white" size={24} />
+                  </div>
+                </div>
+              </div>
             ) : is3dFile(file.name) ? (
               <FiBox className="text-orange-400" size={40} />
             ) : isPdf(file.name) ? (
-              <FiFile className="text-red-400" size={40} />
+              <ShareThumbnail token={token} fileName={file.name} currentSubPath={currentSubPath} submittedPassword={submittedPassword} />
             ) : (
               <FiFile className="text-gray-400" size={40} />
             )}

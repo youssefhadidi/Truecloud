@@ -88,7 +88,7 @@ export function useShareOperations({
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder]
+    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder],
   );
 
   // ============ File Deletion ============
@@ -102,7 +102,7 @@ export function useShareOperations({
       setDeletingFile(file);
       if (closeContextMenu) closeContextMenu();
     },
-    [setDeletingFile, addNotification]
+    [setDeletingFile, addNotification],
   );
 
   const cancelDelete = useCallback(() => {
@@ -151,7 +151,7 @@ export function useShareOperations({
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification]
+    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification],
   );
 
   // ============ File Rename ============
@@ -166,7 +166,7 @@ export function useShareOperations({
       setNewFileName(file.name);
       if (closeContextMenu) closeContextMenu();
     },
-    [setRenamingFile, setNewFileName, addNotification]
+    [setRenamingFile, setNewFileName, addNotification],
   );
 
   const cancelRename = useCallback(() => {
@@ -222,7 +222,7 @@ export function useShareOperations({
         setProcessingFile(null);
       }
     },
-    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename]
+    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename],
   );
 
   // ============ File Upload ============
@@ -268,9 +268,7 @@ export function useShareOperations({
             throw new Error(error.error || 'Upload failed');
           }
 
-          setUploadingFiles((prev) =>
-            prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u))
-          );
+          setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
 
           setTimeout(() => {
             setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
@@ -282,14 +280,12 @@ export function useShareOperations({
           setTimeout(() => window.location.reload(), 2500);
         } catch (error) {
           console.error('Upload error:', error);
-          setUploadingFiles((prev) =>
-            prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u))
-          );
+          setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
           addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
         }
       }
     },
-    [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification]
+    [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification],
   );
 
   const handleUploadFromInput = useCallback(
@@ -298,7 +294,7 @@ export function useShareOperations({
       if (files.length === 0) return;
       await handleUpload(files);
     },
-    [handleUpload]
+    [handleUpload],
   );
 
   // ============ Download ============
@@ -318,7 +314,7 @@ export function useShareOperations({
       // Construct download URL - for shares, we need to download via the public API
       window.open(`/api/public/${token}/download?${params.toString()}`, '_blank');
     },
-    [token, sharePassword, currentSubPath]
+    [token, sharePassword, currentSubPath],
   );
 
   // ============ Navigation ============
@@ -331,7 +327,7 @@ export function useShareOperations({
       setHistoryIndex(newHistory.length - 1);
       setCurrentSubPath(newPath);
     },
-    [currentSubPath, pathHistory, historyIndex, setPathHistory, setHistoryIndex, setCurrentSubPath]
+    [currentSubPath, pathHistory, historyIndex, setPathHistory, setHistoryIndex, setCurrentSubPath],
   );
 
   const navigateUp = useCallback(() => {
@@ -354,7 +350,7 @@ export function useShareOperations({
       setHistoryIndex(newHistory.length - 1);
       setCurrentSubPath(targetPath);
     },
-    [currentSubPath, pathHistory, historyIndex, setPathHistory, setHistoryIndex, setCurrentSubPath]
+    [currentSubPath, pathHistory, historyIndex, setPathHistory, setHistoryIndex, setCurrentSubPath],
   );
 
   // ============ Media Viewer ============
@@ -362,7 +358,14 @@ export function useShareOperations({
     (file) => {
       setViewerFile(file);
     },
-    [setViewerFile]
+    [setViewerFile],
+  );
+
+  const selectViewerFile = useCallback(
+    (file) => {
+      setViewerFile(file);
+    },
+    [setViewerFile],
   );
 
   const closeMediaViewer = useCallback(() => {
@@ -387,7 +390,7 @@ export function useShareOperations({
 
       setViewerFile(viewableFiles[newIndex]);
     },
-    [viewerFile, viewableFiles, setViewerFile]
+    [viewerFile, viewableFiles, setViewerFile],
   );
 
   // Keyboard navigation for media viewer
@@ -429,7 +432,7 @@ export function useShareOperations({
 
       handleUpload(files);
     },
-    [handleUpload]
+    [handleUpload],
   );
 
   // ============ Context Menu ============
@@ -442,7 +445,7 @@ export function useShareOperations({
         y: e.pageY,
       });
     },
-    [setContextMenu, setSelectedContextFile]
+    [setContextMenu, setSelectedContextFile],
   );
 
   const closeContextMenu = useCallback(() => {
@@ -499,6 +502,7 @@ export function useShareOperations({
     openMediaViewer,
     closeMediaViewer,
     navigateViewer,
+    selectViewerFile,
 
     // Drag & drop
     handleDragOver,
