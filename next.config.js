@@ -6,7 +6,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    proxyClientMaxBodySize: '50mb',
+    proxyClientMaxBodySize: '100gb',
   },
   images: {
     domains: ['192.168.1.240', 'localhost'],
