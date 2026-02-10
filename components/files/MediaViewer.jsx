@@ -320,9 +320,9 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const effectiveFullscreen = isMobile || isFullscreen;
 
   // Compute navigation state
-  const currentIndex = viewableFiles.findIndex((f) => f.id === viewerFile.id);
+  const currentIndex = viewerFile ? viewableFiles.findIndex((f) => f.id === viewerFile.id) : -1;
   const canGoPrev = currentIndex > 0;
-  const canGoNext = currentIndex < viewableFiles.length - 1;
+  const canGoNext = currentIndex >= 0 && currentIndex < viewableFiles.length - 1;
 
   useEffect(() => {
     if (!playerRef.current) return undefined;
