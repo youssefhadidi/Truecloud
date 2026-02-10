@@ -251,7 +251,7 @@ export default function SharePage({ params }) {
   // Directory view
   if (shareResponse?.isDirectory && directoryFiles) {
     return (
-      <div className="h-dvh flex flex-col bg-gray-900 text-white" onDragOver={operations.handleDragOver} onDragLeave={operations.handleDragLeave} onDrop={operations.handleDropEvent}>
+      <div className="h-dvh flex flex-col bg-gray-900 text-white" onClick={operations.closeContextMenu} onDragOver={operations.handleDragOver} onDragLeave={operations.handleDragLeave} onDrop={operations.handleDropEvent}>
         {/* Drag overlay */}
         {shareState.isDragging && shareResponse.allowUploads && (
           <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 z-50 flex items-center justify-center">
@@ -325,6 +325,7 @@ export default function SharePage({ params }) {
                   token={token}
                   submittedPassword={submittedPassword}
                   currentSubPath={shareState.currentSubPath}
+                  allowUploads={shareResponse.allowUploads}
                   onFileClick={(file) => {
                     if (file.isDirectory) {
                       operations.navigateToSubFolder(file.name);
@@ -333,11 +334,16 @@ export default function SharePage({ params }) {
                     }
                   }}
                   onContextMenu={operations.handleContextMenu}
+                  onDownload={operations.handleDownload}
+                  onInitiateRename={operations.initiateRename}
+                  onInitiateDelete={operations.initiateDelete}
+                  onOpenMediaViewer={operations.openMediaViewer}
                   formatFileSize={operations.formatFileSize}
                 />
               ) : (
                 <ShareList
                   files={shareState.sortedFilteredFiles || []}
+                  allowUploads={shareResponse.allowUploads}
                   onFileClick={(file) => {
                     if (file.isDirectory) {
                       operations.navigateToSubFolder(file.name);
@@ -347,6 +353,9 @@ export default function SharePage({ params }) {
                   }}
                   onDownload={operations.handleDownload}
                   onContextMenu={operations.handleContextMenu}
+                  onInitiateRename={operations.initiateRename}
+                  onInitiateDelete={operations.initiateDelete}
+                  onOpenMediaViewer={operations.openMediaViewer}
                   formatFileSize={operations.formatFileSize}
                 />
               )}
@@ -374,13 +383,37 @@ export default function SharePage({ params }) {
             <ContextMenu
               contextMenu={shareState.contextMenu}
               file={shareState.selectedContextFile}
-              isShareMode={true}
-              allowUploads={shareResponse.allowUploads}
               onClose={operations.closeContextMenu}
-              onInitiateDelete={operations.initiateDelete}
-              onInitiateRename={operations.initiateRename}
-              onInitiateCreateFolder={operations.initiateCreateFolder}
-              onHandleDownload={operations.handleDownload}
+              onNavigateToFolder={() => {
+                if (shareState.selectedContextFile?.isDirectory) {
+                  operations.navigateToSubFolder(shareState.selectedContextFile.name);
+                }
+                operations.closeContextMenu();
+              }}
+              onDownload={() => {
+                if (shareState.selectedContextFile) {
+                  operations.handleDownload(shareState.selectedContextFile);
+                }
+                operations.closeContextMenu();
+              }}
+              onView={() => {
+                if (shareState.selectedContextFile) {
+                  operations.openMediaViewer(shareState.selectedContextFile);
+                }
+                operations.closeContextMenu();
+              }}
+              onRename={shareResponse.allowUploads ? () => {
+                if (shareState.selectedContextFile) {
+                  operations.initiateRename(shareState.selectedContextFile);
+                }
+                operations.closeContextMenu();
+              } : undefined}
+              onDelete={shareResponse.allowUploads ? () => {
+                if (shareState.selectedContextFile) {
+                  operations.initiateDelete(shareState.selectedContextFile);
+                }
+                operations.closeContextMenu();
+              } : undefined}
             />
           </Suspense>
         )}

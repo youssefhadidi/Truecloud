@@ -2,15 +2,19 @@
 
 'use client';
 
-import { FiFolder, FiFile, FiDownload } from 'react-icons/fi';
-import { isImage, isVideo, isPdf, isAudio } from '@/lib/clientFileUtils';
+import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
 export default function ShareList({
   files = [],
+  allowUploads = false,
   onFileClick,
   onDownload,
   onContextMenu,
+  onInitiateRename,
+  onInitiateDelete,
+  onOpenMediaViewer,
   formatFileSize,
 }) {
   return (
@@ -36,16 +40,62 @@ export default function ShareList({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!file.isDirectory && (
+            {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDownload(file);
+                  onOpenMediaViewer(file);
                 }}
-                className="p-2 text-green-400 hover:bg-green-600 rounded transition-colors"
-                title="Download"
+                className="p-2 hover:bg-gray-600 rounded transition-colors"
+                title="View"
               >
-                <FiDownload size={18} />
+                {is3dFile(file.name) ? (
+                  <FiBox size={18} className="text-orange-400" />
+                ) : isVideo(file.name) ? (
+                  <FiVideo size={18} className="text-purple-400" />
+                ) : isImage(file.name) ? (
+                  <FiImage size={18} className="text-green-400" />
+                ) : isPdf(file.name) ? (
+                  <FiFile size={18} className="text-red-400" />
+                ) : isXlsx(file.name) ? (
+                  <FiFile size={18} className="text-green-400" />
+                ) : (
+                  <FiVideo size={18} className="text-blue-400" />
+                )}
+              </button>
+            )}
+            {allowUploads && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInitiateRename(file);
+                }}
+                className="p-2 text-blue-400 hover:bg-blue-900/20 rounded transition-colors"
+                title="Rename"
+              >
+                <FiEdit size={18} />
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload(file);
+              }}
+              className="p-2 text-indigo-400 hover:bg-indigo-900/20 rounded transition-colors"
+              title="Download"
+            >
+              <FiDownload size={18} />
+            </button>
+            {allowUploads && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInitiateDelete(file);
+                }}
+                className="p-2 text-red-400 hover:bg-red-900/20 rounded transition-colors"
+                title="Delete"
+              >
+                <FiTrash2 size={18} />
               </button>
             )}
           </div>

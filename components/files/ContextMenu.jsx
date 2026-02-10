@@ -31,10 +31,12 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
           </button>
           {!inTrash && (
             <>
-              <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <FiEdit size={16} />
-                Rename
-              </button>
+              {onRename && (
+                <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <FiEdit size={16} />
+                  Rename
+                </button>
+              )}
               <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
                 <FiDownload size={16} />
                 Download as ZIP
@@ -48,7 +50,7 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
             <FiDownload size={16} />
             Download
           </button>
-          {!inTrash && (
+          {!inTrash && onRename && (
             <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
               <FiEdit size={16} />
               Rename
@@ -81,23 +83,27 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
           )}
         </>
       )}
-      <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-      {inTrash ? (
+      {(inTrash || onDelete) && (
         <>
-          <button onClick={onRestore} className="w-full px-4 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2 text-blue-600 dark:text-blue-400">
-            <FiRotateCcw size={16} />
-            Restore
-          </button>
-          <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
-            <FiTrash2 size={16} />
-            Delete Permanently
-          </button>
+          <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+          {inTrash ? (
+            <>
+              <button onClick={onRestore} className="w-full px-4 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <FiRotateCcw size={16} />
+                Restore
+              </button>
+              <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
+                <FiTrash2 size={16} />
+                Delete Permanently
+              </button>
+            </>
+          ) : (
+            <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
+              <FiTrash2 size={16} />
+              Delete
+            </button>
+          )}
         </>
-      ) : (
-        <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
-          <FiTrash2 size={16} />
-          Delete
-        </button>
       )}
     </div>
   );
