@@ -2,7 +2,7 @@
 
 'use client';
 
-import { use, lazy, Suspense, useRef, useState } from 'react';
+import { use, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
@@ -69,10 +69,17 @@ export default function SharePage({ params }) {
     },
     enabled: !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory,
     staleTime: 30 * 1000,
-    onSuccess: (files) => {
-      setShareFiles(files || []);
-    },
   });
+
+  useEffect(() => {
+    if (directoryFiles) {
+      setShareFiles(directoryFiles);
+      return;
+    }
+    if (directoryFiles === null) {
+      setShareFiles([]);
+    }
+  }, [directoryFiles]);
 
   // Create operations hook
   const operations = useShareOperations({
