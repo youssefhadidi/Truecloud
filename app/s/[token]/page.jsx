@@ -326,55 +326,59 @@ export default function SharePage({ params }) {
             </div>
 
             <div className="flex items-center gap-3">
-              {shareResponse.allowUploads && (
-                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-                  <FiUpload size={18} />
-                  <span className="hidden sm:inline">Upload</span>
-                </button>
-              )}
+              <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-1">
+                {shareResponse.allowUploads && (
+                  <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors">
+                    <FiUpload size={18} />
+                    <span className="hidden sm:inline">Upload</span>
+                  </button>
+                )}
 
-              {shareResponse.allowUploads && (
-                <button
-                  onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${shareState.selectionMode ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'}`}
+                {shareResponse.allowUploads && (
+                  <button
+                    onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${shareState.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+                  >
+                    <FiCheckSquare size={18} />
+                    <span className="hidden sm:inline">{shareState.selectionMode ? 'Selecting' : 'Select'}</span>
+                  </button>
+                )}
+
+                {shareResponse.allowUploads && shareState.selectionMode && (
+                  <>
+                    <button
+                      onClick={() => setMoveModalOpen(true)}
+                      disabled={shareState.selectedFiles.length === 0}
+                      className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiFolder size={18} />
+                      <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
+                    </button>
+                    <button
+                      onClick={() => shareState.setSelectionMode(false)}
+                      className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors"
+                    >
+                      <FiX size={18} />
+                      <span className="hidden sm:inline">Cancel</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="bg-gray-700 rounded-lg p-1">
+                <select
+                  value={shareState.sortBy}
+                  onChange={(e) => shareState.setSortBy(e.target.value)}
+                  className="px-3 py-2 text-sm bg-transparent text-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <FiCheckSquare size={18} />
-                  <span className="hidden sm:inline">{shareState.selectionMode ? 'Selecting' : 'Select'}</span>
-                </button>
-              )}
-
-              {shareResponse.allowUploads && shareState.selectionMode && (
-                <>
-                  <button
-                    onClick={() => setMoveModalOpen(true)}
-                    disabled={shareState.selectedFiles.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FiFolder size={18} />
-                    <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
-                  </button>
-                  <button
-                    onClick={() => shareState.setSelectionMode(false)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 hover:text-white rounded-lg transition-colors"
-                  >
-                    <FiX size={18} />
-                    <span className="hidden sm:inline">Cancel</span>
-                  </button>
-                </>
-              )}
-
-              <select
-                value={shareState.sortBy}
-                onChange={(e) => shareState.setSortBy(e.target.value)}
-                className="px-3 py-2 text-sm bg-gray-800 text-gray-300 border border-gray-700 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-desc">Date (New)</option>
-                <option value="date-asc">Date (Old)</option>
-                <option value="size-desc">Size (Big)</option>
-                <option value="size-asc">Size (Small)</option>
-              </select>
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="date-desc">Date (New)</option>
+                  <option value="date-asc">Date (Old)</option>
+                  <option value="size-desc">Size (Big)</option>
+                  <option value="size-asc">Size (Small)</option>
+                </select>
+              </div>
 
               <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
                 <button

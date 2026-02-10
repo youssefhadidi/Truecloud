@@ -170,79 +170,83 @@ function FilesPageContent() {
 
         {/* Toolbar Navbar */}
         <div className="sm:mt-2 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
-          {/* Left Group: Upload, New Folder, Search */}
-          <div className="flex gap-0 flex-wrap bg-gray-700 rounded-lg border border-gray-600 overflow-hidden">
-            {/* Upload Button */}
-            <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors border-r border-gray-600 last:border-r-0">
+          {/* Left Group: Actions + Search */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1 bg-gray-700 rounded-lg p-1">
+              {/* Upload Button */}
+              <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors">
               <FiUpload size={16} />
               <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
               <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
-            </label>
+              </label>
 
-            {/* Selection Mode */}
-            <button
-              onClick={() => state.setSelectionMode(!state.selectionMode)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600 ${state.selectionMode ? 'bg-gray-600' : ''}`}
-            >
-              <FiCheckSquare size={16} />
-              <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
-            </button>
+              {/* Selection Mode */}
+              <button
+                onClick={() => state.setSelectionMode(!state.selectionMode)}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors ${state.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+              >
+                <FiCheckSquare size={16} />
+                <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
+              </button>
 
-            {state.selectionMode && (
-              <>
-                <button
-                  onClick={() => setMoveModalOpen(true)}
-                  disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FiFolder size={16} />
-                  <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
-                </button>
-                <button
-                  onClick={() => state.setSelectionMode(false)}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600"
-                >
-                  <FiX size={16} />
-                  <span className="hidden sm:inline">Cancel</span>
-                </button>
-              </>
-            )}
+              {state.selectionMode && (
+                <>
+                  <button
+                    onClick={() => setMoveModalOpen(true)}
+                    disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FiFolder size={16} />
+                    <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                  </button>
+                  <button
+                    onClick={() => state.setSelectionMode(false)}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors"
+                  >
+                    <FiX size={16} />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </button>
+                </>
+              )}
 
-            {/* New Folder Button */}
-            <button
-              onClick={handlers.initiateCreateFolder}
-              className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors border-r border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={state.creatingFolder}
-            >
-              <FiPlus size={16} />
-              <span className="hidden sm:inline">New Folder</span>
-            </button>
-            <button
-              onClick={navigation.goBack}
-              disabled={!navigation.canGoBack}
-              className={`p-2 rounded-lg ${!navigation.canGoBack ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-700'}`}
-              title="Go Back"
-            >
-              <FiArrowLeft size={20} />
-            </button>
-            <button
-              onClick={navigation.goForward}
-              disabled={!navigation.canGoForward}
-              className={`p-2 rounded-lg ${!navigation.canGoForward ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-700'}`}
-              title="Go Forward"
-            >
-              <FiArrowRight size={20} />
-            </button>
+              {/* New Folder Button */}
+              <button
+                onClick={handlers.initiateCreateFolder}
+                className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={state.creatingFolder}
+              >
+                <FiPlus size={16} />
+                <span className="hidden sm:inline">New Folder</span>
+              </button>
 
-            <button
-              onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
-              className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg"
-              title="Refresh"
-            >
-              <FiRefreshCw size={20} />
-            </button>
+              <button
+                onClick={navigation.goBack}
+                disabled={!navigation.canGoBack}
+                className={`p-2 rounded ${!navigation.canGoBack ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-600'}`}
+                title="Go Back"
+              >
+                <FiArrowLeft size={20} />
+              </button>
+              <button
+                onClick={navigation.goForward}
+                disabled={!navigation.canGoForward}
+                className={`p-2 rounded ${!navigation.canGoForward ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-600'}`}
+                title="Go Forward"
+              >
+                <FiArrowRight size={20} />
+              </button>
+
+              <button
+                onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
+                className="p-2 text-gray-400 hover:bg-gray-600 rounded"
+                title="Refresh"
+              >
+                <FiRefreshCw size={20} />
+              </button>
+            </div>
+
             {/* Search Input - hidden on mobile */}
-            <div className="relative hidden sm:flex flex-1 sm:flex-none min-w-0 sm:min-w-48 items-center px-3">
+            <div className="relative hidden sm:flex flex-1 sm:flex-none min-w-0 sm:min-w-48 items-center px-3 bg-gray-700 rounded-lg">
               <FiSearch className="absolute text-gray-400 flex-shrink-0" size={16} />
               <input
                 type="text"
@@ -257,18 +261,20 @@ function FilesPageContent() {
           {/* Right Group: Sort, Back, Refresh, View Toggle */}
           <div className="flex gap-1 sm:gap-2 flex-wrap items-center ml-auto">
             {/* Sort Dropdown */}
-            <select
-              value={state.sortBy}
-              onChange={(e) => state.setSortBy(e.target.value)}
-              className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm: bg-gray-700 text-gray-300 border border-gray-600 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="name-asc">Name (A-Z)</option>
-              <option value="name-desc">Name (Z-A)</option>
-              <option value="date-desc">Date (New)</option>
-              <option value="date-asc">Date (Old)</option>
-              <option value="size-desc">Size (Big)</option>
-              <option value="size-asc">Size (Small)</option>
-            </select>
+            <div className="bg-gray-700 rounded-lg p-1">
+              <select
+                value={state.sortBy}
+                onChange={(e) => state.setSortBy(e.target.value)}
+                className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-base bg-transparent text-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="date-desc">Date (New)</option>
+                <option value="date-asc">Date (Old)</option>
+                <option value="size-desc">Size (Big)</option>
+                <option value="size-asc">Size (Small)</option>
+              </select>
+            </div>
 
             {/* View Toggle */}
             <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
