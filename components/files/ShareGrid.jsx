@@ -154,7 +154,7 @@ export default function ShareGrid({
           }}
         >
           <div
-            className="group relative bg-gray-700 rounded-lg p-1 cursor-pointer hover:bg-gray-600 transition-colors h-full"
+            className="group relative bg-gray-700 rounded-lg p-1 cursor-pointer hover:bg-gray-600 transition-colors flex flex-col h-full select-none"
             onClick={() => {
               if (isDeleting || isRenaming || shouldShowActions(file.name)) return;
               onFileClick(file);
@@ -256,10 +256,10 @@ export default function ShareGrid({
               )}
             </div>
 
-            <p className="text-sm font-medium text-white truncate" title={file.name}>
+            <p className="text-sm font-medium text-white truncate px-1" title={file.name}>
               {file.name}
             </p>
-            {!file.isDirectory && <p className="text-xs text-gray-400">{formatFileSize(file.size)}</p>}
+            {!file.isDirectory && <p className="text-xs text-gray-400 px-1 mt-auto">{formatFileSize(file.size)}</p>}
 
             {(shouldShowActions(file.name) || containerWidth >= BREAKPOINT.sm) && (
               <div

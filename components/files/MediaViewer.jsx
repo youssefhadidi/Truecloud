@@ -327,7 +327,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
     switch (fileType) {
       case '3d':
-        return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} onClick={stopProp} />;
+        return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
       case 'image':
         return <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
@@ -355,7 +355,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <iframe src={getFileUrl(viewerFile, 'pdf')} className="w-full h-full" title={viewerFile.name} onClick={stopProp} />;
 
       case 'xlsx':
-        return <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} onClick={stopProp} />;
+        return <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
       default:
         return <div className="text-gray-400">Unsupported file type</div>;

@@ -27,7 +27,7 @@ export default function ShareLayout({ children }) {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 w-full">{children}</main>
+        <main className="flex-1 w-full min-h-0 flex flex-col">{children}</main>
       </div>
     </QueryProvider>
   );

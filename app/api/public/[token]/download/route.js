@@ -43,6 +43,7 @@ export async function GET(req, { params }) {
     }
 
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
+    const downloadName = subPath ? basename(subPath) : share.fileName;
     const resolvedPath = resolve(filePath) + sep;
 
     // Security: prevent directory traversal
@@ -87,7 +88,7 @@ export async function GET(req, { params }) {
       return new Response(stream, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(share.fileName))}.zip"`,
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(downloadName)}.zip"`,
           'Transfer-Encoding': 'chunked',
         },
       });
@@ -95,13 +96,13 @@ export async function GET(req, { params }) {
 
     // If it's a file, return it directly
     const fileBuffer = fs.readFileSync(filePath);
-    const mimeType = lookup(share.fileName) || 'application/octet-stream';
+    const mimeType = lookup(downloadName) || 'application/octet-stream';
 
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': mimeType,
         'Content-Length': fileStats.size.toString(),
-        'Content-Disposition': `attachment; filename="${basename(share.fileName)}"`,
+        'Content-Disposition': `attachment; filename="${basename(downloadName)}"`,
         'Cache-Control': 'public, max-age=3600',
       },
     });

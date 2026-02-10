@@ -256,7 +256,7 @@ export default function SharePage({ params }) {
   if (shareResponse?.isDirectory && directoryFiles) {
     return (
       <div
-        className="h-dvh flex flex-col bg-gray-900 text-white"
+        className="flex flex-col flex-1 flex-grow bg-gray-900 text-white min-h-0"
         onClick={operations.closeContextMenu}
         onDragOver={operations.handleDragOver}
         onDragLeave={operations.handleDragLeave}
@@ -275,11 +275,13 @@ export default function SharePage({ params }) {
         {/* Header */}
         <div className="border-b border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <FiFolder className="text-blue-400" size={32} />
-              <div>
-                <h1 className="text-2xl font-bold">{shareResponse.fileName}</h1>
-                <p className="text-sm text-gray-400">Shared by {shareResponse.ownerUsername}</p>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold truncate" title={shareResponse.fileName}>
+                  {shareResponse.fileName}
+                </h1>
+                <p className="text-sm text-gray-400 truncate">Shared by {shareResponse.ownerUsername}</p>
               </div>
             </div>
 
@@ -335,14 +337,14 @@ export default function SharePage({ params }) {
         <input type="file" ref={fileInputRef} className="hidden" multiple onChange={operations.handleUploadFromInput} />
 
         {/* Main content area */}
-        <div className="flex-1 p-1">
+        <div className="flex-1 p-1 min-h-0">
           {(shareState.sortedFilteredFiles || []).length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-400">
               <p>This folder is empty</p>
             </div>
           ) : (
             <Suspense fallback={<div className="text-center text-gray-400">Loading...</div>}>
-              <div className="h-full">
+              <div className="h-full min-h-0">
                 {shareState.viewMode === 'grid' ? (
                   <ShareGrid
                     files={shareState.sortedFilteredFiles || []}
