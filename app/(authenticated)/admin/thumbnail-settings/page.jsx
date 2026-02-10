@@ -115,11 +115,7 @@ export default function ThumbnailSettingsPage() {
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Thumbnail Settings</h1>
-        <button
-          onClick={fetchSettings}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-        >
+        <button onClick={fetchSettings} disabled={loading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50">
           <FiRefreshCw className={loading ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">Refresh</span>
         </button>
@@ -137,7 +133,9 @@ export default function ThumbnailSettingsPage() {
               onChange={(e) => setForm({ ...form, size: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white"
             />
-            <p className="text-xs text-gray-400 mt-1">Range: {SIZE_MIN}-{SIZE_MAX}. Applies to image, video, and PDF thumbnails.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Range: {SIZE_MIN}-{SIZE_MAX}. Applies to image, video, and PDF thumbnails.
+            </p>
           </div>
 
           <div>
@@ -150,27 +148,25 @@ export default function ThumbnailSettingsPage() {
               onChange={(e) => setForm({ ...form, quality: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white"
             />
-            <p className="text-xs text-gray-400 mt-1">Range: {QUALITY_MIN}-{QUALITY_MAX}. Higher values increase file size.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Range: {QUALITY_MIN}-{QUALITY_MAX}. Higher values increase file size.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-            >
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
               <FiSave />
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
-            <button
-              onClick={handleReset}
-              disabled={saving || resetting}
-              className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-            >
+            <button onClick={handleReset} disabled={saving || resetting} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:opacity-50">
               {resetting ? 'Resetting...' : 'Reset to Defaults'}
             </button>
             <p className="text-xs text-gray-400">
-              Changes affect new thumbnails only. Clear cache in <Link href="/admin/cache" className="text-blue-400 hover:text-blue-300">Cache Management</Link> to regenerate.
+              Changes affect new thumbnails only. Clear cache in{' '}
+              <Link href="/admin/cache" className="text-blue-400 hover:text-blue-300">
+                Cache Management
+              </Link>{' '}
+              to regenerate.
             </p>
           </div>
 
