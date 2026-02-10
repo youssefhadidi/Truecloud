@@ -385,26 +385,22 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'video':
         return (
-          <div className="w-full h-full flex items-center justify-center bg-black">
-            <div className="w-full h-full max-h-full max-w-full">
-              <Plyr
-                source={{
-                  type: 'video',
-                  sources: [
-                    {
-                      src: getFileUrl(viewerFile, 'video'),
-                      type: 'video/mp4',
-                    },
-                  ],
-                }}
-                options={{
-                  controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
-                  autoplay: true,
-                }}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
+          <Plyr
+            source={{
+              type: 'video',
+              sources: [
+                {
+                  src: getFileUrl(viewerFile, 'video'),
+                  type: 'video/mp4',
+                },
+              ],
+            }}
+            options={{
+              controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
+              autoplay: true,
+            }}
+            className="w-full h-full"
+          />
         );
 
       case 'audio':
