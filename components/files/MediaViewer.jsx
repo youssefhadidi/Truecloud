@@ -316,9 +316,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     }
   };
 
-  if (!viewerFile) return null;
-
-  const fileType = getFileType(viewerFile);
+  const fileType = viewerFile ? getFileType(viewerFile) : null;
   const effectiveFullscreen = isMobile || isFullscreen;
 
   // Compute navigation state
@@ -346,6 +344,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       }
     };
   }, [viewerFile?.id, fileType]);
+
+  if (!viewerFile) return null;
 
   // Render media based on type
   const renderMedia = () => {
