@@ -19,12 +19,12 @@ const BREAKPOINT = {
 };
 
 const getColumnsCount = (width) => {
-  if (width < BREAKPOINT.sm) return 2;
-  if (width < BREAKPOINT.md) return 3;
-  if (width < BREAKPOINT.lg) return 4;
-  if (width < BREAKPOINT.xl) return 5;
-  if (width < BREAKPOINT['2xl']) return 6;
-  return 7;
+  if (width < BREAKPOINT.sm) return 3;
+  if (width < BREAKPOINT.md) return 4;
+  if (width < BREAKPOINT.lg) return 5;
+  if (width < BREAKPOINT.xl) return 6;
+  if (width < BREAKPOINT['2xl']) return 7;
+  return 8;
 };
 
 function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) {
@@ -154,7 +154,7 @@ export default function ShareGrid({
           }}
         >
           <div
-            className="group relative bg-gray-700 rounded-lg p-3 cursor-pointer hover:bg-gray-600 transition-colors h-full"
+            className="group relative bg-gray-700 rounded-lg p-1 cursor-pointer hover:bg-gray-600 transition-colors h-full"
             onClick={() => {
               if (isDeleting || isRenaming || shouldShowActions(file.name)) return;
               onFileClick(file);

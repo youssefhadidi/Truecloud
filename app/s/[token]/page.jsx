@@ -335,7 +335,7 @@ export default function SharePage({ params }) {
         <input type="file" ref={fileInputRef} className="hidden" multiple onChange={operations.handleUploadFromInput} />
 
         {/* Main content area */}
-        <div className="flex-1 overflow-hidden p-4">
+        <div className="flex-1 p-1">
           {(shareState.sortedFilteredFiles || []).length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-400">
               <p>This folder is empty</p>
