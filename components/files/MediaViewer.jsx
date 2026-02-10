@@ -59,7 +59,7 @@ function PendingPreview({ file, currentPath, compact = false, shareToken, shareP
 }
 
 // Image with thumbnail placeholder — shows thumbnail immediately, fades in full-res on load
-function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
+function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePassword, onImageLoad }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
@@ -79,7 +79,10 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePa
         src={getFileUrl(file, 'image')}
         alt={file.name}
         className={`w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={() => setFullLoaded(true)}
+        onLoad={(e) => {
+          setFullLoaded(true);
+          if (onImageLoad) onImageLoad(e);
+        }}
         onError={() => setFullLoaded(true)}
         onClick={(e) => e.stopPropagation()}
       />
@@ -331,37 +334,67 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const renderMedia = () => {
     const stopProp = (e) => e.stopPropagation();
 
+
     switch (fileType) {
       case '3d':
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
-      case 'image':
+      case 'image': {
+        // Use ref to access TransformWrapper's resetTransform
+        const transformRef = useRef();
+        // Reset zoom when image changes
+        useEffect(() => {
+          if (transformRef.current) {
+            transformRef.current.resetTransform();
+          }
+        }, [viewerFile?.id]);
         return (
-          <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false}>
+          <TransformWrapper
+            minScale={0.5}
+            maxScale={4}
+            initialScale={1}
+            centerOnInit={false}
+            ref={transformRef}
+          >
             <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
-              <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />
+              <ImageWithThumbnail
+                file={viewerFile}
+                currentPath={currentPath}
+                getFileUrl={getFileUrl}
+                shareToken={shareToken}
+                sharePassword={sharePassword}
+                onImageLoad={() => {
+                  if (transformRef.current) transformRef.current.resetTransform();
+                }}
+              />
             </TransformComponent>
           </TransformWrapper>
         );
+      }
+
 
       case 'video':
         return (
-          <Plyr
-            source={{
-              type: 'video',
-              sources: [
-                {
-                  src: getFileUrl(viewerFile, 'video'),
-                  type: 'video/mp4',
-                },
-              ],
-            }}
-            options={{
-              controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
-              autoplay: true,
-            }}
-            className="w-full h-full object-contain"
-          />
+          <div className="w-full h-full flex items-center justify-center bg-black">
+            <div className="w-full h-full max-h-full max-w-full">
+              <Plyr
+                source={{
+                  type: 'video',
+                  sources: [
+                    {
+                      src: getFileUrl(viewerFile, 'video'),
+                      type: 'video/mp4',
+                    },
+                  ],
+                }}
+                options={{
+                  controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
+                  autoplay: true,
+                }}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
         );
 
       case 'audio':
