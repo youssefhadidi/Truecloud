@@ -131,7 +131,7 @@ function FilesPageContent() {
             <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors border-r border-gray-600 last:border-r-0">
               <FiUpload size={16} />
               <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
-              <input type="file" className="hidden" onChange={handlers.handleUpload} disabled={state.uploading} />
+              <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
             </label>
 
             {/* New Folder Button */}

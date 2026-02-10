@@ -61,7 +61,7 @@ export function useFileHandlers({
   };
 
   // Upload operations
-  const uploadFile = async (file) => {
+  const uploadSingleFile = (file) => {
     const uploadId = Date.now() + Math.random();
 
     setUploads((prev) => [
@@ -74,37 +74,46 @@ export function useFileHandlers({
       },
     ]);
 
+    return new Promise((resolve) => {
+      uploadMutation.mutate(
+        { file, uploadId },
+        {
+          onSuccess: () => {
+            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
+            setTimeout(() => {
+              setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+            }, 3000);
+            resolve();
+          },
+          onError: (error) => {
+            console.error('Upload error:', error);
+            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
+            addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
+            resolve();
+          },
+        },
+      );
+    });
+  };
+
+  const uploadFiles = async (files) => {
+    if (!files || files.length === 0) return;
     setUploading(true);
-    uploadMutation.mutate(
-      { file, uploadId },
-      {
-        onSuccess: () => {
-          setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
-          setTimeout(() => {
-            setUploads((prev) => prev.filter((u) => u.id !== uploadId));
-          }, 3000);
-          setUploading(false);
-        },
-        onError: (error) => {
-          console.error('Upload error:', error);
-          setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
-          addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
-          setUploading(false);
-        },
-      },
-    );
+    for (const file of files) {
+      await uploadSingleFile(file);
+    }
+    setUploading(false);
   };
 
   const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await uploadFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    await uploadFiles(files);
+    e.target.value = '';
   };
 
   const handleDrop = async (files) => {
-    for (const file of files) {
-      await uploadFile(file);
-    }
+    await uploadFiles(files);
   };
 
   // Delete operations
@@ -259,7 +268,6 @@ export function useFileHandlers({
     initiateCreateFolder,
     cancelCreateFolder,
     confirmCreateFolder,
-    uploadFile,
     handleUpload,
     handleDrop,
     initiateDelete,

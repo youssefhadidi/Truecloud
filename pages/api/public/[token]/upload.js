@@ -16,7 +16,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export default async function handler(req, res) {
-  let writtenFilePath = null;
+  let writtenFilePaths = [];
   try {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
@@ -70,16 +70,14 @@ export default async function handler(req, res) {
     const busboy = Busboy({
       headers: req.headers,
       limits: {
-        files: 1,
+        files: 100,
         fileSize: 100 * 1024 * 1024 * 1024,
       },
     });
 
-    let fileName = 'unknown';
-    let fileMimeType = 'application/octet-stream';
-    let fileSize = 0;
-    let fileReceived = false;
-    let writePromise = null;
+    let filesReceived = 0;
+    const uploadedFiles = [];
+    const writePromises = [];
     let responded = false;
 
     const respond = (status, payload) => {
@@ -89,11 +87,14 @@ export default async function handler(req, res) {
     };
 
     const cleanup = async () => {
-      if (writtenFilePath) {
-        try {
-          await unlink(writtenFilePath);
-        } catch {}
-      }
+      if (writtenFilePaths.length === 0) return;
+      await Promise.all(
+        writtenFilePaths.map(async (path) => {
+          try {
+            await unlink(path);
+          } catch {}
+        }),
+      );
     };
 
     busboy.on('file', (fieldname, file, info) => {
@@ -102,30 +103,42 @@ export default async function handler(req, res) {
         return;
       }
 
-      fileReceived = true;
+      filesReceived += 1;
       const originalName = info?.filename || `upload_${Date.now()}`;
       const safeName = originalName.split(/[/\\]/).pop() || `upload_${Date.now()}`;
-      fileName = safeName;
-      fileMimeType = info?.mimeType || 'application/octet-stream';
-      writtenFilePath = join(targetDir, safeName);
+      const fileMimeType = info?.mimeType || 'application/octet-stream';
+      const filePath = join(targetDir, safeName);
+      writtenFilePaths.push(filePath);
 
-      const writeStream = createWriteStream(writtenFilePath);
-      writePromise = new Promise((resolveWrite, rejectWrite) => {
+      const fileRecord = {
+        name: safeName,
+        size: 0,
+        mimeType: fileMimeType,
+      };
+
+      const writeStream = createWriteStream(filePath);
+      const writePromise = new Promise((resolveWrite, rejectWrite) => {
         writeStream.on('finish', resolveWrite);
         writeStream.on('error', rejectWrite);
+      }).then(() => {
+        uploadedFiles.push(fileRecord);
       });
 
+      writePromises.push(writePromise);
+
       file.on('data', (chunk) => {
-        fileSize += chunk.length;
+        fileRecord.size += chunk.length;
       });
 
       file.on('limit', async () => {
+        if (responded) return;
         await cleanup();
         respond(413, { error: 'File too large' });
         file.resume();
       });
 
       file.on('error', async () => {
+        if (responded) return;
         await cleanup();
         respond(500, { error: 'Upload failed' });
       });
@@ -139,31 +152,30 @@ export default async function handler(req, res) {
     });
 
     busboy.on('finish', async () => {
-      if (!fileReceived) {
+      if (responded) return;
+      if (filesReceived === 0) {
         respond(400, { error: 'No file provided in multipart data' });
         return;
       }
 
       try {
-        if (writePromise) {
-          await writePromise;
-        }
+        await Promise.all(writePromises);
       } catch {
         await cleanup();
         respond(500, { error: 'Upload failed' });
         return;
       }
 
-      writtenFilePath = null;
-
-      respond(200, {
+      const payload = {
         success: true,
-        file: {
-          name: fileName,
-          size: fileSize,
-          mimeType: fileMimeType,
-        },
-      });
+        files: uploadedFiles,
+      };
+      if (uploadedFiles.length === 1) {
+        payload.file = uploadedFiles[0];
+      }
+
+      respond(200, payload);
+      writtenFilePaths = [];
     });
 
     req.on('aborted', async () => {
@@ -181,10 +193,14 @@ export default async function handler(req, res) {
       res.status(500).json({ error: 'Upload failed' });
     }
   } finally {
-    if (writtenFilePath) {
-      try {
-        await unlink(writtenFilePath);
-      } catch {}
+    if (writtenFilePaths.length > 0) {
+      await Promise.all(
+        writtenFilePaths.map(async (path) => {
+          try {
+            await unlink(path);
+          } catch {}
+        }),
+      );
     }
   }
 }
