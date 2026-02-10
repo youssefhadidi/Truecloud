@@ -59,7 +59,7 @@ function PendingPreview({ file, currentPath, compact = false, shareToken, shareP
 }
 
 // Image with thumbnail placeholder — shows thumbnail immediately, fades in full-res on load
-function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
+function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePassword, onImageLoad }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
@@ -81,6 +81,7 @@ function ImageWithThumbnail({ file, currentPath, getFileUrl, shareToken, sharePa
         className={`w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={(e) => {
           setFullLoaded(true);
+          if (onImageLoad) onImageLoad(e);
         }}
         onError={() => setFullLoaded(true)}
         onClick={(e) => e.stopPropagation()}
@@ -362,7 +363,9 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 getFileUrl={getFileUrl}
                 shareToken={shareToken}
                 sharePassword={sharePassword}
-              
+                onImageLoad={() => {
+                  if (transformRef.current) transformRef.current.resetTransform && transformRef.current.resetTransform();
+                }}
               />
             </TransformComponent>
           </TransformWrapper>
