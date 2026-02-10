@@ -363,7 +363,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 getFileUrl={getFileUrl}
                 shareToken={shareToken}
                 sharePassword={sharePassword}
-                onImageLoad={() => {
+                onImageLoad={(e) => {
+                  const img = e.target;
+                  const container = img.closest('.w-full.h-full');
+                  if (container && transformRef.current && img.naturalWidth && img.naturalHeight) {
+                    const containerWidth = container.offsetWidth;
+                    const containerHeight = container.offsetHeight;
+                    const scale = Math.min(
+                      containerWidth / img.naturalWidth,
+                      containerHeight / img.naturalHeight
+                    ) * 0.95;
+                    transformRef.current.setInstance?.({ scale });
+                  }
                   if (transformRef.current) transformRef.current.resetTransform && transformRef.current.resetTransform();
                 }}
               />
