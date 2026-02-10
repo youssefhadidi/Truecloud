@@ -152,11 +152,11 @@ export async function GET(req) {
       });
     }
 
-    // Normalize paths for frontend (hide uploads/user_id/ prefix)
+    // Normalize paths for frontend (hide uploads/ prefix only, preserve user folder structure)
     files = files.map((file) => {
       let normalizedPath = file.path.replace(/\\/g, '/');
-      // Remove uploads/ or uploads/user_{id}/ prefix
-      normalizedPath = normalizedPath.replace(/^uploads\/(?:user_[^/]+\/)?/, '');
+      // Remove uploads/ prefix only, preserve user_123/ and all subfolder structure
+      normalizedPath = normalizedPath.replace(/^uploads\//, '');
       return {
         ...file,
         path: normalizedPath,

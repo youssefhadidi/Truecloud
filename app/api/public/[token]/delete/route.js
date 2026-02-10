@@ -1,0 +1,104 @@
+/** @format */
+
+import { NextResponse } from 'next/server';
+import { unlink, rm } from 'fs/promises';
+import { stat } from 'fs/promises';
+import { join, resolve, sep } from 'node:path';
+import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { logger } from '@/lib/logger';
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
+
+export async function DELETE(req, { params }) {
+  const startTime = Date.now();
+  try {
+    logger.info('DELETE /api/public/[token]/delete - Request received');
+
+    const { token } = await params;
+    const password = req.headers.get('x-share-password');
+    const url = new URL(req.url);
+    const fileName = url.searchParams.get('file');
+    const subPath = url.searchParams.get('path') || '';
+
+    if (!fileName) {
+      return NextResponse.json({ error: 'File name is required' }, { status: 400 });
+    }
+
+    // Verify share and password
+    const verification = await verifyShare(token, password);
+    if (!verification.valid) {
+      if (verification.requiresPassword) {
+        return NextResponse.json({ error: 'Password required' }, { status: 401 });
+      }
+      return NextResponse.json({ error: verification.error }, { status: 404 });
+    }
+
+    const share = verification.share;
+
+    // Check if deletions are allowed
+    if (!share.allowUploads) {
+      return NextResponse.json({ error: 'Deletions not allowed for this share' }, { status: 403 });
+    }
+
+    // Check if it's a directory share
+    if (!share.isDirectory) {
+      return NextResponse.json({ error: 'Cannot delete from file shares' }, { status: 400 });
+    }
+
+    // Validate path is within share scope
+    const pathCheck = validateSharePath(share, subPath);
+    if (!pathCheck.allowed) {
+      return NextResponse.json({ error: pathCheck.error }, { status: 400 });
+    }
+
+    // Construct full file path
+    const filePath = join(UPLOAD_DIR, pathCheck.fullPath, fileName);
+    const resolvedFilePath = resolve(filePath) + sep;
+
+    // Security: ensure file path is within upload directory
+    if (!resolvedFilePath.startsWith(RESOLVED_UPLOAD_DIR)) {
+      logger.error('DELETE /api/public/[token]/delete - Path traversal attempt', {
+        filePath,
+        token,
+      });
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Prevent deleting the root shared folder itself
+    const rootSharePath = join(UPLOAD_DIR, share.path, share.fileName) + sep;
+    if (resolve(filePath) + sep === rootSharePath) {
+      return NextResponse.json({ error: 'Cannot delete the shared folder' }, { status: 403 });
+    }
+
+    // Check if file/folder exists and get stats
+    let stats;
+    try {
+      stats = await stat(filePath);
+    } catch {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Delete file or directory
+    if (stats.isDirectory()) {
+      await rm(filePath, { recursive: true, force: true });
+      logger.info('DELETE /api/public/[token]/delete - Directory deleted', {
+        fileName,
+        subPath,
+        duration: `${Date.now() - startTime}ms`,
+      });
+    } else {
+      await unlink(filePath);
+      logger.info('DELETE /api/public/[token]/delete - File deleted', {
+        fileName,
+        subPath,
+        duration: `${Date.now() - startTime}ms`,
+      });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logger.error('DELETE /api/public/[token]/delete - Error', error);
+    return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 });
+  }
+}

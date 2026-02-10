@@ -2,115 +2,29 @@
 
 'use client';
 
-import { useState, useEffect, use, lazy, Suspense, useRef, useCallback, useMemo } from 'react';
+import { use, lazy, Suspense, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  FiDownload,
-  FiLock,
-  FiFile,
-  FiFolder,
-  FiImage,
-  FiVideo,
-  FiBox,
-  FiFileText,
-  FiEye,
-  FiChevronRight,
-  FiArrowLeft,
-  FiGrid,
-  FiList,
-  FiPlay,
-  FiUpload,
-  FiX,
-} from 'react-icons/fi';
+import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList } from 'react-icons/fi';
+import { useSharePage } from '@/hooks/useSharePage';
+import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
-// Lazy load heavy viewer components
+// Lazy load heavy components
+const GridView = lazy(() => import('@/components/files/GridView'));
+const ListView = lazy(() => import('@/components/files/ListView'));
+const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
+const ContextMenu = lazy(() => import('@/components/files/ContextMenu'));
 const Viewer3D = lazy(() => import('@/components/files/Viewer3D'));
 const SkpViewer = lazy(() => import('@/components/files/SkpViewer'));
 const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 
-// Check if file is SKP
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
-
-// Thumbnail component that fetches base64 from the public thumbnail API using React Query
-function ShareThumbnail({ url, alt, className, children, password }) {
-  const [hasError, setHasError] = useState(false);
-  const imgRef = useRef(null);
-  const [isInView, setIsInView] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '200px', threshold: 0.01 },
-    );
-    if (imgRef.current) observer.observe(imgRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  const headers = useMemo(() => {
-    const h = {};
-    if (password) h['x-share-password'] = password;
-    return h;
-  }, [password]);
-
-  const { data, isError } = useQuery({
-    queryKey: ['share-thumbnail', url],
-    queryFn: async () => {
-      const res = await fetch(url, { headers });
-      const json = await res.json();
-      if (!json?.data) throw new Error('No thumbnail data');
-      return json.data;
-    },
-    enabled: isInView && !!url && !hasError,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: false,
-  });
-
-  const showError = isError || hasError;
-
-  return (
-    <div ref={imgRef} className="relative w-full h-full">
-      {data && !showError ? (
-        <>
-          <img src={data} alt={alt} className={className} onError={() => setHasError(true)} />
-          {children}
-        </>
-      ) : showError ? (
-        children || null
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">{children || <div className="animate-pulse bg-gray-300 dark:bg-gray-500 rounded w-10 h-10" />}</div>
-      )}
-    </div>
-  );
-}
-
-// Format file size
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
 
 export default function SharePage({ params }) {
   const { token } = use(params);
-  const queryClient = useQueryClient();
-  const [password, setPassword] = useState('');
-  const [verifiedPassword, setVerifiedPassword] = useState(null);
-  const [viewingFile, setViewingFile] = useState(null);
-  const [currentSubPath, setCurrentSubPath] = useState('');
-  const [viewMode, setViewMode] = useState('grid');
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState([]);
   const fileInputRef = useRef(null);
+  const [password, setPassword] = useState('');
 
   // Fetch share metadata
   const {
@@ -118,16 +32,13 @@ export default function SharePage({ params }) {
     isLoading: loading,
     error: shareError,
   } = useQuery({
-    queryKey: ['share', token, verifiedPassword],
+    queryKey: ['share', token],
     queryFn: async () => {
-      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-      const res = await fetch(`/api/public/${token}`, { headers });
+      const res = await fetch(`/api/public/${token}`);
       const data = await res.json();
-
-      if (data.requiresPassword) {
+      if (!res.ok && data.requiresPassword) {
         return { requiresPassword: true, fileName: data.fileName, isDirectory: data.isDirectory };
       }
-
       if (!res.ok) throw new Error(data.error || 'Share not found');
       return data;
     },
@@ -135,704 +46,387 @@ export default function SharePage({ params }) {
     retry: false,
   });
 
-  const requiresPassword = shareResponse?.requiresPassword === true;
-  const shareData = shareResponse ?? null;
-  const error = shareError?.message ?? null;
-
   // Fetch directory listing
-  const { data: directoryFiles = null } = useQuery({
-    queryKey: ['share-files', token, verifiedPassword, currentSubPath],
+  const {
+    data: directoryFiles = null,
+  } = useQuery({
+    queryKey: ['share-files', token],
     queryFn: async () => {
-      const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-      const url = `/api/public/${token}/files${currentSubPath ? `?path=${encodeURIComponent(currentSubPath)}` : ''}`;
-      const res = await fetch(url, { headers });
+      const res = await fetch(`/api/public/${token}/files`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load files');
       return data.files;
     },
-    enabled: !!shareResponse && !requiresPassword && !!shareResponse.isDirectory,
+    enabled: !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory,
     staleTime: 30 * 1000,
   });
 
-  // Drag and drop handlers - must be defined before any early returns
-  const handleDragOver = useCallback(
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (shareData?.allowUploads) {
-        setIsDragging(true);
-      }
-    },
-    [shareData?.allowUploads],
-  );
+  // Use share hooks for state management
+  const shareState = useSharePage(token, {
+    ...shareResponse,
+    files: directoryFiles || [],
+  });
 
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
+  // Create operations hook
+  const operations = useShareOperations({
+    token,
+    sharePassword: shareState.verifiedPassword,
+    currentSubPath: shareState.currentSubPath,
+    setCurrentSubPath: shareState.setCurrentSubPath,
+    setPathHistory: shareState.setPathHistory,
+    setHistoryIndex: shareState.setHistoryIndex,
+    pathHistory: shareState.pathHistory,
+    historyIndex: shareState.historyIndex,
+    setCreatingFolder: shareState.setCreatingFolder,
+    setNewFolderName: shareState.setNewFolderName,
+    newFolderName: shareState.newFolderName,
+    setDeletingFile: shareState.setDeletingFile,
+    setRenamingFile: shareState.setRenamingFile,
+    setNewFileName: shareState.setNewFileName,
+    setProcessingFile: shareState.setProcessingFile,
+    setViewerFile: shareState.setViewerFile,
+    viewerFile: shareState.viewerFile,
+    viewableFiles: shareState.viewableFiles,
+    setContextMenu: shareState.setContextMenu,
+    setSelectedContextFile: shareState.setSelectedContextFile,
+    setUploadingFiles: shareState.setUploadingFiles,
+    addNotification: shareState.addNotification,
+    allowUploads: shareResponse?.allowUploads ?? false,
+  });
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    setVerifiedPassword(password);
-  };
-
-  const handleDownload = async () => {
-    const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-    const downloadUrl = `/api/public/${token}/download`;
-
-    try {
-      const response = await fetch(downloadUrl, { headers });
-      if (!response.ok) throw new Error('Download failed');
-
-      const blob = await response.blob();
-
-      // Get filename from Content-Disposition header or use default
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let fileName = shareData.fileName;
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
-        if (match) fileName = match[1];
-      } else if (shareData.isDirectory) {
-        // Fallback: add .zip extension for directories
-        fileName = `${shareData.fileName}.zip`;
-      }
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download error:', error);
-      alert('Failed to download file');
-    }
-  };
-
-  const navigateToSubFolder = (folderName) => {
-    const newPath = currentSubPath ? `${currentSubPath}/${folderName}` : folderName;
-    setCurrentSubPath(newPath);
-  };
-
-  const navigateUp = () => {
-    const parts = currentSubPath.split('/');
-    parts.pop();
-    setCurrentSubPath(parts.join('/'));
-  };
-
-  const getFileIcon = (file) => {
-    if (file.isDirectory) return <FiFolder className="text-blue-500" size={24} />;
-    if (isImage(file.name)) return <FiImage className="text-green-500" size={24} />;
-    if (isVideo(file.name)) return <FiVideo className="text-purple-500" size={24} />;
-    if (is3dFile(file.name)) return <FiBox className="text-orange-500" size={24} />;
-    if (isPdf(file.name)) return <FiFileText className="text-red-500" size={24} />;
-    return <FiFile className="text-gray-500" size={24} />;
-  };
-
-  const canPreview = (file) => {
-    return isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name);
+    shareState.setVerifiedPassword(password);
   };
 
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center h-dvh bg-gray-900">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
 
   // Error state
-  if (error) {
+  if (shareError) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center max-w-md mx-auto">
-        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-          <FiFile className="text-red-500" size={32} />
+      <div className="flex items-center justify-center h-dvh bg-gray-900">
+        <div className="bg-gray-800 rounded-lg shadow-lg p-8 text-center max-w-md">
+          <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FiFile className="text-red-500" size={32} />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Share Not Found</h2>
+          <p className="text-gray-400">{shareError.message}</p>
         </div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Share Not Found</h2>
-        <p className="text-gray-500 dark:text-gray-400">{error}</p>
       </div>
     );
   }
 
   // Password entry form
-  if (requiresPassword) {
+  if (shareResponse?.requiresPassword) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md mx-auto">
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FiLock className="text-indigo-500" size={32} />
+      <div className="flex items-center justify-center h-dvh bg-gray-900">
+        <div className="bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FiLock className="text-indigo-500" size={32} />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Password Protected</h2>
+            <p className="text-gray-400">This {shareResponse?.isDirectory ? 'folder' : 'file'} is password protected.</p>
+            {shareResponse?.fileName && <p className="text-sm text-gray-300 mt-2 font-medium">{shareResponse.fileName}</p>}
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Password Protected</h2>
-          <p className="text-gray-500 dark:text-gray-400">This {shareData?.isDirectory ? 'folder' : 'file'} is password protected.</p>
-          {shareData?.fileName && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 font-medium">{shareData.fileName}</p>}
-        </div>
 
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Enter password"
-              autoFocus
-            />
-          </div>
-          <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">
-            Unlock
-          </button>
-        </form>
-      </div>
-    );
-  }
-
-  // File viewer modal
-  if (viewingFile) {
-    const filePath = currentSubPath ? `${currentSubPath}/${viewingFile.name}` : viewingFile.name;
-    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
-
-    const getFileUrl = () => {
-      if (isImage(viewingFile.name)) {
-        return `/api/public/${token}/optimize-image?file=${encodeURIComponent(filePath)}&quality=85&w=2000&h=2000${pwdParam}`;
-      }
-      if (isVideo(viewingFile.name) || isAudio(viewingFile.name) || isPdf(viewingFile.name)) {
-        return `/api/public/${token}/stream?file=${encodeURIComponent(filePath)}${pwdParam}`;
-      }
-      return `/api/public/${token}/download?path=${encodeURIComponent(filePath)}${pwdParam}`;
-    };
-
-    return (
-      <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4" onClick={() => setViewingFile(null)}>
-        <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-5xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-700 px-6 py-4">
-            <h3 className="text-lg font-semibold text-white">{viewingFile.name}</h3>
-            <button onClick={() => setViewingFile(null)} className="text-gray-400 hover:text-white px-3 py-2">
-              ✕
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-700 text-white"
+                placeholder="Enter password"
+                autoFocus
+              />
+            </div>
+            <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+              Unlock
             </button>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-auto flex items-center justify-center p-4">
-            {isImage(viewingFile.name) && <img src={getFileUrl()} alt={viewingFile.name} className="max-w-full max-h-full object-contain" />}
-            {isVideo(viewingFile.name) && (
-              <video controls autoPlay className="max-w-full max-h-full" src={getFileUrl()}>
-                Your browser does not support video playback.
-              </video>
-            )}
-            {isAudio(viewingFile.name) && (
-              <audio controls className="w-full" src={getFileUrl()}>
-                Your browser does not support audio playback.
-              </audio>
-            )}
-            {isPdf(viewingFile.name) && <iframe src={getFileUrl()} className="w-full h-full" title={viewingFile.name} />}
-            {is3dFile(viewingFile.name) && !isSkp(viewingFile.name) && (
-              <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
-                <Viewer3D fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
-              </Suspense>
-            )}
-            {isSkp(viewingFile.name) && (
-              <Suspense fallback={<div className="text-white">Loading 3D viewer...</div>}>
-                <SkpViewer fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
-              </Suspense>
-            )}
-            {isXlsx(viewingFile.name) && (
-              <Suspense fallback={<div className="text-white">Loading spreadsheet...</div>}>
-                <XlsxViewer fileName={viewingFile.name} currentPath={currentSubPath} shareToken={token} sharePassword={verifiedPassword} />
-              </Suspense>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Helper to get the public thumbnail API URL (returns base64 JSON, works for all file types)
-  const getPublicThumbnailUrl = (file) => {
-    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
-    return `/api/public/${token}/thumbnail?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(currentSubPath)}`;
-  };
-
-  // Helper to download a single file
-  const handleFileDownload = async (file) => {
-    const filePath = currentSubPath ? `${currentSubPath}/${file.name}` : file.name;
-    const headers = verifiedPassword ? { 'x-share-password': verifiedPassword } : {};
-    const downloadUrl = `/api/public/${token}/download?path=${encodeURIComponent(filePath)}`;
-    try {
-      const response = await fetch(downloadUrl, { headers });
-      if (!response.ok) throw new Error('Download failed');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download error:', error);
-    }
-  };
-
-  // Upload file
-  const uploadFile = async (file) => {
-    const headers = {};
-    if (verifiedPassword) {
-      headers['x-share-password'] = verifiedPassword;
-    }
-
-    try {
-      // Use native FormData - browser handles multipart encoding correctly
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`/api/public/${token}/upload?path=${encodeURIComponent(currentSubPath)}`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Upload failed');
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Upload error:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Handle file upload
-  const handleUpload = async (files) => {
-    if (!shareData?.allowUploads || !files.length) return;
-
-    const fileList = Array.from(files);
-    const uploadItems = fileList.map((file) => ({
-      id: `${file.name}-${Date.now()}`,
-      name: file.name,
-      status: 'uploading',
-    }));
-
-    setUploadingFiles(uploadItems);
-
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const result = await uploadFile(file);
-
-      setUploadingFiles((prev) => prev.map((item) => (item.id === uploadItems[i].id ? { ...item, status: result.success ? 'done' : 'error', error: result.error } : item)));
-    }
-
-    // Refresh file list after upload
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['share-files', token] });
-      setUploadingFiles([]);
-    }, 1500);
-  };
-
-  // Directory view
-  if (shareData.isDirectory && directoryFiles) {
-    return (
-      <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-6xl mx-auto relative"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => {
-          handleDrop(e);
-          if (shareData?.allowUploads && e.dataTransfer.files.length > 0) {
-            handleUpload(e.dataTransfer.files);
-          }
-        }}
-      >
-        {/* Drag overlay */}
-        {isDragging && shareData.allowUploads && (
-          <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 rounded-lg z-50 flex items-center justify-center">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg text-center">
-              <FiUpload className="text-indigo-600 mx-auto mb-2" size={48} />
-              <p className="text-lg font-medium text-gray-900 dark:text-white">Drop files to upload</p>
-            </div>
-          </div>
-        )}
-
-        {/* Upload progress overlay */}
-        {uploadingFiles.length > 0 && (
-          <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg w-80">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Uploading files...</h3>
-              <div className="space-y-2 max-h-48 overflow-auto">
-                {uploadingFiles.map((file) => (
-                  <div key={file.id} className="flex items-center gap-2 text-sm">
-                    {file.status === 'uploading' && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>}
-                    {file.status === 'done' && <div className="text-green-500">✓</div>}
-                    {file.status === 'error' && <div className="text-red-500">✗</div>}
-                    <span className="truncate text-gray-700 dark:text-gray-300">{file.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          multiple
-          onChange={(e) => {
-            if (e.target.files) {
-              handleUpload(e.target.files);
-              e.target.value = '';
-            }
-          }}
-        />
-
-        {/* Header */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FiFolder className="text-blue-500" size={32} />
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{shareData.fileName}</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Shared by {shareData.ownerUsername}
-                  {currentSubPath && ` • ${currentSubPath}`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Upload button */}
-              {shareData.allowUploads && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  title="Upload files"
-                >
-                  <FiUpload size={18} />
-                  <span className="hidden sm:inline">Upload</span>
-                </button>
-              )}
-
-              {/* View Toggle */}
-              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
-                  title="List View"
-                >
-                  <FiList size={18} />
-                </button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
-                  title="Grid View"
-                >
-                  <FiGrid size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Breadcrumb navigation */}
-          {currentSubPath && (
-            <div className="flex items-center gap-2 mt-3">
-              <button onClick={navigateUp} className="text-indigo-600 hover:text-indigo-500 flex items-center gap-1 text-sm">
-                <FiArrowLeft size={14} />
-                Back
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Grid View */}
-        {viewMode === 'grid' ? (
-          <div className="p-4">
-            {directoryFiles.length === 0 ? (
-              <div className="py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {directoryFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="group relative bg-gray-100 dark:bg-gray-700 rounded-lg p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors select-none"
-                    style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
-                    onClick={() => {
-                      if (file.isDirectory) {
-                        navigateToSubFolder(file.name);
-                      } else if (canPreview(file)) {
-                        setViewingFile(file);
-                      }
-                    }}
-                  >
-                    {/* Thumbnail/Icon */}
-                    <div className="aspect-square flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded-lg mb-2 overflow-hidden relative">
-                      {isImage(file.name) && (
-                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
-                          <FiImage className="text-green-500" size={40} />
-                        </ShareThumbnail>
-                      )}
-                      {isVideo(file.name) && (
-                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="bg-black/50 rounded-full p-2">
-                              <FiPlay className="text-white" size={20} />
-                            </div>
-                          </div>
-                        </ShareThumbnail>
-                      )}
-                      {isPdf(file.name) && (
-                        <ShareThumbnail url={getPublicThumbnailUrl(file)} alt={file.name} className="w-full h-full object-cover" password={verifiedPassword}>
-                          <FiFileText className="text-red-500" size={40} />
-                        </ShareThumbnail>
-                      )}
-                      {file.isDirectory && <FiFolder className="text-blue-500" size={40} />}
-                      {is3dFile(file.name) && <FiBox className="text-orange-500" size={40} />}
-                      {!file.isDirectory && !isImage(file.name) && !isVideo(file.name) && !is3dFile(file.name) && !isPdf(file.name) && (
-                        <FiFile className="text-gray-500" size={40} />
-                      )}
-                    </div>
-
-                    {/* File name */}
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
-                      {file.name}
-                    </p>
-                    {!file.isDirectory && <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>}
-
-                    {/* Action buttons on hover */}
-                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {canPreview(file) && !file.isDirectory && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewingFile(file);
-                          }}
-                          className="p-1.5 bg-white dark:bg-gray-800 rounded shadow text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-                          title="Preview"
-                        >
-                          <FiEye size={14} />
-                        </button>
-                      )}
-                      {!file.isDirectory && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFileDownload(file);
-                          }}
-                          className="p-1.5 bg-white dark:bg-gray-800 rounded shadow text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
-                          title="Download"
-                        >
-                          <FiDownload size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* List View */
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {directoryFiles.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer select-none"
-                style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
-                onClick={() => {
-                  if (file.isDirectory) {
-                    navigateToSubFolder(file.name);
-                  } else if (canPreview(file)) {
-                    setViewingFile(file);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  {getFileIcon(file)}
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
-                    {!file.isDirectory && <p className="text-sm text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {canPreview(file) && !file.isDirectory && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setViewingFile(file);
-                      }}
-                      className="p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded"
-                      title="Preview"
-                    >
-                      <FiEye size={18} />
-                    </button>
-                  )}
-                  {!file.isDirectory && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFileDownload(file);
-                      }}
-                      className="p-2 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded"
-                      title="Download"
-                    >
-                      <FiDownload size={18} />
-                    </button>
-                  )}
-                  {file.isDirectory && <FiChevronRight className="text-gray-400" size={18} />}
-                </div>
-              </div>
-            ))}
-
-            {directoryFiles.length === 0 && <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">This folder is empty</div>}
-          </div>
-        )}
-
-        {/* Download all button */}
-        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-          <button
-            onClick={handleDownload}
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
-          >
-            <FiDownload size={18} />
-            Download as ZIP
-          </button>
+          </form>
         </div>
       </div>
     );
   }
 
   // Single file view
-  const fileIcon = shareData.isDirectory ? (
-    <FiFolder className="text-blue-500" size={48} />
-  ) : isImage(shareData.fileName) ? (
-    <FiImage className="text-green-500" size={48} />
-  ) : isVideo(shareData.fileName) ? (
-    <FiVideo className="text-purple-500" size={48} />
-  ) : is3dFile(shareData.fileName) ? (
-    <FiBox className="text-orange-500" size={48} />
-  ) : isPdf(shareData.fileName) ? (
-    <FiFileText className="text-red-500" size={48} />
-  ) : (
-    <FiFile className="text-gray-500" size={48} />
-  );
+  if (shareResponse && !shareResponse.isDirectory) {
+    return (
+      <div className="flex items-center justify-center h-dvh bg-gray-900 p-4">
+        <div className="bg-gray-800 rounded-lg shadow-lg p-8 max-w-2xl w-full max-h-dvh overflow-auto">
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold text-white mb-4">{shareResponse.fileName}</h2>
+            <p className="text-gray-400 mb-6">{shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : 'Unknown size'}</p>
 
-  // Inline preview for single files
-  const renderPreview = () => {
-    const pwdParam = verifiedPassword ? `&pwd=${encodeURIComponent(verifiedPassword)}` : '';
-    const pwdParamFirst = verifiedPassword ? `?pwd=${encodeURIComponent(verifiedPassword)}` : '';
+            {isImage(shareResponse.fileName) && (
+              <img
+                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${shareState.verifiedPassword ? `&pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                alt={shareResponse.fileName}
+                className="max-w-full max-h-[500px] mx-auto object-contain mb-6 rounded"
+              />
+            )}
 
-    if (isImage(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <img
-            src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${pwdParam}`}
-            alt={shareData.fileName}
-            className="max-w-full max-h-[500px] mx-auto object-contain"
-          />
+            {(isVideo(shareResponse.fileName) || isAudio(shareResponse.fileName) || isPdf(shareResponse.fileName)) && (
+              <div className="mb-6 rounded overflow-hidden">
+                {isVideo(shareResponse.fileName) && (
+                  <video
+                    controls
+                    className="w-full max-h-[500px]"
+                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                )}
+                {isAudio(shareResponse.fileName) && (
+                  <audio
+                    controls
+                    className="w-full"
+                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                  >
+                    Your browser does not support audio playback.
+                  </audio>
+                )}
+                {isPdf(shareResponse.fileName) && (
+                  <iframe
+                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                    className="w-full h-[500px]"
+                    title={shareResponse.fileName}
+                  />
+                )}
+              </div>
+            )}
+
+            {is3dFile(shareResponse.fileName) && !isSkp(shareResponse.fileName) && (
+              <div className="mb-6 rounded overflow-hidden h-[500px]">
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
+                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                </Suspense>
+              </div>
+            )}
+
+            {isSkp(shareResponse.fileName) && (
+              <div className="mb-6 rounded overflow-hidden h-[500px]">
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
+                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                </Suspense>
+              </div>
+            )}
+
+            {isXlsx(shareResponse.fileName) && (
+              <div className="mb-6 rounded overflow-hidden h-[500px]">
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
+                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                </Suspense>
+              </div>
+            )}
+
+            <button
+              onClick={() => operations.handleDownload({ name: shareResponse.fileName })}
+              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
+            >
+              <FiDownload size={20} />
+              Download
+            </button>
+          </div>
         </div>
-      );
-    }
-
-    if (isVideo(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <video controls className="w-full max-h-[500px]" src={`/api/public/${token}/stream${pwdParamFirst}`}>
-            Your browser does not support video playback.
-          </video>
-        </div>
-      );
-    }
-
-    if (isAudio(shareData.fileName)) {
-      return (
-        <div className="mt-6">
-          <audio controls className="w-full" src={`/api/public/${token}/stream${pwdParamFirst}`}>
-            Your browser does not support audio playback.
-          </audio>
-        </div>
-      );
-    }
-
-    if (isPdf(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <iframe src={`/api/public/${token}/stream${pwdParamFirst}`} className="w-full h-[500px]" title={shareData.fileName} />
-        </div>
-      );
-    }
-
-    if (is3dFile(shareData.fileName) && !isSkp(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
-          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-            <Viewer3D fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
-          </Suspense>
-        </div>
-      );
-    }
-
-    if (isSkp(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
-          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-            <SkpViewer fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
-          </Suspense>
-        </div>
-      );
-    }
-
-    if (isXlsx(shareData.fileName)) {
-      return (
-        <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden h-[500px]">
-          <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
-            <XlsxViewer fileName={shareData.fileName} currentPath="" shareToken={token} sharePassword={verifiedPassword} />
-          </Suspense>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
-      <div className="text-center">
-        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">{fileIcon}</div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">{shareData.fileName}</h2>
-        <p className="text-gray-500 dark:text-gray-400">
-          {formatFileSize(shareData.size)} • Shared by {shareData.ownerUsername}
-        </p>
       </div>
+    );
+  }
 
-      {renderPreview()}
+  // Directory view
+  if (shareResponse?.isDirectory && directoryFiles) {
+    return (
+      <div className="h-dvh flex flex-col bg-gray-900 text-white" onDragOver={operations.handleDragOver} onDragLeave={operations.handleDragLeave} onDrop={operations.handleDropEvent}>
+        {/* Drag overlay */}
+        {shareState.isDragging && shareResponse.allowUploads && (
+          <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 z-50 flex items-center justify-center">
+            <div className="bg-gray-800 rounded-lg p-8 shadow-lg text-center">
+              <FiUpload className="text-indigo-500 mx-auto mb-3" size={48} />
+              <p className="text-lg font-medium">Drop files to upload</p>
+            </div>
+          </div>
+        )}
 
-      <div className="mt-6">
-        <button
-          onClick={handleDownload}
-          className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
-        >
-          <FiDownload size={20} />
-          Download
-        </button>
+        {/* Header */}
+        <div className="border-b border-gray-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FiFolder className="text-blue-400" size={32} />
+              <div>
+                <h1 className="text-2xl font-bold">{shareResponse.fileName}</h1>
+                <p className="text-sm text-gray-400">Shared by {shareResponse.ownerUsername}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {shareResponse.allowUploads && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                >
+                  <FiUpload size={18} />
+                  <span className="hidden sm:inline">Upload</span>
+                </button>
+              )}
+
+              <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => shareState.setViewMode('grid')}
+                  className={`p-2 rounded ${shareState.viewMode === 'grid' ? 'bg-indigo-600' : 'text-gray-400 hover:text-white'}`}
+                >
+                  <FiGrid size={18} />
+                </button>
+                <button
+                  onClick={() => shareState.setViewMode('list')}
+                  className={`p-2 rounded ${shareState.viewMode === 'list' ? 'bg-indigo-600' : 'text-gray-400 hover:text-white'}`}
+                >
+                  <FiList size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* File input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          multiple
+          onChange={operations.handleUploadFromInput}
+        />
+
+        {/* Main content area */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <Suspense fallback={<div className="flex items-center justify-center flex-1">Loading...</div>}>
+            {shareState.viewMode === 'grid' ? (
+              <GridView
+                files={shareState.sortedFilteredFiles || []}
+                isShareMode={true}
+                allowUploads={shareResponse.allowUploads}
+                currentPath={shareState.currentSubPath}
+                viewerFile={shareState.viewerFile}
+                creatingFolder={shareState.creatingFolder}
+                newFolderName={shareState.newFolderName}
+                deletingFile={shareState.deletingFile}
+                renamingFile={shareState.renamingFile}
+                newFileName={shareState.newFileName}
+                processingFile={shareState.processingFile}
+                uploadingFiles={shareState.uploadingFiles}
+                onNavigateToFolder={operations.navigateToSubFolder}
+                onOpenMediaViewer={operations.openMediaViewer}
+                onInitiateDelete={operations.initiateDelete}
+                onConfirmDelete={operations.confirmDelete}
+                onCancelDelete={operations.cancelDelete}
+                onInitiateRename={operations.initiateRename}
+                onConfirmRename={operations.confirmRename}
+                onCancelRename={operations.cancelRename}
+                onInitiateCreateFolder={operations.initiateCreateFolder}
+                onConfirmCreateFolder={operations.confirmCreateFolder}
+                onCancelCreateFolder={operations.cancelCreateFolder}
+                onHandleDownload={operations.handleDownload}
+                onContextMenu={operations.handleContextMenu}
+                onNewFolderNameChange={shareState.setNewFolderName}
+                onNewFileNameChange={shareState.setNewFileName}
+                formatFileSize={operations.formatFileSize}
+              />
+            ) : (
+              <ListView
+                files={shareState.sortedFilteredFiles || []}
+                isShareMode={true}
+                allowUploads={shareResponse.allowUploads}
+                currentPath={shareState.currentSubPath}
+                viewerFile={shareState.viewerFile}
+                creatingFolder={shareState.creatingFolder}
+                newFolderName={shareState.newFolderName}
+                deletingFile={shareState.deletingFile}
+                renamingFile={shareState.renamingFile}
+                newFileName={shareState.newFileName}
+                processingFile={shareState.processingFile}
+                uploadingFiles={shareState.uploadingFiles}
+                onNavigateToFolder={operations.navigateToSubFolder}
+                onOpenMediaViewer={operations.openMediaViewer}
+                onInitiateDelete={operations.initiateDelete}
+                onConfirmDelete={operations.confirmDelete}
+                onCancelDelete={operations.cancelDelete}
+                onInitiateRename={operations.initiateRename}
+                onConfirmRename={operations.confirmRename}
+                onCancelRename={operations.cancelRename}
+                onInitiateCreateFolder={operations.initiateCreateFolder}
+                onConfirmCreateFolder={operations.confirmCreateFolder}
+                onCancelCreateFolder={operations.cancelCreateFolder}
+                onHandleDownload={operations.handleDownload}
+                onContextMenu={operations.handleContextMenu}
+                onNewFolderNameChange={shareState.setNewFolderName}
+                onNewFileNameChange={shareState.setNewFileName}
+                formatFileSize={operations.formatFileSize}
+              />
+            )}
+          </Suspense>
+        </div>
+
+        {/* Media Viewer Modal */}
+        {shareState.viewerFile && (
+          <Suspense fallback={null}>
+            <MediaViewer
+              file={shareState.viewerFile}
+              files={shareState.viewableFiles}
+              shareToken={token}
+              sharePassword={shareState.verifiedPassword}
+              onClose={operations.closeMediaViewer}
+              onNavigate={operations.navigateViewer}
+            />
+          </Suspense>
+        )}
+
+        {/* Context Menu */}
+        {shareState.contextMenu && (
+          <Suspense fallback={null}>
+            <ContextMenu
+              contextMenu={shareState.contextMenu}
+              file={shareState.selectedContextFile}
+              isShareMode={true}
+              allowUploads={shareResponse.allowUploads}
+              onClose={operations.closeContextMenu}
+              onInitiateDelete={operations.initiateDelete}
+              onInitiateRename={operations.initiateRename}
+              onInitiateCreateFolder={operations.initiateCreateFolder}
+              onHandleDownload={operations.handleDownload}
+            />
+          </Suspense>
+        )}
+
+        {/* Upload Progress */}
+        {shareState.uploadingFiles.length > 0 && (
+          <div className="absolute bottom-6 right-6 bg-gray-800 rounded-lg shadow-lg p-6 w-80 border border-gray-700 z-40">
+            <h3 className="font-semibold mb-4">Uploading ({shareState.uploadingFiles.length})</h3>
+            <div className="space-y-2 max-h-48 overflow-auto">
+              {shareState.uploadingFiles.map((file) => (
+                <div key={file.id} className="flex items-center gap-2 text-sm">
+                  {file.status === 'uploading' && <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>}
+                  {file.status === 'success' && <div className="text-green-400">✓</div>}
+                  {file.status === 'error' && <div className="text-red-400">✗</div>}
+                  <span className="truncate text-gray-300">{file.fileName}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }

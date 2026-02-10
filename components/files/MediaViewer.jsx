@@ -143,15 +143,27 @@ function ThumbnailItem({ file, currentPath, isActive, onClick }) {
   );
 }
 
-export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile }) {
+export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const stripRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
+  const isShareMode = !!shareToken;
 
   // Helper to build download URL
   const getFileUrl = (file, type) => {
+    if (isShareMode) {
+      // For share mode, use public API endpoints
+      const params = new URLSearchParams();
+      const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      params.append('path', filePath);
+      if (sharePassword) {
+        params.append('pwd', sharePassword);
+      }
+      return `/api/public/${shareToken}/download?${params.toString()}`;
+    }
+
     // Use optimization endpoint for all images
     if (type === 'image') {
       return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;

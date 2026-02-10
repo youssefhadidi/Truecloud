@@ -9,10 +9,11 @@ import { is3dFile } from './Viewer3D';
 // Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
 
-export default function ContextMenu({ contextMenu, file, currentPath = '', onNavigateToFolder, onRename, onDownload, onView, onDelete, onRestore, onShare, onToggleFavorite, isFavorite = false, onClose }) {
+export default function ContextMenu({ contextMenu, file, currentPath = '', onNavigateToFolder, onRename, onDownload, onView, onDelete, onRestore, onShare, onToggleFavorite, isFavorite = false, onClose, isShareMode = false, allowUploads = false }) {
   if (!contextMenu || !file) return null;
 
   const inTrash = isInTrash(currentPath);
+  const canEdit = !isShareMode || allowUploads;
 
   return (
     <div
@@ -29,7 +30,7 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
             <FiFolder size={16} />
             Open Folder
           </button>
-          {!inTrash && (
+          {!inTrash && canEdit && (
             <>
               <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
                 <FiEdit size={16} />
@@ -41,6 +42,12 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
               </button>
             </>
           )}
+          {!inTrash && !canEdit && (
+            <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <FiDownload size={16} />
+              Download as ZIP
+            </button>
+          )}
         </>
       ) : (
         <>
@@ -48,7 +55,7 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
             <FiDownload size={16} />
             Download
           </button>
-          {!inTrash && (
+          {!inTrash && canEdit && (
             <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
               <FiEdit size={16} />
               Rename
@@ -65,7 +72,7 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
           )}
         </>
       )}
-      {!inTrash && (
+      {!inTrash && !isShareMode && (
         <>
           {onToggleFavorite && (
             <button onClick={onToggleFavorite} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
@@ -91,7 +98,7 @@ export default function ContextMenu({ contextMenu, file, currentPath = '', onNav
             Delete Permanently
           </button>
         </>
-      ) : (
+      ) : canEdit && (
         <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
           <FiTrash2 size={16} />
           Delete
