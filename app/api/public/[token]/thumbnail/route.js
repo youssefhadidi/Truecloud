@@ -46,7 +46,8 @@ const thumbnailSemaphore = new Semaphore(15);
 export async function GET(req, { params }) {
   try {
     const { token } = await params;
-    const password = req.headers.get('x-share-password');
+    // Get password from header or query parameter (query param needed for <img> tags)
+    const password = req.headers.get('x-share-password') || new URL(req.url).searchParams.get('pwd');
 
     // Verify share
     const verification = await verifyShare(token, password);
