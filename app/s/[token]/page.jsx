@@ -32,9 +32,10 @@ export default function SharePage({ params }) {
     isLoading: loading,
     error: shareError,
   } = useQuery({
-    queryKey: ['share', token],
+    queryKey: ['share', token, password],
     queryFn: async () => {
-      const res = await fetch(`/api/public/${token}`);
+      const headers = password ? { 'x-share-password': password } : {};
+      const res = await fetch(`/api/public/${token}`, { headers });
       const data = await res.json();
       if (!res.ok && data.requiresPassword) {
         return { requiresPassword: true, fileName: data.fileName, isDirectory: data.isDirectory };
@@ -50,9 +51,10 @@ export default function SharePage({ params }) {
   const {
     data: directoryFiles = null,
   } = useQuery({
-    queryKey: ['share-files', token],
+    queryKey: ['share-files', token, password],
     queryFn: async () => {
-      const res = await fetch(`/api/public/${token}/files`);
+      const headers = password ? { 'x-share-password': password } : {};
+      const res = await fetch(`/api/public/${token}/files`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load files');
       return data.files;
@@ -70,7 +72,7 @@ export default function SharePage({ params }) {
   // Create operations hook
   const operations = useShareOperations({
     token,
-    sharePassword: shareState.verifiedPassword,
+    sharePassword: password,
     currentSubPath: shareState.currentSubPath,
     setCurrentSubPath: shareState.setCurrentSubPath,
     setPathHistory: shareState.setPathHistory,
@@ -96,7 +98,7 @@ export default function SharePage({ params }) {
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    shareState.setVerifiedPassword(password);
+    // Password will automatically trigger a refetch via the queryKey change
   };
 
   // Loading state
@@ -172,7 +174,7 @@ export default function SharePage({ params }) {
 
             {isImage(shareResponse.fileName) && (
               <img
-                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${shareState.verifiedPassword ? `&pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${password ? `&pwd=${encodeURIComponent(password)}` : ''}`}
                 alt={shareResponse.fileName}
                 className="max-w-full max-h-[500px] mx-auto object-contain mb-6 rounded"
               />
@@ -184,7 +186,7 @@ export default function SharePage({ params }) {
                   <video
                     controls
                     className="w-full max-h-[500px]"
-                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
                   >
                     Your browser does not support video playback.
                   </video>
@@ -193,14 +195,14 @@ export default function SharePage({ params }) {
                   <audio
                     controls
                     className="w-full"
-                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
                   >
                     Your browser does not support audio playback.
                   </audio>
                 )}
                 {isPdf(shareResponse.fileName) && (
                   <iframe
-                    src={`/api/public/${token}/stream${shareState.verifiedPassword ? `?pwd=${encodeURIComponent(shareState.verifiedPassword)}` : ''}`}
+                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
                     className="w-full h-[500px]"
                     title={shareResponse.fileName}
                   />
@@ -211,7 +213,7 @@ export default function SharePage({ params }) {
             {is3dFile(shareResponse.fileName) && !isSkp(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
                 </Suspense>
               </div>
             )}
@@ -219,7 +221,7 @@ export default function SharePage({ params }) {
             {isSkp(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
                 </Suspense>
               </div>
             )}
@@ -227,7 +229,7 @@ export default function SharePage({ params }) {
             {isXlsx(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
-                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={shareState.verifiedPassword} />
+                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
                 </Suspense>
               </div>
             )}
@@ -384,7 +386,7 @@ export default function SharePage({ params }) {
               file={shareState.viewerFile}
               files={shareState.viewableFiles}
               shareToken={token}
-              sharePassword={shareState.verifiedPassword}
+              sharePassword={password}
               onClose={operations.closeMediaViewer}
               onNavigate={operations.navigateViewer}
             />
