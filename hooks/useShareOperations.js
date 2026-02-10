@@ -33,6 +33,7 @@ export function useShareOperations({
   setUploadingFiles,
   addNotification,
   allowUploads,
+  setIsDragging,
 }) {
   const queryClient = useQueryClient();
 
@@ -416,27 +417,41 @@ export function useShareOperations({
   }, [viewerFile, viewableFiles, navigateViewer, closeMediaViewer]);
 
   // ============ Drag & Drop ============
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  const handleDragOver = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!allowUploads) return;
+      setIsDragging(true);
+    },
+    [allowUploads, setIsDragging],
+  );
 
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  const handleDragLeave = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!allowUploads) return;
+      if (e.currentTarget === e.target) {
+        setIsDragging(false);
+      }
+    },
+    [allowUploads, setIsDragging],
+  );
 
   const handleDropEvent = useCallback(
     (e) => {
       e.preventDefault();
       e.stopPropagation();
+      setIsDragging(false);
+      if (!allowUploads) return;
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
       handleUpload(files);
     },
-    [handleUpload],
+    [handleUpload, allowUploads, setIsDragging],
   );
 
   // ============ Context Menu ============

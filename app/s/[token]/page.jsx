@@ -106,6 +106,7 @@ export default function SharePage({ params }) {
     setUploadingFiles: shareState.setUploadingFiles,
     addNotification: shareState.addNotification,
     allowUploads: shareResponse?.allowUploads ?? false,
+    setIsDragging: shareState.setIsDragging,
   });
 
   const handlePasswordSubmit = (e) => {
