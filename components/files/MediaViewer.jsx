@@ -352,7 +352,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           <TransformWrapper
             minScale={0.5}
             maxScale={4}
-            initialScale={1}
+            initialScale={0.8}
             centerOnInit={false}
             ref={transformRef}
           >
@@ -375,7 +375,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                     ) * 0.95;
                     transformRef.current.setInstance?.({ scale });
                   }
-                  if (transformRef.current) transformRef.current.resetTransform && transformRef.current.resetTransform();
                 }}
               />
             </TransformComponent>
