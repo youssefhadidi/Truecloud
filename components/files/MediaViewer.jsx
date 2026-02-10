@@ -3,6 +3,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Plyr from 'plyr';
+import 'plyr/dist/plyr.css';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { FiArrowLeft, FiChevronRight, FiVideo, FiFileText, FiMaximize2, FiMinimize2, FiImage, FiMusic, FiBox, FiFile } from 'react-icons/fi';
 import Viewer3D, { is3dFile } from './Viewer3D';
 import XlsxViewer from './XlsxViewer';
@@ -155,6 +158,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const stripRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
+  const playerRef = useRef(null);
+  const plyrRef = useRef(null);
   const isShareMode = !!shareToken;
 
   // Helper to build download URL
@@ -321,6 +326,27 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < viewableFiles.length - 1;
 
+  useEffect(() => {
+    if (!playerRef.current) return undefined;
+    if (fileType !== 'video' && fileType !== 'audio') return undefined;
+
+    if (plyrRef.current) {
+      plyrRef.current.destroy();
+      plyrRef.current = null;
+    }
+
+    plyrRef.current = new Plyr(playerRef.current, {
+      controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
+    });
+
+    return () => {
+      if (plyrRef.current) {
+        plyrRef.current.destroy();
+        plyrRef.current = null;
+      }
+    };
+  }, [viewerFile?.id, fileType]);
+
   // Render media based on type
   const renderMedia = () => {
     const stopProp = (e) => e.stopPropagation();
@@ -330,11 +356,25 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
       case 'image':
-        return <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
+        return (
+          <TransformWrapper minScale={1} maxScale={4} centerOnInit>
+            <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
+              <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />
+            </TransformComponent>
+          </TransformWrapper>
+        );
 
       case 'video':
         return (
-          <video controls autoPlay className="w-full h-full object-contain" src={getFileUrl(viewerFile, 'video')} onClick={stopProp} style={{ width: '100%', height: '100%' }}>
+          <video
+            ref={playerRef}
+            controls
+            autoPlay
+            className="w-full h-full object-contain"
+            src={getFileUrl(viewerFile, 'video')}
+            onClick={stopProp}
+            style={{ width: '100%', height: '100%' }}
+          >
             Your browser does not support video playback.
           </video>
         );
@@ -345,7 +385,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center">
               <FiMusic size={64} className="text-purple-400" />
             </div>
-            <audio controls className="w-full" src={getFileUrl(viewerFile, 'audio')} style={{ width: '100%' }}>
+            <audio ref={playerRef} controls className="w-full" src={getFileUrl(viewerFile, 'audio')} style={{ width: '100%' }}>
               Your browser does not support audio playback.
             </audio>
           </div>
