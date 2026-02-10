@@ -25,6 +25,7 @@ export default function SharePage({ params }) {
   const { token } = use(params);
   const fileInputRef = useRef(null);
   const [password, setPassword] = useState('');
+  const [submittedPassword, setSubmittedPassword] = useState('');
 
   // Fetch share metadata
   const {
@@ -32,9 +33,9 @@ export default function SharePage({ params }) {
     isLoading: loading,
     error: shareError,
   } = useQuery({
-    queryKey: ['share', token, password],
+    queryKey: ['share', token, submittedPassword],
     queryFn: async () => {
-      const headers = password ? { 'x-share-password': password } : {};
+      const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
       const res = await fetch(`/api/public/${token}`, { headers });
       const data = await res.json();
       if (!res.ok && data.requiresPassword) {
@@ -51,9 +52,9 @@ export default function SharePage({ params }) {
   const {
     data: directoryFiles = null,
   } = useQuery({
-    queryKey: ['share-files', token, password],
+    queryKey: ['share-files', token, submittedPassword],
     queryFn: async () => {
-      const headers = password ? { 'x-share-password': password } : {};
+      const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
       const res = await fetch(`/api/public/${token}/files`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load files');
@@ -72,7 +73,7 @@ export default function SharePage({ params }) {
   // Create operations hook
   const operations = useShareOperations({
     token,
-    sharePassword: password,
+    sharePassword: submittedPassword,
     currentSubPath: shareState.currentSubPath,
     setCurrentSubPath: shareState.setCurrentSubPath,
     setPathHistory: shareState.setPathHistory,
@@ -98,7 +99,7 @@ export default function SharePage({ params }) {
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    // Password will automatically trigger a refetch via the queryKey change
+    setSubmittedPassword(password);
   };
 
   // Loading state
@@ -174,7 +175,7 @@ export default function SharePage({ params }) {
 
             {isImage(shareResponse.fileName) && (
               <img
-                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${password ? `&pwd=${encodeURIComponent(password)}` : ''}`}
+                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
                 alt={shareResponse.fileName}
                 className="max-w-full max-h-[500px] mx-auto object-contain mb-6 rounded"
               />
@@ -186,7 +187,7 @@ export default function SharePage({ params }) {
                   <video
                     controls
                     className="w-full max-h-[500px]"
-                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
+                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
                   >
                     Your browser does not support video playback.
                   </video>
@@ -195,14 +196,14 @@ export default function SharePage({ params }) {
                   <audio
                     controls
                     className="w-full"
-                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
+                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
                   >
                     Your browser does not support audio playback.
                   </audio>
                 )}
                 {isPdf(shareResponse.fileName) && (
                   <iframe
-                    src={`/api/public/${token}/stream${password ? `?pwd=${encodeURIComponent(password)}` : ''}`}
+                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
                     className="w-full h-[500px]"
                     title={shareResponse.fileName}
                   />
@@ -213,7 +214,7 @@ export default function SharePage({ params }) {
             {is3dFile(shareResponse.fileName) && !isSkp(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
+                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
                 </Suspense>
               </div>
             )}
@@ -221,7 +222,7 @@ export default function SharePage({ params }) {
             {isSkp(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
+                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
                 </Suspense>
               </div>
             )}
@@ -229,7 +230,7 @@ export default function SharePage({ params }) {
             {isXlsx(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
-                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={password} />
+                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
                 </Suspense>
               </div>
             )}
@@ -386,7 +387,7 @@ export default function SharePage({ params }) {
               file={shareState.viewerFile}
               files={shareState.viewableFiles}
               shareToken={token}
-              sharePassword={password}
+              sharePassword={submittedPassword}
               onClose={operations.closeMediaViewer}
               onNavigate={operations.navigateViewer}
             />
