@@ -11,13 +11,13 @@ import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils'
 import { is3dFile } from '@/components/files/Viewer3D';
 
 // Lazy load heavy components
-const GridView = lazy(() => import('@/components/files/GridView'));
-const ListView = lazy(() => import('@/components/files/ListView'));
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const ContextMenu = lazy(() => import('@/components/files/ContextMenu'));
 const Viewer3D = lazy(() => import('@/components/files/Viewer3D'));
 const SkpViewer = lazy(() => import('@/components/files/SkpViewer'));
 const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
+const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
+const ShareList = lazy(() => import('@/components/files/ShareList'));
 
 const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
@@ -312,72 +312,46 @@ export default function SharePage({ params }) {
         />
 
         {/* Main content area */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <Suspense fallback={<div className="flex items-center justify-center flex-1">Loading...</div>}>
-            {shareState.viewMode === 'grid' ? (
-              <GridView
-                files={shareState.sortedFilteredFiles || []}
-                isShareMode={true}
-                allowUploads={shareResponse.allowUploads}
-                currentPath={shareState.currentSubPath}
-                viewerFile={shareState.viewerFile}
-                creatingFolder={shareState.creatingFolder}
-                newFolderName={shareState.newFolderName}
-                deletingFile={shareState.deletingFile}
-                renamingFile={shareState.renamingFile}
-                newFileName={shareState.newFileName}
-                processingFile={shareState.processingFile}
-                uploadingFiles={shareState.uploadingFiles}
-                onNavigateToFolder={operations.navigateToSubFolder}
-                onOpenMediaViewer={operations.openMediaViewer}
-                onInitiateDelete={operations.initiateDelete}
-                onConfirmDelete={operations.confirmDelete}
-                onCancelDelete={operations.cancelDelete}
-                onInitiateRename={operations.initiateRename}
-                onConfirmRename={operations.confirmRename}
-                onCancelRename={operations.cancelRename}
-                onInitiateCreateFolder={operations.initiateCreateFolder}
-                onConfirmCreateFolder={operations.confirmCreateFolder}
-                onCancelCreateFolder={operations.cancelCreateFolder}
-                onHandleDownload={operations.handleDownload}
-                onContextMenu={operations.handleContextMenu}
-                onNewFolderNameChange={shareState.setNewFolderName}
-                onNewFileNameChange={shareState.setNewFileName}
-                formatFileSize={operations.formatFileSize}
-              />
-            ) : (
-              <ListView
-                files={shareState.sortedFilteredFiles || []}
-                isShareMode={true}
-                allowUploads={shareResponse.allowUploads}
-                currentPath={shareState.currentSubPath}
-                viewerFile={shareState.viewerFile}
-                creatingFolder={shareState.creatingFolder}
-                newFolderName={shareState.newFolderName}
-                deletingFile={shareState.deletingFile}
-                renamingFile={shareState.renamingFile}
-                newFileName={shareState.newFileName}
-                processingFile={shareState.processingFile}
-                uploadingFiles={shareState.uploadingFiles}
-                onNavigateToFolder={operations.navigateToSubFolder}
-                onOpenMediaViewer={operations.openMediaViewer}
-                onInitiateDelete={operations.initiateDelete}
-                onConfirmDelete={operations.confirmDelete}
-                onCancelDelete={operations.cancelDelete}
-                onInitiateRename={operations.initiateRename}
-                onConfirmRename={operations.confirmRename}
-                onCancelRename={operations.cancelRename}
-                onInitiateCreateFolder={operations.initiateCreateFolder}
-                onConfirmCreateFolder={operations.confirmCreateFolder}
-                onCancelCreateFolder={operations.cancelCreateFolder}
-                onHandleDownload={operations.handleDownload}
-                onContextMenu={operations.handleContextMenu}
-                onNewFolderNameChange={shareState.setNewFolderName}
-                onNewFileNameChange={shareState.setNewFileName}
-                formatFileSize={operations.formatFileSize}
-              />
-            )}
-          </Suspense>
+        <div className="flex-1 overflow-auto p-4">
+          {(shareState.sortedFilteredFiles || []).length === 0 ? (
+            <div className="flex items-center justify-center h-full text-gray-400">
+              <p>This folder is empty</p>
+            </div>
+          ) : (
+            <Suspense fallback={<div className="text-center text-gray-400">Loading...</div>}>
+              {shareState.viewMode === 'grid' ? (
+                <ShareGrid
+                  files={shareState.sortedFilteredFiles || []}
+                  token={token}
+                  submittedPassword={submittedPassword}
+                  currentSubPath={shareState.currentSubPath}
+                  onFileClick={(file) => {
+                    if (file.isDirectory) {
+                      operations.navigateToSubFolder(file.name);
+                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name)) {
+                      operations.openMediaViewer(file);
+                    }
+                  }}
+                  onContextMenu={operations.handleContextMenu}
+                  formatFileSize={operations.formatFileSize}
+                />
+              ) : (
+                <ShareList
+                  files={shareState.sortedFilteredFiles || []}
+                  onFileClick={(file) => {
+                    if (file.isDirectory) {
+                      operations.navigateToSubFolder(file.name);
+                    } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name)) {
+                      operations.openMediaViewer(file);
+                    }
+                  }}
+                  onDownload={operations.handleDownload}
+                  onContextMenu={operations.handleContextMenu}
+                  formatFileSize={operations.formatFileSize}
+                />
+              )}
+            </Suspense>
+          )}
         </div>
 
         {/* Media Viewer Modal */}
