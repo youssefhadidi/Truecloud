@@ -356,13 +356,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
 
       case 'image':
-        return (
-          <TransformWrapper minScale={1} maxScale={4} centerOnInit>
-            <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
-              <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />
-            </TransformComponent>
-          </TransformWrapper>
-        );
+          return (
+            <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false}>
+              <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
+                <ImageWithThumbnail file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />
+              </TransformComponent>
+            </TransformWrapper>
+          );
 
       case 'video':
         return (
