@@ -3,8 +3,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Plyr } from 'plyr-react';
-import 'plyr-react/plyr.css';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { FiArrowLeft, FiChevronRight, FiVideo, FiFileText, FiMaximize2, FiMinimize2, FiImage, FiMusic, FiBox, FiFile } from 'react-icons/fi';
 import Viewer3D, { is3dFile } from './Viewer3D';
@@ -384,41 +382,23 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'video':
         return (
-          <Plyr
-            source={{
-              type: 'video',
-              sources: [
-                {
-                  src: getFileUrl(viewerFile, 'video'),
-                  type: 'video/mp4',
-                },
-              ],
-            }}
-            options={{
-              controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
-              autoplay: true,
-            }}
+          <video
+            src={getFileUrl(viewerFile, 'video')}
+            controls
+            autoPlay
             className="w-full h-full"
+            onClick={stopProp}
           />
         );
 
       case 'audio':
         return (
-          <Plyr
-            source={{
-              type: 'audio',
-              sources: [
-                {
-                  src: getFileUrl(viewerFile, 'audio'),
-                  type: 'audio/mp3',
-                },
-              ],
-            }}
-            options={{
-              controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings'],
-              autoplay: true,
-            }}
+          <audio
+            src={getFileUrl(viewerFile, 'audio')}
+            controls
+            autoPlay
             className="w-full"
+            onClick={stopProp}
           />
         );
 
