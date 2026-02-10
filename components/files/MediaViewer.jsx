@@ -162,16 +162,17 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     if (isShareMode) {
       const params = new URLSearchParams();
       const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
-      params.append('path', filePath);
       if (sharePassword) {
         params.append('pwd', sharePassword);
       }
       if (type === 'image') {
+        params.append('file', filePath);
         params.append('quality', '85');
         params.append('w', '2000');
         params.append('h', '2000');
         return `/api/public/${shareToken}/optimize-image?${params.toString()}`;
       }
+      params.append('path', filePath);
       // For share mode, use public API endpoints
       return `/api/public/${shareToken}/download?${params.toString()}`;
     }
