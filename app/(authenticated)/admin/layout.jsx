@@ -5,7 +5,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage } from 'react-icons/fi';
 import Link from 'next/link';
 
 export default function AdminLayout({ children }) {
@@ -35,6 +35,7 @@ export default function AdminLayout({ children }) {
 
   const navItems = [
     { href: '/admin/accounts', icon: FiUsers, label: 'Accounts' },
+    { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
     { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
     { href: '/admin/requirements', icon: FiCheckSquare, label: 'System Requirements' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },
