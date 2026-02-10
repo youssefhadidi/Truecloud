@@ -38,8 +38,6 @@ const ListView = ({
   initiateShare,
   sharedPaths,
   currentPath,
-  isShareMode = false,
-  allowUploads = false,
 }) => {
   const parentRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -266,7 +264,7 @@ const ListView = ({
                 ) : (
                   <div className="flex-shrink-0 relative">
                     {getFileIcon(file)}
-                    {!isShareMode && sharedPaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
+                    {sharedPaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
                       <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5" title="Shared">
                         <FiShare2 size={8} className="text-white" />
                       </div>
@@ -311,20 +309,18 @@ const ListView = ({
                       ) : null}
                     </button>
                   )}
-                  {(!isShareMode || allowUploads) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowingActionsFor(null);
-                        initiateRename(file);
-                      }}
-                      className="text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-blue-900/20 rounded"
-                      title="Rename"
-                      disabled={processingFile === file.id}
-                    >
-                      <FiEdit size={18} />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowingActionsFor(null);
+                      initiateRename(file);
+                    }}
+                    className="text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-blue-900/20 rounded"
+                    title="Rename"
+                    disabled={processingFile === file.id}
+                  >
+                    <FiEdit size={18} />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -337,21 +333,19 @@ const ListView = ({
                   >
                     <FiDownload size={18} />
                   </button>
-                  {(!isShareMode || allowUploads) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowingActionsFor(null);
-                        initiateDelete(file);
-                      }}
-                      className="text-red-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-red-900/20 rounded"
-                      title="Delete"
-                      disabled={processingFile === file.id}
-                    >
-                      <FiTrash2 size={18} />
-                    </button>
-                  )}
-                  {!isShareMode && initiateShare && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowingActionsFor(null);
+                      initiateDelete(file);
+                    }}
+                    className="text-red-400 disabled:opacity-50 disabled:cursor-not-allowed p-2 hover:bg-red-900/20 rounded"
+                    title="Delete"
+                    disabled={processingFile === file.id}
+                  >
+                    <FiTrash2 size={18} />
+                  </button>
+                  {initiateShare && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

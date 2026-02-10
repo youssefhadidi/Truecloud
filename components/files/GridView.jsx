@@ -53,8 +53,6 @@ const GridView = ({
   onInitiateShare,
   sharedPaths,
   onContextMenu,
-  isShareMode = false,
-  allowUploads = false,
 }) => {
   const gridRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -310,8 +308,8 @@ const GridView = ({
                   <FiFile className="text-gray-500" size={cellWidth > 100 ? 48 : 32} />
                 )}
 
-                {/* Share indicator badge - only show in authenticated mode */}
-                {!isShareMode && sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
+                {/* Share indicator badge */}
+                {sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, '')) && (
                   <div className="absolute top-1 left-1 bg-green-500 rounded-full p-1 shadow-sm" title="Shared">
                     <FiShare2 size={10} className="text-white" />
                   </div>
@@ -358,20 +356,18 @@ const GridView = ({
                       ) : null}
                     </button>
                   )}
-                  {(!isShareMode || allowUploads) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowingActionsFor(null);
-                        onInitiateRename(item);
-                      }}
-                      className="p-1.5 text-blue-400 hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Rename"
-                      disabled={processingFile === item.id}
-                    >
-                      <FiEdit size={16} />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowingActionsFor(null);
+                      onInitiateRename(item);
+                    }}
+                    className="p-1.5 text-blue-400 hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Rename"
+                    disabled={processingFile === item.id}
+                  >
+                    <FiEdit size={16} />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -384,21 +380,19 @@ const GridView = ({
                   >
                     <FiDownload size={16} />
                   </button>
-                  {(!isShareMode || allowUploads) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowingActionsFor(null);
-                        onInitiateDelete(item);
-                      }}
-                      className="p-1.5 text-red-400 hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Delete"
-                      disabled={processingFile === item.id}
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
-                  )}
-                  {!isShareMode && onInitiateShare && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowingActionsFor(null);
+                      onInitiateDelete(item);
+                    }}
+                    className="p-1.5 text-red-400 hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete"
+                    disabled={processingFile === item.id}
+                  >
+                    <FiTrash2 size={16} />
+                  </button>
+                  {onInitiateShare && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
