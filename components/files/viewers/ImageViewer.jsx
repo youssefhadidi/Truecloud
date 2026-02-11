@@ -1,17 +1,25 @@
 /** @format */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
 export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
   const [fullLoaded, setFullLoaded] = useState(false);
+  const imgRef = useRef(null);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
   // Reset when file changes
   useEffect(() => {
     setFullLoaded(false);
   }, [file.id]);
+
+  // Set src after img is mounted to ensure onLoad fires
+  useEffect(() => {
+    if (imgRef.current) {
+      imgRef.current.src = getFileUrl(file, 'image');
+    }
+  }, [file, currentPath, shareToken, sharePassword]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
@@ -28,7 +36,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       )}
 
       {/* Full-res image wrapped in transform */}
-      <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerContent={true} limitToWrapper={true} style={{ width: '100%', height: '100%' }}>
+      <TransformWrapper minScale={0.95} maxScale={4} initialScale={1} centerContent={true} limitToWrapper={true} style={{ width: '100%', height: '100%' }}>
         <TransformComponent
           wrapperStyle={{
             width: '100%',
@@ -38,9 +46,8 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
         >
           <div className="w-full h-full">
             <img
-              src={getFileUrl(file, 'image')}
+              ref={imgRef}
               alt={file.name}
-              key={file.id}
               className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
               onLoad={() => setFullLoaded(true)}
               onClick={(e) => e.stopPropagation()}
