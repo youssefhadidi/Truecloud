@@ -1,6 +1,6 @@
 /** @format */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { isImage, isVideo, isPdf } from '@/lib/clientFileUtils';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
@@ -28,12 +28,22 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
 
   const currentVersion = loadVersionRef.current;
 
-  // Monitor image load state and handle cached/synchronous loads
+  // Synchronously check if cached image is already loaded
+  useLayoutEffect(() => {
+    const img = imgRef.current;
+    if (!img || loadVersionRef.current !== currentVersion) return;
+
+    if (img.complete && img.naturalWidth > 0) {
+      setFullLoaded(true);
+      if (onImageLoadRef.current) onImageLoadRef.current({ target: img });
+    }
+  }, [file.id, currentVersion]);
+
+  // Monitor image load state for non-cached images
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
 
-    let animationFrameId;
     let timeoutId;
 
     const handleLoad = () => {
@@ -50,33 +60,28 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
     };
 
     const checkIfLoaded = () => {
-      // Check if image completed loading (handles cached images)
-      if (img.complete && img.naturalWidth > 0) {
-        handleLoad();
-        return;
-      }
-
-      // Fallback: check again after a short delay if still loading
-      if (loadVersionRef.current === currentVersion && !img.complete) {
-        timeoutId = setTimeout(checkIfLoaded, 100);
+      if (loadVersionRef.current === currentVersion) {
+        if (img.complete && img.naturalWidth > 0) {
+          handleLoad();
+        } else if (!img.complete) {
+          // Continue polling until image loads
+          timeoutId = setTimeout(checkIfLoaded, 100);
+        }
       }
     };
 
     img.addEventListener('load', handleLoad);
     img.addEventListener('error', handleError);
 
-    // Defer the check to allow browser to process image loading
-    animationFrameId = requestAnimationFrame(() => {
-      requestAnimationFrame(checkIfLoaded);
-    });
+    // Start polling as fallback
+    timeoutId = setTimeout(checkIfLoaded, 50);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
       clearTimeout(timeoutId);
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };
-  }, [file.id]);
+  }, [file.id, currentVersion]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
