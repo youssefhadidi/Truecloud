@@ -52,7 +52,20 @@ export const ImageViewer = forwardRef(function ImageViewer(
               if (container && transformRef && img.naturalWidth && img.naturalHeight) {
                 const containerWidth = container.offsetWidth;
                 const containerHeight = container.offsetHeight;
-                const scale = Math.min(containerWidth / img.naturalWidth, containerHeight / img.naturalHeight) * 0.95;
+                const scaleWidth = containerWidth / img.naturalWidth;
+                const scaleHeight = containerHeight / img.naturalHeight;
+                const scale = Math.min(scaleWidth, scaleHeight) * 0.95;
+
+                console.log('Image load debug:', {
+                  containerWidth,
+                  containerHeight,
+                  naturalWidth: img.naturalWidth,
+                  naturalHeight: img.naturalHeight,
+                  scaleWidth,
+                  scaleHeight,
+                  finalScale: scale,
+                });
+
                 transformRef.current?.setInstance?.({ scale });
               }
             }}
