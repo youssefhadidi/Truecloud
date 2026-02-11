@@ -66,15 +66,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       )}
 
       {/* Full-res image wrapped in transform */}
-      <TransformWrapper
-        minScale={0.5}
-        maxScale={4}
-        initialScale={calculatedScale}
-        centerOnInit={true}
-        limitToWrapper={true}
-        ref={transformRef}
-        style={{ width: '100%', height: '100%' }}
-      >
+      <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={true} limitToWrapper={true} ref={transformRef} style={{ width: '100%', height: '100%' }}>
         <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
           <img
             ref={imgRef}
