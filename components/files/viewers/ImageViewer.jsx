@@ -1,6 +1,6 @@
 /** @format */
 
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { isImage, isVideo, isPdf } from '@/lib/clientFileUtils';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
@@ -28,23 +28,10 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
 
   const currentVersion = loadVersionRef.current;
 
-  // Synchronously check if cached image is already loaded
-  useLayoutEffect(() => {
-    const img = imgRef.current;
-    if (!img || loadVersionRef.current !== currentVersion) return;
-
-    if (img.complete && img.naturalWidth > 0) {
-      setFullLoaded(true);
-      if (onImageLoadRef.current) onImageLoadRef.current({ target: img });
-    }
-  }, [file.id, currentVersion]);
-
-  // Monitor image load state for non-cached images
+  // Monitor image load state (following MDN pattern)
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
-
-    let timeoutId;
 
     const handleLoad = () => {
       if (loadVersionRef.current === currentVersion) {
@@ -59,25 +46,23 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       }
     };
 
-    const checkIfLoaded = () => {
-      if (loadVersionRef.current === currentVersion) {
-        if (img.complete && img.naturalWidth > 0) {
-          handleLoad();
-        } else if (!img.complete) {
-          // Continue polling until image loads
-          timeoutId = setTimeout(checkIfLoaded, 100);
-        }
-      }
-    };
-
+    // Attach listeners first (must be before checking complete)
     img.addEventListener('load', handleLoad);
     img.addEventListener('error', handleError);
 
-    // Start polling as fallback
-    timeoutId = setTimeout(checkIfLoaded, 50);
+    // Check if image is already complete (cached or synchronously loaded)
+    if (img.complete) {
+      // Image has already finished loading (successfully or with error)
+      if (img.naturalWidth > 0) {
+        // Image loaded successfully
+        handleLoad();
+      } else {
+        // Image failed to load
+        handleError();
+      }
+    }
 
     return () => {
-      clearTimeout(timeoutId);
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };
