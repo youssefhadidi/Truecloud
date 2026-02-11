@@ -3,7 +3,6 @@
 'use client';
 
 import { lazy, Suspense, useCallback, useEffect } from 'react';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { VideoPlayer } from './viewers/VideoPlayer';
@@ -98,27 +97,14 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'image':
         return (
-          <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false} ref={transformRef}>
-            <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
-              <ImageViewer
-                file={viewerFile}
-                currentPath={currentPath}
-                getFileUrl={getFileUrl}
-                shareToken={shareToken}
-                sharePassword={sharePassword}
-                onImageLoad={(e) => {
-                  const img = e.target;
-                  const container = img.closest('.w-full.h-full');
-                  if (container && transformRef.current && img.naturalWidth && img.naturalHeight) {
-                    const containerWidth = container.offsetWidth;
-                    const containerHeight = container.offsetHeight;
-                    const scale = Math.min(containerWidth / img.naturalWidth, containerHeight / img.naturalHeight) * 0.95;
-                    transformRef.current.setInstance?.({ scale });
-                  }
-                }}
-              />
-            </TransformComponent>
-          </TransformWrapper>
+          <ImageViewer
+            file={viewerFile}
+            currentPath={currentPath}
+            getFileUrl={getFileUrl}
+            shareToken={shareToken}
+            sharePassword={sharePassword}
+            transformRef={transformRef}
+          />
         );
 
       case 'video':

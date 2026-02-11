@@ -1,9 +1,13 @@
 /** @format */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
-export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, onImageLoad }) {
+export const ImageViewer = forwardRef(function ImageViewer(
+  { file, currentPath, getFileUrl, shareToken, sharePassword, transformRef },
+  ref
+) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
@@ -31,18 +35,31 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
         </div>
       )}
 
-      {/* Full-res image on top */}
-      <img
-        src={getFileUrl(file, 'image')}
-        alt={file.name}
-        key={file.id}
-        className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={(e) => {
-          setFullLoaded(true);
-          if (onImageLoad) onImageLoad(e);
-        }}
-        onClick={(e) => e.stopPropagation()}
-      />
+      {/* Full-res image wrapped in transform */}
+      <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false} ref={transformRef}>
+        <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
+          <img
+            src={getFileUrl(file, 'image')}
+            alt={file.name}
+            key={file.id}
+            className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
+            onLoad={(e) => {
+              setFullLoaded(true);
+
+              // Calculate and apply zoom to fit image
+              const img = e.target;
+              const container = img.closest('.w-full.h-full');
+              if (container && transformRef && img.naturalWidth && img.naturalHeight) {
+                const containerWidth = container.offsetWidth;
+                const containerHeight = container.offsetHeight;
+                const scale = Math.min(containerWidth / img.naturalWidth, containerHeight / img.naturalHeight) * 0.95;
+                transformRef.current?.setInstance?.({ scale });
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </TransformComponent>
+      </TransformWrapper>
     </div>
   );
-}
+});
