@@ -7,6 +7,21 @@ import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { execSync } from 'child_process';
 
+// Compare semantic versions properly
+function compareVersions(v1, v2) {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  const maxLength = Math.max(parts1.length, parts2.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    const a = parts1[i] || 0;
+    const b = parts2[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+  return 0;
+}
+
 export async function GET(req) {
   try {
     const session = await auth();
@@ -75,8 +90,8 @@ export async function GET(req) {
         currentVersion,
       });
 
-      // Simple version comparison
-      const hasUpdate = latestVersion !== currentVersion && latestVersion > currentVersion;
+      // Compare versions semantically
+      const hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
 
       logger.info('Update check complete', { 
         currentVersion, 
