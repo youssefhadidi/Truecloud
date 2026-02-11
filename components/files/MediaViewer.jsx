@@ -98,7 +98,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'image':
         return (
-          <TransformWrapper minScale={0.5} maxScale={4} initialScale={0.8} centerOnInit={false} ref={transformRef}>
+          <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false} ref={transformRef}>
             <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
               <ImageViewer
                 file={viewerFile}
