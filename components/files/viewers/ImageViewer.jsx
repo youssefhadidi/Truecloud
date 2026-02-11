@@ -4,10 +4,7 @@ import { useState, useEffect, forwardRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
-export const ImageViewer = forwardRef(function ImageViewer(
-  { file, currentPath, getFileUrl, shareToken, sharePassword, transformRef },
-  ref
-) {
+export const ImageViewer = forwardRef(function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, transformRef }, ref) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
@@ -20,12 +17,7 @@ export const ImageViewer = forwardRef(function ImageViewer(
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
       {/* Thumbnail as placeholder */}
       {thumbnailData?.data && !fullLoaded && (
-        <img
-          src={thumbnailData.data}
-          alt=""
-          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-          draggable={false}
-        />
+        <img src={thumbnailData.data} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />
       )}
 
       {/* Loading spinner - visible while full image is loading */}
@@ -43,30 +35,12 @@ export const ImageViewer = forwardRef(function ImageViewer(
             alt={file.name}
             key={file.id}
             className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
-            onLoad={(e) => {
+            onLoad={() => {
               setFullLoaded(true);
-
-              // Calculate and apply zoom to fit image
-              const img = e.target;
-              const container = img.closest('.w-full.h-full');
-              if (container && transformRef && img.naturalWidth && img.naturalHeight) {
-                const containerWidth = container.offsetWidth;
-                const containerHeight = container.offsetHeight;
-                const scaleWidth = containerWidth / img.naturalWidth;
-                const scaleHeight = containerHeight / img.naturalHeight;
-                const scale = Math.min(scaleWidth, scaleHeight) * 0.95;
-
-                console.log('Image load debug:', {
-                  containerWidth,
-                  containerHeight,
-                  naturalWidth: img.naturalWidth,
-                  naturalHeight: img.naturalHeight,
-                  scaleWidth,
-                  scaleHeight,
-                  finalScale: scale,
-                });
-
-                transformRef.current?.setInstance?.({ scale });
+              // object-contain CSS already constrains image to fit perfectly
+              // No need to apply additional scale - let user zoom with mouse wheel/pinch
+              if (transformRef) {
+                transformRef.current?.resetTransform?.();
               }
             }}
             onClick={(e) => e.stopPropagation()}
