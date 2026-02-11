@@ -78,9 +78,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         );
 
       case 'image':
-        return (
-          <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} transformRef={transformRef} />
-        );
+        return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
 
       case 'video':
         return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} />;
