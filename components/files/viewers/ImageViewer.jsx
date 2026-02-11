@@ -8,9 +8,16 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
   const [fullLoaded, setFullLoaded] = useState(false);
   const loadVersionRef = useRef(0);
   const imgRef = useRef(null);
+  const onImageLoadRef = useRef(onImageLoad);
+
   const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
   const hasThumbnail = canThumbnail && thumbnailData?.data;
+
+  // Keep ref in sync with latest callback
+  useEffect(() => {
+    onImageLoadRef.current = onImageLoad;
+  }, [onImageLoad]);
 
   // Reset when file changes
   useEffect(() => {
@@ -29,7 +36,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
     const handleLoad = () => {
       if (loadVersionRef.current === currentVersion) {
         setFullLoaded(true);
-        if (onImageLoad) onImageLoad({ target: img });
+        if (onImageLoadRef.current) onImageLoadRef.current({ target: img });
       }
     };
 
@@ -51,7 +58,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };
-  }, [file.id, currentVersion, onImageLoad]);
+  }, [file.id]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
