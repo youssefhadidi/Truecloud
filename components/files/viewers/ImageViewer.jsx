@@ -7,6 +7,7 @@ import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const imgRef = useRef(null);
+  const transformRef = useRef(null);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
   // Reset when file changes
@@ -36,7 +37,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       )}
 
       {/* Full-res image wrapped in transform */}
-      <TransformWrapper minScale={0.95} maxScale={4} initialScale={1} centerContent={true} limitToWrapper={true} style={{ width: '100%', height: '100%' }}>
+      <TransformWrapper ref={transformRef} minScale={0.95} maxScale={4} initialScale={1} centerContent={true} limitToWrapper={true} style={{ width: '100%', height: '100%' }}>
         <TransformComponent
           wrapperStyle={{
             width: '100%',
@@ -49,7 +50,10 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
               ref={imgRef}
               alt={file.name}
               className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
-              onLoad={() => setFullLoaded(true)}
+              onLoad={() => {
+                setFullLoaded(true);
+                transformRef.current?.resetTransform();
+              }}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
