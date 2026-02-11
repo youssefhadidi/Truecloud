@@ -35,8 +35,9 @@ export const ImageViewer = forwardRef(function ImageViewer({ file, currentPath, 
         centerOnInit={true}
         limitToWrapper={true}
         ref={transformRef}
+        style={{ width: '100%', height: '100%' }}
       >
-        <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
+        <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
           <img
             src={getFileUrl(file, 'image')}
             alt={file.name}
