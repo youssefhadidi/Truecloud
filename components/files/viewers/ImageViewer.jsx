@@ -1,77 +1,28 @@
 /** @format */
 
-import { useState, useEffect, useRef } from 'react';
-import { isImage, isVideo, isPdf } from '@/lib/clientFileUtils';
+import { useState, useEffect } from 'react';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
 export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, onImageLoad }) {
   const [fullLoaded, setFullLoaded] = useState(false);
-  const loadVersionRef = useRef(0);
-  const imgRef = useRef(null);
-  const onImageLoadRef = useRef(onImageLoad);
-
-  const canThumbnail = isImage(file.name) || isVideo(file.name) || isPdf(file.name);
-  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail, shareToken, sharePassword);
-  const hasThumbnail = canThumbnail && thumbnailData?.data;
-
-  // Keep ref in sync with latest callback
-  useEffect(() => {
-    onImageLoadRef.current = onImageLoad;
-  }, [onImageLoad]);
+  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
   // Reset when file changes
   useEffect(() => {
-    // Increment version to ignore callbacks from previous image
-    loadVersionRef.current += 1;
     setFullLoaded(false);
   }, [file.id]);
-
-  const currentVersion = loadVersionRef.current;
-
-  // Monitor image load state (following MDN pattern)
-  useEffect(() => {
-    const img = imgRef.current;
-    if (!img) return;
-
-    const handleLoad = () => {
-      if (loadVersionRef.current === currentVersion) {
-        setFullLoaded(true);
-        if (onImageLoadRef.current) onImageLoadRef.current({ target: img });
-      }
-    };
-
-    const handleError = () => {
-      if (loadVersionRef.current === currentVersion) {
-        setFullLoaded(true);
-      }
-    };
-
-    // Attach listeners first (must be before checking complete)
-    img.addEventListener('load', handleLoad);
-    img.addEventListener('error', handleError);
-
-    // Check if image is already complete (cached or synchronously loaded)
-    if (img.complete) {
-      // Image has already finished loading (successfully or with error)
-      if (img.naturalWidth > 0) {
-        // Image loaded successfully
-        handleLoad();
-      } else {
-        // Image failed to load
-        handleError();
-      }
-    }
-
-    return () => {
-      img.removeEventListener('load', handleLoad);
-      img.removeEventListener('error', handleError);
-    };
-  }, [file.id, currentVersion]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
       {/* Thumbnail as placeholder */}
-      {hasThumbnail && !fullLoaded && <img src={thumbnailData.data} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />}
+      {thumbnailData?.data && !fullLoaded && (
+        <img
+          src={thumbnailData.data}
+          alt=""
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          draggable={false}
+        />
+      )}
 
       {/* Loading spinner - visible while full image is loading */}
       {!fullLoaded && (
@@ -82,11 +33,14 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
 
       {/* Full-res image on top */}
       <img
-        ref={imgRef}
         src={getFileUrl(file, 'image')}
         alt={file.name}
         key={file.id}
         className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={(e) => {
+          setFullLoaded(true);
+          if (onImageLoad) onImageLoad(e);
+        }}
         onClick={(e) => e.stopPropagation()}
       />
     </div>
