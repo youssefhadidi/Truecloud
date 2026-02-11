@@ -7,6 +7,7 @@ import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
+import { Semaphore } from '@/lib/semaphore';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -16,31 +17,6 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 export const maxDuration = 60;
 
 // Semaphore for limiting concurrent generation
-class Semaphore {
-  constructor(max) {
-    this.max = max;
-    this.count = 0;
-    this.queue = [];
-  }
-
-  async acquire() {
-    if (this.count < this.max) {
-      this.count++;
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => this.queue.push(resolve));
-  }
-
-  release() {
-    this.count--;
-    if (this.queue.length > 0) {
-      this.count++;
-      const resolve = this.queue.shift();
-      resolve();
-    }
-  }
-}
-
 const thumbnailSemaphore = new Semaphore(15);
 
 export async function GET(req, { params }) {

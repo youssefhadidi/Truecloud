@@ -10,14 +10,21 @@ import sharp from 'sharp';
 import { createHash } from 'crypto';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { Semaphore } from '@/lib/semaphore';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
+
+// Semaphore to limit concurrent image optimizations to 3
+const optimizationSemaphore = new Semaphore(3);
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
 
 export async function GET(req, { params }) {
+  // Acquire semaphore permit before processing
+  await optimizationSemaphore.acquire();
+
   try {
     const session = await auth();
     if (!session) {
@@ -154,5 +161,8 @@ export async function GET(req, { params }) {
   } catch (error) {
     console.error('Optimize image error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
+  } finally {
+    // Always release semaphore permit
+    optimizationSemaphore.release();
   }
 }

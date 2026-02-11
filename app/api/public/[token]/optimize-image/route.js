@@ -9,14 +9,21 @@ import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { createHash } from 'crypto';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
+import { Semaphore } from '@/lib/semaphore';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
+// Semaphore to limit concurrent image optimizations to 3
+const optimizationSemaphore = new Semaphore(3);
+
 export const maxDuration = 30;
 
 export async function GET(req, { params }) {
+  // Acquire semaphore permit before processing
+  await optimizationSemaphore.acquire();
+
   try {
     const { token } = await params;
     const url = new URL(req.url);
@@ -162,5 +169,8 @@ export async function GET(req, { params }) {
   } catch (error) {
     console.error('GET /api/public/[token]/optimize-image - Error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
+  } finally {
+    // Always release semaphore permit
+    optimizationSemaphore.release();
   }
 }

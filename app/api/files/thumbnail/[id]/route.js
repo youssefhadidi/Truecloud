@@ -10,6 +10,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
+import { Semaphore } from '@/lib/semaphore';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -19,37 +20,6 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 export const maxDuration = 60;
 
 // Semaphore to limit concurrent thumbnail generation
-class Semaphore {
-  constructor(max) {
-    this.max = max;
-    this.count = 0;
-    this.queue = [];
-  }
-
-  async acquire() {
-    if (this.count < this.max) {
-      this.count++;
-      logger.debug('Semaphore acquired', { active: this.count, max: this.max, queued: this.queue.length });
-      return Promise.resolve();
-    }
-
-    logger.debug('Semaphore waiting', { active: this.count, max: this.max, queued: this.queue.length });
-    return new Promise((resolve) => {
-      this.queue.push(resolve);
-    });
-  }
-
-  release() {
-    this.count--;
-    logger.debug('Semaphore released', { active: this.count, max: this.max, queued: this.queue.length });
-    if (this.queue.length > 0) {
-      this.count++;
-      const resolve = this.queue.shift();
-      resolve();
-    }
-  }
-}
-
 const thumbnailSemaphore = new Semaphore(15); // Limited parallelization to prevent resource exhaustion
 
 export async function GET(req, { params }) {

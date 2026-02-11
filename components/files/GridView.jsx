@@ -7,7 +7,7 @@ import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
-import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
+import { isViewableFile, getFileType } from '@/lib/getFileType';
 
 // Breakpoints
 const BREAKPOINT = {
@@ -250,12 +250,12 @@ const GridView = ({
 
               <div
                 className={`w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 rounded-lg relative overflow-hidden ${
-                  isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)
+                  isViewableFile(item)
                     ? 'cursor-pointer hover:opacity-90 transition-opacity'
                     : ''
                 }`}
                 onClick={(e) => {
-                  if (isImage(item.name) || isVideo(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)) {
+                  if (isViewableFile(item)) {
                     e.stopPropagation();
                     onOpenMediaViewer(item);
                   }
@@ -350,7 +350,7 @@ const GridView = ({
                   }`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {(isVideo(item.name) || isImage(item.name) || isAudio(item.name) || is3dFile(item.name) || isPdf(item.name) || isXlsx(item.name)) && (
+                  {isViewableFile(item) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

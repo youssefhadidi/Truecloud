@@ -6,7 +6,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
-import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
+import { isViewableFile, getFileType } from '@/lib/getFileType';
 
 // Breakpoint for mobile detection
 const MOBILE_BREAKPOINT = 768;
@@ -256,7 +256,7 @@ const ListView = ({
 
                 if (file.isDirectory) {
                   navigateToFolder(file.name);
-                } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) {
+                } else if (isViewableFile(file)) {
                   openMediaViewer(file);
                 }
               }}
@@ -301,7 +301,7 @@ const ListView = ({
               {/* Action buttons - always show on desktop, show on long press for mobile */}
               {(!isMobile || shouldShowActions(file.id)) && (
                 <div className="flex justify-end gap-2 relative">
-                  {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
+                  {isViewableFile(file) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
