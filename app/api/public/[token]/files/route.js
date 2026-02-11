@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { lookup } from 'mime-types';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -68,7 +67,6 @@ export async function GET(req, { params }) {
           id: name,
           name: name,
           size: stats.size,
-          mimeType: lookup(name) || 'application/octet-stream',
           isDirectory: stats.isDirectory(),
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
@@ -76,12 +74,8 @@ export async function GET(req, { params }) {
       })
     );
 
-    // Sort: directories first, then by name
-    files.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Note: Sorting is handled on the frontend (useSharePage.js) based on user preference
+    // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
 
     return NextResponse.json({
       files,
