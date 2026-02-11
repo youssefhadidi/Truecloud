@@ -33,6 +33,9 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
     const img = imgRef.current;
     if (!img) return;
 
+    let animationFrameId;
+    let timeoutId;
+
     const handleLoad = () => {
       if (loadVersionRef.current === currentVersion) {
         setFullLoaded(true);
@@ -46,15 +49,30 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       }
     };
 
+    const checkIfLoaded = () => {
+      // Check if image completed loading (handles cached images)
+      if (img.complete && img.naturalWidth > 0) {
+        handleLoad();
+        return;
+      }
+
+      // Fallback: check again after a short delay if still loading
+      if (loadVersionRef.current === currentVersion && !img.complete) {
+        timeoutId = setTimeout(checkIfLoaded, 100);
+      }
+    };
+
     img.addEventListener('load', handleLoad);
     img.addEventListener('error', handleError);
 
-    // If image is already loaded (cached), trigger load handler
-    if (img.complete && img.naturalWidth > 0) {
-      handleLoad();
-    }
+    // Defer the check to allow browser to process image loading
+    animationFrameId = requestAnimationFrame(() => {
+      requestAnimationFrame(checkIfLoaded);
+    });
 
     return () => {
+      cancelAnimationFrame(animationFrameId);
+      clearTimeout(timeoutId);
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };
@@ -78,7 +96,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
         src={getFileUrl(file, 'image')}
         alt={file.name}
         key={file.id}
-        className={`w-full h-full object-contain transition-opacity duration-300 ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
       />
     </div>
