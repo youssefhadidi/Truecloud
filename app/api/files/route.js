@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { lookup } from 'mime-types';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
@@ -106,26 +105,41 @@ export async function GET(req) {
     // Read files from filesystem
     const fileNames = await readdir(targetDir);
 
+    // Collect user IDs that need lookup (only at root level)
+    const userIdsToLookup = !relativePath
+      ? fileNames
+          .filter((name) => name.startsWith('user_'))
+          .map((name) => name.replace('user_', ''))
+      : [];
+
+    // Batch query: fetch all users at once instead of N individual queries
+    let userMap = {};
+    if (userIdsToLookup.length > 0) {
+      try {
+        const users = await prisma.user.findMany({
+          where: { id: { in: userIdsToLookup } },
+          select: { id: true, username: true },
+        });
+        userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
+      } catch (e) {
+        logger.warn('GET /api/files - Failed to batch fetch users', { error: e.message });
+        // Continue without user names
+      }
+    }
+
     // Get file stats for each file
     let files = await Promise.all(
       fileNames.map(async (name) => {
         const filePath = join(targetDir, name);
         const stats = await stat(filePath);
 
-        // Get user info for user folders to display username
+        // Get user info for user folders to display username (from pre-fetched map)
         let displayName = name;
         if (!relativePath && name.startsWith('user_')) {
           const userId = name.replace('user_', '');
-          try {
-            const user = await prisma.user.findUnique({
-              where: { id: userId },
-              select: { username: true },
-            });
-            if (user) {
-              displayName = `📁 ${user.username} (Private)`;
-            }
-          } catch (e) {
-            // If user not found, keep original name
+          const username = userMap[userId];
+          if (username) {
+            displayName = `📁 ${username} (Private)`;
           }
         }
 
@@ -135,7 +149,6 @@ export async function GET(req) {
           displayName: displayName,
           path: filePath.replace(/\\/g, '/'),
           size: stats.size,
-          mimeType: lookup(name) || 'application/octet-stream',
           isDirectory: stats.isDirectory(),
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
@@ -163,12 +176,8 @@ export async function GET(req) {
       };
     });
 
-    // Sort: directories first, then by name
-    files.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
+    // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
 
     const duration = Date.now() - startTime;
     logger.info('GET /api/files - Success', {
