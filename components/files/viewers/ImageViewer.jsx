@@ -28,8 +28,15 @@ export const ImageViewer = forwardRef(function ImageViewer({ file, currentPath, 
       )}
 
       {/* Full-res image wrapped in transform */}
-      <TransformWrapper minScale={0.5} maxScale={4} initialScale={1} centerOnInit={false} ref={transformRef}>
-        <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
+      <TransformWrapper
+        minScale={0.5}
+        maxScale={4}
+        initialScale={1}
+        centerOnInit={true}
+        limitToWrapper={true}
+        ref={transformRef}
+      >
+        <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
           <img
             src={getFileUrl(file, 'image')}
             alt={file.name}
