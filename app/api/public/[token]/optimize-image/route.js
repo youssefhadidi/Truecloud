@@ -15,8 +15,8 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
-// Semaphore to limit concurrent image optimizations to 3
-const optimizationSemaphore = new Semaphore(3);
+// Semaphore to limit concurrent image optimizations to 10
+const optimizationSemaphore = new Semaphore(10);
 
 export const maxDuration = 30;
 

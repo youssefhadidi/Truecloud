@@ -15,8 +15,8 @@ import { Semaphore } from '@/lib/semaphore';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 
-// Semaphore to limit concurrent image optimizations to 3
-const optimizationSemaphore = new Semaphore(3);
+// Semaphore to limit concurrent image optimizations to 10
+const optimizationSemaphore = new Semaphore(10);
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;

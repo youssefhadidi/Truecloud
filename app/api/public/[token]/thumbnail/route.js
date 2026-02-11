@@ -17,7 +17,7 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 export const maxDuration = 60;
 
 // Semaphore for limiting concurrent generation
-const thumbnailSemaphore = new Semaphore(15);
+const thumbnailSemaphore = new Semaphore(10);
 
 export async function GET(req, { params }) {
   try {
