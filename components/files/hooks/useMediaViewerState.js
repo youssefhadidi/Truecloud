@@ -110,39 +110,3 @@ export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile
 
   return { handleStripScroll, getCenteredFile };
 }
-
-export function useMediaViewerPreload(viewerFile, viewableFiles, getFileUrl) {
-  // Preload adjacent full-res images for faster navigation
-  useEffect(() => {
-    if (!viewerFile || viewableFiles.length <= 1) return;
-
-    const idx = viewableFiles.findIndex((f) => f.id === viewerFile.id);
-    const prev = idx > 0 ? viewableFiles[idx - 1] : null;
-    const next = idx < viewableFiles.length - 1 ? viewableFiles[idx + 1] : null;
-
-    const preloadImage = (file) => {
-      if (!file || !isImage(file.name)) return;
-
-      const url = getFileUrl(file, 'image');
-      const link = document.createElement('link');
-      link.rel = 'prefetch';
-      link.as = 'image';
-      link.href = url;
-      document.head.appendChild(link);
-
-      return () => {
-        if (document.head.contains(link)) {
-          document.head.removeChild(link);
-        }
-      };
-    };
-
-    const cleanupPrev = preloadImage(prev);
-    const cleanupNext = preloadImage(next);
-
-    return () => {
-      if (cleanupPrev) cleanupPrev();
-      if (cleanupNext) cleanupNext();
-    };
-  }, [viewerFile, viewableFiles, getFileUrl]);
-}

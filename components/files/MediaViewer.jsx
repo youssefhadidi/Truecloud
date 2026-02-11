@@ -10,7 +10,7 @@ import { VideoPlayer } from './viewers/VideoPlayer';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { ImageViewer } from './viewers/ImageViewer';
 import { ThumbnailItem } from './ThumbnailItem';
-import { useMediaViewerState, useMediaViewerScroll, useMediaViewerPreload } from './hooks/useMediaViewerState';
+import { useMediaViewerState, useMediaViewerScroll } from './hooks/useMediaViewerState';
 
 // Lazy load heavy viewers
 const Viewer3D = lazy(() => import('./Viewer3D').then((m) => ({ default: m.default })));
@@ -65,9 +65,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     },
     [shareToken, sharePassword, currentPath],
   );
-
-  // Preload adjacent images
-  useMediaViewerPreload(viewerFile, viewableFiles, getFileUrl);
 
   // Reset zoom when image changes
   useEffect(() => {
