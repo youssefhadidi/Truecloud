@@ -9,7 +9,6 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
   const stripRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
-  const transformRef = useRef();
 
   // Initialize fullscreen state from localStorage
   useEffect(() => {
@@ -53,7 +52,6 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
     stripRef,
     scrollTimeoutRef,
     programmaticScrollRef,
-    transformRef,
     currentIndex,
     canGoPrev,
     canGoNext,

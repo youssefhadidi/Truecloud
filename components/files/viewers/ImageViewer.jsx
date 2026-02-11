@@ -4,11 +4,12 @@ import { useState, useEffect, useRef, forwardRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
-export const ImageViewer = forwardRef(function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, transformRef }, ref) {
+export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const [calculatedScale, setCalculatedScale] = useState(1);
   const wrapperRef = useRef(null);
   const imgRef = useRef(null);
+  const transformRef = useRef(null);
   const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
   // Reset when file changes
@@ -94,4 +95,4 @@ export const ImageViewer = forwardRef(function ImageViewer({ file, currentPath, 
       </TransformWrapper>
     </div>
   );
-});
+}

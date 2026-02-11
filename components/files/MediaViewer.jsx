@@ -20,19 +20,8 @@ function PDFViewer({ file, getFileUrl, onClick }) {
 }
 
 export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
-  const {
-    isFullscreen,
-    isMobile,
-    effectiveFullscreen,
-    toggleFullscreen,
-    stripRef,
-    scrollTimeoutRef,
-    programmaticScrollRef,
-    transformRef,
-    currentIndex,
-    canGoPrev,
-    canGoNext,
-  } = useMediaViewerState(viewerFile, viewableFiles);
+  const { isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen, stripRef, scrollTimeoutRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
+    useMediaViewerState(viewerFile, viewableFiles);
 
   const { handleStripScroll } = useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile);
 
@@ -65,13 +54,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     [shareToken, sharePassword, currentPath],
   );
 
-  // Reset zoom when image changes
-  useEffect(() => {
-    if (transformRef.current) {
-      transformRef.current.resetTransform && transformRef.current.resetTransform();
-    }
-  }, [viewerFile?.id, transformRef]);
-
   // Cleanup scroll timeout on unmount
   useEffect(() => {
     return () => {
@@ -97,14 +79,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       case 'image':
         return (
-          <ImageViewer
-            file={viewerFile}
-            currentPath={currentPath}
-            getFileUrl={getFileUrl}
-            shareToken={shareToken}
-            sharePassword={sharePassword}
-            transformRef={transformRef}
-          />
+          <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} transformRef={transformRef} />
         );
 
       case 'video':
@@ -141,7 +116,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         <div className="flex items-center justify-between border-b border-gray-700 px-6 py-4">
           <div>
             <h3 className="text-lg font-semibold text-white">{viewerFile.name}</h3>
-            {viewableFiles.length > 1 && <p className="text-gray-400">{currentIndex + 1} / {viewableFiles.length}</p>}
+            {viewableFiles.length > 1 && (
+              <p className="text-gray-400">
+                {currentIndex + 1} / {viewableFiles.length}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-0 bg-gray-800 rounded-lg border border-gray-700">
             {!isMobile && (
