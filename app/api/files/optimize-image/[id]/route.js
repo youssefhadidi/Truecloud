@@ -40,6 +40,12 @@ export async function GET(req, { params }) {
     const quality = Math.min(Math.max(parseInt(url.searchParams.get('quality') || '80'), 30), 100);
     const maxWidth = parseInt(url.searchParams.get('w') || '1440');
     const maxHeight = parseInt(url.searchParams.get('h') || '1440');
+    const format = url.searchParams.get('format') || 'webp';
+
+    // Validate format
+    if (!['webp', 'jpeg'].includes(format)) {
+      return NextResponse.json({ error: 'Invalid format. Use webp or jpeg' }, { status: 400 });
+    }
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileName.includes('..')) {
@@ -89,13 +95,13 @@ export async function GET(req, { params }) {
     }
 
     try {
-      // Generate cache key based on file path, quality, and dimensions
-      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
+      // Generate cache key based on file path, quality, dimensions, and format
+      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}-${format}`).digest('hex');
 
       // Create cache path preserving directory structure
       const relativeCacheDir = join(relativePath);
       const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
-      const cacheFileName = `${cacheKey}.webp`;
+      const cacheFileName = `${cacheKey}.${format}`;
       const cachePath = join(cacheDir, cacheFileName);
 
       // Check if cached version exists and is newer than source file
@@ -104,9 +110,10 @@ export async function GET(req, { params }) {
         if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
           // Serve cached version
           const cachedBuffer = fs.readFileSync(cachePath);
+          const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
           return new NextResponse(cachedBuffer, {
             headers: {
-              'Content-Type': 'image/webp',
+              'Content-Type': contentType,
               'Content-Length': cachedBuffer.length.toString(),
               'Cache-Control': 'public, max-age=31536000',
               'X-Cache': 'HIT',
@@ -116,18 +123,29 @@ export async function GET(req, { params }) {
       }
 
       // Optimize image using sharp
-      const optimizedBuffer = await sharp(filePath, {
+      let sharpPipeline = sharp(filePath, {
         failOn: 'none',
         failOnError: false,
         limitInputPixels: false,
       })
-        .rotate()
-        .resize(maxWidth, maxHeight, {
+        .rotate();
+
+      // Only resize if dimensions are not 0x0 (0x0 means preserve original)
+      if (maxWidth !== 0 || maxHeight !== 0) {
+        sharpPipeline = sharpPipeline.resize(maxWidth, maxHeight, {
           fit: 'inside',
           withoutEnlargement: true,
-        })
-        .webp({ quality })
-        .toBuffer();
+        });
+      }
+
+      // Apply format conversion
+      if (format === 'jpeg') {
+        sharpPipeline = sharpPipeline.jpeg({ quality: 100, mozjpeg: true });
+      } else {
+        sharpPipeline = sharpPipeline.webp({ quality });
+      }
+
+      const optimizedBuffer = await sharpPipeline.toBuffer();
 
       // Cache the optimized image
       try {
@@ -138,9 +156,10 @@ export async function GET(req, { params }) {
         // Continue even if caching fails
       }
 
+      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
       return new NextResponse(optimizedBuffer, {
         headers: {
-          'Content-Type': 'image/webp',
+          'Content-Type': contentType,
           'Content-Length': optimizedBuffer.length.toString(),
           'Cache-Control': 'public, max-age=31536000',
           'X-Cache': 'MISS',

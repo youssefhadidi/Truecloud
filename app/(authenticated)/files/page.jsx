@@ -5,7 +5,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState } from 'react';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
@@ -14,6 +14,7 @@ import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 import { useMoveFiles } from '@/lib/api/files';
+import { getFileExtension } from '@/lib/clientFileUtils';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
@@ -68,6 +69,8 @@ function FilesPageContent() {
   const { toggleFavorite, isPending: togglingFavorite } = useToggleFavorite();
   const moveMutation = useMoveFiles();
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [convertingHeic, setConvertingHeic] = useState(false);
+  const [conversionStatus, setConversionStatus] = useState({ completed: 0, total: 0, failed: [] });
 
   // File operation handlers
   const handlers = useFileHandlers({
@@ -87,6 +90,19 @@ function FilesPageContent() {
   });
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
+
+  // Detect HEIC files in current folder
+  const heicFiles = useMemo(() => {
+    return state.files
+      .filter(f => {
+        if (f.isDirectory) return false;
+        const ext = getFileExtension(f.name);
+        return ext === 'heic' || ext === 'heif';
+      })
+      .map(f => f.name);
+  }, [state.files]);
+
+  const hasHeicFiles = heicFiles.length > 0;
 
   const toggleSelection = (file) => {
     state.setSelectedFiles((prev) => {
@@ -125,6 +141,80 @@ function FilesPageContent() {
       const message = error?.response?.data?.error || error.message || 'Failed to move items';
       state.addNotification('error', message, 'Move Error');
     }
+  };
+
+  const handleConvertHeicToJpeg = async () => {
+    if (heicFiles.length === 0) return;
+
+    setConvertingHeic(true);
+    setConversionStatus({ completed: 0, total: heicFiles.length, failed: [] });
+
+    const failed = [];
+
+    for (let i = 0; i < heicFiles.length; i++) {
+      const fileName = heicFiles[i];
+
+      try {
+        // Build URL with format=jpeg parameter and 0x0 to preserve original resolution
+        const params = new URLSearchParams({
+          path: state.currentPath,
+          format: 'jpeg',
+          quality: '100',
+          w: '0',
+          h: '0'
+        });
+
+        const response = await fetch(`/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`);
+
+        if (!response.ok) {
+          throw new Error(`Failed to convert ${fileName}`);
+        }
+
+        // Download the converted file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        // Update progress
+        setConversionStatus(prev => ({
+          ...prev,
+          completed: prev.completed + 1
+        }));
+
+        // Small delay between downloads to avoid browser blocking
+        if (i < heicFiles.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } catch (error) {
+        console.error(`Failed to convert ${fileName}:`, error);
+        failed.push(fileName);
+        setConversionStatus(prev => ({
+          ...prev,
+          completed: prev.completed + 1,
+          failed: [...prev.failed, fileName]
+        }));
+      }
+    }
+
+    // Show completion notification
+    setTimeout(() => {
+      const successCount = heicFiles.length - failed.length;
+      if (failed.length === 0) {
+        state.addNotification('success', `Successfully converted ${successCount} HEIC file(s) to JPEG`);
+      } else {
+        state.addNotification('warning',
+          `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`
+        );
+      }
+      setConvertingHeic(false);
+      setConversionStatus({ completed: 0, total: 0, failed: [] });
+    }, 1000);
   };
 
   if (status === 'loading') {
@@ -197,6 +287,30 @@ function FilesPageContent() {
                 >
                   <FiFolder size={16} />
                   <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                </button>
+              )}
+
+              {/* HEIC to JPEG Conversion Button */}
+              {hasHeicFiles && (
+                <button
+                  onClick={handleConvertHeicToJpeg}
+                  disabled={convertingHeic}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Convert ${heicFiles.length} HEIC file(s) to JPEG`}
+                >
+                  <FiImage size={16} />
+                  <span className="hidden sm:inline">
+                    {convertingHeic
+                      ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...`
+                      : `HEIC→JPEG (${heicFiles.length})`
+                    }
+                  </span>
+                  <span className="sm:hidden">
+                    {convertingHeic
+                      ? `${conversionStatus.completed}/${conversionStatus.total}`
+                      : `HEIC→JPEG`
+                    }
+                  </span>
                 </button>
               )}
 
