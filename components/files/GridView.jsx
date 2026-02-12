@@ -409,7 +409,8 @@ const GridItem = memo(
       prevProps.processingFile === nextProps.processingFile &&
       prevProps.shouldShowActions === nextProps.shouldShowActions &&
       prevProps.newFolderName === nextProps.newFolderName &&
-      prevProps.newFileName === nextProps.newFileName
+      prevProps.newFileName === nextProps.newFileName &&
+      prevProps.selectionMode === nextProps.selectionMode
     );
   },
 );
