@@ -50,7 +50,18 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
       className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
         isActive ? 'border-blue-500 ring-2 ring-blue-500/40 scale-105' : 'border-gray-700 hover:border-gray-500'
       } bg-gray-800 flex items-center justify-center`}
+      style={{
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
       title={file.name}
+      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={(e) => {
+        if (e.target.tagName === 'IMG') {
+          e.preventDefault();
+        }
+      }}
     >
       {hasThumbnail ? (
         <img src={thumbnailData.data} alt={file.name} className="w-full h-full object-cover" draggable={false} />

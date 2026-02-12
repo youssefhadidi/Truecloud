@@ -2,14 +2,15 @@
 
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect } from 'react';
-import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiDownload } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { VideoPlayer } from './viewers/VideoPlayer';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { ImageViewer } from './viewers/ImageViewer';
 import { ThumbnailItem } from './ThumbnailItem';
 import { useMediaViewerState, useMediaViewerScroll } from './hooks/useMediaViewerState';
+import ContextMenu from './ContextMenu';
 
 // Lazy load heavy viewers
 const Viewer3D = lazy(() => import('./Viewer3D').then((m) => ({ default: m.default })));
@@ -20,6 +21,9 @@ function PDFViewer({ file, getFileUrl, onClick }) {
 }
 
 export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
+  const [contextMenu, setContextMenu] = useState(null);
+  const touchTimerRef = useRef(null);
+  const touchStartRef = useRef({ x: 0, y: 0 });
   const { isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen, stripRef, scrollTimeoutRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
     useMediaViewerState(viewerFile, viewableFiles);
 
@@ -53,6 +57,60 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     },
     [shareToken, sharePassword, currentPath],
   );
+
+  // Handle right-click context menu
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  // Handle download
+  const handleDownload = useCallback(() => {
+    if (!viewerFile) return;
+
+    let downloadUrl;
+    if (shareToken) {
+      const params = new URLSearchParams();
+      const filePath = currentPath ? `${currentPath}/${viewerFile.name}` : viewerFile.name;
+      params.append('path', filePath);
+      if (sharePassword) {
+        params.append('pwd', sharePassword);
+      }
+      downloadUrl = `/api/public/${shareToken}/download?${params.toString()}`;
+    } else {
+      downloadUrl = `/api/files/download/${viewerFile.id}?path=${encodeURIComponent(currentPath)}`;
+    }
+
+    // Trigger download
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = viewerFile.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setContextMenu(null);
+  }, [viewerFile, currentPath, shareToken, sharePassword]);
+
+  // Handle touch long-press for mobile context menu
+  const handleTouchStart = useCallback((e) => {
+    if (e.target.tagName !== 'IMG' && e.target.tagName !== 'CANVAS') return;
+
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+
+    touchTimerRef.current = setTimeout(() => {
+      setContextMenu({ x: touch.clientX, y: touch.clientY });
+    }, 500); // 500ms long-press
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  }, []);
 
   // Cleanup scroll timeout on unmount
   useEffect(() => {
@@ -121,6 +179,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             )}
           </div>
           <div className="flex items-center gap-0 bg-gray-800 rounded-lg border border-gray-700">
+            <button
+              onClick={handleDownload}
+              className="px-3 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors first:rounded-l-md last:rounded-r-md border-r border-gray-700 last:border-r-0"
+              title="Download"
+            >
+              <FiDownload size={18} />
+            </button>
             {!isMobile && (
               <button
                 onClick={toggleFullscreen}
@@ -137,7 +202,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         </div>
 
         {/* Media Content */}
-        <div className="flex-1 overflow-hidden flex items-center justify-center relative select-none">
+        <div
+          className="flex-1 overflow-hidden flex items-center justify-center relative select-none"
+          style={{
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+          }}
+          onContextMenu={handleContextMenu}
+          onClick={() => setContextMenu(null)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="w-full h-full flex items-center justify-center p-1">{renderMedia()}</div>
 
           {/* Navigation Buttons */}
@@ -188,6 +264,14 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             ))}
           </div>
         )}
+
+        {/* Context Menu */}
+        <ContextMenu
+          contextMenu={contextMenu}
+          file={viewerFile}
+          onDownload={handleDownload}
+          onClose={() => setContextMenu(null)}
+        />
       </div>
     </div>
   );

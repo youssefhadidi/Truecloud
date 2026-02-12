@@ -23,7 +23,19 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
   }, [file, currentPath, shareToken, sharePassword]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
+    <div
+      className="relative w-full h-full flex items-center justify-center bg-gray-900"
+      style={{
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
+      onTouchStart={(e) => {
+        if (e.target.tagName === 'IMG') {
+          e.preventDefault();
+        }
+      }}
+    >
       {/* Thumbnail as placeholder */}
       {thumbnailData?.data && !fullLoaded && (
         <img src={thumbnailData.data} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />
@@ -49,12 +61,15 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
             <img
               ref={imgRef}
               alt={file.name}
+              draggable={false}
               className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
               onLoad={() => {
                 setFullLoaded(true);
                 transformRef.current?.resetTransform();
               }}
               onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
             />
           </div>
         </TransformComponent>

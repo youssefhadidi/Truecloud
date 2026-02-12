@@ -193,7 +193,10 @@ export function useSharePage(token, shareData = null) {
   }, []);
 
   const setSelectedFiles = useCallback((files) => {
-    setSelection((prev) => ({ ...prev, selectedFiles: files }));
+    setSelection((prev) => {
+      const newFiles = typeof files === 'function' ? files(prev.selectedFiles) : files;
+      return { ...prev, selectedFiles: newFiles };
+    });
   }, []);
 
   // Persist view mode to localStorage
