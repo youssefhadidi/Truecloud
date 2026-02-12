@@ -250,13 +250,13 @@ export function useSharePage(token, shareData = null) {
   // Reset selection on path change or when selection mode is off
   useEffect(() => {
     setSelectedFiles([]);
-  }, [navigation.currentSubPath, setSelectedFiles]);
+  }, [navigation.currentSubPath]);
 
   useEffect(() => {
     if (!selection.selectionMode) {
       setSelectedFiles([]);
     }
-  }, [selection.selectionMode, setSelectedFiles]);
+  }, [selection.selectionMode]);
 
   // Filter and sort files based on search query and sort criteria
   const sortedFilteredFiles = useMemo(() => {
