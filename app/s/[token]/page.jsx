@@ -114,12 +114,10 @@ export default function SharePage({ params }) {
   const selectedFileSet = useMemo(() => new Set(shareState.selectedFiles), [shareState.selectedFiles]);
 
   const toggleSelection = (file) => {
-    shareState.setSelectedFiles((prev) => {
-      if (prev.includes(file.name)) {
-        return prev.filter((name) => name !== file.name);
-      }
-      return [...prev, file.name];
-    });
+    const newSelected = shareState.selectedFiles.includes(file.name)
+      ? shareState.selectedFiles.filter((name) => name !== file.name)
+      : [...shareState.selectedFiles, file.name];
+    shareState.setSelectedFiles(newSelected);
   };
 
   const fetchShareFolders = async (path) => {

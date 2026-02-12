@@ -107,12 +107,10 @@ function FilesPageContent() {
   const hasHeicFiles = heicFiles.length > 0;
 
   const toggleSelection = (file) => {
-    state.setSelectedFiles((prev) => {
-      if (prev.includes(file.name)) {
-        return prev.filter((name) => name !== file.name);
-      }
-      return [...prev, file.name];
-    });
+    const newSelected = state.selectedFiles.includes(file.name)
+      ? state.selectedFiles.filter((name) => name !== file.name)
+      : [...state.selectedFiles, file.name];
+    state.setSelectedFiles(newSelected);
   };
 
   const fetchMoveFolders = async (path) => {
