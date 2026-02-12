@@ -31,12 +31,28 @@ export function useShareOrDownload() {
         // Check if Web Share API is available on this device
         const hasShareAPI = !!navigator.share;
 
-        if (hasShareAPI) {
+        // Detect iOS Safari - it has issues with large files via Web Share API
+        const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (hasShareAPI && !isIOSSafari) {
           // Only fetch if we're going to use Web Share API
           try {
             const response = await fetch(fileUrl);
             if (!response.ok) {
               throw new Error(`Failed to fetch file: ${response.status}`);
+            }
+
+            // Validate Content-Type - reject JSON/XML error responses
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json') || contentType.includes('application/xml') || contentType.includes('text/xml')) {
+              throw new Error(`Invalid content type: ${contentType}. Server may have returned an error response.`);
+            }
+
+            // For large files, ensure we have a reasonable size
+            const contentLength = response.headers.get('content-length');
+            if (contentLength && parseInt(contentLength, 10) < 1024) {
+              // Likely an error response, not the actual file
+              throw new Error('Response size too small, likely an error response');
             }
 
             const blob = await fetchWithProgress(response, downloadId, updateTransfer);
