@@ -83,8 +83,6 @@ function FilesPageContent() {
     setNewFolderName: state.setNewFolderName,
     newFolderName: state.newFolderName,
     addNotification: state.addNotification,
-    setUploads: state.setUploads,
-    setUploading: state.setUploading,
     setDeletingFile: state.setDeletingFile,
     setProcessingFile: state.setProcessingFile,
     setRenamingFile: state.setRenamingFile,
@@ -619,8 +617,8 @@ function FilesPageContent() {
         </div>
       </div>
 
-      {/* Upload Status */}
-      <UploadStatus uploads={state.uploads} />
+      {/* Upload/Download Status */}
+      <UploadStatus transfers={state.transfers} uploads={state.uploads} />
 
       {/* Share Modal */}
       {state.sharingFile && (

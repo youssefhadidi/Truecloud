@@ -1,45 +1,22 @@
 /** @format */
 
-import { useState, useEffect, useMemo, useCallback, useReducer } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
-
-// Action types for file operations reducer
-const FILE_OPS_ACTIONS = {
-  SET_DELETING: 'SET_DELETING',
-  SET_RENAMING: 'SET_RENAMING',
-  SET_NEW_FILENAME: 'SET_NEW_FILENAME',
-  SET_PROCESSING: 'SET_PROCESSING',
-  CLEAR_ALL: 'CLEAR_ALL',
-};
-
-// Initial state for file operations
-const fileOpsInitialState = {
-  deletingFile: null,
-  renamingFile: null,
-  newFileName: '',
-  processingFile: null,
-};
-
-// Reducer for file operations
-const fileOpsReducer = (state, action) => {
-  switch (action.type) {
-    case FILE_OPS_ACTIONS.SET_DELETING:
-      return { ...state, deletingFile: action.payload };
-    case FILE_OPS_ACTIONS.SET_RENAMING:
-      return { ...state, renamingFile: action.payload, newFileName: action.payload?.name || '' };
-    case FILE_OPS_ACTIONS.SET_NEW_FILENAME:
-      return { ...state, newFileName: action.payload };
-    case FILE_OPS_ACTIONS.SET_PROCESSING:
-      return { ...state, processingFile: action.payload };
-    case FILE_OPS_ACTIONS.CLEAR_ALL:
-      return fileOpsInitialState;
-    default:
-      return state;
-  }
-};
+import {
+  useTransfers,
+  useTransferring,
+  useFileOpsState,
+  useFileOpsDispatch,
+  useSelectionState,
+  useSelectionDispatch,
+  useModalsState,
+  useModalsDispatch,
+  useFolderCreationState,
+  useFolderCreationDispatch,
+} from '@/lib/redux/hooks';
 
 export function useFilesPage(status) {
   const router = useRouter();
@@ -77,33 +54,25 @@ export function useFilesPage(status) {
     selectedContextFile: null,
   });
 
-  // Folder creation state - grouped
-  const [folderCreation, setFolderCreation] = useState({
-    creatingFolder: false,
-    newFolderName: '',
-  });
+  // Folder creation state from Redux
+  const folderCreation = useFolderCreationState();
+  const { setCreatingFolder, setNewFolderName } = useFolderCreationDispatch();
 
-  // File operations state (uses reducer for complex interactions)
-  const [fileOps, dispatchFileOps] = useReducer(fileOpsReducer, fileOpsInitialState);
+  // File operations state from Redux
+  const fileOps = useFileOpsState();
+  const { setDeletingFile, setRenamingFile, setNewFileName, setProcessingFile } = useFileOpsDispatch();
 
-  // Modal/Viewer state - grouped
-  const [modals, setModals] = useState({
-    viewerFile: null,
-    sharingFile: null,
-    restoringFile: null,
-  });
+  // Transfer state from Redux
+  const reduxTransfers = useTransfers();
+  const reduxTransferring = useTransferring();
 
-  // Selection state - grouped
-  const [selection, setSelection] = useState({
-    selectionMode: false,
-    selectedFiles: [],
-  });
+  // Modal/Viewer state from Redux
+  const modals = useModalsState();
+  const { setViewerFile, setSharingFile, setRestoringFile } = useModalsDispatch();
 
-  // Upload state - grouped
-  const [upload, setUpload] = useState({
-    uploading: false,
-    uploads: [],
-  });
+  // Selection state from Redux
+  const selection = useSelectionState();
+  const { setSelectionMode, setSelectedFiles } = useSelectionDispatch();
 
   // Cache state (kept separate as it's simple)
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
@@ -143,58 +112,6 @@ export function useFilesPage(status) {
 
   const setSelectedContextFile = useCallback((file) => {
     setUi((prev) => ({ ...prev, selectedContextFile: file }));
-  }, []);
-
-  const setCreatingFolder = useCallback((creating) => {
-    setFolderCreation((prev) => ({ ...prev, creatingFolder: creating }));
-  }, []);
-
-  const setNewFolderName = useCallback((name) => {
-    setFolderCreation((prev) => ({ ...prev, newFolderName: name }));
-  }, []);
-
-  const setDeletingFile = useCallback((file) => {
-    dispatchFileOps({ type: FILE_OPS_ACTIONS.SET_DELETING, payload: file });
-  }, []);
-
-  const setRenamingFile = useCallback((file) => {
-    dispatchFileOps({ type: FILE_OPS_ACTIONS.SET_RENAMING, payload: file });
-  }, []);
-
-  const setNewFileName = useCallback((name) => {
-    dispatchFileOps({ type: FILE_OPS_ACTIONS.SET_NEW_FILENAME, payload: name });
-  }, []);
-
-  const setProcessingFile = useCallback((fileId) => {
-    dispatchFileOps({ type: FILE_OPS_ACTIONS.SET_PROCESSING, payload: fileId });
-  }, []);
-
-  const setViewerFile = useCallback((file) => {
-    setModals((prev) => ({ ...prev, viewerFile: file }));
-  }, []);
-
-  const setSharingFile = useCallback((file) => {
-    setModals((prev) => ({ ...prev, sharingFile: file }));
-  }, []);
-
-  const setRestoringFile = useCallback((file) => {
-    setModals((prev) => ({ ...prev, restoringFile: file }));
-  }, []);
-
-  const setSelectionMode = useCallback((mode) => {
-    setSelection((prev) => ({ ...prev, selectionMode: mode }));
-  }, []);
-
-  const setSelectedFiles = useCallback((files) => {
-    setSelection((prev) => ({ ...prev, selectedFiles: files }));
-  }, []);
-
-  const setUploading = useCallback((uploading) => {
-    setUpload((prev) => ({ ...prev, uploading }));
-  }, []);
-
-  const setUploads = useCallback((uploads) => {
-    setUpload((prev) => ({ ...prev, uploads }));
   }, []);
 
   // Redirect if unauthenticated
@@ -382,9 +299,10 @@ export function useFilesPage(status) {
     selectionMode: selection.selectionMode,
     selectedFiles: selection.selectedFiles,
 
-    // Upload state (backward compatible)
-    uploading: upload.uploading,
-    uploads: upload.uploads,
+    // Transfer state from Redux (uploads/downloads)
+    uploading: reduxTransferring,
+    uploads: reduxTransfers.filter((t) => t.type === 'upload'),
+    transfers: reduxTransfers,
 
     // Other state
     folderDisplayNames,
@@ -414,8 +332,6 @@ export function useFilesPage(status) {
     setRestoringFile,
     setSelectionMode,
     setSelectedFiles,
-    setUploading,
-    setUploads,
 
     // Helpers
     addNotification,

@@ -1,6 +1,7 @@
 /** @format */
 
 import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
+import { useTransfersDispatch } from '@/lib/redux/hooks';
 
 // Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
@@ -11,8 +12,6 @@ export function useFileHandlers({
   setNewFolderName,
   newFolderName,
   addNotification,
-  setUploads,
-  setUploading,
   setDeletingFile,
   setProcessingFile,
   setRenamingFile,
@@ -20,10 +19,12 @@ export function useFileHandlers({
   setSharingFile,
   setRestoringFile,
 }) {
+  const { addTransfer, updateTransfer, removeTransfer, setTransferring } = useTransfersDispatch();
+
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
   const uploadMutation = useUploadFile(currentPath, (uploadId, progress) => {
-    setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, progress } : u)));
+    updateTransfer(uploadId, { progress });
   });
   const deleteMutation = useDeleteFile(currentPath);
   const renameMutation = useRenameFile(currentPath);
@@ -64,30 +65,28 @@ export function useFileHandlers({
   const uploadSingleFile = (file) => {
     const uploadId = Date.now() + Math.random();
 
-    setUploads((prev) => [
-      ...prev,
-      {
-        id: uploadId,
-        fileName: file.name,
-        progress: 0,
-        status: 'uploading',
-      },
-    ]);
+    addTransfer({
+      id: uploadId,
+      fileName: file.name,
+      progress: 0,
+      status: 'uploading',
+      type: 'upload',
+    });
 
     return new Promise((resolve) => {
       uploadMutation.mutate(
         { file, uploadId },
         {
           onSuccess: () => {
-            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
+            updateTransfer(uploadId, { status: 'success', progress: 100 });
             setTimeout(() => {
-              setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+              removeTransfer(uploadId);
             }, 3000);
             resolve();
           },
           onError: (error) => {
             console.error('Upload error:', error);
-            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
+            updateTransfer(uploadId, { status: 'error', error: error.message });
             addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
             resolve();
           },
@@ -98,11 +97,11 @@ export function useFileHandlers({
 
   const uploadFiles = async (files) => {
     if (!files || files.length === 0) return;
-    setUploading(true);
+    setTransferring(true);
     for (const file of files) {
       await uploadSingleFile(file);
     }
-    setUploading(false);
+    setTransferring(false);
   };
 
   const handleUpload = async (e) => {

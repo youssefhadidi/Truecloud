@@ -2,76 +2,137 @@
 
 import { useCallback } from 'react';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTransfersDispatch } from '@/lib/redux/hooks';
 
 /**
  * Hook for handling file downloads with Web Share API fallback
- * - Uses Web Share API (navigator.share) if available
- * - Falls back to traditional blob download
+ * - Uses Web Share API (navigator.share) if available and device supports it
+ * - Falls back to direct browser download without fetching
  * - Works on iOS, Android, and Desktop
  */
 export function useShareOrDownload() {
   const { addNotification } = useNotifications();
+  const { addTransfer, updateTransfer, removeTransfer } = useTransfersDispatch();
 
   const handleShareOrDownload = useCallback(
     async (fileUrl, fileName) => {
+      const downloadId = Date.now() + Math.random();
+
       try {
-        // Fetch the file as a blob
-        const response = await fetch(fileUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.status}`);
-        }
+        // Add download to transfer list
+        addTransfer({
+          id: downloadId,
+          fileName,
+          progress: 0,
+          status: 'downloading',
+          type: 'download',
+        });
 
-        const blob = await response.blob();
+        // Check if Web Share API is available on this device
+        const hasShareAPI = !!navigator.share;
 
-        // Check if Web Share API is available
-        if (navigator.share) {
+        if (hasShareAPI) {
+          // Only fetch if we're going to use Web Share API
           try {
-            // Create a File object for sharing
+            const response = await fetch(fileUrl);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch file: ${response.status}`);
+            }
+
+            const blob = await fetchWithProgress(response, downloadId, updateTransfer);
             const file = new File([blob], fileName, { type: blob.type });
 
             // Check if this device can share files
             // Note: canShare is not available in all browsers, so we wrap in try-catch
             if (navigator.canShare && !navigator.canShare({ files: [file] })) {
-              // Device doesn't support file sharing, fall back to download
-              performDownload(blob, fileName);
+              // Device doesn't support file sharing, fall back to direct browser download
+              performDirectDownload(fileUrl, fileName);
             } else {
               // Attempt to share
               await navigator.share({
                 files: [file],
               });
             }
+
+            // Mark download as successful
+            updateTransfer(downloadId, { status: 'success', progress: 100 });
+            setTimeout(() => {
+              removeTransfer(downloadId);
+            }, 3000);
           } catch (shareError) {
-            // Share API cancelled by user or not supported, fall back to download
+            // Share API cancelled by user or not supported, fall back to direct download
             if (shareError.name !== 'AbortError') {
               console.warn('Share failed, falling back to download:', shareError);
             }
-            performDownload(blob, fileName);
+            performDirectDownload(fileUrl, fileName);
+            // Remove from transfer list since direct download doesn't track progress
+            removeTransfer(downloadId);
           }
         } else {
-          // Web Share API not available, use traditional download
-          performDownload(blob, fileName);
+          // Web Share API not available, use direct browser download (no fetch needed)
+          performDirectDownload(fileUrl, fileName);
+          // Remove from transfer list since direct download doesn't track progress
+          removeTransfer(downloadId);
         }
       } catch (error) {
         console.error('Download/share error:', error);
         addNotification('error', `Failed to download ${fileName}`);
+        updateTransfer(downloadId, { status: 'error', error: error.message });
       }
     },
-    [addNotification]
+    [addNotification, addTransfer, updateTransfer, removeTransfer]
   );
 
   return { handleShareOrDownload };
 }
 
 /**
- * Perform traditional browser download using blob URL
+ * Fetch blob while tracking download progress
+ * Reports progress as chunks are downloaded
  */
-function performDownload(blob, fileName) {
-  const blobUrl = window.URL.createObjectURL(blob);
+async function fetchWithProgress(response, downloadId, dispatchUpdateTransfer) {
+  const contentLength = response.headers.get('content-length');
+  const total = parseInt(contentLength, 10);
+
+  if (!dispatchUpdateTransfer || !contentLength) {
+    // No progress tracking, just return the blob
+    return response.blob();
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) break;
+
+      chunks.push(value);
+      received += value.length;
+
+      // Calculate and report progress percentage
+      const progress = Math.round((received / total) * 100);
+      dispatchUpdateTransfer(downloadId, { progress });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return new Blob(chunks, { type: response.headers.get('content-type') });
+}
+
+/**
+ * Perform direct browser download via link (no blob fetching)
+ * Browser handles the download, respects Content-Disposition headers
+ */
+function performDirectDownload(fileUrl, fileName) {
   const link = document.createElement('a');
-  link.href = blobUrl;
+  link.href = fileUrl;
   link.download = fileName;
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  window.URL.revokeObjectURL(blobUrl);
 }

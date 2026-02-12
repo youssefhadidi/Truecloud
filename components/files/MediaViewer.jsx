@@ -21,7 +21,16 @@ function PDFViewer({ file, getFileUrl, onClick }) {
   return <iframe src={getFileUrl(file, 'pdf')} className="w-full h-full" title={file.name} onClick={onClick} />;
 }
 
-export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
+export default function MediaViewer({
+  viewerFile,
+  viewableFiles,
+  currentPath,
+  onClose,
+  onNavigate,
+  onSelectFile,
+  shareToken,
+  sharePassword,
+}) {
   const [contextMenu, setContextMenu] = useState(null);
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
