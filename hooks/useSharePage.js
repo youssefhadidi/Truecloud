@@ -173,7 +173,10 @@ export function useSharePage(token, shareData = null) {
   }, []);
 
   const setUploadingFiles = useCallback((files) => {
-    setUpload((prev) => ({ ...prev, uploadingFiles: files }));
+    setUpload((prev) => {
+      const newFiles = typeof files === 'function' ? files(prev.uploadingFiles) : files;
+      return { ...prev, uploadingFiles: newFiles };
+    });
   }, []);
 
   const setIsLoading = useCallback((loading) => {
