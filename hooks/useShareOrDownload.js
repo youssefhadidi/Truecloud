@@ -45,20 +45,8 @@ export function useShareOrDownload() {
               },
             });
 
-            // Validate Content-Type - reject JSON/XML error responses
-            const contentType = response.headers['content-type'] || '';
-            if (contentType.includes('application/json') || contentType.includes('application/xml') || contentType.includes('text/xml')) {
-              throw new Error(`Invalid content type: ${contentType}. Server may have returned an error response.`);
-            }
-
-            // For large files, ensure we have a reasonable size
-            const contentLength = response.headers['content-length'];
-            if (contentLength && parseInt(contentLength, 10) < 1024) {
-              throw new Error('Response size too small, likely an error response');
-            }
-
             const blob = response.data;
-            const mimeType = contentType || 'application/octet-stream';
+            const mimeType = response.headers['content-type'] || 'application/octet-stream';
             const file = new File([blob], fileName, { type: mimeType });
 
             // Check if this device can share files
