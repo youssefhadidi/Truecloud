@@ -1,5 +1,6 @@
 /** @format */
 
+import axios from 'axios';
 import { useCallback } from 'react';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
@@ -34,13 +35,31 @@ export function useShareOrDownload() {
         if (hasShareAPI) {
           // Only fetch if we're going to use Web Share API
           try {
-            const response = await fetch(fileUrl);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch file: ${response.status}`);
+            const response = await axios.get(fileUrl, {
+              responseType: 'blob',
+              onDownloadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                  const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+                  updateTransfer(downloadId, { progress });
+                }
+              },
+            });
+
+            // Validate Content-Type - reject JSON/XML error responses
+            const contentType = response.headers['content-type'] || '';
+            if (contentType.includes('application/json') || contentType.includes('application/xml') || contentType.includes('text/xml')) {
+              throw new Error(`Invalid content type: ${contentType}. Server may have returned an error response.`);
             }
 
-            const blob = await fetchWithProgress(response, downloadId, updateTransfer);
-            const file = new File([blob], fileName, { type: blob.type });
+            // For large files, ensure we have a reasonable size
+            const contentLength = response.headers['content-length'];
+            if (contentLength && parseInt(contentLength, 10) < 1024) {
+              throw new Error('Response size too small, likely an error response');
+            }
+
+            const blob = response.data;
+            const mimeType = contentType || 'application/octet-stream';
+            const file = new File([blob], fileName, { type: mimeType });
 
             // Check if this device can share files
             // Note: canShare is not available in all browsers, so we wrap in try-catch
@@ -91,44 +110,6 @@ export function useShareOrDownload() {
   );
 
   return { handleShareOrDownload };
-}
-
-/**
- * Fetch blob while tracking download progress
- * Reports progress as chunks are downloaded
- */
-async function fetchWithProgress(response, downloadId, dispatchUpdateTransfer) {
-  const contentLength = response.headers.get('content-length');
-  const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-  const total = parseInt(contentLength, 10);
-
-  if (!dispatchUpdateTransfer || !contentLength) {
-    // No progress tracking, just return the blob
-    return response.blob();
-  }
-
-  const reader = response.body.getReader();
-  const chunks = [];
-  let received = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-
-      chunks.push(value);
-      received += value.length;
-
-      // Calculate and report progress percentage
-      const progress = Math.round((received / total) * 100);
-      dispatchUpdateTransfer(downloadId, { progress });
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return new Blob(chunks, { type: mimeType });
 }
 
 /**
