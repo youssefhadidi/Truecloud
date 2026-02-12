@@ -1,8 +1,9 @@
 /** @format */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
+import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 
 export function useNavigation({ currentPath, pathHistory, historyIndex, setCurrentPath, setPathHistory, setHistoryIndex }) {
   const navigateToFolder = (folderName) => {
@@ -169,9 +170,15 @@ export function useContextMenu({ setContextMenu, setSelectedContextFile }) {
 }
 
 export function useFileUtils({ currentPath, folderDisplayNames }) {
-  const handleDownload = (fileId, fileName) => {
-    window.open(`/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`, '_blank');
-  };
+  const { handleShareOrDownload } = useShareOrDownload();
+
+  const handleDownload = useCallback(
+    async (fileId, fileName) => {
+      const downloadUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+      await handleShareOrDownload(downloadUrl, fileName);
+    },
+    [currentPath, handleShareOrDownload]
+  );
 
   const getFileIcon = (file) => {
     if (file.isDirectory) return <FiFolder className="text-blue-500" size={24} />;

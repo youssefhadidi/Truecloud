@@ -5,6 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiDownload } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
+import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { VideoPlayer } from './viewers/VideoPlayer';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { ImageViewer } from './viewers/ImageViewer';
@@ -28,6 +29,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     useMediaViewerState(viewerFile, viewableFiles);
 
   const { handleStripScroll } = useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile);
+  const { handleShareOrDownload } = useShareOrDownload();
 
   // Helper to build download URL
   const getFileUrl = useCallback(
@@ -66,7 +68,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   }, []);
 
   // Handle download
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!viewerFile) return;
 
     let downloadUrl;
@@ -82,16 +84,9 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       downloadUrl = `/api/files/download/${viewerFile.id}?path=${encodeURIComponent(currentPath)}`;
     }
 
-    // Trigger download
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = viewerFile.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
+    await handleShareOrDownload(downloadUrl, viewerFile.name);
     setContextMenu(null);
-  }, [viewerFile, currentPath, shareToken, sharePassword]);
+  }, [viewerFile, currentPath, shareToken, sharePassword, handleShareOrDownload]);
 
   // Handle touch long-press for mobile context menu
   const handleTouchStart = useCallback((e) => {

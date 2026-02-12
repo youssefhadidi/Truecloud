@@ -4,6 +4,7 @@ import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
+import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 
 /**
  * useShareOperations - File and folder operations for public shares
@@ -36,6 +37,7 @@ export function useShareOperations({
   setIsDragging,
 }) {
   const queryClient = useQueryClient();
+  const { handleShareOrDownload } = useShareOrDownload();
 
   const refreshListing = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['share-files', token] });
@@ -351,7 +353,7 @@ export function useShareOperations({
 
   // ============ Download ============
   const handleDownload = useCallback(
-    (file) => {
+    async (file) => {
       if (!file || !file.name) return;
 
       // Construct the path parameter: subdirectory/filename
@@ -364,9 +366,10 @@ export function useShareOperations({
       }
 
       // Construct download URL - for shares, we need to download via the public API
-      window.open(`/api/public/${token}/download?${params.toString()}`, '_blank');
+      const downloadUrl = `/api/public/${token}/download?${params.toString()}`;
+      await handleShareOrDownload(downloadUrl, file.name);
     },
-    [token, sharePassword, currentSubPath],
+    [token, sharePassword, currentSubPath, handleShareOrDownload],
   );
 
   // ============ Navigation ============

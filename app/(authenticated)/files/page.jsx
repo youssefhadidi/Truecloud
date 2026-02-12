@@ -12,6 +12,7 @@ import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
+import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 import { useMoveFiles } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
@@ -63,6 +64,9 @@ function FilesPageContent() {
     currentPath: state.currentPath,
     folderDisplayNames: state.folderDisplayNames,
   });
+
+  // Download handler
+  const { handleShareOrDownload } = useShareOrDownload();
 
   // Favorites
   const { data: favorites = [] } = useFavorites();
@@ -164,22 +168,11 @@ function FilesPageContent() {
           h: '0'
         });
 
-        const response = await fetch(`/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`);
+        const downloadUrl = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
+        const outputFileName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
 
-        if (!response.ok) {
-          throw new Error(`Failed to convert ${fileName}`);
-        }
-
-        // Download the converted file
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        // Use the new share or download handler
+        await handleShareOrDownload(downloadUrl, outputFileName);
 
         // Update progress
         setConversionStatus(prev => ({
