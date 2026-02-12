@@ -47,7 +47,8 @@ export function useShareOrDownload() {
             if (navigator.canShare && !navigator.canShare({ files: [file] })) {
               // Device doesn't support file sharing, fall back to direct browser download
               performDirectDownload(fileUrl, fileName);
-              removeTransfer(downloadId);
+              updateTransfer(downloadId, { status: 'success', progress: 100 });
+              setTimeout(() => removeTransfer(downloadId), 3000);
             } else {
               // Attempt to share
               try {
@@ -65,7 +66,8 @@ export function useShareOrDownload() {
                   console.warn('Share failed, falling back to download:', shareError);
                 }
                 performDirectDownload(fileUrl, fileName);
-                removeTransfer(downloadId);
+                updateTransfer(downloadId, { status: 'success', progress: 100 });
+                setTimeout(() => removeTransfer(downloadId), 3000);
               }
             }
           } catch (fetchError) {
@@ -76,8 +78,8 @@ export function useShareOrDownload() {
         } else {
           // Web Share API not available, use direct browser download (no fetch needed)
           performDirectDownload(fileUrl, fileName);
-          // Remove from transfer list since direct download doesn't track progress
-          removeTransfer(downloadId);
+          updateTransfer(downloadId, { status: 'success', progress: 100 });
+          setTimeout(() => removeTransfer(downloadId), 3000);
         }
       } catch (error) {
         console.error('Download/share error:', error);
@@ -97,6 +99,7 @@ export function useShareOrDownload() {
  */
 async function fetchWithProgress(response, downloadId, dispatchUpdateTransfer) {
   const contentLength = response.headers.get('content-length');
+  const mimeType = response.headers.get('content-type') || 'application/octet-stream';
   const total = parseInt(contentLength, 10);
 
   if (!dispatchUpdateTransfer || !contentLength) {
@@ -125,7 +128,7 @@ async function fetchWithProgress(response, downloadId, dispatchUpdateTransfer) {
     reader.releaseLock();
   }
 
-  return new Blob(chunks, { type: response.headers.get('content-type') });
+  return new Blob(chunks, { type: mimeType });
 }
 
 /**
