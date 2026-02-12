@@ -47,26 +47,31 @@ export function useShareOrDownload() {
             if (navigator.canShare && !navigator.canShare({ files: [file] })) {
               // Device doesn't support file sharing, fall back to direct browser download
               performDirectDownload(fileUrl, fileName);
+              removeTransfer(downloadId);
             } else {
               // Attempt to share
-              await navigator.share({
-                files: [file],
-              });
+              try {
+                await navigator.share({
+                  files: [file],
+                });
+                // Share was successful
+                updateTransfer(downloadId, { status: 'success', progress: 100 });
+                setTimeout(() => {
+                  removeTransfer(downloadId);
+                }, 3000);
+              } catch (shareError) {
+                // Share API cancelled by user, fall back to direct download
+                if (shareError.name !== 'AbortError') {
+                  console.warn('Share failed, falling back to download:', shareError);
+                }
+                performDirectDownload(fileUrl, fileName);
+                removeTransfer(downloadId);
+              }
             }
-
-            // Mark download as successful
-            updateTransfer(downloadId, { status: 'success', progress: 100 });
-            setTimeout(() => {
-              removeTransfer(downloadId);
-            }, 3000);
-          } catch (shareError) {
-            // Share API cancelled by user or not supported, fall back to direct download
-            if (shareError.name !== 'AbortError') {
-              console.warn('Share failed, falling back to download:', shareError);
-            }
-            performDirectDownload(fileUrl, fileName);
-            // Remove from transfer list since direct download doesn't track progress
-            removeTransfer(downloadId);
+          } catch (fetchError) {
+            console.error('Failed to fetch file for sharing:', fetchError);
+            addNotification('error', `Failed to download ${fileName}`);
+            updateTransfer(downloadId, { status: 'error', error: fetchError.message });
           }
         } else {
           // Web Share API not available, use direct browser download (no fetch needed)
