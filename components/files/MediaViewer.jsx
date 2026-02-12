@@ -2,7 +2,7 @@
 
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiDownload } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { VideoPlayer } from './viewers/VideoPlayer';
