@@ -31,10 +31,7 @@ export function useShareOrDownload() {
         // Check if Web Share API is available on this device
         const hasShareAPI = !!navigator.share;
 
-        // Detect iOS Safari - it has issues with large files via Web Share API
-        const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-        if (hasShareAPI && !isIOSSafari) {
+        if (hasShareAPI) {
           // Only fetch if we're going to use Web Share API
           try {
             const response = await fetch(fileUrl);
