@@ -2,7 +2,7 @@
 
 'use client';
 
-import { use, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
@@ -113,12 +113,12 @@ export default function SharePage({ params }) {
 
   const selectedFileSet = useMemo(() => new Set(shareState.selectedFiles), [shareState.selectedFiles]);
 
-  const toggleSelection = (file) => {
+  const toggleSelection = useCallback((file) => {
     const newSelected = shareState.selectedFiles.includes(file.name)
       ? shareState.selectedFiles.filter((name) => name !== file.name)
       : [...shareState.selectedFiles, file.name];
     shareState.setSelectedFiles(newSelected);
-  };
+  }, [shareState.selectedFiles, shareState.setSelectedFiles]);
 
   const fetchShareFolders = async (path) => {
     const params = new URLSearchParams();
