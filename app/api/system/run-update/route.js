@@ -4,6 +4,86 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
+import {
+  STEPS,
+  startUpdate,
+  setCurrentStep,
+  completeStep,
+  addLog,
+  finishUpdate,
+} from '@/lib/updateStatus';
+
+async function runUpdateProcess() {
+  const updateStatus = startUpdate();
+  const steps = [
+    { name: STEPS.PULLING, command: 'npm', args: ['run', 'pull'] },
+    { name: STEPS.INSTALLING, command: 'pnpm', args: ['i'] },
+    { name: STEPS.DB_PUSH, command: 'npm', args: ['run', 'db:push'] },
+    { name: STEPS.BUILDING, command: 'npm', args: ['run', 'build'] },
+    { name: STEPS.RESTARTING, command: 'npm', args: ['run', 'restart'] },
+  ];
+
+  for (const step of steps) {
+    try {
+      setCurrentStep(step.name);
+      addLog(step.name, `Starting: ${step.command} ${step.args.join(' ')}`, 'info');
+
+      await executeCommand(step.command, step.args, step.name);
+
+      completeStep(step.name, true);
+      addLog(step.name, `Completed successfully`, 'success');
+    } catch (error) {
+      completeStep(step.name, false, error.message);
+      addLog(step.name, `Failed: ${error.message}`, 'error');
+      finishUpdate(false, `Failed at step: ${step.name}`);
+      logger.error(`Update failed at step ${step.name}`, { error: error.message });
+      return;
+    }
+  }
+
+  finishUpdate(true);
+  logger.info('Update completed successfully');
+}
+
+function executeCommand(command, args, stepName) {
+  return new Promise((resolve, reject) => {
+    const process = spawn(command, args, {
+      cwd: process.cwd(),
+      shell: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    if (process.stdout) {
+      process.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        addLog(stepName, text.trim(), 'log');
+      });
+    }
+
+    if (process.stderr) {
+      process.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
+        addLog(stepName, text.trim(), 'error');
+      });
+    }
+
+    process.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        reject(new Error(`Process exited with code ${code}`));
+      }
+    });
+
+    process.on('error', (error) => {
+      reject(error);
+    });
+  });
+}
 
 export async function POST(req) {
   try {
@@ -13,33 +93,26 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Optional: Check if user is admin (if your app has admin roles)
-    // For now, just logging the action
     logger.info('Update requested', { userId: session.user.id, email: session.user.email });
 
-    // Run pnpm runUpdate in background
-    const updateProcess = spawn('pnpm', ['runUpdate'], {
-      detached: true,
-      stdio: 'ignore', // Ignore stdin, stdout, stderr
-      cwd: process.cwd(),
+    // Start the update process in the background
+    // Don't await it - let it run independently
+    runUpdateProcess().catch((error) => {
+      logger.error('Unhandled update error', { error: error.message });
     });
-
-    // Unref the process so the Node process can exit even if the child is still running
-    updateProcess.unref();
-
-    // Log the process ID for monitoring
-    logger.info('Update process started', { pid: updateProcess.pid });
 
     return NextResponse.json({
       success: true,
-      message: 'Update process started. The server will restart automatically.',
-      pid: updateProcess.pid,
+      message: 'Update process started. Check WebSocket for status updates.',
     });
   } catch (error) {
     logger.error('POST /api/system/run-update - Error', { error: error.message });
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message,
+      },
+      { status: 500 }
+    );
   }
 }
