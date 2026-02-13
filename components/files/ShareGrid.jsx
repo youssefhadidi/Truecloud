@@ -3,11 +3,11 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2, FiPlay } from 'react-icons/fi';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
+import { getShareThumbnailUrl } from '@/lib/api/files';
 
 // Breakpoints
 const BREAKPOINT = {
@@ -30,6 +30,7 @@ const getColumnsCount = (width) => {
 function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) {
   const ref = useRef(null);
   const [isInView, setIsInView] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -45,27 +46,19 @@ function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) 
     return () => observer.disconnect();
   }, []);
 
-  const { data, isError } = useQuery({
-    queryKey: ['share-thumbnail', token, fileName, currentSubPath],
-    queryFn: async () => {
-      const url = `/api/public/${token}/thumbnail?file=${encodeURIComponent(fileName)}&path=${encodeURIComponent(currentSubPath)}${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      if (!res.ok || !json.data) throw new Error('No thumbnail');
-      return json;
-    },
-    enabled: isInView,
-    retry: 1,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
-
-  if (isError) return null;
+  const thumbnailUrl = isInView ? getShareThumbnailUrl(token, fileName, currentSubPath, submittedPassword) : null;
 
   return (
     <div ref={ref} className="w-full h-full">
-      {data?.data && <img src={data.data} alt={fileName} className="w-full h-full object-cover" />}
-      {!data?.data && isInView && !isError && (
+      {thumbnailUrl && (
+        <img
+          src={thumbnailUrl}
+          alt={fileName}
+          className="w-full h-full object-cover"
+          onLoad={() => setIsLoaded(true)}
+        />
+      )}
+      {!isLoaded && isInView && (
         <div className="w-full h-full flex items-center justify-center">
           <FiImage className="text-gray-400 animate-spin" size={24} />
         </div>

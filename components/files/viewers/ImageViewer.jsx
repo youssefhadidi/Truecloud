@@ -8,7 +8,7 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
   const [fullLoaded, setFullLoaded] = useState(false);
   const imgRef = useRef(null);
   const transformRef = useRef(null);
-  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
+  const thumbnailUrl = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
   // Reset when file changes
   useEffect(() => {
@@ -37,8 +37,8 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
       }}
     >
       {/* Thumbnail as placeholder */}
-      {thumbnailData?.data && !fullLoaded && (
-        <img src={thumbnailData.data} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />
+      {thumbnailUrl && !fullLoaded && (
+        <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />
       )}
 
       {/* Loading spinner - visible while full image is loading */}

@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { FiImage } from 'react-icons/fi';
-import { useThumbnail } from '@/lib/api/files';
+import { getThumbnailUrl } from '@/lib/api/files';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 
 export default function LazyImage({ src, alt, className, onError, isThumbnail = false, fileId = null, filePath = '' }) {
@@ -13,13 +13,9 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
   const [hasError, setHasError] = useState(false);
   const imgRef = useRef(null);
 
-  // Fetch thumbnail (generates if needed)
-  // When isThumbnail is true, use fileId and filePath props directly to avoid URL encoding issues
-  const { data: thumbnailData, isLoading, isError } = useThumbnail(
-    isThumbnail ? fileId : null,
-    isThumbnail ? filePath : '',
-    isThumbnail && isInView && !hasError && fileId !== null
-  );
+  // Get thumbnail URL (when in view and for thumbnails only)
+  // URL is stable/deterministic so browser caches via HTTP cache headers
+  const thumbnailUrl = isThumbnail && isInView && fileId ? getThumbnailUrl(fileId, filePath) : null;
 
   // Handle intersection observer
   useEffect(() => {
@@ -47,15 +43,6 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
     };
   }, []);
 
-  // Handle error from React Query
-  useEffect(() => {
-    if (isError) {
-      setHasError(true);
-      if (onError) {
-        onError();
-      }
-    }
-  }, [isError, onError]);
 
   const handleLoad = () => {
     setIsLoaded(true);
@@ -68,9 +55,9 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
     }
   };
 
-  // Use base64 data if it's a thumbnail, otherwise use original src
-  const imageSrc = isThumbnail && thumbnailData?.data ? thumbnailData.data : src;
-  const showImage = !isThumbnail || thumbnailData?.data;
+  // Use thumbnail URL if available, otherwise use original src
+  const imageSrc = isThumbnail && thumbnailUrl ? thumbnailUrl : src;
+  const showImage = !isThumbnail || thumbnailUrl;
 
   return (
     <div ref={imgRef} className={`relative ${className}`}>
@@ -87,7 +74,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
               decoding="async"
             />
           )}
-          {(!isLoaded || isLoading) && !hasError && (
+          {!isLoaded && !hasError && (
             <div className="absolute inset-0 flex items-center justify-center">
               <FiImage className="text-gray-400 animate-spin" size={24} />
             </div>

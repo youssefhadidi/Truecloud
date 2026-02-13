@@ -30,7 +30,7 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
   const fileType = getFileType(file);
 
   const canThumbnail = fileType === 'image' || fileType === 'video' || fileType === 'pdf';
-  const { data: thumbnailData } = useShareAwareThumbnail(file, currentPath, canThumbnail && isVisible, shareToken, sharePassword);
+  const thumbnailUrl = useShareAwareThumbnail(file, currentPath, canThumbnail && isVisible, shareToken, sharePassword);
 
   const iconMap = {
     '3d': <FiBox size={20} className="text-orange-400" />,
@@ -40,8 +40,6 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
     xlsx: <FiFile size={20} className="text-green-400" />,
     image: <FiImage size={20} className="text-green-400" />,
   };
-
-  const hasThumbnail = canThumbnail && thumbnailData?.data;
 
   return (
     <button
@@ -63,8 +61,8 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
         }
       }}
     >
-      {hasThumbnail ? (
-        <img src={thumbnailData.data} alt={file.name} className="w-full h-full object-cover" draggable={false} />
+      {thumbnailUrl ? (
+        <img src={thumbnailUrl} alt={file.name} className="w-full h-full object-cover" draggable={false} />
       ) : (
         iconMap[fileType] || <FiFile size={20} className="text-gray-500" />
       )}

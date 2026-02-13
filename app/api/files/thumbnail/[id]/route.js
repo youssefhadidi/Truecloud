@@ -174,21 +174,24 @@ export async function GET(req, { params }) {
       }
     }
 
-    // Read thumbnail and convert to base64
+    // Read thumbnail and serve as binary
     const thumbnailBuffer = await fsPromises.readFile(actualThumbnailPath);
-    const base64 = thumbnailBuffer.toString('base64');
-    const dataUrl = `data:image/webp;base64,${base64}`;
 
     const duration = Date.now() - startTime;
-    logger.debug('GET /api/files/thumbnail - Returning base64', {
+    logger.debug('GET /api/files/thumbnail - Returning WebP', {
       fileId,
       duration: `${duration}ms`,
-      generated: !thumbnailExists,
+      cacheHit: thumbnailExists,
+      size: thumbnailBuffer.length,
     });
 
-    return NextResponse.json({
-      data: dataUrl,
-      generated: !thumbnailExists,
+    return new NextResponse(thumbnailBuffer, {
+      headers: {
+        'Content-Type': 'image/webp',
+        'Content-Length': thumbnailBuffer.length.toString(),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Cache': thumbnailExists ? 'HIT' : 'MISS',
+      },
     });
   } catch (error) {
     const duration = Date.now() - startTime;

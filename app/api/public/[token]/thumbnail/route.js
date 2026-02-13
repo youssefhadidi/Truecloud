@@ -134,19 +134,17 @@ export async function GET(req, { params }) {
       }
     }
 
-    // Return base64 thumbnail
+    // Return WebP thumbnail as binary
     const thumbnailBuffer = await fsPromises.readFile(thumbnailPath);
-    const base64 = thumbnailBuffer.toString('base64');
-    const dataUrl = `data:image/webp;base64,${base64}`;
 
-    return NextResponse.json(
-      { data: dataUrl, generated: !thumbnailExists },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=31536000, immutable',
-        },
+    return new NextResponse(thumbnailBuffer, {
+      headers: {
+        'Content-Type': 'image/webp',
+        'Content-Length': thumbnailBuffer.length.toString(),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Cache': !thumbnailExists ? 'MISS' : 'HIT',
       },
-    );
+    });
   } catch (error) {
     console.error('GET /api/public/[token]/thumbnail - Error:', error);
     return NextResponse.json({ error: 'Thumbnail generation failed' }, { status: 500 });
