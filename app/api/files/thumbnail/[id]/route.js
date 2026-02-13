@@ -21,7 +21,7 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 export const maxDuration = 60;
 
 // Semaphore to limit concurrent thumbnail generation
-const thumbnailSemaphore = new Semaphore(15); // Limited parallelization to prevent resource exhaustion
+const thumbnailSemaphore = new Semaphore(30); // Limited parallelization to prevent resource exhaustion
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
