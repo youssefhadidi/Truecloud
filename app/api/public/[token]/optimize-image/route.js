@@ -21,9 +21,6 @@ const optimizationSemaphore = new Semaphore(10);
 export const maxDuration = 30;
 
 export async function GET(req, { params }) {
-  // Acquire semaphore permit before processing
-  await optimizationSemaphore.acquire();
-
   try {
     const { token } = await params;
     const url = new URL(req.url);
@@ -96,34 +93,38 @@ export async function GET(req, { params }) {
       });
     }
 
-    try {
-      // Generate cache key based on file path, quality, and dimensions
-      // Uses the same scheme as the authenticated route so both share the cache
-      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
+    // Generate cache key based on file path, quality, and dimensions
+    // Uses the same scheme as the authenticated route so both share the cache
+    const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
 
-      // Build cache path: split fullPath into directory and filename
-      const lastSlash = pathCheck.fullPath.lastIndexOf('/');
-      const relativeCacheDir = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
-      const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
-      const cacheFileName = `${cacheKey}.webp`;
-      const cachePath = join(cacheDir, cacheFileName);
+    // Build cache path: split fullPath into directory and filename
+    const lastSlash = pathCheck.fullPath.lastIndexOf('/');
+    const relativeCacheDir = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
+    const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
+    const cacheFileName = `${cacheKey}.webp`;
+    const cachePath = join(cacheDir, cacheFileName);
 
-      // Check if cached version exists and is newer than source file
-      if (fs.existsSync(cachePath)) {
-        const cacheStats = await stat(cachePath);
-        if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
-          const cachedBuffer = fs.readFileSync(cachePath);
-          return new NextResponse(cachedBuffer, {
-            headers: {
-              'Content-Type': 'image/webp',
-              'Content-Length': cachedBuffer.length.toString(),
-              'Cache-Control': 'public, max-age=31536000',
-              'X-Cache': 'HIT',
-            },
-          });
-        }
+    // Check if cached version exists and is newer than source file
+    if (fs.existsSync(cachePath)) {
+      const cacheStats = await stat(cachePath);
+      if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
+        // Serve cached version without semaphore
+        const cachedBuffer = fs.readFileSync(cachePath);
+        return new NextResponse(cachedBuffer, {
+          headers: {
+            'Content-Type': 'image/webp',
+            'Content-Length': cachedBuffer.length.toString(),
+            'Cache-Control': 'public, max-age=31536000',
+            'X-Cache': 'HIT',
+          },
+        });
       }
+    }
 
+    // Acquire semaphore only for actual optimization
+    await optimizationSemaphore.acquire();
+
+    try {
       // Optimize image using sharp
       const optimizedBuffer = await sharp(filePath, {
         failOn: 'none',
@@ -165,12 +166,12 @@ export async function GET(req, { params }) {
           'Cache-Control': 'public, max-age=31536000',
         },
       });
+    } finally {
+      // Release semaphore after optimization completes
+      optimizationSemaphore.release();
     }
   } catch (error) {
     console.error('GET /api/public/[token]/optimize-image - Error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
-  } finally {
-    // Always release semaphore permit
-    optimizationSemaphore.release();
   }
 }

@@ -22,9 +22,6 @@ const optimizationSemaphore = new Semaphore(10);
 export const maxDuration = 30;
 
 export async function GET(req, { params }) {
-  // Acquire semaphore permit before processing
-  await optimizationSemaphore.acquire();
-
   try {
     const session = await auth();
     if (!session) {
@@ -94,34 +91,37 @@ export async function GET(req, { params }) {
       });
     }
 
-    try {
-      // Generate cache key based on file path, quality, dimensions, and format
-      const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}-${format}`).digest('hex');
+    // Generate cache key based on file path, quality, dimensions, and format
+    const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}-${format}`).digest('hex');
 
-      // Create cache path preserving directory structure
-      const relativeCacheDir = join(relativePath);
-      const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
-      const cacheFileName = `${cacheKey}.${format}`;
-      const cachePath = join(cacheDir, cacheFileName);
+    // Create cache path preserving directory structure
+    const relativeCacheDir = join(relativePath);
+    const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
+    const cacheFileName = `${cacheKey}.${format}`;
+    const cachePath = join(cacheDir, cacheFileName);
 
-      // Check if cached version exists and is newer than source file
-      if (fs.existsSync(cachePath)) {
-        const cacheStats = await stat(cachePath);
-        if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
-          // Serve cached version
-          const cachedBuffer = fs.readFileSync(cachePath);
-          const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-          return new NextResponse(cachedBuffer, {
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': cachedBuffer.length.toString(),
-              'Cache-Control': 'public, max-age=31536000',
-              'X-Cache': 'HIT',
-            },
-          });
-        }
+    // Check if cached version exists and is newer than source file
+    if (fs.existsSync(cachePath)) {
+      const cacheStats = await stat(cachePath);
+      if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
+        // Serve cached version without semaphore
+        const cachedBuffer = fs.readFileSync(cachePath);
+        const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
+        return new NextResponse(cachedBuffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': cachedBuffer.length.toString(),
+            'Cache-Control': 'public, max-age=31536000',
+            'X-Cache': 'HIT',
+          },
+        });
       }
+    }
 
+    // Acquire semaphore only for actual optimization
+    await optimizationSemaphore.acquire();
+
+    try {
       // Optimize image using sharp
       let sharpPipeline = sharp(filePath, {
         failOn: 'none',
@@ -176,12 +176,12 @@ export async function GET(req, { params }) {
           'Cache-Control': 'public, max-age=31536000',
         },
       });
+    } finally {
+      // Release semaphore after optimization completes
+      optimizationSemaphore.release();
     }
   } catch (error) {
     console.error('Optimize image error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
-  } finally {
-    // Always release semaphore permit
-    optimizationSemaphore.release();
   }
 }
