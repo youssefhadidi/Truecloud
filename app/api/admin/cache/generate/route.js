@@ -108,7 +108,8 @@ export async function POST(req) {
           global.cacheGenerationStatus.skipped = data.skipped;
           global.cacheGenerationStatus.currentFile = data.current;
         } else if (data.status === 'cancelled') {
-          console.error('[CACHE] Received cancelled message');
+          console.error('[CACHE] >>> RECEIVED CANCELLED MESSAGE <<<');
+          console.error('[CACHE] Cancellation confirmed - isRunning: true -> false');
           global.cacheGenerationStatus.isRunning = false;
           global.cacheGenerationStatus.success = false;
           global.cacheGenerationStatus.error = 'Cache generation cancelled by user';
