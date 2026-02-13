@@ -33,7 +33,14 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Mark webtorrent as external to avoid build errors with native modules
+  // Configure Turbopack for Next.js 16 (default bundler)
+  turbopack: {
+    resolveAlias: {
+      // Use a stub for webtorrent during build - real module is lazy-loaded at runtime
+      webtorrent: '@/lib/webtorrent-stub',
+    },
+  },
+  // Webpack config for fallback if webpack is explicitly used
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];
