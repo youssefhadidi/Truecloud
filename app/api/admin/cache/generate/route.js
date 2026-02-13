@@ -135,20 +135,24 @@ export async function POST(req) {
           global.cacheGenerationStatus.successful = data.successful;
           global.cacheGenerationStatus.failed = data.failed;
           global.cacheGenerationStatus.skipped = data.skipped;
+          // Set flag so we only broadcast the complete message once
+          global.cacheGenerationStatusBroadcast = true;
         } else if (data.status === 'error') {
           global.cacheGenerationStatus.isRunning = false;
           global.cacheGenerationStatus.success = false;
           global.cacheGenerationStatus.error = data.message;
           global.cacheGenerationStatus.endTime = new Date();
+          // Set flag so we only broadcast the error message once
+          global.cacheGenerationStatusBroadcast = true;
         }
 
         // Broadcast update (ignore progress updates after cancellation, but always broadcast cancelled/complete/error)
-        // For cancelled status, only broadcast once
+        // Prevent duplicate broadcasts of final status messages
         let shouldBroadcast = global.broadcastCacheGenerationUpdate &&
           (!global.cacheGenerationCancelled || data.status === 'cancelled' || data.status === 'error' || data.status === 'complete');
 
-        if (data.status === 'cancelled' && global.cacheGenerationStatusBroadcast === true) {
-          // Already broadcast the cancelled message, don't broadcast again
+        if ((data.status === 'cancelled' || data.status === 'complete' || data.status === 'error') && global.cacheGenerationStatusBroadcast === true) {
+          // Already broadcast the final status message, don't broadcast again
           shouldBroadcast = false;
         }
 
