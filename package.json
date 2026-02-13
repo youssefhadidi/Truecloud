@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.67.0",
+  "version": "1.68.0",
   "private": true,
   "scripts": {
     "dev": "node server.js",
@@ -16,8 +16,9 @@
     "generate-secret": "node scripts/generate-secret.js",
     "pull": "git pull",
     "stopServ": "systemctl stop truecloud",
-    "runUpdate": "npm run pull && pnpm i && npm run db:push && npm run build && npm run restart",
-    "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'"
+    "runUpdate": "npm run pull && pnpm i && npm rebuild node-datachannel && npm run db:push && npm run build && npm run restart",
+    "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'",
+    "rebuild-native": "npm rebuild node-datachannel"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
