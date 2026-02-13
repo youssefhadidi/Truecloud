@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.14.0",
+  "version": "1.29.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

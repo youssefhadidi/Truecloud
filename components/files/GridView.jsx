@@ -28,9 +28,8 @@ const getColumnsCount = (width) => {
   return 8;
 };
 
-// Memoized GridItem to prevent re-renders
-const GridItem = memo(
-  ({
+// Memoized GridItem with shallow comparison
+const GridItem = memo(({
     item,
     cellWidth,
     containerWidth,
@@ -397,19 +396,6 @@ const GridItem = memo(
           </div>
         )}
       </div>
-    );
-  },
-  (prevProps, nextProps) => {
-    // Custom comparison for memoization
-    return (
-      prevProps.item === nextProps.item &&
-      prevProps.isDeletingFile === nextProps.isDeletingFile &&
-      prevProps.isRenamingFile === nextProps.isRenamingFile &&
-      prevProps.isSelected === nextProps.isSelected &&
-      prevProps.processingFile === nextProps.processingFile &&
-      prevProps.shouldShowActions === nextProps.shouldShowActions &&
-      prevProps.newFolderName === nextProps.newFolderName &&
-      prevProps.newFileName === nextProps.newFileName
     );
   },
 );

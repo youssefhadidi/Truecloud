@@ -94,11 +94,11 @@ export async function GET(req, { params }) {
       });
     }
 
-    // If it's a file, return it directly
-    const fileBuffer = fs.readFileSync(filePath);
+    // If it's a file, stream it directly (don't load entire file into memory)
+    const fileStream = fs.createReadStream(filePath);
     const mimeType = lookup(downloadName) || 'application/octet-stream';
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileStream, {
       headers: {
         'Content-Type': mimeType,
         'Content-Length': fileStats.size.toString(),

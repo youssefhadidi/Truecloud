@@ -173,7 +173,10 @@ export function useSharePage(token, shareData = null) {
   }, []);
 
   const setUploadingFiles = useCallback((files) => {
-    setUpload((prev) => ({ ...prev, uploadingFiles: files }));
+    setUpload((prev) => {
+      const newFiles = typeof files === 'function' ? files(prev.uploadingFiles) : files;
+      return { ...prev, uploadingFiles: newFiles };
+    });
   }, []);
 
   const setIsLoading = useCallback((loading) => {
@@ -250,13 +253,13 @@ export function useSharePage(token, shareData = null) {
   // Reset selection on path change or when selection mode is off
   useEffect(() => {
     setSelectedFiles([]);
-  }, [navigation.currentSubPath, setSelectedFiles]);
+  }, [navigation.currentSubPath]);
 
   useEffect(() => {
     if (!selection.selectionMode) {
       setSelectedFiles([]);
     }
-  }, [selection.selectionMode, setSelectedFiles]);
+  }, [selection.selectionMode]);
 
   // Filter and sort files based on search query and sort criteria
   const sortedFilteredFiles = useMemo(() => {

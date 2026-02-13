@@ -171,14 +171,14 @@ export function useFilesPage(status) {
   // Reset selection on path change
   useEffect(() => {
     setSelectedFiles([]);
-  }, [navigation.currentPath, setSelectedFiles]);
+  }, [navigation.currentPath]);
 
   // Reset selection when selection mode turns off
   useEffect(() => {
     if (!selection.selectionMode) {
       setSelectedFiles([]);
     }
-  }, [selection.selectionMode, setSelectedFiles]);
+  }, [selection.selectionMode]);
 
   // Fetch and sort files
   const { data: filesData, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');

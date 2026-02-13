@@ -4,7 +4,7 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState, useCallback } from 'react';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
@@ -106,14 +106,12 @@ function FilesPageContent() {
 
   const hasHeicFiles = heicFiles.length > 0;
 
-  const toggleSelection = (file) => {
-    state.setSelectedFiles((prev) => {
-      if (prev.includes(file.name)) {
-        return prev.filter((name) => name !== file.name);
-      }
-      return [...prev, file.name];
-    });
-  };
+  const toggleSelection = useCallback((file) => {
+    const newSelected = state.selectedFiles.includes(file.name)
+      ? state.selectedFiles.filter((name) => name !== file.name)
+      : [...state.selectedFiles, file.name];
+    state.setSelectedFiles(newSelected);
+  }, [state.selectedFiles, state.setSelectedFiles]);
 
   const fetchMoveFolders = async (path) => {
     const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
