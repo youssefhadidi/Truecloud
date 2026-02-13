@@ -94,6 +94,7 @@ export async function POST(req) {
       try {
         // Ignore messages if generation was cancelled
         if (global.cacheGenerationCancelled) {
+          console.error('[CACHE] Ignoring message after cancellation:', data.status);
           return;
         }
 
@@ -107,6 +108,7 @@ export async function POST(req) {
           global.cacheGenerationStatus.skipped = data.skipped;
           global.cacheGenerationStatus.currentFile = data.current;
         } else if (data.status === 'complete') {
+          console.error('[CACHE] Received complete message');
           global.cacheGenerationStatus.isRunning = false;
           global.cacheGenerationStatus.success = true;
           global.cacheGenerationStatus.endTime = new Date();
@@ -123,8 +125,9 @@ export async function POST(req) {
           global.cacheGenerationStatus.endTime = new Date();
         }
 
-        // Broadcast update
-        if (global.broadcastCacheGenerationUpdate) {
+        // Broadcast update (but never if cancelled)
+        if (global.broadcastCacheGenerationUpdate && !global.cacheGenerationCancelled) {
+          console.error(`[CACHE] Broadcasting ${data.status} update - processed: ${data.processed || 'N/A'}`);
           global.broadcastCacheGenerationUpdate({
             type: 'status',
             payload: global.cacheGenerationStatus,
@@ -138,8 +141,11 @@ export async function POST(req) {
     child.on('error', (err) => {
       // Don't broadcast error if it was manually cancelled
       if (global.cacheGenerationCancelled) {
+        console.error('[CACHE] Ignoring error event after cancellation:', err.message);
         return;
       }
+
+      console.error('[CACHE] Error event broadcast:', err.message);
 
       global.cacheGenerationStatus.isRunning = false;
       global.cacheGenerationStatus.success = false;
@@ -160,8 +166,11 @@ export async function POST(req) {
 
       // Don't broadcast if it was manually cancelled (already broadcast from DELETE handler)
       if (global.cacheGenerationCancelled) {
+        console.error('[CACHE] Ignoring exit event after cancellation, code:', code);
         return;
       }
+
+      console.error('[CACHE] Exit event triggered, code:', code);
 
       if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
         global.cacheGenerationStatus.isRunning = false;
@@ -220,6 +229,8 @@ export async function DELETE() {
     global.cacheGenerationStatus.success = false;
     global.cacheGenerationStatus.error = 'Cache generation cancelled by user';
     global.cacheGenerationStatus.endTime = new Date();
+
+    console.error('[CACHE] Cancellation requested - broadcasting final status');
 
     // Broadcast update once
     if (global.broadcastCacheGenerationUpdate) {
