@@ -47,7 +47,7 @@ async function runUpdateProcess() {
 
 function executeCommand(command, args, stepName) {
   return new Promise((resolve, reject) => {
-    const process = spawn(command, args, {
+    const child = spawn(command, args, {
       cwd: process.cwd(),
       shell: true,
     });
@@ -55,23 +55,23 @@ function executeCommand(command, args, stepName) {
     let stdout = '';
     let stderr = '';
 
-    if (process.stdout) {
-      process.stdout.on('data', (data) => {
+    if (child.stdout) {
+      child.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
         addLog(stepName, text.trim(), 'log');
       });
     }
 
-    if (process.stderr) {
-      process.stderr.on('data', (data) => {
+    if (child.stderr) {
+      child.stderr.on('data', (data) => {
         const text = data.toString();
         stderr += text;
         addLog(stepName, text.trim(), 'error');
       });
     }
 
-    process.on('close', (code) => {
+    child.on('close', (code) => {
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -79,7 +79,7 @@ function executeCommand(command, args, stepName) {
       }
     });
 
-    process.on('error', (error) => {
+    child.on('error', (error) => {
       reject(error);
     });
   });
