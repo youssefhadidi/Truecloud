@@ -18,6 +18,10 @@ const nextConfig = {
     staticFolder: '/mnt/Truenas/truecloud/uploads',
   },
 
+  // Enable compression (gzip + Brotli for production)
+  // Brotli typically achieves 15-20% better compression than gzip
+  compress: true,
+
   // Enable more detailed logging
   logging: {
     fetches: {
