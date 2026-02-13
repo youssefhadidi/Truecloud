@@ -159,8 +159,8 @@ export async function GET(req) {
 
       return NextResponse.json({ downloads: allDownloads });
     } catch (error) {
-      // aria2c daemon not running or not available
-      logger.warn('GET /api/files/torrent-download - aria2c unavailable', { error: error.message });
+      // WebTorrent client error or unavailable
+      logger.warn('GET /api/files/torrent-download - Error fetching downloads', { error: error.message });
       return NextResponse.json({ downloads: [] });
     }
   } catch (error) {

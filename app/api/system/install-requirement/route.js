@@ -79,7 +79,6 @@ export async function POST(req) {
     // Map of installable packages (Debian only)
     const packages = {
       ffmpeg: 'ffmpeg',
-      aria2: 'aria2',
       ghostscript: 'ghostscript',
       'sharp hevc': 'sharp-hevc-custom',
     };

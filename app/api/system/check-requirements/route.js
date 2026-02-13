@@ -121,13 +121,6 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y ffmpeg',
   },
   {
-    name: 'aria2',
-    command: 'aria2c',
-    description: 'Torrent and metalink download utility',
-    installable: true,
-    installCommand: 'sudo apt-get install -y aria2',
-  },
-  {
     name: 'Sharp HEVC',
     checkType: 'sharp-hevc',
     description: 'HEIC/HEIF image support (requires libde265 + libheif + libvips)',
