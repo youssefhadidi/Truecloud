@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.57.0",
+  "version": "1.58.0",
   "private": true,
   "scripts": {
     "dev": "node server.js",
@@ -42,6 +42,7 @@
     "react-zoom-pan-pinch": "^3.7.0",
     "sharp": "^0.34.5",
     "three": "^0.182.0",
+    "webtorrent": "^2.12.0",
     "ws": "^8.19.0",
     "xlsx": "^0.18.5"
   },

@@ -14,7 +14,7 @@ import {
   pauseDownload,
   resumeDownload,
   removeDownload,
-} from '@/lib/aria2Manager';
+} from '@/lib/webTorrentManager';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
 
@@ -33,11 +33,15 @@ export async function POST(req) {
     const formData = await req.formData();
     const torrentFile = formData.get('torrentFile');
     const url = formData.get('url');
-    const downloadType = formData.get('downloadType') || 'http';
     const downloadPath = formData.get('path') || '';
 
+    // Only accept torrent files or magnet links
     if (!torrentFile && !url) {
-      return NextResponse.json({ error: 'Please provide either a file or URL' }, { status: 400 });
+      return NextResponse.json({ error: 'Please provide a torrent file or magnet link' }, { status: 400 });
+    }
+
+    if (url && !url.startsWith('magnet:')) {
+      return NextResponse.json({ error: 'Only magnet links are supported (no HTTP downloads)' }, { status: 400 });
     }
 
     // Build absolute download directory
@@ -67,13 +71,14 @@ export async function POST(req) {
       await writeFile(torrentPath, Buffer.from(bytes));
       logger.info('Torrent file saved', { path: torrentPath, size: bytes.byteLength });
 
-      // Convert to file:// URL for aria2 (use absolute path)
+      // Convert to file:// URL for WebTorrent (use absolute path)
       downloadUrl = 'file://' + torrentPath;
     } else {
+      // url is magnet link
       downloadUrl = url;
     }
 
-    // Add download via aria2 manager with specified directory
+    // Add download via WebTorrent manager with specified directory
     const gid = await addDownload(downloadUrl, { dir: downloadDir });
 
     // Get initial status
@@ -86,12 +91,11 @@ export async function POST(req) {
       downloadSpeed: '0 B/s',
       downloaded: '0 B',
       totalSize: 'Unknown',
-      isTorrent: torrentFile || url.startsWith('magnet:'),
+      isTorrent: true,
     };
 
     logger.info('POST /api/files/torrent-download - Download started', {
       gid,
-      type: downloadType,
       path: downloadPath,
     });
 
