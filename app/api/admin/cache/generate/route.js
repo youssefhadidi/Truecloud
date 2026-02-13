@@ -118,9 +118,8 @@ export async function POST(req) {
           global.cacheGenerationStatus.successful = data.successful;
           global.cacheGenerationStatus.failed = data.failed;
           global.cacheGenerationStatus.skipped = data.skipped;
-          // Call cancel handler if it exists (set by DELETE)
+          // Clean up cancel handler
           if (global.cacheGenerationCancelHandler) {
-            global.cacheGenerationCancelHandler();
             global.cacheGenerationCancelHandler = null;
           }
         } else if (data.status === 'complete') {
@@ -183,12 +182,18 @@ export async function POST(req) {
       // Clean up the reference
       global.cacheGenerationChild = null;
 
-      // Always ensure isRunning is false and clean up
+      // Don't broadcast on exit if already handled by cancelled status
+      if (global.cacheGenerationCancelled) {
+        console.error('[CACHE] Ignoring exit event after cancellation, code:', code);
+        return;
+      }
+
+      // Only broadcast if still running (i.e., not already completed)
       if (global.cacheGenerationStatus.isRunning === true) {
         global.cacheGenerationStatus.isRunning = false;
         global.cacheGenerationStatus.endTime = new Date();
 
-        // If not already marked as error or success, mark as error with exit code
+        // If not already marked as error or success, mark based on exit code
         if (global.cacheGenerationStatus.success === null) {
           global.cacheGenerationStatus.success = code === 0;
           if (code !== 0) {
@@ -196,15 +201,12 @@ export async function POST(req) {
           }
         }
 
-        // Only broadcast if we haven't already (cancelled status broadcasts separately)
-        if (global.broadcastCacheGenerationUpdate && !global.cacheGenerationCancelled) {
+        if (global.broadcastCacheGenerationUpdate) {
           console.error('[CACHE] Broadcasting exit status, code:', code);
           global.broadcastCacheGenerationUpdate({
             type: 'status',
             payload: global.cacheGenerationStatus,
           });
-        } else if (global.cacheGenerationCancelled) {
-          console.error('[CACHE] Ignoring exit broadcast after cancellation, code:', code);
         }
       }
     });
@@ -261,21 +263,6 @@ export async function DELETE() {
         global.cacheGenerationChild.kill('SIGKILL');
       }
     }, 5000);
-
-    // Handle the worker's cancellation response
-    const handleCancelResponse = () => {
-      clearTimeout(killTimeout);
-      if (global.broadcastCacheGenerationUpdate && !global.cacheGenerationCancelled) {
-        console.error('[CACHE] Worker acknowledged cancellation - broadcasting final status');
-        global.broadcastCacheGenerationUpdate({
-          type: 'status',
-          payload: global.cacheGenerationStatus,
-        });
-      }
-    };
-
-    // Wait for the cancelled status message or timeout
-    global.cacheGenerationCancelHandler = handleCancelResponse;
 
     return NextResponse.json({ success: true, message: 'Cache generation cancellation requested' });
   } catch (error) {
