@@ -172,7 +172,18 @@ export async function POST(req) {
 
       console.error('[CACHE] Exit event triggered, code:', code);
 
-      if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
+      // If process completed successfully, still need to ensure isRunning is false
+      if (code === 0 && global.cacheGenerationStatus.isRunning === true && global.cacheGenerationStatus.success === true) {
+        // Successful completion - just ensure isRunning is false
+        global.cacheGenerationStatus.isRunning = false;
+        if (global.broadcastCacheGenerationUpdate) {
+          global.broadcastCacheGenerationUpdate({
+            type: 'status',
+            payload: global.cacheGenerationStatus,
+          });
+        }
+      } else if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
+        // Error exit
         global.cacheGenerationStatus.isRunning = false;
         global.cacheGenerationStatus.success = false;
         global.cacheGenerationStatus.error = `Worker exited with code ${code}`;
