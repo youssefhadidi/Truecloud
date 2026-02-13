@@ -8,6 +8,7 @@ const nextConfig = {
   experimental: {
     proxyClientMaxBodySize: '100gb',
   },
+  serverExternalPackages: ['webtorrent'],
   images: {
     domains: ['192.168.1.240', 'localhost'],
   },
@@ -33,14 +34,7 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Configure Turbopack for Next.js 16 (default bundler)
-  turbopack: {
-    resolveAlias: {
-      // Use a stub for webtorrent during build - real module is lazy-loaded at runtime
-      webtorrent: '@/lib/webtorrent-stub',
-    },
-  },
-  // Webpack config for fallback if webpack is explicitly used
+  // Webpack config for fallback (when explicitly used, not Turbopack)
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];
@@ -51,6 +45,8 @@ const nextConfig = {
     }
     return config;
   },
+  // Turbopack config for Next.js 16 (default bundler)
+  turbopack: {},
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
