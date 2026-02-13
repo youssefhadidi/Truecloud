@@ -67,7 +67,8 @@ export async function POST(req) {
       await writeFile(torrentPath, Buffer.from(bytes));
       logger.info('Torrent file saved', { path: torrentPath, size: bytes.byteLength });
 
-      downloadUrl = torrentPath;
+      // Convert to file:// URL for aria2 (use absolute path)
+      downloadUrl = 'file://' + torrentPath;
     } else {
       downloadUrl = url;
     }
