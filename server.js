@@ -7,6 +7,7 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 const updateClients = new Set();
+const cacheGenerationClients = new Set();
 
 // Global update status state
 global.updateStatus = {
@@ -26,9 +27,35 @@ global.updateStatus = {
   logs: [],
 };
 
+// Global cache generation status state
+global.cacheGenerationStatus = {
+  isRunning: false,
+  type: null,
+  processed: 0,
+  total: 0,
+  successful: 0,
+  failed: 0,
+  skipped: 0,
+  currentFile: null,
+  startTime: null,
+  endTime: null,
+  success: null,
+  error: null,
+  duration: 0,
+};
+
 // Function to broadcast updates to all connected clients
 global.broadcastUpdate = (message) => {
   updateClients.forEach((client) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      client.send(JSON.stringify(message));
+    }
+  });
+};
+
+// Function to broadcast cache generation updates to all connected clients
+global.broadcastCacheGenerationUpdate = (message) => {
+  cacheGenerationClients.forEach((client) => {
     if (client.readyState === 1) { // 1 = OPEN
       client.send(JSON.stringify(message));
     }
@@ -63,6 +90,26 @@ app.prepare().then(() => {
 
         ws.on('error', () => {
           updateClients.delete(ws);
+        });
+      });
+    } else if (url.pathname === '/api/ws/cache-generation') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        // Send current status to newly connected client
+        ws.send(JSON.stringify({
+          type: 'status',
+          payload: global.cacheGenerationStatus,
+        }));
+
+        // Add to clients set
+        cacheGenerationClients.add(ws);
+
+        // Remove client when disconnected
+        ws.on('close', () => {
+          cacheGenerationClients.delete(ws);
+        });
+
+        ws.on('error', () => {
+          cacheGenerationClients.delete(ws);
         });
       });
     } else {

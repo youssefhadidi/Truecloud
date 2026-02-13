@@ -35,11 +35,41 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Directory not found' }, { status: 404 });
     }
 
+    // Initialize cache generation status
+    global.cacheGenerationStatus = {
+      isRunning: true,
+      type,
+      processed: 0,
+      total: 0,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      currentFile: null,
+      startTime: new Date(),
+      endTime: null,
+      success: null,
+      error: null,
+      duration: 0,
+    };
+
+    // Broadcast initial status
+    if (global.broadcastCacheGenerationUpdate) {
+      global.broadcastCacheGenerationUpdate({
+        type: 'status',
+        payload: global.cacheGenerationStatus,
+      });
+    }
+
     // Spawn child process for generation (spawn avoids Turbopack resolving the worker path)
     const { spawn } = await import('child_process');
     const workerPath = join(process.cwd(), 'lib', 'workers', 'generateCacheWorker.mjs');
     const child = spawn(process.execPath, [workerPath], {
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+
+    // Log stderr for debugging
+    child.stderr.on('data', (data) => {
+      console.error('Worker stderr:', data.toString());
     });
 
     // Send config to child process
@@ -53,52 +83,95 @@ export async function POST(req) {
       cwd: process.cwd(),
     });
 
-    // Create SSE stream that relays child process messages
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(controller) {
-        child.on('message', (data) => {
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          } catch {
-            // Stream already closed
-          }
-        });
+    // Handle messages from child process
+    child.on('message', (data) => {
+      try {
+        if (data.status === 'scanning' || data.status === 'starting') {
+          global.cacheGenerationStatus.total = data.total || global.cacheGenerationStatus.total;
+        } else if (data.status === 'progress') {
+          global.cacheGenerationStatus.processed = data.processed;
+          global.cacheGenerationStatus.total = data.total;
+          global.cacheGenerationStatus.successful = data.successful;
+          global.cacheGenerationStatus.failed = data.failed;
+          global.cacheGenerationStatus.skipped = data.skipped;
+          global.cacheGenerationStatus.currentFile = data.current;
+        } else if (data.status === 'complete') {
+          global.cacheGenerationStatus.isRunning = false;
+          global.cacheGenerationStatus.success = true;
+          global.cacheGenerationStatus.endTime = new Date();
+          global.cacheGenerationStatus.duration = data.duration || 0;
+          global.cacheGenerationStatus.processed = data.processed;
+          global.cacheGenerationStatus.total = data.total;
+          global.cacheGenerationStatus.successful = data.successful;
+          global.cacheGenerationStatus.failed = data.failed;
+          global.cacheGenerationStatus.skipped = data.skipped;
+        } else if (data.status === 'error') {
+          global.cacheGenerationStatus.isRunning = false;
+          global.cacheGenerationStatus.success = false;
+          global.cacheGenerationStatus.error = data.message;
+          global.cacheGenerationStatus.endTime = new Date();
+        }
 
-        child.on('error', (err) => {
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: err.message })}\n\n`));
-            controller.close();
-          } catch {
-            // Stream already closed
-          }
-        });
-
-        child.on('exit', (code) => {
-          try {
-            if (code !== 0 && code !== null) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: `Worker exited with code ${code}` })}\n\n`));
-            }
-            controller.close();
-          } catch {
-            // Stream already closed
-          }
-        });
-      },
-      cancel() {
-        child.kill();
-      },
+        // Broadcast update
+        if (global.broadcastCacheGenerationUpdate) {
+          global.broadcastCacheGenerationUpdate({
+            type: 'status',
+            payload: global.cacheGenerationStatus,
+          });
+        }
+      } catch (err) {
+        console.error('Error processing worker message:', err);
+      }
     });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
+    child.on('error', (err) => {
+      global.cacheGenerationStatus.isRunning = false;
+      global.cacheGenerationStatus.success = false;
+      global.cacheGenerationStatus.error = err.message;
+      global.cacheGenerationStatus.endTime = new Date();
+
+      if (global.broadcastCacheGenerationUpdate) {
+        global.broadcastCacheGenerationUpdate({
+          type: 'status',
+          payload: global.cacheGenerationStatus,
+        });
+      }
+    });
+
+    child.on('exit', (code) => {
+      if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
+        global.cacheGenerationStatus.isRunning = false;
+        global.cacheGenerationStatus.success = false;
+        global.cacheGenerationStatus.error = `Worker exited with code ${code}`;
+        global.cacheGenerationStatus.endTime = new Date();
+
+        if (global.broadcastCacheGenerationUpdate) {
+          global.broadcastCacheGenerationUpdate({
+            type: 'status',
+            payload: global.cacheGenerationStatus,
+          });
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Cache generation started. Connect to WebSocket for live updates.',
     });
   } catch (error) {
     console.error('Generate cache error:', error);
-    return NextResponse.json({ error: 'Failed to generate cache' }, { status: 500 });
+    global.cacheGenerationStatus.isRunning = false;
+    global.cacheGenerationStatus.success = false;
+    global.cacheGenerationStatus.error = error.message;
+    global.cacheGenerationStatus.endTime = new Date();
+
+    if (global.broadcastCacheGenerationUpdate) {
+      global.broadcastCacheGenerationUpdate({
+        type: 'status',
+        payload: global.cacheGenerationStatus,
+      });
+    }
+
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -2,9 +2,10 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { FiTrash2, FiRefreshCw, FiPlay, FiX, FiFolder, FiHardDrive } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { FiTrash2, FiRefreshCw, FiHardDrive } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import CacheGenerationClient from './CacheGenerationClient';
 
 export default function CachePage() {
   const [caches, setCaches] = useState([]);
@@ -12,13 +13,6 @@ export default function CachePage() {
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(null);
   const [confirmClear, setConfirmClear] = useState(null);
-
-  // Generate state
-  const [generatePath, setGeneratePath] = useState('');
-  const [generateType, setGenerateType] = useState('thumbnails');
-  const [generating, setGenerating] = useState(false);
-  const [generateProgress, setGenerateProgress] = useState(null);
-  const abortControllerRef = useRef(null);
 
   const { addNotification } = useNotifications();
 
@@ -61,78 +55,6 @@ export default function CachePage() {
     }
   };
 
-  // Start generation
-  const handleGenerate = async () => {
-    if (generating) return;
-
-    setGenerating(true);
-    setGenerateProgress({ status: 'starting', processed: 0, total: 0 });
-
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const response = await fetch('/api/admin/cache/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: generatePath, type: generateType }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate cache');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep incomplete last line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              setGenerateProgress(data);
-
-              if (data.status === 'complete') {
-                addNotification(
-                  'success',
-                  `Generated ${data.successful} items, ${data.skipped} skipped, ${data.failed} failed in ${data.duration}s`
-                );
-                await fetchStats();
-              } else if (data.status === 'error') {
-                addNotification('error', data.message);
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        addNotification('error', error.message);
-      }
-    } finally {
-      setGenerating(false);
-      abortControllerRef.current = null;
-    }
-  };
-
-  // Cancel generation
-  const handleCancelGenerate = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      addNotification('info', 'Generation cancelled');
-    }
-  };
 
   return (
     <>
@@ -206,121 +128,7 @@ export default function CachePage() {
       </div>
 
       {/* Generate Section */}
-      <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Generate Cache</h2>
-
-        <div className="space-y-4">
-          {/* Path Input */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Target Path (leave empty for all files)</label>
-            <div className="flex items-center gap-2">
-              <FiFolder className="text-gray-500" />
-              <input
-                type="text"
-                value={generatePath}
-                onChange={(e) => setGeneratePath(e.target.value)}
-                placeholder="e.g., user_abc123/photos"
-                disabled={generating}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 disabled:opacity-50"
-              />
-            </div>
-          </div>
-
-          {/* Type Selection */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Generate Type</label>
-            <div className="flex flex-wrap gap-3">
-              {[
-                { value: 'thumbnails', label: 'Thumbnails' },
-                { value: 'optimized', label: 'Optimized Images' },
-                { value: 'stream', label: 'Video Streaming' },
-                { value: 'all', label: 'All' },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-colors ${
-                    generateType === option.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  } ${generating ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="generateType"
-                    value={option.value}
-                    checked={generateType === option.value}
-                    onChange={(e) => setGenerateType(e.target.value)}
-                    disabled={generating}
-                    className="hidden"
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Generate Button */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-            >
-              <FiPlay />
-              {generating ? 'Generating...' : 'Generate'}
-            </button>
-            {generating && (
-              <button
-                onClick={handleCancelGenerate}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-              >
-                <FiX />
-                Cancel
-              </button>
-            )}
-          </div>
-
-          {/* Progress */}
-          {generateProgress && (
-            <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-300">
-                  {generateProgress.status === 'scanning' && 'Scanning directory...'}
-                  {generateProgress.status === 'starting' && `Found ${generateProgress.total} files`}
-                  {generateProgress.status === 'progress' && `Processing: ${generateProgress.current}`}
-                  {generateProgress.status === 'complete' && 'Complete!'}
-                  {generateProgress.status === 'error' && `Error: ${generateProgress.message}`}
-                </span>
-                {generateProgress.total > 0 && (
-                  <span className="text-gray-400">
-                    {generateProgress.processed}/{generateProgress.total}
-                  </span>
-                )}
-              </div>
-
-              {generateProgress.total > 0 && (
-                <>
-                  <div className="w-full bg-gray-600 rounded-full h-2 mb-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all"
-                      style={{ width: `${(generateProgress.processed / generateProgress.total) * 100}%` }}
-                    ></div>
-                  </div>
-
-                  <div className="flex gap-4 text-xs text-gray-400">
-                    <span className="text-green-400">✓ {generateProgress.successful || 0} generated</span>
-                    <span className="text-yellow-400">⊘ {generateProgress.skipped || 0} skipped</span>
-                    <span className="text-red-400">✗ {generateProgress.failed || 0} failed</span>
-                    {generateProgress.duration && (
-                      <span className="ml-auto">{generateProgress.duration}s</span>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <CacheGenerationClient />
 
       {/* Confirm Clear Modal */}
       {confirmClear && (
