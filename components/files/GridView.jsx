@@ -29,7 +29,8 @@ const getColumnsCount = (width) => {
 };
 
 // Memoized GridItem with shallow comparison
-const GridItem = memo(({
+const GridItem = memo(
+  ({
     item,
     cellWidth,
     containerWidth,
@@ -224,7 +225,7 @@ const GridItem = memo(({
                 <LazyImage
                   src=""
                   alt={item.name}
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover"
                   isThumbnail={true}
                   fileId={item.id}
                   filePath={currentPath}
@@ -241,7 +242,7 @@ const GridItem = memo(({
                   <LazyImage
                     src=""
                     alt={item.name}
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover"
                     isThumbnail={true}
                     fileId={item.id}
                     filePath={currentPath}
@@ -263,7 +264,7 @@ const GridItem = memo(({
                 <LazyImage
                   src=""
                   alt={item.name}
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover"
                   isThumbnail={true}
                   fileId={item.id}
                   filePath={currentPath}

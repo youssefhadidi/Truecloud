@@ -68,10 +68,17 @@ export function useShareOrDownload() {
                   removeTransfer(downloadId);
                 }, 3000);
               } catch (shareError) {
-                // Share API cancelled by user, fall back to direct download
-                if (shareError.name !== 'AbortError') {
-                  console.warn('Share failed, falling back to download:', shareError);
+                // If user cancelled the share, treat as cancellation and do NOT
+                // fall back to performing a direct download. For other errors,
+                // fall back to direct download.
+                if (shareError && shareError.name === 'AbortError') {
+                  updateTransfer(downloadId, { status: 'cancelled' });
+                  addNotification('info', `Download cancelled ${fileName ? `: ${fileName}` : ''}`);
+                  setTimeout(() => removeTransfer(downloadId), 3000);
+                  return;
                 }
+
+                console.warn('Share failed, falling back to download:', shareError);
                 performDirectDownload(fileUrl, fileName);
                 updateTransfer(downloadId, { status: 'success', progress: 100 });
                 setTimeout(() => removeTransfer(downloadId), 3000);
@@ -94,7 +101,7 @@ export function useShareOrDownload() {
         updateTransfer(downloadId, { status: 'error', error: error.message });
       }
     },
-    [addNotification, addTransfer, updateTransfer, removeTransfer]
+    [addNotification, addTransfer, updateTransfer, removeTransfer],
   );
 
   return { handleShareOrDownload };
