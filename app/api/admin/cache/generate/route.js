@@ -145,7 +145,7 @@ export async function POST(req) {
           (!global.cacheGenerationCancelled || data.status === 'cancelled' || data.status === 'error' || data.status === 'complete');
 
         if (shouldBroadcast) {
-          console.error(`[CACHE] Broadcasting ${data.status} update - processed: ${data.processed || 'N/A'}`);
+          console.error(`[CACHE] Broadcasting ${data.status} update`);
           global.broadcastCacheGenerationUpdate({
             type: 'status',
             payload: global.cacheGenerationStatus,
