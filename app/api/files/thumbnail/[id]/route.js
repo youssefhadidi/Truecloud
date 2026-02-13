@@ -11,6 +11,7 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 import { Semaphore } from '@/lib/semaphore';
+import { thumbnailCache } from '@/lib/thumbnailCache';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -113,6 +114,25 @@ export async function GET(req, { params }) {
     // Ensure thumbnails directory exists
     await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
+    // Fast path: check memory cache first
+    let cachedBuffer = thumbnailCache.get(thumbnailPath);
+    if (cachedBuffer) {
+      const duration = Date.now() - startTime;
+      logger.debug('GET /api/files/thumbnail - Serving from memory cache', {
+        fileId,
+        duration: `${duration}ms`,
+        size: cachedBuffer.length,
+      });
+      return new NextResponse(cachedBuffer, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Content-Length': cachedBuffer.length.toString(),
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Cache': 'MEMORY',
+        },
+      });
+    }
+
     // Check if thumbnail already exists
     let thumbnailExists = false;
     let actualThumbnailPath = thumbnailPath;
@@ -175,7 +195,11 @@ export async function GET(req, { params }) {
     }
 
     // Read thumbnail and serve as binary
-    const thumbnailBuffer = await fsPromises.readFile(actualThumbnailPath);
+    let thumbnailBuffer = thumbnailCache.get(actualThumbnailPath);
+    if (!thumbnailBuffer) {
+      thumbnailBuffer = await fsPromises.readFile(actualThumbnailPath);
+      thumbnailCache.set(actualThumbnailPath, thumbnailBuffer);
+    }
 
     const duration = Date.now() - startTime;
     logger.debug('GET /api/files/thumbnail - Returning WebP', {

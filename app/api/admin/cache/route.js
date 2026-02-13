@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authCheck';
 import { resolve } from 'node:path';
 import fsPromises from 'fs/promises';
+import { thumbnailCache } from '@/lib/thumbnailCache';
 
 // Cache directory configurations
 const CACHE_DIRS = {
@@ -180,6 +181,10 @@ export async function DELETE(req) {
           filesDeleted: result.filesDeleted,
           freedSpace: result.freedSpace,
         });
+        // Clear in-memory thumbnail cache when clearing disk thumbnails
+        if (cacheType === 'thumbnails') {
+          thumbnailCache.clear();
+        }
       }
 
       return NextResponse.json({
@@ -200,6 +205,11 @@ export async function DELETE(req) {
 
     const dirPath = resolve(process.cwd(), process.env[config.envVar] || config.defaultPath);
     const result = await clearDirectory(dirPath);
+
+    // Clear in-memory thumbnail cache when clearing disk thumbnails
+    if (type === 'thumbnails') {
+      thumbnailCache.clear();
+    }
 
     return NextResponse.json({
       success: true,
