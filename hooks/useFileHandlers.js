@@ -1,6 +1,7 @@
 /** @format */
 
 import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
+import { useStartDownload } from '@/lib/api/downloads';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
 
 // Helper to check if path is in trash
@@ -18,6 +19,7 @@ export function useFileHandlers({
   setNewFileName,
   setSharingFile,
   setRestoringFile,
+  addDownloadToTracker,
 }) {
   const { addTransfer, updateTransfer, removeTransfer, setTransferring } = useTransfersDispatch();
 
@@ -26,6 +28,7 @@ export function useFileHandlers({
   const uploadMutation = useUploadFile(currentPath, (uploadId, progress) => {
     updateTransfer(uploadId, { progress });
   });
+  const startDownloadMutation = useStartDownload();
   const deleteMutation = useDeleteFile(currentPath);
   const renameMutation = useRenameFile(currentPath);
   const restoreMutation = useRestoreFile(currentPath);
@@ -95,13 +98,46 @@ export function useFileHandlers({
     });
   };
 
+  const startTorrentDownload = async (torrentFile) => {
+    try {
+      const formData = new FormData();
+      formData.append('torrentFile', torrentFile);
+      formData.append('path', currentPath);
+
+      const result = await startDownloadMutation.mutateAsync({ formData, path: currentPath });
+
+      // Track download in the UI state
+      if (addDownloadToTracker) {
+        addDownloadToTracker(result.gid, result.name || torrentFile.name, currentPath);
+      }
+
+      addNotification('success', `Started downloading: ${torrentFile.name}`);
+    } catch (error) {
+      console.error('Torrent download error:', error);
+      addNotification('error', `Failed to start download: ${error.message}`, 'Download Error');
+    }
+  };
+
   const uploadFiles = async (files) => {
     if (!files || files.length === 0) return;
-    setTransferring(true);
-    for (const file of files) {
-      await uploadSingleFile(file);
+
+    // Separate torrent files from regular uploads
+    const torrentFiles = files.filter((f) => f.name.toLowerCase().endsWith('.torrent'));
+    const regularFiles = files.filter((f) => !f.name.toLowerCase().endsWith('.torrent'));
+
+    // Handle torrent downloads
+    for (const torrentFile of torrentFiles) {
+      await startTorrentDownload(torrentFile);
     }
-    setTransferring(false);
+
+    // Handle regular uploads
+    if (regularFiles.length > 0) {
+      setTransferring(true);
+      for (const file of regularFiles) {
+        await uploadSingleFile(file);
+      }
+      setTransferring(false);
+    }
   };
 
   const handleUpload = async (e) => {

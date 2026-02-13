@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import {
   useTransfers,
   useTransferring,
@@ -76,6 +77,9 @@ export function useFilesPage(status) {
 
   // Cache state (kept separate as it's simple)
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
+
+  // Active downloads tracking
+  const { downloads, addDownload, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
 
   // Helper functions for grouped state updates (maintains backward compatibility)
   const setCurrentPath = useCallback((path) => {
@@ -187,6 +191,24 @@ export function useFilesPage(status) {
   const { data: sharedPaths } = usePathShares(navigation.currentPath);
 
   const files = useMemo(() => {
+    // Build download placeholders for current path
+    const downloadEntries = Object.values(downloads)
+      .filter((d) => d.path === navigation.currentPath)
+      .map((d) => ({
+        id: `dl-${d.gid}`,
+        name: d.name,
+        displayName: d.name,
+        isDirectory: false,
+        isDownloading: true,
+        downloadGid: d.gid,
+        downloadProgress: d.progress || 0,
+        downloadSpeed: d.downloadSpeed || '0 B/s',
+        downloadStatus: d.status || 'active',
+        size: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
     // Filter out hidden files
     let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
 
@@ -219,7 +241,10 @@ export function useFilesPage(status) {
       }
     }
 
-    const sorted = [...filtered].sort((a, b) => {
+    // Combine regular files and downloads
+    const combined = [...downloadEntries, ...filtered];
+
+    const sorted = [...combined].sort((a, b) => {
       if (a.isDirectory && !b.isDirectory) return -1;
       if (!a.isDirectory && b.isDirectory) return 1;
 
@@ -242,7 +267,7 @@ export function useFilesPage(status) {
     });
 
     return sorted;
-  }, [filesData, preferences.sortBy, preferences.searchQuery]);
+  }, [filesData, preferences.sortBy, preferences.searchQuery, downloads, navigation.currentPath]);
 
   // Store folder display names
   useEffect(() => {
@@ -310,6 +335,7 @@ export function useFilesPage(status) {
     isLoading,
     viewableFiles,
     sharedPaths,
+    downloads,
 
     // Setters (backward compatible)
     setCurrentPath,
@@ -332,6 +358,12 @@ export function useFilesPage(status) {
     setRestoringFile,
     setSelectionMode,
     setSelectedFiles,
+
+    // Download helpers
+    addDownloadToTracker: addDownload,
+    pauseDownload,
+    resumeDownload,
+    removeDownload,
 
     // Helpers
     addNotification,

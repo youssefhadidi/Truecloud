@@ -89,6 +89,7 @@ function FilesPageContent() {
     setNewFileName: state.setNewFileName,
     setSharingFile: state.setSharingFile,
     setRestoringFile: state.setRestoringFile,
+    addDownloadToTracker: state.addDownloadToTracker,
   });
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
@@ -473,6 +474,9 @@ function FilesPageContent() {
                       selectionMode={state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
+                      onPauseDownload={state.pauseDownload}
+                      onResumeDownload={state.resumeDownload}
+                      onRemoveDownload={state.removeDownload}
                     />
                   </Suspense>
                 </div>
@@ -527,6 +531,9 @@ function FilesPageContent() {
                     selectionMode={state.selectionMode}
                     selectedFiles={selectedFileSet}
                     onToggleSelect={toggleSelection}
+                    onPauseDownload={state.pauseDownload}
+                    onResumeDownload={state.resumeDownload}
+                    onRemoveDownload={state.removeDownload}
                   />
                 </Suspense>
               )}

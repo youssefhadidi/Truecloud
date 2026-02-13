@@ -34,9 +34,21 @@ export async function POST(req) {
     const torrentFile = formData.get('torrentFile');
     const url = formData.get('url');
     const downloadType = formData.get('downloadType') || 'http';
+    const downloadPath = formData.get('path') || '';
 
     if (!torrentFile && !url) {
       return NextResponse.json({ error: 'Please provide either a file or URL' }, { status: 400 });
+    }
+
+    // Build absolute download directory
+    let downloadDir = resolve(process.cwd(), TORRENT_FILE_DIR);
+    if (downloadPath) {
+      downloadDir = resolve(process.cwd(), 'uploads', downloadPath.replace(/^\/+/, ''));
+    }
+
+    // Ensure directory exists
+    if (!existsSync(downloadDir)) {
+      mkdirSync(downloadDir, { recursive: true });
     }
 
     let downloadUrl;
@@ -60,13 +72,14 @@ export async function POST(req) {
       downloadUrl = url;
     }
 
-    // Add download via aria2 manager
-    const gid = await addDownload(downloadUrl);
+    // Add download via aria2 manager with specified directory
+    const gid = await addDownload(downloadUrl, { dir: downloadDir });
 
     // Get initial status
     const status = {
       gid,
       name: torrentFile ? torrentFile.name : url,
+      path: downloadPath,
       status: 'active',
       progress: 0,
       downloadSpeed: '0 B/s',
@@ -78,6 +91,7 @@ export async function POST(req) {
     logger.info('POST /api/files/torrent-download - Download started', {
       gid,
       type: downloadType,
+      path: downloadPath,
     });
 
     // Broadcast to WebSocket clients
