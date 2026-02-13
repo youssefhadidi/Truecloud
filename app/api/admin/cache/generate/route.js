@@ -52,6 +52,9 @@ export async function POST(req) {
       duration: 0,
     };
 
+    // Track if generation was manually cancelled
+    global.cacheGenerationCancelled = false;
+
     // Broadcast initial status
     if (global.broadcastCacheGenerationUpdate) {
       global.broadcastCacheGenerationUpdate({
@@ -89,6 +92,11 @@ export async function POST(req) {
     // Handle messages from child process
     child.on('message', (data) => {
       try {
+        // Ignore messages if generation was cancelled
+        if (global.cacheGenerationCancelled) {
+          return;
+        }
+
         if (data.status === 'scanning' || data.status === 'starting') {
           global.cacheGenerationStatus.total = data.total || global.cacheGenerationStatus.total;
         } else if (data.status === 'progress') {
@@ -191,6 +199,9 @@ export async function DELETE() {
       return NextResponse.json({ error: 'No cache generation in progress' }, { status: 400 });
     }
 
+    // Set flag to ignore further messages from the worker
+    global.cacheGenerationCancelled = true;
+
     // Kill the child process
     global.cacheGenerationChild.kill('SIGTERM');
 
@@ -200,7 +211,7 @@ export async function DELETE() {
     global.cacheGenerationStatus.error = 'Cache generation cancelled by user';
     global.cacheGenerationStatus.endTime = new Date();
 
-    // Broadcast update
+    // Broadcast update once
     if (global.broadcastCacheGenerationUpdate) {
       global.broadcastCacheGenerationUpdate({
         type: 'status',
