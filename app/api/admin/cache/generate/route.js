@@ -136,6 +136,11 @@ export async function POST(req) {
     });
 
     child.on('error', (err) => {
+      // Don't broadcast error if it was manually cancelled
+      if (global.cacheGenerationCancelled) {
+        return;
+      }
+
       global.cacheGenerationStatus.isRunning = false;
       global.cacheGenerationStatus.success = false;
       global.cacheGenerationStatus.error = err.message;
@@ -152,6 +157,11 @@ export async function POST(req) {
     child.on('exit', (code) => {
       // Clean up the reference
       global.cacheGenerationChild = null;
+
+      // Don't broadcast if it was manually cancelled (already broadcast from DELETE handler)
+      if (global.cacheGenerationCancelled) {
+        return;
+      }
 
       if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
         global.cacheGenerationStatus.isRunning = false;
