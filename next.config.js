@@ -33,6 +33,17 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Mark webtorrent as external to avoid build errors with native modules
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      // Mark webtorrent as external so it's not bundled during build
+      if (!config.externals.includes('webtorrent')) {
+        config.externals.push('webtorrent');
+      }
+    }
+    return config;
+  },
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
