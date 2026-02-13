@@ -92,9 +92,9 @@ export async function POST(req) {
     // Handle messages from child process
     child.on('message', (data) => {
       try {
-        // Ignore messages if generation was cancelled
-        if (global.cacheGenerationCancelled) {
-          console.error('[CACHE] Ignoring message after cancellation:', data.status);
+        // Ignore progress messages after cancellation, but allow final status messages (cancelled, error, complete)
+        if (global.cacheGenerationCancelled && data.status === 'progress') {
+          console.error('[CACHE] Ignoring progress message after cancellation');
           return;
         }
 
