@@ -67,6 +67,9 @@ export async function POST(req) {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
 
+    // Store child process reference globally so it can be killed later
+    global.cacheGenerationChild = child;
+
     // Log stderr for debugging
     child.stderr.on('data', (data) => {
       console.error('Worker stderr:', data.toString());
@@ -139,6 +142,9 @@ export async function POST(req) {
     });
 
     child.on('exit', (code) => {
+      // Clean up the reference
+      global.cacheGenerationChild = null;
+
       if (code !== 0 && code !== null && global.cacheGenerationStatus.success !== false) {
         global.cacheGenerationStatus.isRunning = false;
         global.cacheGenerationStatus.success = false;
@@ -172,6 +178,39 @@ export async function POST(req) {
       });
     }
 
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
+  try {
+    if (!global.cacheGenerationChild || !global.cacheGenerationStatus.isRunning) {
+      return NextResponse.json({ error: 'No cache generation in progress' }, { status: 400 });
+    }
+
+    // Kill the child process
+    global.cacheGenerationChild.kill('SIGTERM');
+
+    // Update status
+    global.cacheGenerationStatus.isRunning = false;
+    global.cacheGenerationStatus.success = false;
+    global.cacheGenerationStatus.error = 'Cache generation cancelled by user';
+    global.cacheGenerationStatus.endTime = new Date();
+
+    // Broadcast update
+    if (global.broadcastCacheGenerationUpdate) {
+      global.broadcastCacheGenerationUpdate({
+        type: 'status',
+        payload: global.cacheGenerationStatus,
+      });
+    }
+
+    return NextResponse.json({ success: true, message: 'Cache generation cancelled' });
+  } catch (error) {
+    console.error('Stop cache generation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

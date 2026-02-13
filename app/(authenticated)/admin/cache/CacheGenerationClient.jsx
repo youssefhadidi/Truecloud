@@ -77,6 +77,23 @@ export default function CacheGenerationClient() {
     }
   };
 
+  const handleStop = async () => {
+    try {
+      const response = await fetch('/api/admin/cache/generate', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to stop cache generation');
+      }
+
+      addNotification('info', 'Cache generation cancelled');
+    } catch (error) {
+      addNotification('error', error.message);
+    }
+  };
+
   return (
     <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
@@ -137,16 +154,27 @@ export default function CacheGenerationClient() {
           </div>
         </div>
 
-        {/* Generate Button */}
+        {/* Generate/Stop Buttons */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleGenerate}
-            disabled={generating || !connected}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <FiPlay />
-            {generating ? 'Generating...' : 'Generate'}
-          </button>
+          {generating ? (
+            <button
+              onClick={handleStop}
+              disabled={!connected}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <FiX />
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={handleGenerate}
+              disabled={!connected}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <FiPlay />
+              Generate
+            </button>
+          )}
         </div>
 
         {/* Status Display */}
