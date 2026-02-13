@@ -54,6 +54,8 @@ export async function POST(req) {
 
     // Track if generation was manually cancelled
     global.cacheGenerationCancelled = false;
+    // Track if final status has been broadcast
+    global.cacheGenerationStatusBroadcast = false;
 
     // Broadcast initial status
     if (global.broadcastCacheGenerationUpdate) {
@@ -118,8 +120,6 @@ export async function POST(req) {
           global.cacheGenerationStatus.successful = data.successful;
           global.cacheGenerationStatus.failed = data.failed;
           global.cacheGenerationStatus.skipped = data.skipped;
-          // Set flag so we only broadcast the cancelled message once
-          global.cacheGenerationStatusBroadcast = true;
           // Clean up cancel handler
           if (global.cacheGenerationCancelHandler) {
             global.cacheGenerationCancelHandler = null;
@@ -135,25 +135,23 @@ export async function POST(req) {
           global.cacheGenerationStatus.successful = data.successful;
           global.cacheGenerationStatus.failed = data.failed;
           global.cacheGenerationStatus.skipped = data.skipped;
-          // Set flag so we only broadcast the complete message once
-          global.cacheGenerationStatusBroadcast = true;
         } else if (data.status === 'error') {
           global.cacheGenerationStatus.isRunning = false;
           global.cacheGenerationStatus.success = false;
           global.cacheGenerationStatus.error = data.message;
           global.cacheGenerationStatus.endTime = new Date();
-          // Set flag so we only broadcast the error message once
-          global.cacheGenerationStatusBroadcast = true;
         }
 
         // Broadcast update (ignore progress updates after cancellation, but always broadcast cancelled/complete/error)
-        // Prevent duplicate broadcasts of final status messages
+        // Prevent duplicate broadcasts of final status messages by checking flag BEFORE setting it
         let shouldBroadcast = global.broadcastCacheGenerationUpdate &&
           (!global.cacheGenerationCancelled || data.status === 'cancelled' || data.status === 'error' || data.status === 'complete');
 
-        if ((data.status === 'cancelled' || data.status === 'complete' || data.status === 'error') && global.cacheGenerationStatusBroadcast === true) {
-          // Already broadcast the final status message, don't broadcast again
-          shouldBroadcast = false;
+        // Only prevent re-broadcasts of final statuses (not first broadcast)
+        if ((data.status === 'cancelled' || data.status === 'complete' || data.status === 'error')) {
+          if (global.cacheGenerationStatusBroadcast) {
+            shouldBroadcast = false;
+          }
         }
 
         if (shouldBroadcast) {
@@ -162,6 +160,10 @@ export async function POST(req) {
             type: 'status',
             payload: global.cacheGenerationStatus,
           });
+          // Set flag AFTER broadcasting (only on first broadcast of final status)
+          if (data.status === 'cancelled' || data.status === 'complete' || data.status === 'error') {
+            global.cacheGenerationStatusBroadcast = true;
+          }
         }
       } catch (err) {
         console.error('Error processing worker message:', err);
