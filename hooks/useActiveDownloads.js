@@ -60,6 +60,17 @@ export function useActiveDownloads() {
 
             if (message.type === 'connected') {
               console.log('[DOWNLOADS]', message.message);
+            } else if (message.type === 'download-progress') {
+              // Update download progress in real-time
+              const { payload } = message;
+              const existing = downloadsRef.current.get(payload.gid);
+              if (existing) {
+                downloadsRef.current.set(payload.gid, {
+                  ...existing,
+                  ...payload,
+                });
+                syncDownloads();
+              }
             } else if (message.type === 'download-added') {
               const { payload } = message;
               const existing = downloadsRef.current.get(payload.gid);
