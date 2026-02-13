@@ -56,7 +56,7 @@ export default function CacheGenerationClient() {
     return () => {
       ws.close();
     };
-  }, [addNotification]);
+  }, []);
 
   const handleGenerate = async () => {
     try {
