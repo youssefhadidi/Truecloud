@@ -113,8 +113,8 @@ const GridItem = memo(
           </div>
         ) : (
           <div
-            className="group relative bg-gray-700 rounded-lg p-1 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none"
-            style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+            className="group relative bg-gray-700 rounded-lg p-0 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none"
+            style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}
             onClick={() => {
               if (selectionMode) {
                 onToggleSelect?.(item);
@@ -205,7 +205,7 @@ const GridItem = memo(
             ) : null}
 
             <div
-              className={`w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 rounded-lg relative overflow-hidden ${
+              className={`w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 relative overflow-hidden ${
                 isViewableFile(item) ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''
               }`}
               onClick={(e) => {
@@ -216,7 +216,7 @@ const GridItem = memo(
               }}
             >
               {processingFile === item.id && (
-                <div className="absolute inset-0 bg-gray-600 bg-opacity-75 rounded-lg flex items-center justify-center z-10">
+                <div className="absolute inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
               )}
