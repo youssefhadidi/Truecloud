@@ -108,8 +108,7 @@ export async function POST(req) {
           global.cacheGenerationStatus.skipped = data.skipped;
           global.cacheGenerationStatus.currentFile = data.current;
         } else if (data.status === 'cancelled') {
-          console.error('[CACHE] >>> RECEIVED CANCELLED MESSAGE <<<');
-          console.error('[CACHE] Cancellation confirmed - isRunning: true -> false');
+          console.error('[CACHE] Received cancelled message');
           global.cacheGenerationStatus.isRunning = false;
           global.cacheGenerationStatus.success = false;
           global.cacheGenerationStatus.error = 'Cache generation cancelled by user';
@@ -119,6 +118,8 @@ export async function POST(req) {
           global.cacheGenerationStatus.successful = data.successful;
           global.cacheGenerationStatus.failed = data.failed;
           global.cacheGenerationStatus.skipped = data.skipped;
+          // Set flag so we only broadcast the cancelled message once
+          global.cacheGenerationStatusBroadcast = true;
           // Clean up cancel handler
           if (global.cacheGenerationCancelHandler) {
             global.cacheGenerationCancelHandler = null;
@@ -142,8 +143,14 @@ export async function POST(req) {
         }
 
         // Broadcast update (ignore progress updates after cancellation, but always broadcast cancelled/complete/error)
-        const shouldBroadcast = global.broadcastCacheGenerationUpdate &&
+        // For cancelled status, only broadcast once
+        let shouldBroadcast = global.broadcastCacheGenerationUpdate &&
           (!global.cacheGenerationCancelled || data.status === 'cancelled' || data.status === 'error' || data.status === 'complete');
+
+        if (data.status === 'cancelled' && global.cacheGenerationStatusBroadcast === true) {
+          // Already broadcast the cancelled message, don't broadcast again
+          shouldBroadcast = false;
+        }
 
         if (shouldBroadcast) {
           console.error(`[CACHE] Broadcasting ${data.status} update`);
