@@ -8,6 +8,7 @@ const handle = app.getRequestHandler();
 
 const updateClients = new Set();
 const cacheGenerationClients = new Set();
+const torrentDownloadClients = new Set();
 
 // Global update status state
 global.updateStatus = {
@@ -62,6 +63,15 @@ global.broadcastCacheGenerationUpdate = (message) => {
   });
 };
 
+// Function to broadcast torrent download updates to all connected clients
+global.broadcastTorrentDownloadUpdate = (message) => {
+  torrentDownloadClients.forEach((client) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      client.send(JSON.stringify(message));
+    }
+  });
+};
+
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     handle(req, res);
@@ -110,6 +120,26 @@ app.prepare().then(() => {
 
         ws.on('error', () => {
           cacheGenerationClients.delete(ws);
+        });
+      });
+    } else if (url.pathname === '/api/ws/torrent-downloads') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        // Add to clients set
+        torrentDownloadClients.add(ws);
+
+        // Send initial "connected" message
+        ws.send(JSON.stringify({
+          type: 'connected',
+          message: 'Connected to torrent download status stream',
+        }));
+
+        // Remove client when disconnected
+        ws.on('close', () => {
+          torrentDownloadClients.delete(ws);
+        });
+
+        ws.on('error', () => {
+          torrentDownloadClients.delete(ws);
         });
       });
     } else {

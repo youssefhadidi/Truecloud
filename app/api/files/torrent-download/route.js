@@ -80,6 +80,14 @@ export async function POST(req) {
       type: downloadType,
     });
 
+    // Broadcast to WebSocket clients
+    if (global.broadcastTorrentDownloadUpdate) {
+      global.broadcastTorrentDownloadUpdate({
+        type: 'download-added',
+        payload: status,
+      });
+    }
+
     return NextResponse.json(status);
   } catch (error) {
     const errorMessage = error.message || 'Internal Server Error';
@@ -119,6 +127,17 @@ export async function GET(req) {
         stopped: stoppedDownloads.length,
       });
 
+      // Broadcast current downloads to all connected WebSocket clients
+      if (global.broadcastTorrentDownloadUpdate && allDownloads.length > 0) {
+        global.broadcastTorrentDownloadUpdate({
+          type: 'downloads-status',
+          payload: {
+            downloads: allDownloads,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+
       return NextResponse.json({ downloads: allDownloads });
     } catch (error) {
       // aria2c daemon not running or not available
@@ -155,16 +174,40 @@ export async function PATCH(req) {
       case 'pause':
         await pauseDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download paused', { gid });
+
+        // Broadcast pause action
+        if (global.broadcastTorrentDownloadUpdate) {
+          global.broadcastTorrentDownloadUpdate({
+            type: 'download-paused',
+            payload: { gid },
+          });
+        }
         return NextResponse.json({ success: true, message: 'Download paused' });
 
       case 'resume':
         await resumeDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download resumed', { gid });
+
+        // Broadcast resume action
+        if (global.broadcastTorrentDownloadUpdate) {
+          global.broadcastTorrentDownloadUpdate({
+            type: 'download-resumed',
+            payload: { gid },
+          });
+        }
         return NextResponse.json({ success: true, message: 'Download resumed' });
 
       case 'remove':
         await removeDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download removed', { gid });
+
+        // Broadcast remove action
+        if (global.broadcastTorrentDownloadUpdate) {
+          global.broadcastTorrentDownloadUpdate({
+            type: 'download-removed',
+            payload: { gid },
+          });
+        }
         return NextResponse.json({ success: true, message: 'Download removed' });
 
       default:
