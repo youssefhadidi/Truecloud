@@ -128,6 +128,17 @@ export function useActiveDownloads() {
               const { gid } = message.payload;
               downloadsRef.current.delete(gid);
               syncDownloads();
+            } else if (message.type === 'download-complete') {
+              // Download completed - remove from downloads list
+              const { gid, targetPath } = message.payload;
+              downloadsRef.current.delete(gid);
+              syncDownloads();
+
+              // Trigger file browser refresh event
+              window.dispatchEvent(new CustomEvent('torrent-download-complete', {
+                detail: { path: targetPath }
+              }));
+              console.log('[DOWNLOADS] Download completed, file browser should refresh:', targetPath);
             }
           } catch (err) {
             console.error('[DOWNLOADS] Error processing WebSocket message:', err);

@@ -190,6 +190,21 @@ export function useFilesPage(status) {
   // Fetch shared paths for share indicators
   const { data: sharedPaths } = usePathShares(navigation.currentPath);
 
+  // Listen for torrent download completion to refresh file list
+  useEffect(() => {
+    const handleTorrentComplete = (event) => {
+      const { path: completedPath } = event.detail || {};
+      // If download completed in current path, refresh file list
+      if (completedPath === navigation.currentPath) {
+        console.log('[FILES PAGE] Torrent download completed in current path, refreshing...');
+        queryClient.invalidateQueries({ queryKey: ['files', navigation.currentPath] });
+      }
+    };
+
+    window.addEventListener('torrent-download-complete', handleTorrentComplete);
+    return () => window.removeEventListener('torrent-download-complete', handleTorrentComplete);
+  }, [navigation.currentPath, queryClient]);
+
   const files = useMemo(() => {
     // Build download placeholders for current path
     const downloadEntries = Object.values(downloads)
