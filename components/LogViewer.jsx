@@ -2,14 +2,20 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { FiRefreshCw, FiDownload } from 'react-icons/fi';
-import axios from '@/lib/axiosConfig';
+import { useLogsStream } from '@/hooks/useLogsStream';
 
 export default function LogViewer() {
-  const [logs, setLogs] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { logs, isLoading, error: streamError } = useLogsStream();
   const [autoScroll, setAutoScroll] = useState(true);
+  const [error, setError] = useState(null);
   const logsEndRef = useRef(null);
+
+  // Sync error from stream hook
+  useEffect(() => {
+    if (streamError) {
+      setError(streamError);
+    }
+  }, [streamError]);
 
   const scrollToBottom = () => {
     if (autoScroll && logsEndRef.current) {
@@ -21,33 +27,20 @@ export default function LogViewer() {
     scrollToBottom();
   }, [logs, autoScroll]);
 
-  const fetchLogs = async () => {
+  // Manual refresh - re-fetch initial logs from API
+  const refreshLogs = async () => {
     try {
       setError(null);
-      const response = await axios.get('/api/system/logs');
-      
-      if (response.data.success) {
-        // Use allLines from history to maintain persistence
-        setLogs(response.data.allLines || []);
-        setIsLoading(false);
-      } else {
-        setError(response.data.error || 'Failed to load logs');
-        setIsLoading(false);
+      // Re-fetch from API to reset
+      const response = await fetch('/api/system/logs');
+      if (!response.ok) {
+        setError('Failed to refresh logs');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load logs');
-      console.error('Error fetching logs:', err);
-      setIsLoading(false);
+      setError('Failed to refresh logs');
+      console.error('[LOGS] Error refreshing:', err);
     }
   };
-
-  useEffect(() => {
-    fetchLogs();
-    
-    // Refresh logs every 2 seconds
-    const interval = setInterval(fetchLogs, 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   const downloadLogs = () => {
     const content = logs.join('\n');
@@ -85,7 +78,7 @@ export default function LogViewer() {
               <span className="sm:hidden">📍</span>
             </button>
             <button
-              onClick={fetchLogs}
+              onClick={refreshLogs}
               disabled={isLoading}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500"
               title="Refresh"
@@ -141,7 +134,7 @@ export default function LogViewer() {
         </div>
 
         <div className="mt-2 text-xs text-gray-400">
-          <p>Logs refresh automatically every 2 seconds</p>
+          <p>Logs stream in real-time via WebSocket</p>
         </div>
       </div>
     </div>

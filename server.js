@@ -1,6 +1,7 @@
 const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
+const { startLogStream } = require('./lib/logStreamManager');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -79,6 +80,10 @@ global.broadcastFileChange = (message) => {
   broadcastMessage({ type: 'file-change', payload: message });
 };
 
+global.broadcastLogs = (message) => {
+  broadcastMessage({ type: 'logs', payload: message });
+};
+
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     handle(req, res);
@@ -124,5 +129,8 @@ app.prepare().then(() => {
   server.listen(3000, (err) => {
     if (err) throw err;
     console.log('> Ready on http://localhost:3000');
+
+    // Start log stream manager
+    startLogStream();
   });
 });
