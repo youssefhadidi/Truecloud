@@ -29,6 +29,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 export function useActiveDownloads() {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
+  const { subscribe } = useWebSocket(); // Call hook at top level
 
   // Sync downloads map to state
   const syncDownloads = useCallback(() => {
@@ -73,8 +74,6 @@ export function useActiveDownloads() {
 
   // Subscribe to torrent-downloads messages from unified WebSocket
   useEffect(() => {
-    const { subscribe } = useWebSocket();
-
     const unsubscribe = subscribe('torrent-downloads', (message) => {
       try {
         const { payload } = message;
