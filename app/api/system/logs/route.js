@@ -63,78 +63,13 @@ export async function GET(req) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Try common log locations
-    const logPaths = [
-      '/var/log/truecloud/output.log',
-      resolve(process.cwd(), '.next/logs/server.log'),
-      resolve(process.cwd(), 'logs/app.log'),
-      resolve(process.cwd(), 'app.log'),
-    ];
-
-    let logPath = null;
-    let logContent = '';
-
-    // Find which log file exists and read it
-    for (const path of logPaths) {
-      try {
-        logContent = await readFile(path, 'utf-8');
-        logPath = path;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!logPath) {
-      return NextResponse.json({
-        error: 'No log file found',
-        paths: logPaths,
-      }, { status: 404 });
-    }
-
-    // Get stored state
-    const state = await getLogState();
+    // Just return current history (logStreamManager handles reading the actual log file)
     const history = await getLogHistory();
-    
-    // If log path changed, reset offset
-    let newLines = [];
-    let newOffset = logContent.length;
-    
-    if (state.lastPath === logPath && state.lastOffset < logContent.length) {
-      // Only get new content since last read
-      const newContent = logContent.slice(state.lastOffset);
-      newLines = newContent
-        .split('\n')
-        .filter(line => line.trim());
-    } else if (state.lastPath !== logPath) {
-      // Different log file, return all
-      newLines = logContent
-        .split('\n')
-        .filter(line => line.trim());
-    }
-
-    // Append new lines to history
-    if (newLines.length > 0) {
-      await appendToHistory(newLines);
-      // Re-fetch history after appending to get trimmed version
-      history = await getLogHistory();
-    }
-
-    // Save new state
-    await saveLogState(logPath, newOffset);
-
-    // Return only the last 50 lines
-    const recentLines = history.lines.length > HISTORY_LIMIT
-      ? history.lines.slice(-HISTORY_LIMIT)
-      : history.lines;
 
     return NextResponse.json({
       success: true,
-      logPath,
-      newLines,
-      allLines: recentLines,
+      allLines: history.lines,
       total: history.lines.length,
-      offset: newOffset,
     });
   } catch (error) {
     return NextResponse.json({
