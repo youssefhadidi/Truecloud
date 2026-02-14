@@ -2,10 +2,11 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Confirm from '@/components/Confirm';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { FiWifi, FiWifiOff } from 'react-icons/fi';
 
 const DISMISSED_VERSION_KEY = 'update_dismissed_version';
 
@@ -14,6 +15,9 @@ export default function UpdateChecker() {
   const runUpdateMutation = useRunUpdate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef(null);
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -22,6 +26,40 @@ export default function UpdateChecker() {
       setDismissed(dismissedVersion === updateInfo.latestVersion);
     }
   }, [updateInfo]);
+
+  // Connect to update status WebSocket
+  useEffect(() => {
+    const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/update-status`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setWsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'status') {
+          setUpdateStatus(message.payload);
+        }
+      } catch (err) {
+        console.error('Error parsing update status message:', err);
+      }
+    };
+
+    ws.onerror = () => {
+      setWsConnected(false);
+    };
+
+    ws.onclose = () => {
+      setWsConnected(false);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.latestVersion);
@@ -63,6 +101,20 @@ export default function UpdateChecker() {
             <p className="text-sm text-blue-700 mt-1">
               {updateInfo.currentVersion} → {updateInfo.latestVersion}
             </p>
+
+            {/* Update Status from WebSocket */}
+            {updateStatus && updateStatus.isRunning && (
+              <div className="mt-2 p-2 bg-blue-100 rounded border border-blue-300">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="animate-pulse w-2 h-2 bg-blue-600 rounded-full"></div>
+                  <p className="text-xs font-medium text-blue-800">Update in progress...</p>
+                </div>
+                <p className="text-xs text-blue-700">
+                  Step {updateStatus.steps.filter(s => s.status === 'completed').length + (updateStatus.steps.findIndex(s => s.status === 'running') >= 0 ? 1 : 0)}/{updateStatus.steps.length}
+                </p>
+              </div>
+            )}
+
             {updateInfo.releaseNotes && (
               <details className="mt-2 text-xs text-blue-600">
                 <summary className="cursor-pointer hover:text-blue-700">Release notes</summary>

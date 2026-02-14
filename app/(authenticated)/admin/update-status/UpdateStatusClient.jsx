@@ -80,91 +80,90 @@ export default function UpdateStatusClient() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Status */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-2">System Update</h1>
-            <div className="flex items-center gap-2">
-              {connected ? (
-                <>
-                  <FiWifi className="text-green-500" size={16} />
-                  <span className="text-sm text-green-400">Connected</span>
-                </>
-              ) : (
-                <>
-                  <FiWifiOff className="text-red-500" size={16} />
-                  <span className="text-sm text-red-400">Disconnected</span>
-                </>
+      {/* Main System Update Box with Status and Steps */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-700">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-white mb-2">System Update</h1>
+              <div className="flex items-center gap-2 mb-3">
+                {connected ? (
+                  <>
+                    <FiWifi className="text-green-500" size={16} />
+                    <span className="text-sm text-green-400">Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <FiWifiOff className="text-red-500" size={16} />
+                    <span className="text-sm text-red-400">Disconnected</span>
+                  </>
+                )}
+              </div>
+
+              {/* Timing Info */}
+              {status.startTime && (
+                <div className="text-sm text-gray-400">
+                  <p>
+                    Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}
+                  </p>
+                  {status.endTime && (
+                    <p>
+                      Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Status Badge */}
+            <div className="flex-shrink-0">
+              {status.isRunning && (
+                <div className="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2">
+                  <p className="text-sm font-medium text-blue-300">In Progress</p>
+                </div>
+              )}
+              {status.success === true && (
+                <div className="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2">
+                  <p className="text-sm font-medium text-green-300">✓ Completed</p>
+                </div>
+              )}
+              {status.success === false && (
+                <div className="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2">
+                  <p className="text-sm font-medium text-red-300">✕ Failed</p>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Status Badge */}
+          {/* Progress Summary - Inline */}
           {status.isRunning && (
-            <div className="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2">
-              <p className="text-sm font-medium text-blue-300">In Progress</p>
+            <div className="mt-4 flex gap-4 text-sm">
+              <div>
+                <p className="text-gray-500">Completed:</p>
+                <p className="text-green-400 font-semibold">{completedSteps}/{status.steps.length}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Current:</p>
+                <p className="text-blue-400 font-semibold">
+                  {currentStepIndex >= 0 ? status.steps[currentStepIndex].label : '—'}
+                </p>
+              </div>
+              {failedSteps > 0 && (
+                <div>
+                  <p className="text-gray-500">Failed:</p>
+                  <p className="text-red-400 font-semibold">{failedSteps}</p>
+                </div>
+              )}
             </div>
           )}
-          {status.success === true && (
-            <div className="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2">
-              <p className="text-sm font-medium text-green-300">✓ Completed</p>
-            </div>
-          )}
-          {status.success === false && (
-            <div className="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2">
-              <p className="text-sm font-medium text-red-300">✕ Failed</p>
-            </div>
-          )}
         </div>
 
-        {/* Timing Info */}
-        {status.startTime && (
-          <div className="text-sm text-gray-400">
-            <p>
-              Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}
-            </p>
-            {status.endTime && (
-              <p>
-                Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Progress Summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Completed</p>
-          <p className="text-3xl font-bold text-green-400">{completedSteps}</p>
-          <p className="text-gray-500 text-xs mt-1">of {status.steps.length} steps</p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Current</p>
-          <p className="text-xl font-bold text-blue-400">
-            {currentStepIndex >= 0 ? currentStepIndex + 1 : '—'}
-          </p>
-          <p className="text-gray-500 text-xs mt-1">
-            {currentStepIndex >= 0 ? status.steps[currentStepIndex].label : 'Waiting'}
-          </p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Failed</p>
-          <p className={`text-3xl font-bold ${failedSteps > 0 ? 'text-red-400' : 'text-green-400'}`}>
-            {failedSteps}
-          </p>
-          <p className="text-gray-500 text-xs mt-1">errors</p>
-        </div>
-      </div>
-
-      {/* Horizontal Timeline */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-lg font-semibold text-white mb-6">Update Steps</h2>
-
-        {/* Steps Timeline */}
-        <div className="space-y-4">
-          {status.steps.map((step, index) => (
+        {/* Update Steps Timeline */}
+        <div className="p-6">
+          {/* Steps Timeline */}
+          <div className="space-y-4">
+            {status.steps.map((step, index) => (
             <div key={step.name} className="relative">
               {/* Connector Line */}
               {index < status.steps.length - 1 && (
@@ -249,7 +248,8 @@ export default function UpdateStatusClient() {
                 </div>
               </div>
             </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
