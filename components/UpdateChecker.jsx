@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import Confirm from '@/components/Confirm';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 import { FiWifi, FiWifiOff } from 'react-icons/fi';
 
 const DISMISSED_VERSION_KEY = 'update_dismissed_version';
@@ -16,8 +17,7 @@ export default function UpdateChecker() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
-  const [wsConnected, setWsConnected] = useState(false);
-  const wsRef = useRef(null);
+  const { connected, subscribe } = useWebSocket();
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -27,40 +27,18 @@ export default function UpdateChecker() {
     }
   }, [updateInfo]);
 
-  // Connect to unified WebSocket for update status
+  // Subscribe to update status messages from unified WebSocket
   useEffect(() => {
-    const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setWsConnected(true);
-    };
-
-    ws.onmessage = (event) => {
+    const unsubscribe = subscribe('update-status', (message) => {
       try {
-        const message = JSON.parse(event.data);
-        // Only process update-status messages from the unified WebSocket
-        if (message.type === 'update-status') {
-          setUpdateStatus(message.payload);
-        }
+        setUpdateStatus(message.payload);
       } catch (err) {
-        console.error('Error parsing update status message:', err);
+        console.error('Error processing update status message:', err);
       }
-    };
+    });
 
-    ws.onerror = () => {
-      setWsConnected(false);
-    };
-
-    ws.onclose = () => {
-      setWsConnected(false);
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, []);
+    return unsubscribe;
+  }, [subscribe]);
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.latestVersion);

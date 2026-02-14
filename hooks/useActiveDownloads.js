@@ -5,9 +5,9 @@
  * file browser (useFilesPage) and the downloads management page.
  *
  * DATA FLOW:
- * 1. On mount, connects to unified WebSocket at /api/ws
+ * 1. On mount, subscribes to 'torrent-downloads' messages from app-level WebSocket
  * 2. On connect, fetches initial state via GET /api/files/torrent-download
- * 3. Receives real-time updates via /api/ws messages with type: 'torrent-downloads':
+ * 3. Receives real-time updates via subscribed messages:
  *    - download-progress: Updates progress every 1s
  *    - download-added: New download started
  *    - downloads-status: Batch update (poll or state refresh)
@@ -24,12 +24,11 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import axios from 'axios';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 export function useActiveDownloads() {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
-  const wsRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
 
   // Sync downloads map to state
   const syncDownloads = useCallback(() => {
@@ -40,168 +39,136 @@ export function useActiveDownloads() {
     setDownloads(obj);
   }, []);
 
-  // Connect to unified WebSocket
+  // Fetch initial download state
   useEffect(() => {
-    const connectWebSocket = () => {
+    const fetchInitialState = async () => {
       try {
-        const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
-
-        ws.onopen = async () => {
-          wsRef.current = ws;
-
-          // Fetch initial state
-          try {
-            const response = await axios.get('/api/files/torrent-download');
-            if (response.data.downloads && Array.isArray(response.data.downloads)) {
-              downloadsRef.current.clear();
-              for (const dl of response.data.downloads) {
-                downloadsRef.current.set(dl.gid, {
-                  gid: dl.gid,
-                  name: dl.name,
-                  path: dl.path || '', // Use relative path from backend
-                  progress: dl.progress || 0,
-                  status: dl.status || 'active',
-                  downloadSpeed: dl.downloadSpeed || '0 B/s',
-                  uploadSpeed: dl.uploadSpeed || '0 B/s',
-                  seeders: dl.seeders || 0,
-                  peers: dl.peers || 0,
-                  isTorrent: dl.isTorrent || false,
-                  error: dl.error || null,
-                });
-              }
-              syncDownloads();
-            }
-          } catch (err) {
-            console.warn('[DOWNLOADS] Failed to fetch initial download state:', err.message);
+        const response = await axios.get('/api/files/torrent-download');
+        if (response.data.downloads && Array.isArray(response.data.downloads)) {
+          downloadsRef.current.clear();
+          for (const dl of response.data.downloads) {
+            downloadsRef.current.set(dl.gid, {
+              gid: dl.gid,
+              name: dl.name,
+              path: dl.path || '', // Use relative path from backend
+              progress: dl.progress || 0,
+              status: dl.status || 'active',
+              downloadSpeed: dl.downloadSpeed || '0 B/s',
+              uploadSpeed: dl.uploadSpeed || '0 B/s',
+              seeders: dl.seeders || 0,
+              peers: dl.peers || 0,
+              isTorrent: dl.isTorrent || false,
+              error: dl.error || null,
+            });
           }
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-
-            // Only process torrent-downloads message types
-            if (message.type !== 'torrent-downloads') {
-              return;
-            }
-
-            const { payload } = message;
-
-            if (payload.type === 'download-progress') {
-              // Update download progress in real-time
-              const existing = downloadsRef.current.get(payload.gid);
-              if (existing) {
-                downloadsRef.current.set(payload.gid, {
-                  ...existing,
-                  ...payload,
-                });
-                syncDownloads();
-              }
-            } else if (payload.type === 'download-added') {
-              const existing = downloadsRef.current.get(payload.gid);
-              downloadsRef.current.set(payload.gid, {
-                ...existing,
-                gid: payload.gid,
-                name: payload.name || 'Unknown',
-                path: payload.path || '',
-                progress: payload.progress || 0,
-                status: payload.status || 'active',
-                downloadSpeed: payload.downloadSpeed || '0 B/s',
-                uploadSpeed: payload.uploadSpeed || '0 B/s',
-                seeders: payload.seeders || 0,
-                peers: payload.peers || 0,
-                isTorrent: payload.isTorrent || false,
-                error: payload.error || null,
-              });
-              syncDownloads();
-            } else if (payload.type === 'downloads-status') {
-              const { downloads: downloadsList } = payload;
-              if (Array.isArray(downloadsList)) {
-                for (const dl of downloadsList) {
-                  const existing = downloadsRef.current.get(dl.gid);
-                  downloadsRef.current.set(dl.gid, {
-                    ...existing,
-                    gid: dl.gid,
-                    name: dl.name || 'Unknown',
-                    path: dl.path || '', // Include path from backend
-                    progress: dl.progress || 0,
-                    status: dl.status || 'active',
-                    downloadSpeed: dl.downloadSpeed || '0 B/s',
-                    uploadSpeed: dl.uploadSpeed || '0 B/s',
-                    seeders: dl.seeders || 0,
-                    peers: dl.peers || 0,
-                    isTorrent: dl.isTorrent || false,
-                    error: dl.error || null,
-                  });
-                }
-              }
-              syncDownloads();
-            } else if (payload.type === 'download-paused') {
-              const existing = downloadsRef.current.get(payload.gid);
-              if (existing) {
-                downloadsRef.current.set(payload.gid, {
-                  ...existing,
-                  ...payload,
-                  status: 'paused',
-                });
-                syncDownloads();
-              }
-            } else if (payload.type === 'download-resumed') {
-              const existing = downloadsRef.current.get(payload.gid);
-              if (existing) {
-                downloadsRef.current.set(payload.gid, {
-                  ...existing,
-                  ...payload,
-                  status: 'active',
-                });
-                syncDownloads();
-              }
-            } else if (payload.type === 'download-removed') {
-              const { gid } = payload;
-              downloadsRef.current.delete(gid);
-              syncDownloads();
-            } else if (payload.type === 'download-complete') {
-              // Download completed - remove from downloads list
-              const { gid, targetPath } = payload;
-              downloadsRef.current.delete(gid);
-              syncDownloads();
-
-              // Trigger file browser refresh event
-              window.dispatchEvent(new CustomEvent('torrent-download-complete', {
-                detail: { path: targetPath }
-              }));
-            }
-          } catch (err) {
-            console.error('[DOWNLOADS] Error processing WebSocket message:', err);
-          }
-        };
-
-        ws.onerror = (err) => {
-          console.error('[DOWNLOADS] WebSocket error:', err);
-        };
-
-        ws.onclose = () => {
-          wsRef.current = null;
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
-        };
+          syncDownloads();
+        }
       } catch (err) {
-        console.error('[DOWNLOADS] Failed to connect WebSocket:', err);
-        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+        console.warn('[DOWNLOADS] Failed to fetch initial download state:', err.message);
       }
     };
 
-    connectWebSocket();
+    fetchInitialState();
+  }, [syncDownloads]);
 
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+  // Subscribe to torrent-downloads messages from unified WebSocket
+  useEffect(() => {
+    const { subscribe } = useWebSocket();
+
+    const unsubscribe = subscribe('torrent-downloads', (message) => {
+      try {
+        const { payload } = message;
+
+        if (payload.type === 'download-progress') {
+          // Update download progress in real-time
+          const existing = downloadsRef.current.get(payload.gid);
+          if (existing) {
+            downloadsRef.current.set(payload.gid, {
+              ...existing,
+              ...payload,
+            });
+            syncDownloads();
+          }
+        } else if (payload.type === 'download-added') {
+          const existing = downloadsRef.current.get(payload.gid);
+          downloadsRef.current.set(payload.gid, {
+            ...existing,
+            gid: payload.gid,
+            name: payload.name || 'Unknown',
+            path: payload.path || '',
+            progress: payload.progress || 0,
+            status: payload.status || 'active',
+            downloadSpeed: payload.downloadSpeed || '0 B/s',
+            uploadSpeed: payload.uploadSpeed || '0 B/s',
+            seeders: payload.seeders || 0,
+            peers: payload.peers || 0,
+            isTorrent: payload.isTorrent || false,
+            error: payload.error || null,
+          });
+          syncDownloads();
+        } else if (payload.type === 'downloads-status') {
+          const { downloads: downloadsList } = payload;
+          if (Array.isArray(downloadsList)) {
+            for (const dl of downloadsList) {
+              const existing = downloadsRef.current.get(dl.gid);
+              downloadsRef.current.set(dl.gid, {
+                ...existing,
+                gid: dl.gid,
+                name: dl.name || 'Unknown',
+                path: dl.path || '', // Include path from backend
+                progress: dl.progress || 0,
+                status: dl.status || 'active',
+                downloadSpeed: dl.downloadSpeed || '0 B/s',
+                uploadSpeed: dl.uploadSpeed || '0 B/s',
+                seeders: dl.seeders || 0,
+                peers: dl.peers || 0,
+                isTorrent: dl.isTorrent || false,
+                error: dl.error || null,
+              });
+            }
+          }
+          syncDownloads();
+        } else if (payload.type === 'download-paused') {
+          const existing = downloadsRef.current.get(payload.gid);
+          if (existing) {
+            downloadsRef.current.set(payload.gid, {
+              ...existing,
+              ...payload,
+              status: 'paused',
+            });
+            syncDownloads();
+          }
+        } else if (payload.type === 'download-resumed') {
+          const existing = downloadsRef.current.get(payload.gid);
+          if (existing) {
+            downloadsRef.current.set(payload.gid, {
+              ...existing,
+              ...payload,
+              status: 'active',
+            });
+            syncDownloads();
+          }
+        } else if (payload.type === 'download-removed') {
+          const { gid } = payload;
+          downloadsRef.current.delete(gid);
+          syncDownloads();
+        } else if (payload.type === 'download-complete') {
+          // Download completed - remove from downloads list
+          const { gid, targetPath } = payload;
+          downloadsRef.current.delete(gid);
+          syncDownloads();
+
+          // Trigger file browser refresh event
+          window.dispatchEvent(new CustomEvent('torrent-download-complete', {
+            detail: { path: targetPath }
+          }));
+        }
+      } catch (err) {
+        console.error('[DOWNLOADS] Error processing WebSocket message:', err);
       }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
+    });
+
+    return unsubscribe;
   }, [syncDownloads]);
 
   // Add a download to the tracked map (called when user starts a download from UI)

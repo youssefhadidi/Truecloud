@@ -3,62 +3,40 @@
 import { useEffect, useState } from 'react';
 import { FiPlay, FiX, FiFolder } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 export default function CacheGenerationClient() {
   const [status, setStatus] = useState(null);
-  const [connected, setConnected] = useState(false);
   const [generatePath, setGeneratePath] = useState('');
   const [generateType, setGenerateType] = useState('thumbnails');
   const [generating, setGenerating] = useState(false);
-  const wsRef = null;
+  const { connected, subscribe } = useWebSocket();
 
   const { addNotification } = useNotifications();
 
+  // Subscribe to cache-generation messages from unified WebSocket
   useEffect(() => {
-    // Connect to unified WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
-
-    ws.onopen = () => {
-      setConnected(true);
-      setStatus(null);
-    };
-
-    ws.onmessage = (event) => {
+    const unsubscribe = subscribe('cache-generation', (message) => {
       try {
-        const message = JSON.parse(event.data);
-        // Only process cache-generation messages from the unified WebSocket
-        if (message.type === 'cache-generation') {
-          const payload = message.payload;
-          setStatus(payload);
-          setGenerating(payload.isRunning);
+        const payload = message.payload;
+        setStatus(payload);
+        setGenerating(payload.isRunning);
 
-          if (payload.success === true) {
-            addNotification(
-              'success',
-              `Generated ${payload.successful} items, ${payload.skipped} skipped, ${payload.failed} failed in ${payload.duration}s`
-            );
-          } else if (payload.success === false) {
-            addNotification('error', payload.error || 'Cache generation failed');
-          }
+        if (payload.success === true) {
+          addNotification(
+            'success',
+            `Generated ${payload.successful} items, ${payload.skipped} skipped, ${payload.failed} failed in ${payload.duration}s`
+          );
+        } else if (payload.success === false) {
+          addNotification('error', payload.error || 'Cache generation failed');
         }
       } catch (err) {
-        console.error('Error parsing WebSocket message:', err);
+        console.error('Error processing cache-generation message:', err);
       }
-    };
+    });
 
-    ws.onerror = () => {
-      setConnected(false);
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, []);
+    return unsubscribe;
+  }, [subscribe, addNotification]);
 
   const handleGenerate = async () => {
     try {

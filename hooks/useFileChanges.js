@@ -3,94 +3,55 @@
 import { useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 /**
- * Hook to listen for real-time file changes via WebSocket
+ * Hook to listen for real-time file changes via unified WebSocket
  *
- * Connects to /api/ws and listens for file-change messages.
+ * Subscribes to 'file-change' messages from the app-level WebSocket connection.
  * Automatically invalidates React Query cache for affected paths.
  * Skips invalidation for changes made by the current user to avoid double invalidation.
  */
 export function useFileChanges() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const wsRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
+  const { subscribe } = useWebSocket();
   const sessionRef = useRef(session);
 
-  // Keep sessionRef in sync with session without triggering reconnection
+  // Keep sessionRef in sync with session
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
 
   useEffect(() => {
-    const connectWebSocket = () => {
+    // Subscribe to file-change messages
+    const unsubscribe = subscribe('file-change', (message) => {
       try {
-        const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+        const { path, userId } = message.payload;
 
-        ws.onopen = () => {
-          wsRef.current = ws;
-        };
+        // Skip invalidation for changes made by current user (avoid double invalidation)
+        const currentUserId = sessionRef.current?.user?.id;
+        if (currentUserId && userId === currentUserId) {
+          return;
+        }
 
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
+        // Invalidate the cache for the affected path
+        // This will trigger a refetch of the files list
+        queryClient.invalidateQueries({ queryKey: ['files', path] });
 
-            // Only process file-change message types
-            if (message.type !== 'file-change') {
-              return;
-            }
-
-            const { path, userId } = message.payload;
-
-            // Skip invalidation for changes made by current user (avoid double invalidation)
-            const currentUserId = sessionRef.current?.user?.id;
-            if (currentUserId && userId === currentUserId) {
-              return;
-            }
-
-            // Invalidate the cache for the affected path
-            // This will trigger a refetch of the files list
-            queryClient.invalidateQueries({ queryKey: ['files', path] });
-
-            // Also invalidate parent directories for better UX
-            // For example, if a file changes in 'folder/subfolder', also invalidate 'folder'
-            if (path && path.includes('/')) {
-              const parentPath = path.substring(0, path.lastIndexOf('/'));
-              if (parentPath) {
-                queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
-              }
-            }
-          } catch (err) {
-            console.error('[FILE CHANGES] Error processing message:', err);
+        // Also invalidate parent directories for better UX
+        // For example, if a file changes in 'folder/subfolder', also invalidate 'folder'
+        if (path && path.includes('/')) {
+          const parentPath = path.substring(0, path.lastIndexOf('/'));
+          if (parentPath) {
+            queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
           }
-        };
-
-        ws.onerror = (err) => {
-          console.error('[FILE CHANGES] WebSocket error:', err);
-        };
-
-        ws.onclose = () => {
-          wsRef.current = null;
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
-        };
+        }
       } catch (err) {
-        console.error('[FILE CHANGES] Failed to connect WebSocket:', err);
-        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+        console.error('[FILE CHANGES] Error processing message:', err);
       }
-    };
+    });
 
-    connectWebSocket();
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
-  }, []);
+    return unsubscribe;
+  }, [subscribe, queryClient]);
 }

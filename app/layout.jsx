@@ -6,6 +6,7 @@ import AuthProvider from '@/components/AuthProvider';
 import QueryProvider from '@/components/QueryProvider';
 import ReduxProvider from '@/components/ReduxProvider';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
+import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import Notifications from '@/components/Notifications';
 
 const geistSans = Geist({
@@ -31,7 +32,9 @@ export default function RootLayout({ children }) {
           <QueryProvider>
             <NotificationsProvider>
               <Notifications />
-              <AuthProvider>{children}</AuthProvider>
+              <AuthProvider>
+                <WebSocketProvider>{children}</WebSocketProvider>
+              </AuthProvider>
             </NotificationsProvider>
           </QueryProvider>
         </ReduxProvider>

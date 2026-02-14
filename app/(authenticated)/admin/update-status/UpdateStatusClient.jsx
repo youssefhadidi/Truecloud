@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { FiChevronDown, FiChevronUp, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 export default function UpdateStatusClient() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [connected, setConnected] = useState(false);
   const [expandedStep, setExpandedStep] = useState(null);
+  const { connected, subscribe } = useWebSocket();
 
   useEffect(() => {
     // Fetch initial status
@@ -27,41 +28,20 @@ export default function UpdateStatusClient() {
     };
 
     fetchStatus();
-
-    // Connect to unified WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
-
-    ws.onopen = () => {
-      setConnected(true);
-      setError(null);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        // Only process update-status messages from the unified WebSocket
-        if (message.type === 'update-status') {
-          setStatus(message.payload);
-        }
-      } catch (err) {
-        console.error('Error parsing WebSocket message:', err);
-      }
-    };
-
-    ws.onerror = () => {
-      setConnected(false);
-      setError('WebSocket connection error');
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-    };
-
-    return () => {
-      ws.close();
-    };
   }, []);
+
+  // Subscribe to update status messages from unified WebSocket
+  useEffect(() => {
+    const unsubscribe = subscribe('update-status', (message) => {
+      try {
+        setStatus(message.payload);
+      } catch (err) {
+        console.error('Error processing update status message:', err);
+      }
+    });
+
+    return unsubscribe;
+  }, [subscribe]);
 
   if (loading) {
     return (
