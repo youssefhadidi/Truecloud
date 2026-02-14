@@ -56,7 +56,7 @@ export function useActiveDownloads() {
                 downloadsRef.current.set(dl.gid, {
                   gid: dl.gid,
                   name: dl.name,
-                  path: '', // Will be set when user starts download from UI
+                  path: dl.path || '', // Use relative path from backend
                   progress: dl.progress || 0,
                   status: dl.status || 'active',
                   downloadSpeed: dl.downloadSpeed || '0 B/s',
