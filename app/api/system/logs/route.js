@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 
 const STATE_FILE = resolve(process.cwd(), '.logs-state.json');
 const HISTORY_FILE = resolve(process.cwd(), '.logs-history.json');
+const HISTORY_LIMIT = 50; // Keep only last 50 lines
 
 async function getLogState() {
   try {
@@ -45,6 +46,10 @@ async function appendToHistory(newLines) {
   try {
     const history = await getLogHistory();
     history.lines.push(...newLines);
+    // Keep only the last 50 lines (like tail -50)
+    if (history.lines.length > HISTORY_LIMIT) {
+      history.lines = history.lines.slice(-HISTORY_LIMIT);
+    }
     await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2));
   } catch (error) {
     console.error('Failed to append to history:', error);
@@ -111,16 +116,23 @@ export async function GET(req) {
     // Append new lines to history
     if (newLines.length > 0) {
       await appendToHistory(newLines);
+      // Re-fetch history after appending to get trimmed version
+      history = await getLogHistory();
     }
 
     // Save new state
     await saveLogState(logPath, newOffset);
 
+    // Return only the last 50 lines
+    const recentLines = history.lines.length > HISTORY_LIMIT
+      ? history.lines.slice(-HISTORY_LIMIT)
+      : history.lines;
+
     return NextResponse.json({
       success: true,
       logPath,
       newLines,
-      allLines: history.lines,
+      allLines: recentLines,
       total: history.lines.length,
       offset: newOffset,
     });
