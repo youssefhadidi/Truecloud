@@ -116,36 +116,37 @@ const GridItem = memo(
           </div>
         ) : item.isDownloading ? (
           <div
-            className="group relative bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 active:shadow-lg transition-shadow flex flex-col h-full select-none"
+            className="group relative bg-yellow-900/30 border border-yellow-700 rounded-lg active:shadow-lg transition-shadow flex flex-col h-full select-none"
             style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}
           >
             {/* Download icon area */}
             <div className="w-full aspect-square flex items-center justify-center mb-2 bg-yellow-900/20 relative overflow-hidden rounded">
-              {item.downloadStatus === 'active' ? (
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+              {item.downloadStatus === 'active' ? (<>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div> 
+                <div className="w-full bg-gray-700 rounded-full h-2 mt-2 overflow-hidden">
+              <div
+                className="bg-yellow-500 h-full transition-all"
+                style={{ width: `${item.downloadProgress || 0}%` }}
+              />
+            </div>
+            </>
               ) : (
                 <FiDownload className="text-yellow-500" size={32} />
               )}
             </div>
 
             {/* Download name */}
-            <div className="font-medium text-white truncate px-1 text-sm" title={item.name}>
+            <div className="font-medium text-white truncate px-1" title={item.name}>
               {item.name}
             </div>
 
             {/* Progress percentage */}
-            <div className="text-xs text-yellow-300 px-1 mt-1">{item.downloadProgress || 0}%</div>
+            <div className="text-xs text-yellow-300 px-1 mt-1">{item.downloadProgress || 0}%{item.downloadSpeed ? ` - ${item.downloadSpeed}` : ''}</div>
 
-            {/* Progress bar */}
-            <div className="w-full bg-gray-700 rounded-full h-2 mt-2 overflow-hidden">
-              <div
-                className="bg-yellow-500 h-full transition-all"
-                style={{ width: `${item.downloadProgress || 0}%` }}
-              />
-            </div>
+
 
             {/* Download speed */}
-            <div className="text-xs text-yellow-300 px-1 mt-2">{item.downloadSpeed || '0 B/s'}</div>
+            <div className="text-xs text-yellow-300 px-1 mt-2"></div>
 
             {/* Action buttons - pause/resume and cancel */}
             {(shouldShowActions(item.id) || containerWidth >= 640) && (
