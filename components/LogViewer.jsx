@@ -116,7 +116,7 @@ export default function LogViewer() {
           </div>
         )}
 
-        <div className="bg-black rounded font-mono text-xs sm:text-sm text-green-400 p-3 sm:p-4 h-64 sm:h-80 lg:h-96 overflow-y-auto border border-gray-700">
+        <div className="bg-black rounded font-mono text-xs sm:text-sm text-green-400 p-3 sm:p-4 h-64 sm:h-80 lg:h-96 overflow-y-auto overflow-x-auto border border-gray-700">
           {logs.length === 0 ? (
             <div className="text-gray-500">
               {isLoading ? 'Loading logs...' : 'No logs available'}
@@ -124,7 +124,7 @@ export default function LogViewer() {
           ) : (
             <>
               {logs.map((log, index) => (
-                <div key={index} className="whitespace-pre-wrap break-words text-xs">
+                <div key={index} className="whitespace-pre-wrap break-words text-xs min-w-fit">
                   {log}
                 </div>
               ))}
