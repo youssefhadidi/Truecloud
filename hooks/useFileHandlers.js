@@ -19,7 +19,9 @@ export function useFileHandlers({
   setNewFileName,
   setSharingFile,
   setRestoringFile,
-  addDownloadToTracker,
+  pauseDownload,
+  resumeDownload,
+  removeDownload,
 }) {
   const { addTransfer, updateTransfer, removeTransfer, setTransferring } = useTransfersDispatch();
 
@@ -104,12 +106,7 @@ export function useFileHandlers({
       formData.append('torrentFile', torrentFile);
       formData.append('path', currentPath);
 
-      const result = await startDownloadMutation.mutateAsync({ formData, path: currentPath });
-
-      // Track download in the UI state
-      if (addDownloadToTracker) {
-        addDownloadToTracker(result.gid, result.name || torrentFile.name, currentPath);
-      }
+      await startDownloadMutation.mutateAsync({ formData, path: currentPath });
 
       addNotification('success', `Started downloading: ${torrentFile.name}`);
     } catch (error) {
@@ -316,6 +313,9 @@ export function useFileHandlers({
     initiateRestore,
     cancelRestore,
     confirmRestore,
+    pauseDownload,
+    resumeDownload,
+    removeDownload,
     isInTrash: isInTrash(currentPath),
   };
 }

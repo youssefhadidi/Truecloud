@@ -6,6 +6,7 @@ import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -88,6 +89,9 @@ export async function PATCH(req, { params }) {
 
     // Rename file
     await rename(oldPath, newPath);
+
+    // Broadcast file change to all connected clients
+    broadcastFileChange('rename', subPath, newName, `T-${token}`);
 
     logger.info('PATCH /api/public/[token]/rename - File renamed', {
       oldName,

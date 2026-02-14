@@ -6,6 +6,7 @@ import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'fs';
 import { stat, rename } from 'fs/promises';
 import { logger } from '@/lib/logger';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -152,6 +153,9 @@ export async function POST(req, { params }) {
 
     for (const plan of movePlan) {
       await rename(plan.sourceItemPath, plan.destItemPath);
+      // Broadcast file change to all connected clients
+      const normalizedDestPath = destinationPath.replace(/\\/g, '/').replace(/\/+$/, '');
+      broadcastFileChange('move', normalizedDestPath, plan.name, `T-${token}`);
     }
 
     const duration = Date.now() - startTime;

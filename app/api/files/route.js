@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getActiveDownloads, getWaitingDownloads, getStoppedDownloads } from '@/lib/webTorrentManager';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -324,6 +325,9 @@ export async function DELETE(req) {
         });
       }
 
+      // Broadcast file change
+      broadcastFileChange('delete', relativePath, fileName, session.user.id);
+
       return NextResponse.json({ success: true, permanent: true });
     } else {
       // Move to trash (mirror the folder structure)
@@ -368,6 +372,9 @@ export async function DELETE(req) {
         trashPath: finalTrashPath.replace(UPLOAD_DIR, ''),
         duration: `${Date.now() - startTime}ms`,
       });
+
+      // Broadcast file change
+      broadcastFileChange('delete', relativePath, fileName, session.user.id);
 
       return NextResponse.json({ success: true, movedToTrash: true });
     }
@@ -457,6 +464,9 @@ export async function PATCH(req) {
       path: relativePath,
       duration: `${duration}ms`,
     });
+
+    // Broadcast file change (rename)
+    broadcastFileChange('rename', relativePath, newName, session.user.id);
 
     return NextResponse.json({ success: true, newName });
   } catch (error) {

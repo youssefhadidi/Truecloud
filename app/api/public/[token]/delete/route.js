@@ -6,6 +6,7 @@ import { stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -82,6 +83,8 @@ export async function DELETE(req, { params }) {
     // Delete file or directory
     if (stats.isDirectory()) {
       await rm(filePath, { recursive: true, force: true });
+      // Broadcast file change to all connected clients
+      broadcastFileChange('delete', subPath, fileName, `T-${token}`);
       logger.info('DELETE /api/public/[token]/delete - Directory deleted', {
         fileName,
         subPath,
@@ -89,6 +92,8 @@ export async function DELETE(req, { params }) {
       });
     } else {
       await unlink(filePath);
+      // Broadcast file change to all connected clients
+      broadcastFileChange('delete', subPath, fileName, `T-${token}`);
       logger.info('DELETE /api/public/[token]/delete - File deleted', {
         fileName,
         subPath,

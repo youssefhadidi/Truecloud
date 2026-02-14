@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
+import { useFileChanges } from '@/hooks/useFileChanges';
 import {
   useTransfers,
   useTransferring,
@@ -77,9 +78,6 @@ export function useFilesPage(status) {
 
   // Cache state (kept separate as it's simple)
   const [folderDisplayNames, setFolderDisplayNames] = useState({});
-
-  // Active downloads tracking
-  const { downloads, addDownload, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
 
   // Helper functions for grouped state updates (maintains backward compatibility)
   const setCurrentPath = useCallback((path) => {
@@ -184,9 +182,14 @@ export function useFilesPage(status) {
     }
   }, [selection.selectionMode]);
 
-  // Fetch and sort files (now includes downloads for current directory from API)
-  // Note: useActiveDownloads provides real-time updates, API downloads serve as initial state
+  // Fetch files for current directory from API
   const { files: filesData, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
+
+  // Get real-time download progress via WebSocket
+  const { downloads: wsDownloads, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
+
+  // Listen for file changes via WebSocket and invalidate cache
+  useFileChanges();
 
   // Fetch shared paths for share indicators
   const { data: sharedPaths } = usePathShares(navigation.currentPath);
@@ -207,8 +210,8 @@ export function useFilesPage(status) {
   }, [navigation.currentPath, queryClient]);
 
   const files = useMemo(() => {
-    // Build download placeholders for current path
-    const downloadEntries = Object.values(downloads)
+    // Build download placeholders for current path (use real-time WebSocket data)
+    const downloadEntries = Object.values(wsDownloads || {})
       .filter((d) => d.path === navigation.currentPath)
       .map((d) => ({
         id: `dl-${d.gid}`,
@@ -283,7 +286,7 @@ export function useFilesPage(status) {
     });
 
     return sorted;
-  }, [filesData, preferences.sortBy, preferences.searchQuery, downloads, navigation.currentPath]);
+  }, [filesData, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath]);
 
   // Store folder display names
   useEffect(() => {
@@ -351,7 +354,6 @@ export function useFilesPage(status) {
     isLoading,
     viewableFiles,
     sharedPaths,
-    downloads,
 
     // Setters (backward compatible)
     setCurrentPath,
@@ -375,8 +377,7 @@ export function useFilesPage(status) {
     setSelectionMode,
     setSelectedFiles,
 
-    // Download helpers
-    addDownloadToTracker: addDownload,
+    // Download handlers (real-time via WebSocket)
     pauseDownload,
     resumeDownload,
     removeDownload,

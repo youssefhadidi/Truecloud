@@ -6,6 +6,7 @@ import { mkdir } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -83,6 +84,9 @@ export async function POST(req) {
     }
 
     await mkdir(targetPath, { recursive: true });
+
+    // Broadcast file change to all connected clients
+    broadcastFileChange('create', adjustedPath, name, session.user.id);
 
     const duration = Date.now() - startTime;
     logger.info('POST /api/files/mkdir - Folder created successfully', {

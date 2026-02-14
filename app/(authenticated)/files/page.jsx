@@ -89,7 +89,9 @@ function FilesPageContent() {
     setNewFileName: state.setNewFileName,
     setSharingFile: state.setSharingFile,
     setRestoringFile: state.setRestoringFile,
-    addDownloadToTracker: state.addDownloadToTracker,
+    pauseDownload: state.pauseDownload,
+    resumeDownload: state.resumeDownload,
+    removeDownload: state.removeDownload,
   });
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);

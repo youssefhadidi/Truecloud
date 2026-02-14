@@ -6,6 +6,7 @@ import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -73,6 +74,9 @@ export async function POST(req, { params }) {
 
     // Create folder
     await mkdir(folderPath, { recursive: false });
+
+    // Broadcast file change to all connected clients
+    broadcastFileChange('create', pathCheck.fullPath, name, `T-${token}`);
 
     logger.info('POST /api/public/[token]/mkdir - Folder created', {
       token,

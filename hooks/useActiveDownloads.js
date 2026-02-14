@@ -44,7 +44,6 @@ export function useActiveDownloads() {
         const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/torrent-downloads`);
 
         ws.onopen = async () => {
-          console.log('[DOWNLOADS] WebSocket connected');
           wsRef.current = ws;
 
           // Fetch initial state
@@ -78,9 +77,7 @@ export function useActiveDownloads() {
           try {
             const message = JSON.parse(event.data);
 
-            if (message.type === 'connected') {
-              console.log('[DOWNLOADS]', message.message);
-            } else if (message.type === 'download-progress') {
+            if (message.type === 'download-progress') {
               // Update download progress in real-time
               const { payload } = message;
               const existing = downloadsRef.current.get(payload.gid);
@@ -167,7 +164,6 @@ export function useActiveDownloads() {
               window.dispatchEvent(new CustomEvent('torrent-download-complete', {
                 detail: { path: targetPath }
               }));
-              console.log('[DOWNLOADS] Download completed, file browser should refresh:', targetPath);
             }
           } catch (err) {
             console.error('[DOWNLOADS] Error processing WebSocket message:', err);
@@ -179,7 +175,6 @@ export function useActiveDownloads() {
         };
 
         ws.onclose = () => {
-          console.log('[DOWNLOADS] WebSocket disconnected, reconnecting in 3s...');
           wsRef.current = null;
           reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
         };

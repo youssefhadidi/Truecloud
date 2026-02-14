@@ -23,17 +23,7 @@ export default async function handler(req, res) {
       logger = null;
     }
 
-    const logInfo = (message, data) => {
-      try {
-        if (logger?.info) {
-          logger.info(message, data);
-        } else {
-          console.log(message, data);
-        }
-      } catch (error) {
-        console.log('[Logger fallback]', message, data, error?.message);
-      }
-    };
+
 
     const logError = (message, data) => {
       try {
@@ -47,17 +37,12 @@ export default async function handler(req, res) {
       }
     };
 
-    logInfo('POST /api/files/upload - Request received (pages api)', {
-      contentType: req.headers['content-type'],
-      contentLength: req.headers['content-length'],
-    });
 
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    logInfo('POST /api/files/upload - Session check start (pages api)');
     const { getToken } = await import('next-auth/jwt');
     let token = null;
     try {
@@ -72,10 +57,7 @@ export default async function handler(req, res) {
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    logInfo('POST /api/files/upload - Session ok (pages api)', {
-      userId: token?.id,
-      email: token?.email,
-    });
+
 
     const queryPath = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path || '';
     let relativePath = queryPath;
@@ -92,10 +74,7 @@ export default async function handler(req, res) {
     if (!accessCheck.allowed) {
       return res.status(accessCheck.status).json({ error: accessCheck.error });
     }
-    logInfo('POST /api/files/upload - Access ok (pages api)', {
-      path: accessCheck.normalizedPath,
-      isRoot,
-    });
+
 
     relativePath = accessCheck.normalizedPath;
     const targetDir = join(UPLOAD_DIR, relativePath);
@@ -107,20 +86,13 @@ export default async function handler(req, res) {
     if (!existsSync(targetDir)) {
       await mkdir(targetDir, { recursive: true });
     }
-    logInfo('POST /api/files/upload - Target dir ready (pages api)', {
-      targetDir,
-    });
+
 
     const contentType = req.headers['content-type'];
     if (!contentType || !contentType.includes('multipart/form-data')) {
       return res.status(415).json({ error: 'Invalid content type' });
     }
 
-    logInfo('POST /api/files/upload - Incoming request (pages api)', {
-      contentType,
-      contentLength: req.headers['content-length'],
-      path: relativePath,
-    });
 
     const { default: Busboy } = await import('busboy');
     const busboy = Busboy({
@@ -130,7 +102,6 @@ export default async function handler(req, res) {
         fileSize: 100 * 1024 * 1024 * 1024,
       },
     });
-    logInfo('POST /api/files/upload - Busboy initialized (pages api)');
 
     let filesReceived = 0;
     const uploadedFiles = [];
@@ -225,11 +196,6 @@ export default async function handler(req, res) {
     });
 
     busboy.on('finish', async () => {
-      logInfo('POST /api/files/upload - Busboy finished (pages api)', {
-        filesReceived,
-        uploadedCount: uploadedFiles.length,
-      });
-
       if (responded) return;
       if (filesReceived === 0) {
         respond(400, { error: 'No file provided in multipart data' });

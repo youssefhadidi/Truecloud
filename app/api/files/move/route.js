@@ -7,6 +7,7 @@ import { existsSync } from 'fs';
 import { stat, rename } from 'fs/promises';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -153,6 +154,8 @@ export async function POST(req) {
 
     for (const plan of movePlan) {
       await rename(plan.sourceItemPath, plan.destItemPath);
+      // Broadcast move operation
+      broadcastFileChange('move', normalizedDest, plan.name, session.user.id);
     }
 
     const duration = Date.now() - startTime;

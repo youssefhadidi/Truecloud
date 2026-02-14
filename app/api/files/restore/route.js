@@ -6,6 +6,7 @@ import { stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -124,6 +125,9 @@ export async function POST(req) {
       originalPath,
       duration: `${Date.now() - startTime}ms`,
     });
+
+    // Broadcast file change (restore)
+    broadcastFileChange('restore', originalPath, restoredFileName, session.user.id);
 
     return NextResponse.json({
       success: true,

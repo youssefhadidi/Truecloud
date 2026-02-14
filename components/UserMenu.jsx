@@ -24,10 +24,7 @@ export default function UserMenu({ email, isAdmin = false }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debug: log when isAdmin changes
-  useEffect(() => {
-    console.log('UserMenu - isAdmin prop changed:', isAdmin);
-  }, [isAdmin]);
+
 
   const handleAdminPanel = () => {
     router.push('/admin');
