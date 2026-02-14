@@ -27,10 +27,10 @@ export default function UpdateChecker() {
     }
   }, [updateInfo]);
 
-  // Connect to update status WebSocket
+  // Connect to unified WebSocket for update status
   useEffect(() => {
     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/update-status`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -40,7 +40,8 @@ export default function UpdateChecker() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'status') {
+        // Only process update-status messages from the unified WebSocket
+        if (message.type === 'update-status') {
           setUpdateStatus(message.payload);
         }
       } catch (err) {

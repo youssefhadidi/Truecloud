@@ -1,13 +1,17 @@
 /**
- * Hook for real-time torrent download tracking via WebSocket.
+ * Hook for real-time torrent download tracking via unified WebSocket.
  *
  * This is the primary download state management hook, used by both the
  * file browser (useFilesPage) and the downloads management page.
  *
  * DATA FLOW:
- * 1. On mount, connects to WebSocket at /api/ws/torrent-downloads
+ * 1. On mount, connects to unified WebSocket at /api/ws
  * 2. On connect, fetches initial state via GET /api/files/torrent-download
- * 3. Receives real-time updates: progress (every 1s), status changes, completions
+ * 3. Receives real-time updates via /api/ws messages with type: 'torrent-downloads':
+ *    - download-progress: Updates progress every 1s
+ *    - download-added: New download started
+ *    - downloads-status: Batch update (poll or state refresh)
+ *    - download-paused/resumed/removed/complete: Status changes
  * 4. Provides pause/resume/remove actions via PATCH /api/files/torrent-download
  *    (the backend broadcasts status changes back through WebSocket)
  *
@@ -36,12 +40,12 @@ export function useActiveDownloads() {
     setDownloads(obj);
   }, []);
 
-  // Connect to WebSocket
+  // Connect to unified WebSocket
   useEffect(() => {
     const connectWebSocket = () => {
       try {
         const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/torrent-downloads`);
+        const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
 
         ws.onopen = async () => {
           wsRef.current = ws;
@@ -77,9 +81,15 @@ export function useActiveDownloads() {
           try {
             const message = JSON.parse(event.data);
 
-            if (message.type === 'download-progress') {
+            // Only process torrent-downloads message types
+            if (message.type !== 'torrent-downloads') {
+              return;
+            }
+
+            const { payload } = message;
+
+            if (payload.type === 'download-progress') {
               // Update download progress in real-time
-              const { payload } = message;
               const existing = downloadsRef.current.get(payload.gid);
               if (existing) {
                 downloadsRef.current.set(payload.gid, {
@@ -88,8 +98,7 @@ export function useActiveDownloads() {
                 });
                 syncDownloads();
               }
-            } else if (message.type === 'download-added') {
-              const { payload } = message;
+            } else if (payload.type === 'download-added') {
               const existing = downloadsRef.current.get(payload.gid);
               downloadsRef.current.set(payload.gid, {
                 ...existing,
@@ -106,8 +115,8 @@ export function useActiveDownloads() {
                 error: payload.error || null,
               });
               syncDownloads();
-            } else if (message.type === 'downloads-status') {
-              const { downloads: downloadsList } = message.payload;
+            } else if (payload.type === 'downloads-status') {
+              const { downloads: downloadsList } = payload;
               if (Array.isArray(downloadsList)) {
                 for (const dl of downloadsList) {
                   const existing = downloadsRef.current.get(dl.gid);
@@ -128,8 +137,7 @@ export function useActiveDownloads() {
                 }
               }
               syncDownloads();
-            } else if (message.type === 'download-paused') {
-              const { payload } = message;
+            } else if (payload.type === 'download-paused') {
               const existing = downloadsRef.current.get(payload.gid);
               if (existing) {
                 downloadsRef.current.set(payload.gid, {
@@ -139,8 +147,7 @@ export function useActiveDownloads() {
                 });
                 syncDownloads();
               }
-            } else if (message.type === 'download-resumed') {
-              const { payload } = message;
+            } else if (payload.type === 'download-resumed') {
               const existing = downloadsRef.current.get(payload.gid);
               if (existing) {
                 downloadsRef.current.set(payload.gid, {
@@ -150,13 +157,13 @@ export function useActiveDownloads() {
                 });
                 syncDownloads();
               }
-            } else if (message.type === 'download-removed') {
-              const { gid } = message.payload;
+            } else if (payload.type === 'download-removed') {
+              const { gid } = payload;
               downloadsRef.current.delete(gid);
               syncDownloads();
-            } else if (message.type === 'download-complete') {
+            } else if (payload.type === 'download-complete') {
               // Download completed - remove from downloads list
-              const { gid, targetPath } = message.payload;
+              const { gid, targetPath } = payload;
               downloadsRef.current.delete(gid);
               syncDownloads();
 

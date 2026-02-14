@@ -15,9 +15,9 @@ export default function CacheGenerationClient() {
   const { addNotification } = useNotifications();
 
   useEffect(() => {
-    // Connect to WebSocket
+    // Connect to unified WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/cache-generation`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
 
     ws.onopen = () => {
       setConnected(true);
@@ -27,17 +27,19 @@ export default function CacheGenerationClient() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'status') {
-          setStatus(message.payload);
-          setGenerating(message.payload.isRunning);
+        // Only process cache-generation messages from the unified WebSocket
+        if (message.type === 'cache-generation') {
+          const payload = message.payload;
+          setStatus(payload);
+          setGenerating(payload.isRunning);
 
-          if (message.payload.success === true) {
+          if (payload.success === true) {
             addNotification(
               'success',
-              `Generated ${message.payload.successful} items, ${message.payload.skipped} skipped, ${message.payload.failed} failed in ${message.payload.duration}s`
+              `Generated ${payload.successful} items, ${payload.skipped} skipped, ${payload.failed} failed in ${payload.duration}s`
             );
-          } else if (message.payload.success === false) {
-            addNotification('error', message.payload.error || 'Cache generation failed');
+          } else if (payload.success === false) {
+            addNotification('error', payload.error || 'Cache generation failed');
           }
         }
       } catch (err) {

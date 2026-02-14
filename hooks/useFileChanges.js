@@ -37,26 +37,29 @@ export function useFileChanges() {
           try {
             const message = JSON.parse(event.data);
 
-            if (message.type === 'file-change') {
-              const { operation, path, fileName, userId } = message;
+            // Only process file-change message types
+            if (message.type !== 'file-change') {
+              return;
+            }
 
-              // Skip invalidation for changes made by current user (avoid double invalidation)
-              const currentUserId = sessionRef.current?.user?.id;
-              if (currentUserId && userId === currentUserId) {
-                return;
-              }
+            const { path, userId } = message.payload;
 
-              // Invalidate the cache for the affected path
-              // This will trigger a refetch of the files list
-              queryClient.invalidateQueries({ queryKey: ['files', path] });
+            // Skip invalidation for changes made by current user (avoid double invalidation)
+            const currentUserId = sessionRef.current?.user?.id;
+            if (currentUserId && userId === currentUserId) {
+              return;
+            }
 
-              // Also invalidate parent directories for better UX
-              // For example, if a file changes in 'folder/subfolder', also invalidate 'folder'
-              if (path && path.includes('/')) {
-                const parentPath = path.substring(0, path.lastIndexOf('/'));
-                if (parentPath) {
-                  queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
-                }
+            // Invalidate the cache for the affected path
+            // This will trigger a refetch of the files list
+            queryClient.invalidateQueries({ queryKey: ['files', path] });
+
+            // Also invalidate parent directories for better UX
+            // For example, if a file changes in 'folder/subfolder', also invalidate 'folder'
+            if (path && path.includes('/')) {
+              const parentPath = path.substring(0, path.lastIndexOf('/'));
+              if (parentPath) {
+                queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
               }
             }
           } catch (err) {

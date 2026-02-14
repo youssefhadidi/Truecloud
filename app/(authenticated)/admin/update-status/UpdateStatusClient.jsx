@@ -28,9 +28,9 @@ export default function UpdateStatusClient() {
 
     fetchStatus();
 
-    // Connect to WebSocket
+    // Connect to unified WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/update-status`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
 
     ws.onopen = () => {
       setConnected(true);
@@ -40,7 +40,8 @@ export default function UpdateStatusClient() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'status') {
+        // Only process update-status messages from the unified WebSocket
+        if (message.type === 'update-status') {
           setStatus(message.payload);
         }
       } catch (err) {

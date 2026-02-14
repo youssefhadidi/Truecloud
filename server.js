@@ -6,10 +6,8 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const updateClients = new Set();
-const cacheGenerationClients = new Set();
-const torrentDownloadClients = new Set();
-const fileChangeClients = new Set();
+// Unified WebSocket clients set - all messages route through here
+const wsClients = new Set();
 
 // Global update status state
 global.updateStatus = {
@@ -46,40 +44,39 @@ global.cacheGenerationStatus = {
   duration: 0,
 };
 
-// Function to broadcast updates to all connected clients
+/**
+ * Unified WebSocket message broadcast function
+ * All messages are routed through /api/ws with a `type` field:
+ * - type: 'update-status' for system update progress
+ * - type: 'cache-generation' for cache generation progress
+ * - type: 'torrent-downloads' for torrent download updates
+ * - type: 'file-change' for file CRUD operations
+ */
+const broadcastMessage = (message) => {
+  wsClients.forEach((client) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      client.send(JSON.stringify(message));
+    }
+  });
+};
+
+// Legacy function names for backwards compatibility during transition
 global.broadcastUpdate = (message) => {
-  updateClients.forEach((client) => {
-    if (client.readyState === 1) { // 1 = OPEN
-      client.send(JSON.stringify(message));
-    }
-  });
+  broadcastMessage({ type: 'update-status', payload: message.payload });
 };
 
-// Function to broadcast cache generation updates to all connected clients
 global.broadcastCacheGenerationUpdate = (message) => {
-  cacheGenerationClients.forEach((client) => {
-    if (client.readyState === 1) { // 1 = OPEN
-      client.send(JSON.stringify(message));
-    }
-  });
+  broadcastMessage({ type: 'cache-generation', payload: message.payload });
 };
 
-// Function to broadcast torrent download updates to all connected clients
 global.broadcastTorrentDownloadUpdate = (message) => {
-  torrentDownloadClients.forEach((client) => {
-    if (client.readyState === 1) { // 1 = OPEN
-      client.send(JSON.stringify(message));
-    }
-  });
+  // Message is already in format { type: 'download-progress', payload: ... }
+  // Wrap it under torrent-downloads type for unified WebSocket
+  broadcastMessage({ type: 'torrent-downloads', payload: message });
 };
 
-// Function to broadcast file changes to all connected clients
 global.broadcastFileChange = (message) => {
-  fileChangeClients.forEach((client) => {
-    if (client.readyState === 1) { // 1 = OPEN
-      client.send(JSON.stringify(message));
-    }
-  });
+  broadcastMessage({ type: 'file-change', payload: message });
 };
 
 app.prepare().then(() => {
@@ -92,84 +89,31 @@ app.prepare().then(() => {
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
-    if (url.pathname === '/api/ws/update-status') {
+    // Unified WebSocket endpoint for all message types
+    if (url.pathname === '/api/ws') {
       wss.handleUpgrade(request, socket, head, (ws) => {
-        // Send current status to newly connected client
+        // Add client to unified set
+        wsClients.add(ws);
+
+        // Send initial status messages to newly connected client
+        // This ensures the client has current state for all message types
         ws.send(JSON.stringify({
-          type: 'status',
+          type: 'update-status',
           payload: global.updateStatus,
         }));
 
-        // Add to clients set
-        updateClients.add(ws);
-
-        // Remove client when disconnected
-        ws.on('close', () => {
-          updateClients.delete(ws);
-        });
-
-        ws.on('error', () => {
-          updateClients.delete(ws);
-        });
-      });
-    } else if (url.pathname === '/api/ws/cache-generation') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        // Send current status to newly connected client
         ws.send(JSON.stringify({
-          type: 'status',
+          type: 'cache-generation',
           payload: global.cacheGenerationStatus,
         }));
 
-        // Add to clients set
-        cacheGenerationClients.add(ws);
-
-        // Remove client when disconnected
+        // Remove client when disconnected or error
         ws.on('close', () => {
-          cacheGenerationClients.delete(ws);
+          wsClients.delete(ws);
         });
 
         ws.on('error', () => {
-          cacheGenerationClients.delete(ws);
-        });
-      });
-    } else if (url.pathname === '/api/ws/torrent-downloads') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        // Add to clients set
-        torrentDownloadClients.add(ws);
-
-        // Send initial "connected" message
-        ws.send(JSON.stringify({
-          type: 'connected',
-          message: 'Connected to torrent download status stream',
-        }));
-
-        // Remove client when disconnected
-        ws.on('close', () => {
-          torrentDownloadClients.delete(ws);
-        });
-
-        ws.on('error', () => {
-          torrentDownloadClients.delete(ws);
-        });
-      });
-    } else if (url.pathname === '/api/ws') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        // Add to clients set
-        fileChangeClients.add(ws);
-
-        // Send initial "connected" message
-        ws.send(JSON.stringify({
-          type: 'connected',
-          message: 'Connected to updates stream',
-        }));
-
-        // Remove client when disconnected
-        ws.on('close', () => {
-          fileChangeClients.delete(ws);
-        });
-
-        ws.on('error', () => {
-          fileChangeClients.delete(ws);
+          wsClients.delete(ws);
         });
       });
     } else {
