@@ -184,8 +184,9 @@ export function useFilesPage(status) {
     }
   }, [selection.selectionMode]);
 
-  // Fetch and sort files
-  const { data: filesData, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
+  // Fetch and sort files (now includes downloads for current directory from API)
+  // Note: useActiveDownloads provides real-time updates, API downloads serve as initial state
+  const { files: filesData, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
 
   // Fetch shared paths for share indicators
   const { data: sharedPaths } = usePathShares(navigation.currentPath);

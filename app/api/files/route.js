@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { getActiveDownloads, getWaitingDownloads, getStoppedDownloads } from '@/lib/webTorrentManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -179,14 +180,39 @@ export async function GET(req) {
     // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
     // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
 
+    // Fetch torrent downloads for this directory
+    let downloads = [];
+    try {
+      const resolvedTargetDir = resolve(targetDir);
+      const activeDownloads = await getActiveDownloads(resolvedTargetDir);
+      const waitingDownloads = await getWaitingDownloads(0, 100, resolvedTargetDir);
+      const stoppedDownloads = await getStoppedDownloads(0, 10, resolvedTargetDir);
+      downloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
+
+      logger.debug('GET /api/files - Downloads fetched', {
+        path: relativePath,
+        active: activeDownloads.length,
+        waiting: waitingDownloads.length,
+        stopped: stoppedDownloads.length,
+      });
+    } catch (downloadError) {
+      logger.warn('GET /api/files - Error fetching downloads', {
+        path: relativePath,
+        error: downloadError.message,
+      });
+      // Continue without downloads if there's an error
+      downloads = [];
+    }
+
     const duration = Date.now() - startTime;
     logger.info('GET /api/files - Success', {
       path: relativePath,
       fileCount: files.length,
+      downloadCount: downloads.length,
       duration: `${duration}ms`,
     });
 
-    return NextResponse.json({ files });
+    return NextResponse.json({ files, downloads });
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error('GET /api/files - Error fetching files', error);

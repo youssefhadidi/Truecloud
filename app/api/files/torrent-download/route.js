@@ -121,6 +121,8 @@ export async function POST(req) {
 /**
  * GET /api/files/torrent-download
  * Get list of active and recent downloads with progress
+ * Query params:
+ *   - path: (optional) Filter downloads by directory path
  */
 export async function GET(req) {
   try {
@@ -131,14 +133,20 @@ export async function GET(req) {
     }
 
     try {
-      // Get active downloads
-      const activeDownloads = await getActiveDownloads();
+      // Get optional path filter from query params
+      const { searchParams } = new URL(req.url);
+      const filterPath = searchParams.get('path');
 
-      // Get waiting/paused downloads
-      const waitingDownloads = await getWaitingDownloads(0, 100);
+      logger.debug('GET /api/files/torrent-download', { filterPath });
 
-      // Get recently stopped downloads (completed or failed)
-      const stoppedDownloads = await getStoppedDownloads(0, 10);
+      // Get active downloads (optionally filtered by path)
+      const activeDownloads = await getActiveDownloads(filterPath);
+
+      // Get waiting/paused downloads (optionally filtered by path)
+      const waitingDownloads = await getWaitingDownloads(0, 100, filterPath);
+
+      // Get recently stopped downloads (optionally filtered by path)
+      const stoppedDownloads = await getStoppedDownloads(0, 10, filterPath);
 
       // Combine and sort by most recent
       const allDownloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
@@ -147,6 +155,7 @@ export async function GET(req) {
         active: activeDownloads.length,
         waiting: waitingDownloads.length,
         stopped: stoppedDownloads.length,
+        filterPath,
       });
 
       // Broadcast current downloads to all connected WebSocket clients
