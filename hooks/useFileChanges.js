@@ -16,6 +16,12 @@ export function useFileChanges() {
   const queryClient = useQueryClient();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const sessionRef = useRef(session);
+
+  // Keep sessionRef in sync with session without triggering reconnection
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -35,7 +41,7 @@ export function useFileChanges() {
               const { operation, path, fileName, userId } = message;
 
               // Skip invalidation for changes made by current user (avoid double invalidation)
-              const currentUserId = session?.user?.id;
+              const currentUserId = sessionRef.current?.user?.id;
               if (currentUserId && userId === currentUserId) {
                 return;
               }
@@ -83,5 +89,5 @@ export function useFileChanges() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [queryClient, session]);
+  }, []);
 }
