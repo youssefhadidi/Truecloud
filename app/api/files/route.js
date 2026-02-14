@@ -204,6 +204,15 @@ export async function GET(req) {
       downloads = [];
     }
 
+    // Filter out files that are currently being downloaded (active or waiting)
+    // Only exclude active/waiting downloads, not completed ones
+    const downloadingNames = new Set(
+      downloads
+        .filter((d) => d.status === 'active' || d.status === 'paused')
+        .map((d) => d.name)
+    );
+    files = files.filter((file) => !downloadingNames.has(file.name));
+
     const duration = Date.now() - startTime;
     logger.info('GET /api/files - Success', {
       path: relativePath,
