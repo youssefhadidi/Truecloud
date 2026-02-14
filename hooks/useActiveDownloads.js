@@ -98,6 +98,7 @@ export function useActiveDownloads() {
                     ...existing,
                     gid: dl.gid,
                     name: dl.name || 'Unknown',
+                    path: dl.path || '', // Include path from backend
                     progress: dl.progress || 0,
                     status: dl.status || 'active',
                     downloadSpeed: dl.downloadSpeed || '0 B/s',
