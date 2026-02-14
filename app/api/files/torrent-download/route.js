@@ -17,6 +17,9 @@ import {
 } from '@/lib/webTorrentManager';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? resolve(process.env.UPLOAD_DIR)          // absolute path from env
+  : resolve(process.cwd(), './uploads');     // fallback relative to cwd
 
 /**
  * POST /api/files/torrent-download
@@ -44,10 +47,10 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Only magnet links are supported (no HTTP downloads)' }, { status: 400 });
     }
 
-    // Build absolute download directory
-    let downloadDir = resolve(process.cwd(), TORRENT_FILE_DIR);
+    // Build absolute download directory - use UPLOAD_DIR from env if available
+    let downloadDir = UPLOAD_DIR;             // default: root of UPLOAD_DIR
     if (downloadPath) {
-      downloadDir = resolve(process.cwd(), 'uploads', downloadPath.replace(/^\/+/, ''));
+      downloadDir = resolve(UPLOAD_DIR, downloadPath.replace(/^\/+/, ''));
     }
 
     // Ensure directory exists
