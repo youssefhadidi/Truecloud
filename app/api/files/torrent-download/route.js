@@ -9,9 +9,10 @@
  *   - Passes both absolute dir and relative path to webTorrentManager
  *   - Broadcasts 'download-added' via WebSocket
  *
- * GET: List all downloads (active, paused, stopped)
+ * GET: List all downloads (active and paused)
  *   - Optional ?path= query param filters by relative directory path
  *   - Used by the frontend for initial state fetch on WebSocket connect
+ *   - Completed downloads are removed immediately from memory/WebTorrent
  *
  * PATCH: Control a download (pause/resume/remove)
  *   - Delegates to webTorrentManager functions
@@ -28,7 +29,6 @@ import { logger } from '@/lib/logger';
 import {
   addDownload,
   getActiveDownloads,
-  getStoppedDownloads,
   getWaitingDownloads,
   pauseDownload,
   resumeDownload,
@@ -166,16 +166,12 @@ export async function GET(req) {
       // Get waiting/paused downloads (optionally filtered by path)
       const waitingDownloads = await getWaitingDownloads(0, 100, filterPath);
 
-      // Get recently stopped downloads (optionally filtered by path)
-      const stoppedDownloads = await getStoppedDownloads(0, 10, filterPath);
-
-      // Combine and sort by most recent
-      const allDownloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
+      // Combine active and paused downloads
+      const allDownloads = [...activeDownloads, ...waitingDownloads];
 
       logger.debug('GET /api/files/torrent-download - Success', {
         active: activeDownloads.length,
         waiting: waitingDownloads.length,
-        stopped: stoppedDownloads.length,
         filterPath,
       });
 

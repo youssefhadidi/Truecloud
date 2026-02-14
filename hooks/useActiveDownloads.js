@@ -132,17 +132,25 @@ export function useActiveDownloads() {
               }
               syncDownloads();
             } else if (message.type === 'download-paused') {
-              const { gid } = message.payload;
-              const existing = downloadsRef.current.get(gid);
+              const { payload } = message;
+              const existing = downloadsRef.current.get(payload.gid);
               if (existing) {
-                downloadsRef.current.set(gid, { ...existing, status: 'paused' });
+                downloadsRef.current.set(payload.gid, {
+                  ...existing,
+                  ...payload,
+                  status: 'paused',
+                });
                 syncDownloads();
               }
             } else if (message.type === 'download-resumed') {
-              const { gid } = message.payload;
-              const existing = downloadsRef.current.get(gid);
+              const { payload } = message;
+              const existing = downloadsRef.current.get(payload.gid);
               if (existing) {
-                downloadsRef.current.set(gid, { ...existing, status: 'active' });
+                downloadsRef.current.set(payload.gid, {
+                  ...existing,
+                  ...payload,
+                  status: 'active',
+                });
                 syncDownloads();
               }
             } else if (message.type === 'download-removed') {
