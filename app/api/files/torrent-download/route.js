@@ -1,5 +1,24 @@
 /** @format */
 
+/**
+ * Torrent Download API Routes
+ *
+ * POST: Start a new torrent download (.torrent file upload or magnet link)
+ *   - Saves .torrent files to disk, converts to file:// URL for WebTorrent
+ *   - Resolves the relative download path to an absolute directory
+ *   - Passes both absolute dir and relative path to webTorrentManager
+ *   - Broadcasts 'download-added' via WebSocket
+ *
+ * GET: List all downloads (active, paused, stopped)
+ *   - Optional ?path= query param filters by relative directory path
+ *   - Used by the frontend for initial state fetch on WebSocket connect
+ *
+ * PATCH: Control a download (pause/resume/remove)
+ *   - Delegates to webTorrentManager functions
+ *   - Pause/resume broadcasts are handled by the manager (not here)
+ *   - Remove broadcast IS handled here (manager doesn't broadcast for remove)
+ */
+
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { writeFile } from 'fs/promises';
@@ -82,7 +101,9 @@ export async function POST(req) {
     }
 
     // Add download via WebTorrent manager with specified directory
-    const gid = await addDownload(downloadUrl, { dir: downloadDir });
+    // dir = absolute path for WebTorrent file I/O
+    // relativePath = browser-relative path for frontend display/filtering
+    const gid = await addDownload(downloadUrl, { dir: downloadDir, relativePath: downloadPath });
 
     // Get initial status
     const status = {
@@ -205,34 +226,19 @@ export async function PATCH(req) {
       case 'pause':
         await pauseDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download paused', { gid });
-
-        // Broadcast pause action
-        if (global.broadcastTorrentDownloadUpdate) {
-          global.broadcastTorrentDownloadUpdate({
-            type: 'download-paused',
-            payload: { gid },
-          });
-        }
+        // WebSocket broadcast is handled inside pauseDownload() in webTorrentManager
         return NextResponse.json({ success: true, message: 'Download paused' });
 
       case 'resume':
         await resumeDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download resumed', { gid });
-
-        // Broadcast resume action
-        if (global.broadcastTorrentDownloadUpdate) {
-          global.broadcastTorrentDownloadUpdate({
-            type: 'download-resumed',
-            payload: { gid },
-          });
-        }
+        // WebSocket broadcast is handled inside resumeDownload() in webTorrentManager
         return NextResponse.json({ success: true, message: 'Download resumed' });
 
       case 'remove':
         await removeDownload(gid);
         logger.info('PATCH /api/files/torrent-download - Download removed', { gid });
-
-        // Broadcast remove action
+        // removeDownload() does NOT broadcast, so we broadcast from here
         if (global.broadcastTorrentDownloadUpdate) {
           global.broadcastTorrentDownloadUpdate({
             type: 'download-removed',

@@ -180,13 +180,12 @@ export async function GET(req) {
     // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
     // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
 
-    // Fetch torrent downloads for this directory
+    // Fetch torrent downloads for this directory (filter by relative path)
     let downloads = [];
     try {
-      const resolvedTargetDir = resolve(targetDir);
-      const activeDownloads = await getActiveDownloads(resolvedTargetDir);
-      const waitingDownloads = await getWaitingDownloads(0, 100, resolvedTargetDir);
-      const stoppedDownloads = await getStoppedDownloads(0, 10, resolvedTargetDir);
+      const activeDownloads = await getActiveDownloads(relativePath);
+      const waitingDownloads = await getWaitingDownloads(0, 100, relativePath);
+      const stoppedDownloads = await getStoppedDownloads(0, 10, relativePath);
       downloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
 
       logger.debug('GET /api/files - Downloads fetched', {

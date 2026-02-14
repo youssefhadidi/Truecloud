@@ -2,49 +2,65 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiArrowLeft, FiRefreshCw, FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
-import { useTorrentDownloads, usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
+import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
+/**
+ * Downloads management page.
+ *
+ * Uses the same useActiveDownloads WebSocket hook as the file browser,
+ * so all download status updates are real-time (no polling needed).
+ */
 export default function DownloadsPage() {
   const router = useRouter();
-  const { data: downloads = [], isLoading, refetch } = useTorrentDownloads();
+  const { downloads: downloadsMap, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
   const { addNotification } = useNotifications();
-  const pauseDownloadMutation = usePauseDownload();
-  const resumeDownloadMutation = useResumeDownload();
-  const removeDownloadMutation = useRemoveDownload();
+  const [actionLoading, setActionLoading] = useState(null); // gid of item currently being acted on
+
+  // Convert downloads map to array (show ALL downloads, not filtered by path)
+  const downloads = Object.values(downloadsMap);
 
   const handleDownloadStart = (downloadInfo) => {
     addNotification('success', `Download started: ${downloadInfo.name}`);
-    refetch();
   };
 
   const handlePause = async (download) => {
     try {
-      await pauseDownloadMutation.mutateAsync(download.gid);
+      setActionLoading(download.gid);
+      await pauseDownload(download.gid);
       addNotification('success', `Paused: ${download.name}`);
     } catch (error) {
       addNotification('error', `Failed to pause: ${error.message}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleResume = async (download) => {
     try {
-      await resumeDownloadMutation.mutateAsync(download.gid);
+      setActionLoading(download.gid);
+      await resumeDownload(download.gid);
       addNotification('success', `Resumed: ${download.name}`);
     } catch (error) {
       addNotification('error', `Failed to resume: ${error.message}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleRemove = async (download) => {
     try {
-      await removeDownloadMutation.mutateAsync(download.gid);
+      setActionLoading(download.gid);
+      await removeDownload(download.gid);
       addNotification('success', `Removed: ${download.name}`);
     } catch (error) {
       addNotification('error', `Failed to remove: ${error.message}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -76,16 +92,9 @@ export default function DownloadsPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Active Downloads</h2>
-                  <button onClick={() => refetch()} disabled={isLoading} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
-                    <FiRefreshCw size={20} className={`text-gray-700 dark:text-gray-300 ${isLoading ? 'animate-spin' : ''}`} />
-                  </button>
                 </div>
 
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                  </div>
-                ) : downloads.length === 0 ? (
+                {downloads.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
                     <p>No active downloads</p>
                   </div>
@@ -163,7 +172,7 @@ export default function DownloadsPage() {
                           {download.status === 'active' && (
                             <button
                               onClick={() => handlePause(download)}
-                              disabled={pauseDownloadMutation.isPending}
+                              disabled={actionLoading === download.gid}
                               className="flex items-center gap-1 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50 disabled:opacity-50 text-sm"
                             >
                               <FiPause size={14} />
@@ -173,7 +182,7 @@ export default function DownloadsPage() {
                           {download.status === 'paused' && (
                             <button
                               onClick={() => handleResume(download)}
-                              disabled={resumeDownloadMutation.isPending}
+                              disabled={actionLoading === download.gid}
                               className="flex items-center gap-1 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 text-sm"
                             >
                               <FiPlay size={14} />
@@ -187,7 +196,7 @@ export default function DownloadsPage() {
                           )}
                           <button
                             onClick={() => handleRemove(download)}
-                            disabled={removeDownloadMutation.isPending}
+                            disabled={actionLoading === download.gid}
                             className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 text-sm ml-auto"
                           >
                             <FiTrash2 size={14} />

@@ -1,3 +1,23 @@
+/**
+ * Hook for real-time torrent download tracking via WebSocket.
+ *
+ * This is the primary download state management hook, used by both the
+ * file browser (useFilesPage) and the downloads management page.
+ *
+ * DATA FLOW:
+ * 1. On mount, connects to WebSocket at /api/ws/torrent-downloads
+ * 2. On connect, fetches initial state via GET /api/files/torrent-download
+ * 3. Receives real-time updates: progress (every 1s), status changes, completions
+ * 4. Provides pause/resume/remove actions via PATCH /api/files/torrent-download
+ *    (the backend broadcasts status changes back through WebSocket)
+ *
+ * The downloads are stored as a Map<gid, downloadInfo> where gid = torrent infoHash.
+ * Each download's `path` field is a RELATIVE path (matching the file browser's
+ * navigation.currentPath), used to filter which downloads appear in which directory.
+ *
+ * On download completion, a 'torrent-download-complete' custom event is dispatched
+ * so the file browser can refresh and show the newly completed files.
+ */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import axios from 'axios';
 
