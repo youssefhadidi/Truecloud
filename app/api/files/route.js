@@ -7,7 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { getActiveDownloads, getWaitingDownloads, getStoppedDownloads } from '@/lib/webTorrentManager';
+import { getActiveDownloads, getWaitingDownloads } from '@/lib/webTorrentManager';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -186,14 +186,12 @@ export async function GET(req) {
     try {
       const activeDownloads = await getActiveDownloads(relativePath);
       const waitingDownloads = await getWaitingDownloads(0, 100, relativePath);
-      const stoppedDownloads = await getStoppedDownloads(0, 10, relativePath);
-      downloads = [...activeDownloads, ...waitingDownloads, ...stoppedDownloads];
+      downloads = [...activeDownloads, ...waitingDownloads];
 
       logger.debug('GET /api/files - Downloads fetched', {
         path: relativePath,
         active: activeDownloads.length,
         waiting: waitingDownloads.length,
-        stopped: stoppedDownloads.length,
       });
     } catch (downloadError) {
       logger.warn('GET /api/files - Error fetching downloads', {
