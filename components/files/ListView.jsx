@@ -7,6 +7,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile, getFileType } from '@/lib/getFileType';
+import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 
 // Breakpoint for mobile detection
 const MOBILE_BREAKPOINT = 768;
