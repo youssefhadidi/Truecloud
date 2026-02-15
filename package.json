@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.139.0",
+  "version": "1.140.0",
   "private": true,
   "scripts": {
     "dev": "node server.js",
@@ -32,7 +32,6 @@
     "bcryptjs": "^2.4.3",
     "busboy": "^1.6.0",
     "date-fns": "^4.1.0",
-    "hls.js": "^1.6.15",
     "mime-types": "^3.0.2",
     "next": "16.1.2",
     "next-auth": "5.0.0-beta.30",
