@@ -141,8 +141,8 @@ async function transcodeQuality(inputPath, outputDir, quality) {
   });
 }
 
-// Write master playlist
-async function writeMasterPlaylist(cacheDir, sourceWidth, sourceHeight, applicableQualities) {
+// Write master playlist with absolute URLs
+async function writeMasterPlaylist(cacheDir, sourceWidth, sourceHeight, applicableQualities, fileId, relativePath) {
   const masterPath = join(cacheDir, 'master.m3u8');
   let content = '#EXTM3U\n#EXT-X-VERSION:3\n\n';
 
@@ -151,15 +151,18 @@ async function writeMasterPlaylist(cacheDir, sourceWidth, sourceHeight, applicab
     const outputWidth = Math.round(sourceWidth * (quality.height / sourceHeight));
     const evenWidth = outputWidth % 2 === 0 ? outputWidth : outputWidth + 1;
 
+    // Use absolute URLs pointing back to the HLS route
+    const playlistUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}&type=playlist&quality=${quality.label}`;
+
     content += `#EXT-X-STREAM-INF:BANDWIDTH=${parseInt(quality.videoBitrate) * 1000},RESOLUTION=${evenWidth}x${quality.height},CODECS="avc1.42e01e,mp4a.40.2"\n`;
-    content += `${quality.label}/playlist.m3u8\n\n`;
+    content += `${playlistUrl}\n\n`;
   }
 
   await writeFile(masterPath, content);
 }
 
 // Ensure transcoded files exist (returns immediately, transcode happens in background)
-async function ensureTranscoded(cacheDir, fullPath) {
+async function ensureTranscoded(cacheDir, fullPath, fileId, relativePath) {
   const startTime = Date.now();
   const masterPath = join(cacheDir, 'master.m3u8');
   const transcodingPath = join(cacheDir, '.transcoding');
@@ -222,7 +225,7 @@ async function ensureTranscoded(cacheDir, fullPath) {
     }
 
     // Write master playlist immediately so user can fetch it
-    await writeMasterPlaylist(cacheDir, width, height, applicableQualities);
+    await writeMasterPlaylist(cacheDir, width, height, applicableQualities, fileId, relativePath);
     logger.info('Master playlist written, segments will be transcoded in background');
 
     // Start background transcode (don't await)
@@ -329,7 +332,7 @@ export async function GET(req, { params }) {
 
     // Dispatch by type
     if (type === 'master') {
-      await ensureTranscoded(cacheDir, fullPath);
+      await ensureTranscoded(cacheDir, fullPath, fileId, relativePath);
 
       const masterPath = join(cacheDir, 'master.m3u8');
       const content = await readFile(masterPath, 'utf-8');
