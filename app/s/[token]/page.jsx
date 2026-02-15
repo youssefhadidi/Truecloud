@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
 
@@ -29,6 +30,7 @@ export default function SharePage({ params }) {
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [shareFiles, setShareFiles] = useState([]);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const { setShareCredentials } = useWebSocket();
 
   // Fetch share metadata
   const {
@@ -50,6 +52,13 @@ export default function SharePage({ params }) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+
+  // Connect WebSocket with share credentials once password is verified
+  useEffect(() => {
+    if (shareResponse && !shareResponse.requiresPassword && submittedPassword) {
+      setShareCredentials(token, submittedPassword);
+    }
+  }, [shareResponse, submittedPassword, token, setShareCredentials]);
 
   // Use share hooks for state management
   const shareState = useSharePage(token, shareResponse ? { ...shareResponse, files: shareFiles } : null);

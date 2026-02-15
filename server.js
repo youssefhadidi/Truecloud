@@ -91,17 +91,63 @@ app.prepare().then(() => {
 
   const wss = new WebSocketServer({ noServer: true });
 
+  // Authenticate WebSocket upgrade requests
+  async function authenticateWsUpgrade(request) {
+    // 1. Check NextAuth session cookie
+    const cookies = request.headers.cookie || '';
+    const sessionToken =
+      cookies.match(/(?:^|;\s*)next-auth\.session-token=([^;]*)/)?.[1] ||
+      cookies.match(/(?:^|;\s*)__Secure-next-auth\.session-token=([^;]*)/)?.[1];
+
+    if (sessionToken && process.env.NEXTAUTH_SECRET) {
+      try {
+        const { decode } = await import('next-auth/jwt');
+        const token = await decode({
+          token: sessionToken,
+          secret: process.env.NEXTAUTH_SECRET,
+        });
+        if (token) return true;
+      } catch {
+        // Invalid token, continue to share check
+      }
+    }
+
+    // 2. Check share token + password query params
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const shareToken = url.searchParams.get('token');
+    const sharePassword = url.searchParams.get('password');
+
+    if (shareToken && sharePassword) {
+      try {
+        const { verifyShare } = await import('./lib/shareAuth.js');
+        const result = await verifyShare(shareToken, sharePassword);
+        if (result.valid) return true;
+      } catch {
+        // Share verification failed
+      }
+    }
+
+    return false;
+  }
+
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
-    // Unified WebSocket endpoint for all message types
-    if (url.pathname === '/api/ws') {
+    if (url.pathname !== '/api/ws') {
+      socket.destroy();
+      return;
+    }
+
+    authenticateWsUpgrade(request).then((authenticated) => {
+      if (!authenticated) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       wss.handleUpgrade(request, socket, head, (ws) => {
-        // Add client to unified set
         wsClients.add(ws);
 
-        // Send initial status messages to newly connected client
-        // This ensures the client has current state for all message types
         ws.send(JSON.stringify({
           type: 'update-status',
           payload: global.updateStatus,
@@ -112,7 +158,6 @@ app.prepare().then(() => {
           payload: global.cacheGenerationStatus,
         }));
 
-        // Remove client when disconnected or error
         ws.on('close', () => {
           wsClients.delete(ws);
         });
@@ -121,9 +166,10 @@ app.prepare().then(() => {
           wsClients.delete(ws);
         });
       });
-    } else {
+    }).catch(() => {
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
       socket.destroy();
-    }
+    });
   });
 
   server.listen(3000, (err) => {
