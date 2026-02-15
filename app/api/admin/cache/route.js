@@ -26,6 +26,12 @@ const CACHE_DIRS = {
     envVar: 'STREAM_CACHE_DIR',
     defaultPath: './.stream-cache',
   },
+  hls: {
+    name: 'HLS Transcodes',
+    description: 'Adaptive bitrate HLS video transcodes (360p/720p/1080p)',
+    envVar: 'HLS_CACHE_DIR',
+    defaultPath: './hls-cache',
+  },
   '3d': {
     name: '3D/SKP Cache',
     description: '3D and SketchUp file conversions',

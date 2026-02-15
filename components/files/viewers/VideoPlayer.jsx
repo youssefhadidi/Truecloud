@@ -13,17 +13,25 @@ export function VideoPlayer({ file, getFileUrl }) {
 
   const currentVersion = loadVersionRef.current;
 
+  // Use HLS if browser supports it natively (Safari/iOS)
+  // Other browsers fall back to byte-range stream
+  const supportsHlsNatively =
+    typeof document !== 'undefined' &&
+    document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '';
+
+  const src = supportsHlsNatively ? getFileUrl(file, 'hls') : getFileUrl(file, 'video');
+
   return (
     <video
       ref={videoRef}
-      src={getFileUrl(file, 'video')}
+      src={src}
       key={file.id}
       controls
       className="w-full h-full"
       onLoadStart={() => {
         // Verify this is still the current video
         if (loadVersionRef.current !== currentVersion) {
-          videoRef.current.pause();
+          videoRef.current?.pause();
         }
       }}
       onClick={(e) => e.stopPropagation()}
