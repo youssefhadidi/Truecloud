@@ -93,23 +93,13 @@ app.prepare().then(() => {
 
   // Authenticate WebSocket upgrade requests
   async function authenticateWsUpgrade(request) {
-    // 1. Check NextAuth session cookie
-    const cookies = request.headers.cookie || '';
-    const sessionToken =
-      cookies.match(/(?:^|;\s*)next-auth\.session-token=([^;]*)/)?.[1] ||
-      cookies.match(/(?:^|;\s*)__Secure-next-auth\.session-token=([^;]*)/)?.[1];
-
-    if (sessionToken && process.env.NEXTAUTH_SECRET) {
-      try {
-        const { decode } = await import('next-auth/jwt');
-        const token = await decode({
-          token: sessionToken,
-          secret: process.env.NEXTAUTH_SECRET,
-        });
-        if (token) return true;
-      } catch {
-        // Invalid token, continue to share check
-      }
+    // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
+    try {
+      const { getToken } = await import('next-auth/jwt');
+      const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+      if (token) return true;
+    } catch {
+      // No valid session, continue to share check
     }
 
     // 2. Check share token + password query params
