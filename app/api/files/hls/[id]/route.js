@@ -198,40 +198,52 @@ async function ensureTranscoded(cacheDir, fullPath) {
   // Mark transcode in progress
   inProgressTranscodes.set(pathHash, true);
 
-  // Create cache directory
-  await mkdir(cacheDir, { recursive: true });
-  await writeFile(transcodingPath, '');
-
-  logger.info('Starting background HLS transcode');
-
-  // Start transcode in background (don't await)
-  startBackgroundTranscode(cacheDir, fullPath, pathHash);
-
-  const duration = Date.now() - startTime;
-  logger.debug('Background transcode queued', { duration: `${duration}ms` });
-}
-
-// Background transcode job
-async function startBackgroundTranscode(cacheDir, fullPath, pathHash) {
-  const transcodingPath = join(cacheDir, '.transcoding');
-  const failedPath = join(cacheDir, '.failed');
-
   try {
-    // Probe source video
-    const { width, height } = await probeVideo(fullPath);
-    logger.info('Video probed for transcode', { width, height });
+    // Create cache directory
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(transcodingPath, '');
 
-    // Determine applicable quality ladder (only 1080p)
+    logger.info('Starting HLS transcode setup');
+
+    // Probe source video synchronously to determine quality ladder
+    const { width, height } = await probeVideo(fullPath);
+    logger.info('Video probed', { width, height });
+
+    // Determine applicable quality ladder
     const applicableQualities = QUALITY_LADDER.filter((q) => q.height <= height);
     if (applicableQualities.length === 0) {
       applicableQualities.push(QUALITY_LADDER[0]);
     }
 
-    logger.info('Applying quality ladder', { qualities: applicableQualities.map((q) => q.label) });
+    // Create quality directories and write master playlist immediately
+    for (const quality of applicableQualities) {
+      const qualityDir = join(cacheDir, quality.label);
+      await mkdir(qualityDir, { recursive: true });
+    }
 
-    // Write master playlist immediately so user can start watching
+    // Write master playlist immediately so user can fetch it
     await writeMasterPlaylist(cacheDir, width, height, applicableQualities);
-    logger.info('Master playlist written, user can now start watching');
+    logger.info('Master playlist written, segments will be transcoded in background');
+
+    // Start background transcode (don't await)
+    startBackgroundTranscode(cacheDir, fullPath, pathHash, applicableQualities);
+
+    const duration = Date.now() - startTime;
+    logger.debug('Background transcode queued', { duration: `${duration}ms` });
+  } catch (error) {
+    logger.error('HLS setup failed', { error: error.message });
+    inProgressTranscodes.delete(pathHash);
+    throw error;
+  }
+}
+
+// Background transcode job
+async function startBackgroundTranscode(cacheDir, fullPath, pathHash, applicableQualities) {
+  const transcodingPath = join(cacheDir, '.transcoding');
+  const failedPath = join(cacheDir, '.failed');
+
+  try {
+    logger.info('Background transcode starting', { qualities: applicableQualities.map((q) => q.label) });
 
     // Transcode 1080p in background
     for (const quality of applicableQualities) {
