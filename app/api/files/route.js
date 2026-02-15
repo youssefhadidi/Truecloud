@@ -361,19 +361,27 @@ export async function DELETE(req) {
         finalTrashPath = join(trashDir, `${nameWithoutExt}_${timestamp}${ext}`);
       }
 
-      // Move file to trash
+      // Move file to trash (fall back to copy+delete for cross-device moves)
       try {
         await rename(targetPath, finalTrashPath);
       } catch (renameError) {
-        logger.error('DELETE /api/files - Failed to move to trash', {
-          message: renameError.message,
-          code: renameError.code,
-          source: targetPath,
-          destination: finalTrashPath,
-          fileName,
-          path: relativePath,
-        });
-        return NextResponse.json({ error: `Failed to move to trash: ${renameError.code || renameError.message}` }, { status: 500 });
+        if (renameError.code === 'EXDEV') {
+          // Cross-device: copy then remove original
+          logger.info('DELETE /api/files - Cross-device move, using cp+rm fallback', { fileName, path: relativePath });
+          const { cp, rm } = await import('fs/promises');
+          await cp(targetPath, finalTrashPath, { recursive: true, preserveTimestamps: true });
+          await rm(targetPath, { recursive: true, force: true });
+        } else {
+          logger.error('DELETE /api/files - Failed to move to trash', {
+            message: renameError.message,
+            code: renameError.code,
+            source: targetPath,
+            destination: finalTrashPath,
+            fileName,
+            path: relativePath,
+          });
+          return NextResponse.json({ error: `Failed to move to trash: ${renameError.code || renameError.message}` }, { status: 500 });
+        }
       }
 
       logger.info('DELETE /api/files - Moved to trash', {
