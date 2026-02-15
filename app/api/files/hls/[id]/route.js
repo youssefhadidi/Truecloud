@@ -15,8 +15,6 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const HLS_CACHE_DIR = process.env.HLS_CACHE_DIR || './hls-cache';
 
 const QUALITY_LADDER = [
-  { label: '360p', height: 360, videoBitrate: '800k', audioBitrate: '96k' },
-  { label: '720p', height: 720, videoBitrate: '2800k', audioBitrate: '128k' },
   { label: '1080p', height: 1080, videoBitrate: '5000k', audioBitrate: '192k' },
 ];
 
@@ -160,7 +158,7 @@ async function writeMasterPlaylist(cacheDir, sourceWidth, sourceHeight, applicab
   await writeFile(masterPath, content);
 }
 
-// Ensure transcoded files exist
+// Ensure transcoded files exist (returns immediately, transcode happens in background)
 async function ensureTranscoded(cacheDir, fullPath) {
   const startTime = Date.now();
   const masterPath = join(cacheDir, 'master.m3u8');
@@ -193,51 +191,37 @@ async function ensureTranscoded(cacheDir, fullPath) {
   // Check if transcode is already in progress
   const pathHash = createHash('md5').update(fullPath).digest('hex');
   if (inProgressTranscodes.has(pathHash)) {
-    logger.info('HLS transcode already in progress, waiting...');
-    // Poll for completion with 10 minute timeout
-    let waited = 0;
-    while (waited < 600000) {
-      try {
-        await access(transcodingPath);
-      } catch {
-        // File deleted, transcode complete
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      waited += 500;
-    }
-
-    // Check result
-    try {
-      await access(masterPath);
-      logger.debug('HLS concurrent wait completed successfully', { duration: `${Date.now() - startTime}ms` });
-      return;
-    } catch {
-      try {
-        await access(failedPath);
-        throw new Error('Transcoding previously failed. Try clearing the HLS cache.');
-      } catch (err) {
-        if (err.message.includes('Transcoding previously failed')) throw err;
-        throw new Error('Transcoding timeout or failed.');
-      }
-    }
+    logger.info('HLS transcode already in progress, master playlist already available');
+    return;
   }
 
   // Mark transcode in progress
   inProgressTranscodes.set(pathHash, true);
 
+  // Create cache directory
+  await mkdir(cacheDir, { recursive: true });
+  await writeFile(transcodingPath, '');
+
+  logger.info('Starting background HLS transcode');
+
+  // Start transcode in background (don't await)
+  startBackgroundTranscode(cacheDir, fullPath, pathHash);
+
+  const duration = Date.now() - startTime;
+  logger.debug('Background transcode queued', { duration: `${duration}ms` });
+}
+
+// Background transcode job
+async function startBackgroundTranscode(cacheDir, fullPath, pathHash) {
+  const transcodingPath = join(cacheDir, '.transcoding');
+  const failedPath = join(cacheDir, '.failed');
+
   try {
-    // Create cache directory
-    await mkdir(cacheDir, { recursive: true });
-    await writeFile(transcodingPath, '');
-
-    logger.info('Starting HLS transcode');
-
     // Probe source video
     const { width, height } = await probeVideo(fullPath);
-    logger.info('Video probed', { width, height });
+    logger.info('Video probed for transcode', { width, height });
 
-    // Determine applicable quality ladder
+    // Determine applicable quality ladder (only 1080p)
     const applicableQualities = QUALITY_LADDER.filter((q) => q.height <= height);
     if (applicableQualities.length === 0) {
       applicableQualities.push(QUALITY_LADDER[0]);
@@ -245,14 +229,16 @@ async function ensureTranscoded(cacheDir, fullPath) {
 
     logger.info('Applying quality ladder', { qualities: applicableQualities.map((q) => q.label) });
 
-    // Transcode each quality sequentially
+    // Write master playlist immediately so user can start watching
+    await writeMasterPlaylist(cacheDir, width, height, applicableQualities);
+    logger.info('Master playlist written, user can now start watching');
+
+    // Transcode 1080p in background
     for (const quality of applicableQualities) {
       await transcodeQuality(fullPath, cacheDir, quality);
     }
 
-    // Write master playlist
-    await writeMasterPlaylist(cacheDir, width, height, applicableQualities);
-    logger.info('Master playlist written');
+    logger.info('Background HLS transcode complete');
 
     // Delete .transcoding sentinel
     try {
@@ -260,11 +246,8 @@ async function ensureTranscoded(cacheDir, fullPath) {
     } catch {
       // Ignore if already deleted
     }
-
-    const duration = Date.now() - startTime;
-    logger.info('HLS transcode complete', { duration: `${duration}ms` });
   } catch (error) {
-    logger.error('HLS transcode failed', { error: error.message });
+    logger.error('Background HLS transcode failed', { error: error.message });
 
     // Write .failed sentinel
     try {
@@ -279,8 +262,6 @@ async function ensureTranscoded(cacheDir, fullPath) {
     } catch {
       // Ignore
     }
-
-    throw error;
   } finally {
     inProgressTranscodes.delete(pathHash);
   }
