@@ -84,7 +84,7 @@ export async function DELETE(req, { params }) {
     if (stats.isDirectory()) {
       await rm(filePath, { recursive: true, force: true });
       // Broadcast file change to all connected clients
-      broadcastFileChange('delete', subPath, fileName, `T-${token}`);
+      broadcastFileChange('delete', pathCheck.fullPath, fileName, `T-${token}`);
       logger.info('DELETE /api/public/[token]/delete - Directory deleted', {
         fileName,
         subPath,
@@ -93,7 +93,7 @@ export async function DELETE(req, { params }) {
     } else {
       await unlink(filePath);
       // Broadcast file change to all connected clients
-      broadcastFileChange('delete', subPath, fileName, `T-${token}`);
+      broadcastFileChange('delete', pathCheck.fullPath, fileName, `T-${token}`);
       logger.info('DELETE /api/public/[token]/delete - File deleted', {
         fileName,
         subPath,

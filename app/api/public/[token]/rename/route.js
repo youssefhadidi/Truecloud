@@ -91,7 +91,7 @@ export async function PATCH(req, { params }) {
     await rename(oldPath, newPath);
 
     // Broadcast file change to all connected clients
-    broadcastFileChange('rename', subPath, newName, `T-${token}`);
+    broadcastFileChange('rename', pathCheck.fullPath, newName, `T-${token}`);
 
     logger.info('PATCH /api/public/[token]/rename - File renamed', {
       oldName,

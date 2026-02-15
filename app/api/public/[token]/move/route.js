@@ -154,8 +154,7 @@ export async function POST(req, { params }) {
     for (const plan of movePlan) {
       await rename(plan.sourceItemPath, plan.destItemPath);
       // Broadcast file change to all connected clients
-      const normalizedDestPath = destinationPath.replace(/\\/g, '/').replace(/\/+$/, '');
-      broadcastFileChange('move', normalizedDestPath, plan.name, `T-${token}`);
+      broadcastFileChange('move', destCheck.fullPath, plan.name, `T-${token}`);
     }
 
     const duration = Date.now() - startTime;

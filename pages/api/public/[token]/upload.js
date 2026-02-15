@@ -174,6 +174,11 @@ export default async function handler(req, res) {
         payload.file = uploadedFiles[0];
       }
 
+      const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+      for (const f of uploadedFiles) {
+        broadcastFileChange('upload', pathCheck.fullPath, f.name, 'share-' + token);
+      }
+
       respond(200, payload);
       writtenFilePaths = [];
     });
