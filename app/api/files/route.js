@@ -362,7 +362,19 @@ export async function DELETE(req) {
       }
 
       // Move file to trash
-      await rename(targetPath, finalTrashPath);
+      try {
+        await rename(targetPath, finalTrashPath);
+      } catch (renameError) {
+        logger.error('DELETE /api/files - Failed to move to trash', {
+          message: renameError.message,
+          code: renameError.code,
+          source: targetPath,
+          destination: finalTrashPath,
+          fileName,
+          path: relativePath,
+        });
+        return NextResponse.json({ error: `Failed to move to trash: ${renameError.code || renameError.message}` }, { status: 500 });
+      }
 
       logger.info('DELETE /api/files - Moved to trash', {
         fileName,
@@ -377,8 +389,13 @@ export async function DELETE(req) {
       return NextResponse.json({ success: true, movedToTrash: true });
     }
   } catch (error) {
-    logger.error('DELETE /api/files - Error deleting file', error);
-    logger.error('DELETE /api/files - Request details', {
+    const { searchParams } = new URL(req.url);
+    logger.error('DELETE /api/files - Error deleting file', {
+      message: error.message,
+      code: error.code,
+      path: searchParams.get('path') || '',
+      fileName: searchParams.get('id'),
+      stack: error.stack,
       duration: `${Date.now() - startTime}ms`,
     });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
