@@ -235,7 +235,13 @@ async function ensureTranscoded(cacheDir, fullPath) {
     // Determine applicable qualities
     const applicableQualities = QUALITY_LADDER.filter((q) => q.height <= height);
     if (applicableQualities.length === 0) {
-      applicableQualities.push(QUALITY_LADDER[0]);
+      // Source is smaller than all ladder entries — transcode at source resolution
+      applicableQualities.push({
+        label: `${height}p`,
+        height,
+        videoBitrate: QUALITY_LADDER[QUALITY_LADDER.length - 1].videoBitrate,
+        audioBitrate: QUALITY_LADDER[QUALITY_LADDER.length - 1].audioBitrate,
+      });
     }
 
     // Create directories

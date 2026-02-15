@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 const HLS_CACHE_DIR = process.env.HLS_CACHE_DIR || './hls-cache';
 
 export async function GET(req, { params }) {
+  let hash = '';
+  let relativePath = '';
   try {
     const session = await auth();
     if (!session) {
@@ -17,7 +19,7 @@ export async function GET(req, { params }) {
     }
 
     const resolvedParams = await params;
-    const hash = resolvedParams.hash;
+    hash = resolvedParams.hash;
     const pathArray = resolvedParams.path || [];
 
     // Security: validate hash is hex
@@ -27,7 +29,7 @@ export async function GET(req, { params }) {
     }
 
     // Security: prevent directory traversal
-    const relativePath = pathArray.join('/');
+    relativePath = pathArray.join('/');
     if (relativePath.includes('..') || relativePath.includes('\\')) {
       logger.error('Directory traversal attempt', { hash, path: relativePath });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
@@ -73,10 +75,15 @@ export async function GET(req, { params }) {
       },
     });
   } catch (error) {
-    logger.error('HLS cache file error', { error: error.message });
+    logger.error('HLS cache file error', { error: error.message, hash, path: relativePath });
 
     if (error.code === 'ENOENT') {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      logger.warn('HLS cache file not found - transcode may still be in progress', { hash, path: relativePath });
+      // Return 503 so hls.js treats it as a retryable network error
+      return new NextResponse('Transcode in progress', {
+        status: 503,
+        headers: { 'Retry-After': '3' },
+      });
     }
 
     return NextResponse.json({ error: 'Failed to serve file' }, { status: 500 });

@@ -6,15 +6,6 @@ import HLS from 'hls.js';
 export function VideoPlayer({ file, getFileUrl }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  const loadVersionRef = useRef(0);
-
-  // Track file changes to abort old loads
-  useEffect(() => {
-    loadVersionRef.current += 1;
-  }, [file.id]);
-
-  const currentVersion = loadVersionRef.current;
-
   // Setup HLS playback
   useEffect(() => {
     const video = videoRef.current;
@@ -34,6 +25,10 @@ export function VideoPlayer({ file, getFileUrl }) {
       const hls = new HLS({
         debug: false,
         enableWorker: true,
+        manifestLoadingRetryDelay: 2000,
+        manifestLoadingMaxRetry: 15,
+        levelLoadingRetryDelay: 2000,
+        levelLoadingMaxRetry: 15,
       });
 
       hlsRef.current = hls;
@@ -43,12 +38,21 @@ export function VideoPlayer({ file, getFileUrl }) {
 
       // Fallback to regular stream if HLS fails
       hls.on(HLS.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          console.warn('HLS error, falling back to regular stream:', data);
+        console.warn('HLS error:', data);
+
+        // Retry on non-fatal errors for a short time, then fallback
+        if (!data.fatal) {
+          // Non-fatal errors will be retried automatically
+          return;
+        }
+
+        // Fatal errors: switch to regular stream
+        console.warn('HLS fatal error, falling back to regular stream:', data);
+        if (hlsRef.current) {
           hls.destroy();
           hlsRef.current = null;
-          video.src = fallbackUrl;
         }
+        video.src = fallbackUrl;
       });
 
       return () => {
@@ -61,7 +65,7 @@ export function VideoPlayer({ file, getFileUrl }) {
       // Fallback for browsers without HLS support
       video.src = fallbackUrl;
     }
-  }, [file.id, getFileUrl, file]);
+  }, [file.id, getFileUrl]);
 
   return (
     <video
@@ -69,12 +73,6 @@ export function VideoPlayer({ file, getFileUrl }) {
       key={file.id}
       controls
       className="w-full h-full"
-      onLoadStart={() => {
-        // Verify this is still the current video
-        if (loadVersionRef.current !== currentVersion) {
-          videoRef.current?.pause();
-        }
-      }}
       onClick={(e) => e.stopPropagation()}
     />
   );
