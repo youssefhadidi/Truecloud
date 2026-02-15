@@ -106,7 +106,10 @@ export async function POST(req) {
     }
 
     // Install the package
-    const execOpts = { timeout: 120000, maxBuffer: 1024 * 1024 * 5, env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' } };
+    // Ensure Node.js bin dir is on PATH (systemd services often have a minimal PATH)
+    const nodeBinDir = require('path').dirname(process.execPath);
+    const enhancedPath = `${nodeBinDir}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`;
+    const execOpts = { timeout: 120000, maxBuffer: 1024 * 1024 * 5, env: { ...process.env, PATH: enhancedPath, DEBIAN_FRONTEND: 'noninteractive' } };
 
     try {
       logger.info('Executing install command for:', { name, packageName });
@@ -119,7 +122,7 @@ export async function POST(req) {
         const triplet = arch === 'arm64' ? 'aarch64-linux-gnu' : 'x86_64-linux-gnu';
         const pkgConfigPath = `/usr/local/lib/pkgconfig:/usr/local/lib/${triplet}/pkgconfig:/usr/lib/${triplet}/pkgconfig:${process.env.PKG_CONFIG_PATH || ''}`;
         const ldPath = `/usr/local/lib/${triplet}:/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
-        const buildEnv = { ...process.env, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
+        const buildEnv = { ...process.env, PATH: enhancedPath, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
         // Step 1: Install build dependencies and remove conflicting system packages
         logger.info('Step 1/6: Installing build dependencies...');
