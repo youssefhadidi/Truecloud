@@ -64,7 +64,7 @@ export default function MediaViewer({
         return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
       }
       if (type === 'hls') {
-        return `/api/files/hls/${encodeURIComponent(file.id)}?path=${encodeURIComponent(currentPath)}&type=master`;
+        return `/api/files/hls/${encodeURIComponent(file.id)}?path=${encodeURIComponent(currentPath)}`;
       }
       const baseUrl = `/api/files/${type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download'}/${file.id}`;
       return `${baseUrl}?path=${encodeURIComponent(currentPath)}`;
