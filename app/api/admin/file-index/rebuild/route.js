@@ -22,8 +22,9 @@ export async function POST(req) {
     // Clear existing index
     await prisma.fileIndex.deleteMany({});
 
-    // Spawn background worker (path built dynamically to avoid Turbopack resolution)
-    const workerPath = `${process.cwd()}/lib/workers/buildFileIndexWorker.mjs`;
+    // Spawn background worker (indirect reference to avoid Turbopack static resolution)
+    const cwd = process['cwd'];
+    const workerPath = cwd() + '/lib/workers/buildFileIndexWorker.mjs';
 
     rebuildProcess = spawn('node', [workerPath], {
       env: { ...process.env },
