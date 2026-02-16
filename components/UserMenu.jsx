@@ -5,12 +5,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2, FiTrash2 } from 'react-icons/fi';
+import { FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2, FiTrash2, FiSettings, FiLock } from 'react-icons/fi';
+import { useSessionLock } from '@/contexts/SessionLockContext';
 
 export default function UserMenu({ email, isAdmin = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const router = useRouter();
+  const { settings, lockNow } = useSessionLock();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -43,6 +45,16 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   const handleTrash = () => {
     router.push('/files?path=trash');
+    setIsOpen(false);
+  };
+
+  const handleAccountSettings = () => {
+    router.push('/account');
+    setIsOpen(false);
+  };
+
+  const handleLockNow = () => {
+    lockNow();
     setIsOpen(false);
   };
 
@@ -98,6 +110,26 @@ export default function UserMenu({ email, isAdmin = false }) {
             <FiDownload size={16} />
             Downloads
           </button>
+
+          <hr className="my-1 border-gray-700" />
+
+          <button
+            onClick={handleAccountSettings}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            <FiSettings size={16} />
+            Account Settings
+          </button>
+
+          {settings?.sessionLockEnabled && (
+            <button
+              onClick={handleLockNow}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+            >
+              <FiLock size={16} />
+              Lock Now
+            </button>
+          )}
 
           <hr className="my-1 border-gray-700" />
 
