@@ -8,7 +8,7 @@ import { FiLock } from 'react-icons/fi';
 import { signOut } from 'next-auth/react';
 
 export default function SessionLockScreen({ children }) {
-  const { isLocked, unlock } = useSessionLock();
+  const { isLocked, isLoading, unlock } = useSessionLock();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
@@ -61,6 +61,9 @@ export default function SessionLockScreen({ children }) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked, handleKeyDown]);
+
+  // While session is loading, don't render anything to prevent race conditions
+  if (isLoading) return null;
 
   // If not locked, render children normally
   if (!isLocked) return children;

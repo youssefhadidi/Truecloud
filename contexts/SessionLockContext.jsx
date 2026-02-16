@@ -9,7 +9,7 @@ import { setupAxiosInterceptor } from '@/lib/axios';
 const SessionLockContext = createContext();
 
 export function SessionLockProvider({ children }) {
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, update: updateSession, status } = useSession();
   const [isLoading, setIsLoading] = useState(true);
 
   // Initialize and poll for lock status every 30 seconds
@@ -17,8 +17,10 @@ export function SessionLockProvider({ children }) {
     // Setup axios interceptor to catch 423 (Locked) responses
     setupAxiosInterceptor(updateSession);
 
-    // Initial load
-    setIsLoading(false);
+    // Only consider loading done when NextAuth session is loaded
+    if (status !== 'loading') {
+      setIsLoading(false);
+    }
 
     // Poll for session updates every 30 seconds (inactivity detection)
     const interval = setInterval(() => {
@@ -26,7 +28,7 @@ export function SessionLockProvider({ children }) {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [updateSession]);
+  }, [status, updateSession]);
 
   const isLocked = session?.user?.isLocked ?? false;
 
@@ -104,6 +106,7 @@ export function SessionLockProvider({ children }) {
 
   const value = {
     isLocked,
+    isLoading,
     settings,
     unlock,
     lockNow,
