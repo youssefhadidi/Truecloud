@@ -3,15 +3,20 @@
 'use client';
 
 import { useState } from 'react';
-import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2 } from 'react-icons/fi';
+import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
+import { useSearch } from '@/lib/api/search';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
-export default function FavoritesSidebar({ onNavigate, currentPath }) {
+export default function FavoritesSidebar({ onNavigate, currentPath, onSearchNavigate }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { data: favorites = [], isLoading } = useFavorites();
+  const { data: searchResults = [], isLoading: searchLoading } = useSearch(searchQuery);
   const removeFavorite = useRemoveFavorite();
   const { addNotification } = useNotifications();
+
+  const isSearching = searchQuery.length >= 2;
 
   const handleRemove = async (e, favorite) => {
     e.stopPropagation();
@@ -31,6 +36,16 @@ export default function FavoritesSidebar({ onNavigate, currentPath }) {
       const parentPath = favorite.path.split('/').slice(0, -1).join('/');
       onNavigate(parentPath);
     }
+  };
+
+  const handleSearchResultClick = (result) => {
+    if (result.isDirectory) {
+      onNavigate(result.path);
+    } else {
+      onNavigate(result.parentPath || '');
+      onSearchNavigate?.(result.name);
+    }
+    setSearchQuery('');
   };
 
   const isInTrash = currentPath === 'trash' || currentPath.startsWith('trash/') || currentPath.startsWith('trash\\');
@@ -93,50 +108,107 @@ export default function FavoritesSidebar({ onNavigate, currentPath }) {
         </button>
       </div>
 
-      {/* Favorites list */}
+      {/* Search Input */}
+      <div className="px-2 py-2 border-b border-gray-700">
+        <div className="relative flex items-center">
+          <FiSearch size={14} className="absolute left-2 text-gray-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search all files..."
+            className="w-full pl-7 pr-7 py-1.5 text-xs bg-gray-700 text-white placeholder-gray-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-1.5 p-0.5 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              <FiX size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Content: search results OR favorites */}
       <div className="flex-1 overflow-y-auto py-1">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
-          </div>
-        ) : favorites.length === 0 ? (
-          <div className="px-3 py-4 text-center text-gray-500 text-sm">
-            <FiStar size={24} className="mx-auto mb-2 opacity-50" />
-            <p>No favorites yet</p>
-            <p className="text-xs mt-1">Right-click files to add</p>
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {favorites.map((favorite) => (
-              <div
-                key={favorite.id}
-                onClick={() => handleNavigate(favorite)}
-                className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                  currentPath === favorite.path
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                {favorite.isDirectory ? (
-                  <FiFolder size={16} className="flex-shrink-0 text-indigo-400" />
-                ) : (
-                  <FiFile size={16} className="flex-shrink-0 text-gray-400" />
-                )}
-                <span className="flex-1 truncate text-sm">{favorite.name}</span>
-                <button
-                  onClick={(e) => handleRemove(e, favorite)}
-                  className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                    currentPath === favorite.path
-                      ? 'hover:bg-indigo-500 text-white'
-                      : 'hover:bg-gray-600 text-gray-400'
-                  }`}
-                  title="Remove from favorites"
+        {isSearching ? (
+          // Search results
+          searchLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="px-3 py-4 text-center text-gray-500 text-sm">
+              <FiSearch size={24} className="mx-auto mb-2 opacity-50" />
+              <p>No results</p>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {searchResults.map((result) => (
+                <div
+                  key={result.path}
+                  onClick={() => handleSearchResultClick(result)}
+                  className="group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-gray-300 hover:bg-gray-700"
                 >
-                  <FiX size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
+                  {result.isDirectory ? (
+                    <FiFolder size={16} className="flex-shrink-0 text-blue-400" />
+                  ) : (
+                    <FiFile size={16} className="flex-shrink-0 text-gray-400" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{result.name}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{result.parentPath || '/'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          // Favorites list
+          isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : favorites.length === 0 ? (
+            <div className="px-3 py-4 text-center text-gray-500 text-sm">
+              <FiStar size={24} className="mx-auto mb-2 opacity-50" />
+              <p>No favorites yet</p>
+              <p className="text-xs mt-1">Right-click files to add</p>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {favorites.map((favorite) => (
+                <div
+                  key={favorite.id}
+                  onClick={() => handleNavigate(favorite)}
+                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                    currentPath === favorite.path
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {favorite.isDirectory ? (
+                    <FiFolder size={16} className="flex-shrink-0 text-indigo-400" />
+                  ) : (
+                    <FiFile size={16} className="flex-shrink-0 text-gray-400" />
+                  )}
+                  <span className="flex-1 truncate text-sm">{favorite.name}</span>
+                  <button
+                    onClick={(e) => handleRemove(e, favorite)}
+                    className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                      currentPath === favorite.path
+                        ? 'hover:bg-indigo-500 text-white'
+                        : 'hover:bg-gray-600 text-gray-400'
+                    }`}
+                    title="Remove from favorites"
+                  >
+                    <FiX size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         )}
       </div>
 

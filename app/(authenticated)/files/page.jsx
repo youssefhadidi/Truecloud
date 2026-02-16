@@ -9,7 +9,6 @@ import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiA
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
-import SearchResults from '@/components/SearchOverlay';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -26,10 +25,10 @@ const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 function FilesPageContent() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   // Get all state and helpers from custom hook
-  const state = useFilesPage(status, session);
+  const state = useFilesPage(status);
 
   // Refs for virtual scrollers
   const gridViewRef = useRef(null);
@@ -245,6 +244,7 @@ function FilesPageContent() {
         <FavoritesSidebar
           onNavigate={(path) => state.setCurrentPath(path)}
           currentPath={state.currentPath}
+          onSearchNavigate={(fileName) => setPendingScrollTarget(fileName)}
         />
       </div>
 
@@ -434,7 +434,7 @@ function FilesPageContent() {
             })}
         </div>
         {/* File Grid */}
-        <div className={`bg-gray-800 rounded-lg shadow overflow-y-auto flex flex-col ${state.searchQuery ? 'h-1/2 flex-shrink-0' : 'flex-grow-1'}`}>
+        <div className="bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
@@ -563,21 +563,6 @@ function FilesPageContent() {
           )}
         </div>
 
-        {/* Search Results - shown below file list when searching */}
-        {state.searchQuery && (
-          <SearchResults
-            query={state.searchQuery}
-            currentPath={state.currentPath}
-            viewMode={state.viewMode}
-            onNavigate={(path, fileName) => {
-              state.setCurrentPath(path);
-              state.setSearchQuery('');
-              if (fileName) {
-                setPendingScrollTarget(fileName);
-              }
-            }}
-          />
-        )}
       </main>
 
       {/* Context Menu */}
