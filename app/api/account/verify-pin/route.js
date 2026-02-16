@@ -1,17 +1,18 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { requireAuthNoActivity } from '@/lib/authCheck';
+import { requireAuthAllowLocked } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import bcryptjs from 'bcryptjs';
 
 /**
  * POST /api/account/verify-pin
  * Verify the 4-digit session lock PIN
- * (doesn't reset activity timer - read-only check)
+ * On success, clears the lock and resets lastActivityAt
+ * (uses allowLocked variant so locked users can still verify PIN)
  */
 export async function POST(req) {
-  const { session, error } = await requireAuthNoActivity();
+  const { session, error } = await requireAuthAllowLocked();
   if (error) return error;
 
   try {
@@ -46,7 +47,15 @@ export async function POST(req) {
       );
     }
 
-    // PIN is correct - the frontend will handle unlocking
+    // PIN is correct - clear lock and reset activity timer
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        isSessionLocked: false,
+        lastActivityAt: new Date(),
+      },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error verifying PIN:', error);

@@ -20,6 +20,7 @@ model User {
   sessionLockEnabled    Boolean  @default(false)
   sessionLockPin        String?  // bcrypt-hashed 4-digit PIN
   sessionLockTimeout    Int      @default(15) // minutes
+  isSessionLocked       Boolean  @default(false) // Manually locked via "Lock Now"
   lastActivityAt        DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

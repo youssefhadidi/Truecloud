@@ -1,16 +1,17 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
+import { requireAuthAllowLocked } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import bcryptjs from 'bcryptjs';
 
 /**
  * GET /api/account/settings
  * Returns user's session lock settings (doesn't reset activity timer)
+ * Allowed even when session is locked
  */
 export async function GET(req) {
-  const { session, error } = await requireAuthNoActivity();
+  const { session, error } = await requireAuthAllowLocked();
   if (error) return error;
 
   try {
@@ -41,9 +42,10 @@ export async function GET(req) {
 /**
  * PUT /api/account/settings
  * Update session lock settings (enable/disable, timeout, PIN)
+ * Resets activity timer on success but allowed when session is locked
  */
 export async function PUT(req) {
-  const { session, error } = await requireAuth();
+  const { session, error } = await requireAuthAllowLocked();
   if (error) return error;
 
   try {
@@ -78,6 +80,9 @@ export async function PUT(req) {
         { status: 400 }
       );
     }
+
+    // Reset activity timer when settings are updated
+    updateData.lastActivityAt = new Date();
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },

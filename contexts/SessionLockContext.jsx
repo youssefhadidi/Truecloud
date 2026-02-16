@@ -2,67 +2,29 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useCallback, useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 
 const SessionLockContext = createContext();
 
 export function SessionLockProvider({ children }) {
-  const [isLocked, setIsLocked] = useState(false);
-  const [settings, setSettings] = useState({
-    sessionLockEnabled: false,
-    sessionLockTimeout: 15,
-    lastActivityAt: new Date(),
-  });
+  const { data: session, update: updateSession } = useSession();
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch settings from backend
-  const fetchSettings = useCallback(async () => {
-    try {
-      const res = await fetch('/api/account/settings');
-      if (res.ok) {
-        const data = await res.json();
-        setSettings({
-          sessionLockEnabled: data.sessionLockEnabled,
-          sessionLockTimeout: data.sessionLockTimeout,
-          lastActivityAt: new Date(data.lastActivityAt),
-        });
-
-        // Check if should be locked
-        if (data.sessionLockEnabled) {
-          const lastActivity = new Date(data.lastActivityAt).getTime();
-          const now = Date.now();
-          const timeoutMs = data.sessionLockTimeout * 60 * 1000;
-
-          if (now - lastActivity > timeoutMs) {
-            setIsLocked(true);
-          } else {
-            setIsLocked(false);
-          }
-        } else {
-          setIsLocked(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching session lock settings:', error);
-    }
-  }, []);
-
-  // Fetch settings on mount
+  // Initialize and poll for lock status every 30 seconds
   useEffect(() => {
-    fetchSettings();
+    // Initial load
     setIsLoading(false);
-  }, [fetchSettings]);
 
-  // Poll for lock status every 30 seconds
-  useEffect(() => {
-    if (isLoading) return;
-
+    // Poll for session updates every 30 seconds (inactivity detection)
     const interval = setInterval(() => {
-      fetchSettings();
+      updateSession();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [isLoading, fetchSettings]);
+  }, [updateSession]);
+
+  const isLocked = session?.user?.isLocked ?? false;
 
   const unlock = useCallback(
     async (pin) => {
@@ -76,9 +38,8 @@ export function SessionLockProvider({ children }) {
         const data = await res.json();
 
         if (data.success) {
-          setIsLocked(false);
-          // Refresh settings to update lastActivityAt
-          fetchSettings();
+          // Refresh session to get updated isLocked status
+          await updateSession();
           return true;
         }
 
@@ -88,12 +49,24 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    [fetchSettings]
+    [updateSession]
   );
 
-  const lockNow = useCallback(() => {
-    setIsLocked(true);
-  }, []);
+  const lockNow = useCallback(async () => {
+    try {
+      const res = await fetch('/api/account/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (res.ok) {
+        // Refresh session to get updated isLocked status
+        await updateSession();
+      }
+    } catch (error) {
+      console.error('Error locking session:', error);
+    }
+  }, [updateSession]);
 
   const updateSettings = useCallback(
     async (newSettings) => {
@@ -105,12 +78,8 @@ export function SessionLockProvider({ children }) {
         });
 
         if (res.ok) {
-          const data = await res.json();
-          setSettings((prev) => ({
-            ...prev,
-            sessionLockEnabled: data.sessionLockEnabled,
-            sessionLockTimeout: data.sessionLockTimeout,
-          }));
+          // Refresh session after settings update
+          await updateSession();
           return true;
         }
 
@@ -120,8 +89,13 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    []
+    [updateSession]
   );
+
+  const settings = {
+    sessionLockEnabled: session?.user?.sessionLockEnabled,
+    sessionLockTimeout: session?.user?.sessionLockTimeout,
+  };
 
   const value = {
     isLocked,
