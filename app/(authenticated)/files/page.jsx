@@ -405,7 +405,7 @@ function FilesPageContent() {
                 type="text"
                 value={state.searchQuery}
                 onChange={(e) => state.setSearchQuery(e.target.value)}
-                placeholder="Search..."
+                placeholder="Filter..."
                 className="w-full pl-6 pr-2 py-1 sm:py-2 bg-transparent text-white text-xs sm:text-base placeholder-gray-400 focus:outline-none"
               />
             </div>
