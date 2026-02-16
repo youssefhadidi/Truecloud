@@ -6,12 +6,12 @@ import { useState, useEffect } from 'react';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 
-const TIMEOUT_OPTIONS = [5, 10, 15, 30, 60];
+const TIMEOUT_OPTIONS = [60, 120, 240, 480, 720]; // 1h, 2h, 4h, 8h, 12h in minutes
 
 export default function AccountPage() {
   const { settings, updateSettings, lockNow } = useSessionLock();
   const [isEnabled, setIsEnabled] = useState(false);
-  const [timeout, setTimeout] = useState(15);
+  const [timeout, setTimeout] = useState(60); // 1 hour default
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -118,11 +118,14 @@ export default function AccountPage() {
                     onChange={(e) => setTimeout(Number(e.target.value))}
                     className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
-                    {TIMEOUT_OPTIONS.map((mins) => (
-                      <option key={mins} value={mins}>
-                        {mins} minute{mins !== 1 ? 's' : ''}
-                      </option>
-                    ))}
+                    {TIMEOUT_OPTIONS.map((mins) => {
+                      const hours = mins / 60;
+                      return (
+                        <option key={mins} value={mins}>
+                          {hours} hour{hours !== 1 ? 's' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <p className="text-xs text-gray-400 mt-2">
                     Your session will be locked if there's no activity for this long
