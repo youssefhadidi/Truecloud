@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
  * - 'torrent-downloads': Download status updates
  * - 'update-status': System update progress
  * - 'cache-generation': Cache generation status
+ * - 'file-index': File indexing progress (rebuilt from /api/admin/file-index/rebuild)
  */
 
 const WebSocketContext = createContext(null);

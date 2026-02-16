@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { FiTrash2, FiRefreshCw, FiHardDrive, FiDatabase, FiActivity } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useFileIndexing } from '@/hooks/useFileIndexing';
 import CacheGenerationClient from './CacheGenerationClient';
 
 export default function CachePage() {
@@ -19,11 +19,10 @@ export default function CachePage() {
   const [indexStats, setIndexStats] = useState(null);
   const [indexLoading, setIndexLoading] = useState(true);
   const [indexRebuilding, setIndexRebuilding] = useState(false);
-  const [indexProgress, setIndexProgress] = useState({ processed: 0, total: 0 });
   const [confirmIndexClear, setConfirmIndexClear] = useState(false);
 
   const { addNotification } = useNotifications();
-  const { subscribe } = useWebSocket();
+  const indexStatus = useFileIndexing();
 
   // Fetch cache stats
   const fetchStats = async () => {
@@ -111,22 +110,18 @@ export default function CachePage() {
     }
   };
 
-  // Subscribe to WebSocket updates for file index rebuild
+  // Subscribe to file indexing status updates via hook
   useEffect(() => {
-    const unsubscribe = subscribe('file-index', (message) => {
-      if (message.type === 'progress') {
-        setIndexProgress({ processed: message.processed, total: message.total });
-      } else if (message.type === 'done') {
-        setIndexRebuilding(false);
-        addNotification('success', `Index rebuilt with ${message.total} entries`);
+    if (indexStatus.done) {
+      setIndexRebuilding(false);
+      if (indexStatus.error) {
+        addNotification('error', `Index rebuild failed: ${indexStatus.error}`);
+      } else {
+        addNotification('success', `Index rebuilt with ${indexStatus.total} entries`);
         fetchIndexStats();
-      } else if (message.type === 'error') {
-        setIndexRebuilding(false);
-        addNotification('error', `Index rebuild failed: ${message.error}`);
       }
-    });
-    return unsubscribe;
-  }, [subscribe, addNotification]);
+    }
+  }, [indexStatus.done, indexStatus.error, indexStatus.total, addNotification]);
 
   // Initial load
   useEffect(() => {
@@ -261,14 +256,14 @@ export default function CachePage() {
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{
                   width:
-                    indexProgress.total > 0
-                      ? `${(indexProgress.processed / indexProgress.total) * 100}%`
+                    indexStatus.total > 0
+                      ? `${(indexStatus.processed / indexStatus.total) * 100}%`
                       : '0%',
                 }}
               ></div>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              {indexProgress.processed.toLocaleString()} / {indexProgress.total.toLocaleString()} items
+              {indexStatus.processed.toLocaleString()} / {indexStatus.total.toLocaleString()} items
             </p>
           </div>
         )}
