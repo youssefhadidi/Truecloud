@@ -44,7 +44,10 @@ export async function GET(req) {
       },
     });
 
-    return NextResponse.json({ results });
+    // Convert BigInt size to Number for JSON serialization
+    const serialized = results.map((r) => ({ ...r, size: Number(r.size) }));
+
+    return NextResponse.json({ results: serialized });
   } catch (error) {
     console.error('Search API error:', error?.message || error);
     console.error('Full error:', error);

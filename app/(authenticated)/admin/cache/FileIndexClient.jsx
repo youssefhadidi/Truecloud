@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FiTrash2, FiRefreshCw, FiDatabase, FiActivity } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useFileIndexing } from '@/hooks/useFileIndexing';
@@ -45,14 +45,19 @@ export default function FileIndexClient() {
   };
 
   // Subscribe to file indexing status updates via hook
+  const handledDoneRef = useRef(false);
+
   useEffect(() => {
-    if (indexStatus.done) {
+    if (indexStatus.done && !handledDoneRef.current) {
+      handledDoneRef.current = true;
       setIndexRebuilding(false);
       if (indexStatus.error) {
         addNotification('error', `Index rebuild failed: ${indexStatus.error}`);
       } else {
         addNotification('success', `Index rebuilt with ${indexStatus.total} entries`);
       }
+    } else if (!indexStatus.done) {
+      handledDoneRef.current = false;
     }
   }, [indexStatus.done, indexStatus.error, indexStatus.total, addNotification]);
 
