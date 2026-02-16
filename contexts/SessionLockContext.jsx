@@ -4,6 +4,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { setupAxiosInterceptor } from '@/lib/axios';
 
 const SessionLockContext = createContext();
 
@@ -13,6 +14,9 @@ export function SessionLockProvider({ children }) {
 
   // Initialize and poll for lock status every 30 seconds
   useEffect(() => {
+    // Setup axios interceptor to catch 423 (Locked) responses
+    setupAxiosInterceptor(updateSession);
+
     // Initial load
     setIsLoading(false);
 
