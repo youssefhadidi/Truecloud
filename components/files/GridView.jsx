@@ -121,15 +121,13 @@ const GridItem = memo(
           >
             {/* Download icon area */}
             <div className="w-full aspect-square flex items-center justify-center mb-2 bg-yellow-900/20 relative overflow-hidden rounded">
-              {item.downloadStatus === 'active' ? (<>
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div> 
-                <div className="w-full bg-gray-700 rounded-full h-2 mt-2 overflow-hidden">
-              <div
-                className="bg-yellow-500 h-full transition-all"
-                style={{ width: `${item.downloadProgress || 0}%` }}
-              />
-            </div>
-            </>
+              {item.downloadStatus === 'active' ? (
+                <>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+                  <div className="w-full bg-gray-700 rounded-full h-2 mt-2 overflow-hidden">
+                    <div className="bg-yellow-500 h-full transition-all" style={{ width: `${item.downloadProgress || 0}%` }} />
+                  </div>
+                </>
               ) : (
                 <FiDownload className="text-yellow-500" size={32} />
               )}
@@ -141,9 +139,9 @@ const GridItem = memo(
             </div>
 
             {/* Progress percentage */}
-            <div className="text-xs text-yellow-300 px-1 mt-1">{item.downloadProgress || 0}%{item.downloadSpeed ? ` - ${item.downloadSpeed}` : ''}</div>
-
-
+            <div className="text-xs text-yellow-300 px-1 mt-1">
+              {item.downloadProgress || 0}%{item.downloadSpeed ? ` - ${item.downloadSpeed}` : ''}
+            </div>
 
             {/* Download speed */}
             <div className="text-xs text-yellow-300 px-1 mt-2"></div>
@@ -169,11 +167,7 @@ const GridItem = memo(
                   className="p-1.5 text-yellow-400 hover:bg-yellow-900/20 rounded transition-colors"
                   title={item.downloadStatus === 'paused' ? 'Resume' : 'Pause'}
                 >
-                  {item.downloadStatus === 'paused' ? (
-                    <FiPlay size={16} />
-                  ) : (
-                    <FiPause size={16} />
-                  )}
+                  {item.downloadStatus === 'paused' ? <FiPlay size={16} /> : <FiPause size={16} />}
                 </button>
                 <button
                   onClick={(e) => {
@@ -671,7 +665,7 @@ const GridView = ({
               rowCount={rowCount}
               rowHeight={rowHeight}
               width={width}
-              overscanRowCount={1}
+              overscanRowCount={4}
               style={{
                 outline: 'none',
                 overflowX: 'hidden',

@@ -50,14 +50,7 @@ function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword }) 
 
   return (
     <div ref={ref} className="w-full h-full">
-      {thumbnailUrl && (
-        <img
-          src={thumbnailUrl}
-          alt={fileName}
-          className="w-full h-full object-cover"
-          onLoad={() => setIsLoaded(true)}
-        />
-      )}
+      {thumbnailUrl && <img src={thumbnailUrl} alt={fileName} className="w-full h-full object-cover" onLoad={() => setIsLoaded(true)} />}
       {!isLoaded && isInView && (
         <div className="w-full h-full flex items-center justify-center">
           <FiImage className="text-gray-400 animate-spin" size={24} />
@@ -416,7 +409,7 @@ export default function ShareGrid({
               rowCount={rowCount}
               rowHeight={rowHeight}
               width={width}
-              overscanRowCount={1}
+              overscanRowCount={4}
               style={{
                 outline: 'none',
                 overflowX: 'hidden',
