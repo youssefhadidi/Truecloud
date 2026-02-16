@@ -548,7 +548,10 @@ function FilesPageContent() {
           <SearchResults
             query={state.searchQuery}
             currentPath={state.currentPath}
-            onNavigate={state.setCurrentPath}
+            onNavigate={(path) => {
+              state.setCurrentPath(path);
+              state.setSearchQuery('');
+            }}
           />
         )}
       </main>
