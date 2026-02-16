@@ -9,6 +9,7 @@ import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiA
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
+import { useSearch } from '@/lib/api/search';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -29,6 +30,31 @@ function FilesPageContent() {
   const router = useRouter();
   // Get all state and helpers from custom hook
   const state = useFilesPage(status);
+
+  // Global search (sidebar)
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const { data: globalSearchResults = [] } = useSearch(globalSearchQuery);
+  const isGlobalSearch = globalSearchQuery.length >= 2 && globalSearchResults.length > 0;
+
+  // Transform search results into file-like objects for GridView/ListView
+  const searchFiles = useMemo(() => {
+    if (!isGlobalSearch) return [];
+    return globalSearchResults.map((r) => ({
+      id: r.name,
+      name: r.name,
+      displayName: r.name,
+      isDirectory: r.isDirectory,
+      size: Number(r.size) || 0,
+      extension: r.extension,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _parentPath: r.parentPath || '',
+      _fullPath: r.path,
+    }));
+  }, [isGlobalSearch, globalSearchResults]);
+
+  // Files to display: search results or current folder
+  const displayFiles = isGlobalSearch ? searchFiles : state.files;
 
   // Refs for virtual scrollers
   const gridViewRef = useRef(null);
@@ -242,21 +268,22 @@ function FilesPageContent() {
       {/* Favorites Sidebar - hidden on mobile */}
       <div className="hidden sm:block">
         <FavoritesSidebar
-          onNavigate={(path) => state.setCurrentPath(path)}
+          onNavigate={(path) => { setGlobalSearchQuery(''); state.setCurrentPath(path); }}
           currentPath={state.currentPath}
-          onSearchNavigate={(fileName) => setPendingScrollTarget(fileName)}
+          searchQuery={globalSearchQuery}
+          onSearchQueryChange={setGlobalSearchQuery}
         />
       </div>
 
       {/* Main Content */}
       <main
         className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 pb-16 sm:pb-1 flex flex-col relative"
-        onDragOver={dragDrop.handleDragOver}
-        onDragLeave={dragDrop.handleDragLeave}
-        onDrop={(e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
+        onDragOver={isGlobalSearch ? undefined : dragDrop.handleDragOver}
+        onDragLeave={isGlobalSearch ? undefined : dragDrop.handleDragLeave}
+        onDrop={isGlobalSearch ? undefined : (e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
       >
         {/* Drag and Drop Overlay */}
-        {state.isDragging && (
+        {!isGlobalSearch && state.isDragging && (
           <div className="absolute inset-0 z-40 bg-indigo-500 bg-opacity-10 border-4 border-dashed border-indigo-500 rounded-lg flex items-center justify-center pointer-events-none">
             <div className="bg-gray-800 rounded-lg p-8 shadow-2xl">
               <div className="text-center">
@@ -273,66 +300,77 @@ function FilesPageContent() {
           {/* Left Group: Actions + Search */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-1 bg-gray-700 rounded-lg p-1">
-              {/* Upload Button */}
-              <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors">
-              <FiUpload size={16} />
-              <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
-              <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
-              </label>
+              {!isGlobalSearch && (
+                <>
+                  {/* Upload Button */}
+                  <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors">
+                  <FiUpload size={16} />
+                  <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
+                  <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
+                  </label>
 
-              {/* Selection Mode */}
-              <button
-                onClick={() => state.setSelectionMode(!state.selectionMode)}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors ${state.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
-              >
-                <FiCheckSquare size={16} />
-                <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
-              </button>
+                  {/* Selection Mode */}
+                  <button
+                    onClick={() => state.setSelectionMode(!state.selectionMode)}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors ${state.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+                  >
+                    <FiCheckSquare size={16} />
+                    <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
+                  </button>
 
-              {state.selectionMode && (
-                <button
-                  onClick={() => setMoveModalOpen(true)}
-                  disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FiFolder size={16} />
-                  <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
-                </button>
+                  {state.selectionMode && (
+                    <button
+                      onClick={() => setMoveModalOpen(true)}
+                      disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiFolder size={16} />
+                      <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                    </button>
+                  )}
+
+                  {/* HEIC to JPEG Conversion Button */}
+                  {hasHeicFiles && (
+                    <button
+                      onClick={handleConvertHeicToJpeg}
+                      disabled={convertingHeic}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={`Convert ${heicFiles.length} HEIC file(s) to JPEG`}
+                    >
+                      <FiImage size={16} />
+                      <span className="hidden sm:inline">
+                        {convertingHeic
+                          ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...`
+                          : `HEIC→JPEG (${heicFiles.length})`
+                        }
+                      </span>
+                      <span className="sm:hidden">
+                        {convertingHeic
+                          ? `${conversionStatus.completed}/${conversionStatus.total}`
+                          : `HEIC→JPEG`
+                        }
+                      </span>
+                    </button>
+                  )}
+
+                  {/* New Folder Button */}
+                  <button
+                    onClick={handlers.initiateCreateFolder}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={state.creatingFolder}
+                  >
+                    <FiPlus size={16} />
+                    <span className="hidden sm:inline">New Folder</span>
+                  </button>
+                </>
               )}
 
-              {/* HEIC to JPEG Conversion Button */}
-              {hasHeicFiles && (
-                <button
-                  onClick={handleConvertHeicToJpeg}
-                  disabled={convertingHeic}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={`Convert ${heicFiles.length} HEIC file(s) to JPEG`}
-                >
-                  <FiImage size={16} />
-                  <span className="hidden sm:inline">
-                    {convertingHeic
-                      ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...`
-                      : `HEIC→JPEG (${heicFiles.length})`
-                    }
-                  </span>
-                  <span className="sm:hidden">
-                    {convertingHeic
-                      ? `${conversionStatus.completed}/${conversionStatus.total}`
-                      : `HEIC→JPEG`
-                    }
-                  </span>
-                </button>
+              {isGlobalSearch && (
+                <span className="flex items-center gap-2 px-3 py-1 sm:py-2 text-xs sm:text-base text-indigo-400">
+                  <FiSearch size={16} />
+                  <span className="hidden sm:inline">Search Results ({searchFiles.length})</span>
+                </span>
               )}
-
-              {/* New Folder Button */}
-              <button
-                onClick={handlers.initiateCreateFolder}
-                className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={state.creatingFolder}
-              >
-                <FiPlus size={16} />
-                <span className="hidden sm:inline">New Folder</span>
-              </button>
 
               <button
                 onClick={navigation.goBack}
@@ -413,48 +451,56 @@ function FilesPageContent() {
 
         {/* Breadcrumb Navigation */}
         <div className="mb-1 mt-1 sm:mb-2 flex items-center gap-2 sm:gap-3  text-gray-400">
-          <button onClick={() => navigation.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap">
+          <button onClick={() => { setGlobalSearchQuery(''); navigation.navigateToBreadcrumb(0); }} className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap">
             <FiHome size={16} />
             <span className="hidden sm:inline">Home</span>
           </button>
-          {state.currentPath &&
-            state.currentPath.split('/').map((folder, index, arr) => {
-              const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
-              return (
-                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
-                  <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
-                  <button
-                    onClick={() => navigation.navigateToBreadcrumb(index + 1)}
-                    className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
-                  >
-                    {displayName}
-                  </button>
-                </div>
-              );
-            })}
+          {isGlobalSearch ? (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
+              <span className="font-medium text-white">Search: &quot;{globalSearchQuery}&quot;</span>
+            </div>
+          ) : (
+            state.currentPath &&
+              state.currentPath.split('/').map((folder, index, arr) => {
+                const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
+                return (
+                  <div key={index} className="flex items-center gap-1.5 sm:gap-2">
+                    <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
+                    <button
+                      onClick={() => navigation.navigateToBreadcrumb(index + 1)}
+                      className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
+                    >
+                      {displayName}
+                    </button>
+                  </div>
+                );
+              })
+          )}
         </div>
         {/* File Grid */}
         <div className="bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
-              {state.isLoading ? (
+              {!isGlobalSearch && state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
                     <p className="mt-2  text-gray-400">Loading files...</p>
                   </div>
                 </div>
-              ) : state.files.length === 0 && !state.creatingFolder ? (
-                <div className="flex items-center justify-center flex-grow text-gray-400">No files yet. Upload your first file!</div>
+              ) : displayFiles.length === 0 && !state.creatingFolder ? (
+                <div className="flex items-center justify-center flex-grow text-gray-400">{isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'}</div>
               ) : (
                 <div className="flex flex-col flex-grow overflow-hidden">
                   <div className="flex-shrink-0 bg-gray-700 border-b border-gray-700">
-                    <div className="grid grid-cols-[1fr_150px_150px_200px] gap-4 px-6 py-3">
+                    <div className={`grid ${isGlobalSearch ? 'grid-cols-[1fr_1fr_150px]' : 'grid-cols-[1fr_150px_150px_200px]'} gap-4 px-6 py-3`}>
                       <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</div>
+                      {isGlobalSearch && <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Path</div>}
                       <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Size</div>
-                      <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modified</div>
-                      <div className="text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</div>
+                      {!isGlobalSearch && <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modified</div>}
+                      {!isGlobalSearch && <div className="text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</div>}
                     </div>
                   </div>
                   <Suspense
@@ -466,7 +512,7 @@ function FilesPageContent() {
                   >
                     <ListView
                       ref={listViewRef}
-                      files={state.files}
+                      files={displayFiles}
                       creatingFolder={state.creatingFolder}
                       newFolderName={state.newFolderName}
                       onNewFolderNameChange={state.setNewFolderName}
@@ -483,16 +529,32 @@ function FilesPageContent() {
                       processingFile={state.processingFile}
                       handleContextMenu={contextMenu.handleContextMenu}
                       getFileIcon={fileUtils.getFileIcon}
-                      navigateToFolder={navigation.navigateToFolder}
+                      navigateToFolder={isGlobalSearch
+                        ? (name, file) => {
+                            const path = file?._fullPath || file?._parentPath || name;
+                            setGlobalSearchQuery('');
+                            if (file?.isDirectory) {
+                              state.setCurrentPath(path);
+                            } else {
+                              state.setCurrentPath(file?._parentPath || '');
+                              setPendingScrollTarget(name);
+                            }
+                          }
+                        : navigation.navigateToFolder}
                       formatFileSize={fileUtils.formatFileSize}
-                      openMediaViewer={mediaViewer.openMediaViewer}
-                      initiateRename={handlers.initiateRename}
-                      handleDownload={fileUtils.handleDownload}
-                      initiateDelete={handlers.initiateDelete}
-                      initiateShare={handlers.initiateShare}
-                      sharedPaths={state.sharedPaths}
+                      openMediaViewer={isGlobalSearch ? (file) => {
+                        setGlobalSearchQuery('');
+                        state.setCurrentPath(file._parentPath || '');
+                        setPendingScrollTarget(file.name);
+                      } : mediaViewer.openMediaViewer}
+                      initiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
+                      handleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
+                      initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
+                      initiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
+                      sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
                       currentPath={state.currentPath}
-                      selectionMode={state.selectionMode}
+                      isGlobalSearch={isGlobalSearch}
+                      selectionMode={isGlobalSearch ? false : state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
                       onPauseDownload={state.pauseDownload}
@@ -513,8 +575,8 @@ function FilesPageContent() {
                     <p className="mt-2  text-gray-400">Loading files...</p>
                   </div>
                 </div>
-              ) : state.files.length === 0 && !state.creatingFolder ? (
-                <div className="text-center py-12 text-gray-400">No files yet. Upload your first file!</div>
+              ) : displayFiles.length === 0 && !state.creatingFolder ? (
+                <div className="text-center py-12 text-gray-400">{isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'}</div>
               ) : (
                 <Suspense
                   fallback={
@@ -525,8 +587,8 @@ function FilesPageContent() {
                 >
                   <GridView
                     ref={gridViewRef}
-                    files={state.files}
-                    creatingFolder={state.creatingFolder}
+                    files={displayFiles}
+                    creatingFolder={isGlobalSearch ? false : state.creatingFolder}
                     newFolderName={state.newFolderName}
                     onNewFolderNameChange={state.setNewFolderName}
                     onCancelCreateFolder={handlers.cancelCreateFolder}
@@ -539,23 +601,39 @@ function FilesPageContent() {
                     onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
                     processingFile={state.processingFile}
                     currentPath={state.currentPath}
-                    onNavigateToFolder={navigation.navigateToFolder}
-                    onOpenMediaViewer={mediaViewer.openMediaViewer}
-                    onInitiateRename={handlers.initiateRename}
-                    onHandleDownload={fileUtils.handleDownload}
-                    onInitiateDelete={handlers.initiateDelete}
+                    onNavigateToFolder={isGlobalSearch
+                      ? (name, file) => {
+                          const item = displayFiles.find(f => f.name === name) || file;
+                          setGlobalSearchQuery('');
+                          if (item?.isDirectory) {
+                            state.setCurrentPath(item._fullPath || item._parentPath || name);
+                          } else {
+                            state.setCurrentPath(item?._parentPath || '');
+                            setPendingScrollTarget(name);
+                          }
+                        }
+                      : navigation.navigateToFolder}
+                    onOpenMediaViewer={isGlobalSearch ? (file) => {
+                      setGlobalSearchQuery('');
+                      state.setCurrentPath(file._parentPath || '');
+                      setPendingScrollTarget(file.name);
+                    } : mediaViewer.openMediaViewer}
+                    onInitiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
+                    onHandleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
+                    onInitiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
                     onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
                     onCancelDelete={handlers.cancelDelete}
                     formatFileSize={fileUtils.formatFileSize}
-                    onContextMenu={contextMenu.handleContextMenu}
-                    onInitiateShare={handlers.initiateShare}
-                    sharedPaths={state.sharedPaths}
-                    selectionMode={state.selectionMode}
+                    onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
+                    onInitiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
+                    sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
+                    selectionMode={isGlobalSearch ? false : state.selectionMode}
                     selectedFiles={selectedFileSet}
                     onToggleSelect={toggleSelection}
                     onPauseDownload={state.pauseDownload}
                     onResumeDownload={state.resumeDownload}
                     onRemoveDownload={state.removeDownload}
+                    isGlobalSearch={isGlobalSearch}
                   />
                 </Suspense>
               )}

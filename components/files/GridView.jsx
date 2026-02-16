@@ -71,6 +71,7 @@ const GridItem = memo(
     onPauseDownload,
     onResumeDownload,
     onRemoveDownload,
+    isGlobalSearch,
   }) => {
     return (
       <div
@@ -193,7 +194,9 @@ const GridItem = memo(
                 return;
               }
               if (item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
-                onNavigateToFolder(item.name);
+                onNavigateToFolder(item.name, item);
+              } else if (isGlobalSearch && !item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
+                onNavigateToFolder(item.name, item);
               }
             }}
             onContextMenu={(e) => onContextMenu?.(e, item)}
@@ -300,7 +303,7 @@ const GridItem = memo(
                   className="w-full h-full object-cover"
                   isThumbnail={true}
                   fileId={item.id}
-                  filePath={currentPath}
+                  filePath={item._parentPath != null ? item._parentPath : currentPath}
                   onError={(e) => {
                     if (e?.target) {
                       e.target.style.display = 'none';
@@ -317,7 +320,7 @@ const GridItem = memo(
                     className="w-full h-full object-cover"
                     isThumbnail={true}
                     fileId={item.id}
-                    filePath={currentPath}
+                    filePath={item._parentPath != null ? item._parentPath : currentPath}
                     onError={(e) => {
                       if (e?.target) {
                         e.target.style.display = 'none';
@@ -339,7 +342,7 @@ const GridItem = memo(
                   className="w-full h-full object-cover"
                   isThumbnail={true}
                   fileId={item.id}
-                  filePath={currentPath}
+                  filePath={item._parentPath != null ? item._parentPath : currentPath}
                   onError={(e) => {
                     if (e?.target) {
                       e.target.style.display = 'none';
@@ -365,9 +368,13 @@ const GridItem = memo(
               {item.displayName || item.name}
             </div>
 
+            {isGlobalSearch && item._parentPath != null && (
+              <div className="text-[10px] text-gray-500 truncate px-1" title={item._parentPath || '/'}>{item._parentPath || '/'}</div>
+            )}
+
             <div className="text-xs text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
 
-            {(shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
+            {!isGlobalSearch && (shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
               <div
                 className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
                   containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
@@ -507,6 +514,7 @@ const GridView = forwardRef(({
   onPauseDownload,
   onResumeDownload,
   onRemoveDownload,
+  isGlobalSearch,
 }, ref) => {
   const gridRef = useRef(null);
   const containerWidthRef = useRef(0);
@@ -619,6 +627,7 @@ const GridView = forwardRef(({
           onPauseDownload={onPauseDownload}
           onResumeDownload={onResumeDownload}
           onRemoveDownload={onRemoveDownload}
+          isGlobalSearch={isGlobalSearch}
         />
       );
     },
@@ -655,6 +664,7 @@ const GridView = forwardRef(({
       selectionMode,
       selectedFiles,
       onToggleSelect,
+      isGlobalSearch,
     ],
   );
 

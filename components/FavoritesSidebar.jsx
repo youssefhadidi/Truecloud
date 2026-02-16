@@ -5,18 +5,13 @@
 import { useState } from 'react';
 import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
-import { useSearch } from '@/lib/api/search';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
-export default function FavoritesSidebar({ onNavigate, currentPath, onSearchNavigate }) {
+export default function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const { data: favorites = [], isLoading } = useFavorites();
-  const { data: searchResults = [], isLoading: searchLoading } = useSearch(searchQuery);
   const removeFavorite = useRemoveFavorite();
   const { addNotification } = useNotifications();
-
-  const isSearching = searchQuery.length >= 2;
 
   const handleRemove = async (e, favorite) => {
     e.stopPropagation();
@@ -36,16 +31,6 @@ export default function FavoritesSidebar({ onNavigate, currentPath, onSearchNavi
       const parentPath = favorite.path.split('/').slice(0, -1).join('/');
       onNavigate(parentPath);
     }
-  };
-
-  const handleSearchResultClick = (result) => {
-    if (result.isDirectory) {
-      onNavigate(result.path);
-    } else {
-      onNavigate(result.parentPath || '');
-      onSearchNavigate?.(result.name);
-    }
-    setSearchQuery('');
   };
 
   const isInTrash = currentPath === 'trash' || currentPath.startsWith('trash/') || currentPath.startsWith('trash\\');
@@ -114,14 +99,14 @@ export default function FavoritesSidebar({ onNavigate, currentPath, onSearchNavi
           <FiSearch size={14} className="absolute left-2 text-gray-500" />
           <input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchQuery || ''}
+            onChange={(e) => onSearchQueryChange?.(e.target.value)}
             placeholder="Search all files..."
             className="w-full pl-7 pr-7 py-1.5 text-xs bg-gray-700 text-white placeholder-gray-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => onSearchQueryChange?.('')}
               className="absolute right-1.5 p-0.5 text-gray-500 hover:text-gray-300 transition-colors"
             >
               <FiX size={12} />
@@ -130,43 +115,9 @@ export default function FavoritesSidebar({ onNavigate, currentPath, onSearchNavi
         </div>
       </div>
 
-      {/* Content: search results OR favorites */}
+      {/* Favorites list */}
       <div className="flex-1 overflow-y-auto py-1">
-        {isSearching ? (
-          // Search results
-          searchLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : searchResults.length === 0 ? (
-            <div className="px-3 py-4 text-center text-gray-500 text-sm">
-              <FiSearch size={24} className="mx-auto mb-2 opacity-50" />
-              <p>No results</p>
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {searchResults.map((result) => (
-                <div
-                  key={result.path}
-                  onClick={() => handleSearchResultClick(result)}
-                  className="group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-gray-300 hover:bg-gray-700"
-                >
-                  {result.isDirectory ? (
-                    <FiFolder size={16} className="flex-shrink-0 text-blue-400" />
-                  ) : (
-                    <FiFile size={16} className="flex-shrink-0 text-gray-400" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{result.name}</p>
-                    <p className="text-[10px] text-gray-500 truncate">{result.parentPath || '/'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          // Favorites list
-          isLoading ? (
+        {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
             </div>

@@ -45,6 +45,7 @@ const ListView = forwardRef(({
   onPauseDownload,
   onResumeDownload,
   onRemoveDownload,
+  isGlobalSearch,
 }, ref) => {
   const listRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -121,7 +122,9 @@ const ListView = forwardRef(({
   }), [allItems]);
 
   // Responsive grid: mobile shows only name and actions, desktop shows all columns
-  const gridCols = 'sm:grid-cols-[1fr_150px_150px_200px] grid-cols-[1fr_100px]';
+  const gridCols = isGlobalSearch
+    ? 'sm:grid-cols-[1fr_1fr_150px] grid-cols-[1fr_100px]'
+    : 'sm:grid-cols-[1fr_150px_150px_200px] grid-cols-[1fr_100px]';
 
   const rowRenderer = useCallback(
     ({ index, key, style }) => {
@@ -324,7 +327,7 @@ const ListView = forwardRef(({
                 if (shouldShowActions(file.id)) return;
 
                 if (file.isDirectory) {
-                  navigateToFolder(file.name);
+                  navigateToFolder(file.name, file);
                 } else if (isViewableFile(file)) {
                   openMediaViewer(file);
                 }
@@ -364,11 +367,15 @@ const ListView = forwardRef(({
                   <div className="font-medium text-white truncate">{file.displayName || file.name}</div>
                 )}
               </div>
-              <div className="hidden sm:block text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
-              <div className="hidden sm:block text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>
+              {isGlobalSearch ? (
+                <div className="hidden sm:block text-gray-500 text-sm truncate" title={file._parentPath || '/'}>{file._parentPath || '/'}</div>
+              ) : (
+                <div className="hidden sm:block text-gray-400">{file.isDirectory ? '' : formatFileSize(file.size)}</div>
+              )}
+              {!isGlobalSearch && <div className="hidden sm:block text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>}
 
               {/* Action buttons - always show on desktop, show on long press for mobile */}
-              {(!isMobile || shouldShowActions(file.id)) && (
+              {!isGlobalSearch && (!isMobile || shouldShowActions(file.id)) && (
                 <div className="flex justify-end gap-2 relative">
                   {isViewableFile(file) && (
                     <button
@@ -466,7 +473,7 @@ const ListView = forwardRef(({
             </div>
           );
     },
-    [allItems, deletingFile, renamingFile, showingActionsFor, isMobile, gridCols, currentPath, sharedPaths, selectionMode, selectedFiles, processingFile, shouldShowActions, getFileIcon, navigateToFolder, isViewableFile, openMediaViewer, initiateRename, setNewFileName, cancelRename, confirmRename, handleDownload, initiateDelete, cancelDelete, confirmDelete, initiateShare, onToggleSelect, onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize],
+    [allItems, deletingFile, renamingFile, showingActionsFor, isMobile, gridCols, currentPath, sharedPaths, selectionMode, selectedFiles, processingFile, shouldShowActions, getFileIcon, navigateToFolder, isViewableFile, openMediaViewer, initiateRename, setNewFileName, cancelRename, confirmRename, handleDownload, initiateDelete, cancelDelete, confirmDelete, initiateShare, onToggleSelect, onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize, isGlobalSearch],
   );
 
   return (
