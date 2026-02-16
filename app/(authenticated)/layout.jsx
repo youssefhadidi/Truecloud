@@ -7,8 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
-import { SessionLockProvider } from '@/contexts/SessionLockContext';
-import SessionLockScreen from '@/components/SessionLockScreen';
 
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useSession();
@@ -31,28 +29,25 @@ function AuthenticatedLayoutContent({ children }) {
 
   // Show layout even while loading, instead of full-screen loading
   return (
-    <SessionLockProvider>
-      <SessionLockScreen />
-      <div className="h-dvh bg-gray-900 flex flex-col overflow-hidden">
-        {/* Persistent Header */}
-        <header className="bg-gray-800 shadow flex-shrink-0">
-          <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
-            <div className="flex justify-between items-center gap-2 sm:gap-4">
-              <h1 className="text-lg sm:text-2xl font-bold text-white truncate">Truecloud</h1>
-              <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
-              </div>
+    <div className="h-dvh bg-gray-900 flex flex-col overflow-hidden">
+      {/* Persistent Header */}
+      <header className="bg-gray-800 shadow flex-shrink-0">
+        <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
+          <div className="flex justify-between items-center gap-2 sm:gap-4">
+            <h1 className="text-lg sm:text-2xl font-bold text-white truncate">Truecloud</h1>
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Page Content */}
-        <main className="flex-1 flex overflow-y-auto w-full">{children}</main>
+      {/* Page Content */}
+      <main className="flex-1 flex overflow-y-auto w-full">{children}</main>
 
-        {/* Update notification - auto-checks on first load */}
-        <UpdateChecker />
-      </div>
-    </SessionLockProvider>
+      {/* Update notification - auto-checks on first load */}
+      <UpdateChecker />
+    </div>
   );
 }
 

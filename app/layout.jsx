@@ -8,6 +8,8 @@ import ReduxProvider from '@/components/ReduxProvider';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import Notifications from '@/components/Notifications';
+import { SessionLockProvider } from '@/contexts/SessionLockContext';
+import SessionLockScreen from '@/components/SessionLockScreen';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -33,7 +35,10 @@ export default function RootLayout({ children }) {
             <NotificationsProvider>
               <Notifications />
               <AuthProvider>
-                <WebSocketProvider>{children}</WebSocketProvider>
+                <SessionLockProvider>
+                  <SessionLockScreen />
+                  <WebSocketProvider>{children}</WebSocketProvider>
+                </SessionLockProvider>
               </AuthProvider>
             </NotificationsProvider>
           </QueryProvider>

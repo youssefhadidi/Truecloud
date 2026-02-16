@@ -38,7 +38,8 @@ export function SessionLockProvider({ children }) {
         const data = await res.json();
 
         if (data.success) {
-          // Refresh session to get updated isLocked status
+          // Wait a moment for DB to settle, then refresh session
+          await new Promise((resolve) => setTimeout(resolve, 100));
           await updateSession();
           return true;
         }
@@ -49,7 +50,7 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    [updateSession]
+    [updateSession],
   );
 
   const lockNow = useCallback(async () => {
@@ -89,7 +90,7 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    [updateSession]
+    [updateSession],
   );
 
   const settings = {
@@ -105,11 +106,7 @@ export function SessionLockProvider({ children }) {
     updateSettings,
   };
 
-  return (
-    <SessionLockContext.Provider value={value}>
-      {children}
-    </SessionLockContext.Provider>
-  );
+  return <SessionLockContext.Provider value={value}>{children}</SessionLockContext.Provider>;
 }
 
 export function useSessionLock() {
