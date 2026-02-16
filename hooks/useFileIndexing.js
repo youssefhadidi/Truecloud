@@ -25,23 +25,23 @@ export function useFileIndexing() {
     // Subscribe to file-index messages
     const unsubscribe = subscribe('file-index', (message) => {
       try {
-        const { type, payload } = message;
+        const payload = message.payload;
 
-        if (type === 'progress') {
+        if (payload.type === 'progress') {
           setStatus({
             processed: payload.processed || 0,
             total: payload.total || 0,
             done: false,
             error: null,
           });
-        } else if (type === 'done') {
+        } else if (payload.type === 'done') {
           setStatus({
             processed: payload.total || 0,
             total: payload.total || 0,
             done: true,
             error: null,
           });
-        } else if (type === 'error') {
+        } else if (payload.type === 'error') {
           setStatus((prev) => ({
             ...prev,
             done: true,

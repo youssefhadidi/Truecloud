@@ -117,7 +117,6 @@ export default function CachePage() {
         addNotification('error', `Index rebuild failed: ${indexStatus.error}`);
       } else {
         addNotification('success', `Index rebuilt with ${indexStatus.total} entries`);
-        fetchIndexStats();
       }
     }
   }, [indexStatus.done, indexStatus.error, indexStatus.total, addNotification]);
