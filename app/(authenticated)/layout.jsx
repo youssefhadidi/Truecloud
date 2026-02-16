@@ -3,14 +3,17 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { FiArrowLeft } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
 
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const isFilesPage = pathname === '/files';
 
   // Debug logging disabled - uncomment if needed for debugging
   // useEffect(() => {
@@ -34,7 +37,11 @@ function AuthenticatedLayoutContent({ children }) {
       <header className="bg-gray-800 shadow flex-shrink-0">
         <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
           <div className="flex justify-between items-center gap-2 sm:gap-4">
-            <h1 className="text-lg sm:text-2xl font-bold text-white truncate">Truecloud</h1>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <h1 className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors" onClick={() => router.push('/files')}>
+                {!isFilesPage && <FiArrowLeft className="text-gray-400 hover:text-white" size={24} />} Truecloud
+              </h1>
+            </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
             </div>
