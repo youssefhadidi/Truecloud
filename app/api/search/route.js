@@ -29,11 +29,10 @@ export async function GET(req) {
       whereClause.OR = [{ ownerId: null }, { ownerId: session.user.id }];
     }
 
-    // Query the index
+    // Query the index (no limit - virtual scroller on frontend handles large result sets)
     const results = await prisma.fileIndex.findMany({
       where: whereClause,
       orderBy: [{ isDirectory: 'desc' }, { name: 'asc' }],
-      take: 50,
       select: {
         name: true,
         path: true,
