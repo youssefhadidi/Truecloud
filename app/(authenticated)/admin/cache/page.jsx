@@ -82,7 +82,6 @@ export default function CachePage() {
   const handleRebuildIndex = async () => {
     try {
       setIndexRebuilding(true);
-      setIndexProgress({ processed: 0, total: 0 });
       const response = await fetch('/api/admin/file-index/rebuild', {
         method: 'POST',
       });
