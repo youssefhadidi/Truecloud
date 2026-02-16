@@ -15,15 +15,6 @@ function AuthenticatedLayoutContent({ children }) {
   const pathname = usePathname();
   const isFilesPage = pathname === '/files';
 
-  // Debug logging disabled - uncomment if needed for debugging
-  // useEffect(() => {
-  //   console.log('AuthenticatedLayout - Session:', {
-  //     status,
-  //     userRole: session?.user?.role,
-  //     isAdmin: session?.user?.role === 'admin',
-  //   });
-  // }, [status, session]);
-
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
