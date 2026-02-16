@@ -1,0 +1,53 @@
+/** @format */
+
+import { NextResponse } from 'next/server';
+import { requireAuthNoActivity } from '@/lib/authCheck';
+import { prisma } from '@/lib/prisma';
+
+export async function GET(req) {
+  try {
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
+
+    const { searchParams } = new URL(req.url);
+    const query = searchParams.get('q')?.trim() || '';
+
+    // Validate query length
+    if (!query || query.length < 2) {
+      return NextResponse.json({ results: [] });
+    }
+
+    // Build where clause based on user permissions
+    const whereClause = {
+      name: {
+        contains: query,
+        mode: 'insensitive',
+      },
+    };
+
+    // Non-admin users can only see their own files + shared files (ownerId=null)
+    if (!session.user.hasRootAccess) {
+      whereClause.OR = [{ ownerId: null }, { ownerId: session.user.id }];
+    }
+
+    // Query the index
+    const results = await prisma.fileIndex.findMany({
+      where: whereClause,
+      orderBy: [{ isDirectory: 'desc' }, { name: 'asc' }],
+      take: 50,
+      select: {
+        name: true,
+        path: true,
+        parentPath: true,
+        isDirectory: true,
+        extension: true,
+        size: true,
+      },
+    });
+
+    return NextResponse.json({ results });
+  } catch (error) {
+    console.error('Search API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

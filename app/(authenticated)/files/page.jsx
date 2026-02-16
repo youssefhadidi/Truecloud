@@ -9,6 +9,7 @@ import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiA
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
+import SearchOverlay from '@/components/SearchOverlay';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
@@ -27,6 +28,7 @@ const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 function FilesPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Get all state and helpers from custom hook
   const state = useFilesPage(status, session);
@@ -349,6 +351,7 @@ function FilesPageContent() {
                 type="text"
                 value={state.searchQuery}
                 onChange={(e) => state.setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
                 placeholder="Search..."
                 className="w-full pl-6 pr-2 py-1 sm:py-2 bg-transparent text-white text-xs sm:text-base placeholder-gray-400 focus:outline-none"
               />
@@ -618,11 +621,17 @@ function FilesPageContent() {
             type="text"
             value={state.searchQuery}
             onChange={(e) => state.setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
             placeholder="Search files..."
             className="w-full bg-transparent text-white text-sm placeholder-gray-400 focus:outline-none"
           />
         </div>
       </div>
+
+      {/* Search Overlay */}
+      {searchFocused && state.searchQuery && (
+        <SearchOverlay query={state.searchQuery} onClose={() => setSearchFocused(false)} />
+      )}
 
       {/* Upload/Download Status */}
       <UploadStatus transfers={state.transfers} uploads={state.uploads} />

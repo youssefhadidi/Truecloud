@@ -38,8 +38,11 @@ function AuthenticatedLayoutContent({ children }) {
         <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
           <div className="flex justify-between items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <h1 className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors" onClick={() => router.push('/files')}>
-                {!isFilesPage && <FiArrowLeft className="text-gray-400 hover:text-white" size={24} />} Truecloud
+              <h1
+                className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors flex flex-col"
+                onClick={() => router.push('/files')}
+              >
+                {!isFilesPage && <FiArrowLeft className="text-gray-400 hover:text-white p-1" size={24} />} Truecloud
               </h1>
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">

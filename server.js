@@ -2,6 +2,7 @@ const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
+const { startFileWatcher } = require('./lib/fileWatcher.js');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -82,6 +83,10 @@ global.broadcastFileChange = (message) => {
 
 global.broadcastLogs = (message) => {
   broadcastMessage({ type: 'logs', payload: message });
+};
+
+global.broadcastFileIndexUpdate = (message) => {
+  broadcastMessage({ type: 'file-index', payload: message });
 };
 
 app.prepare().then(() => {
@@ -168,5 +173,8 @@ app.prepare().then(() => {
 
     // Start log stream manager
     startLogStream();
+
+    // Start file watcher for search index
+    startFileWatcher();
   });
 });

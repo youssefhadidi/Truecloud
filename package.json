@@ -30,6 +30,7 @@
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "busboy": "^1.6.0",
+    "chokidar": "^5.0.0",
     "date-fns": "^4.1.0",
     "mime-types": "^3.0.2",
     "next": "16.1.2",

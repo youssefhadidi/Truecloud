@@ -109,3 +109,20 @@ model Favorite {
   @@unique([path, ownerId])
   @@index([ownerId])
 }
+
+model FileIndex {
+  id           String   @id @default(cuid())
+  name         String
+  path         String   @unique // relative to UPLOAD_DIR, e.g. "user_abc/docs/file.pdf"
+  parentPath   String   // relative parent dir, e.g. "user_abc/docs"
+  extension    String   // lowercase, e.g. "pdf", "" for dirs/no-ext
+  size         BigInt   @default(0)
+  isDirectory  Boolean  @default(false)
+  lastModified DateTime @default(now())
+  ownerId      String?  // null = shared folder; set for user_ folders
+  indexedAt    DateTime @default(now()) @updatedAt
+
+  @@index([name])
+  @@index([ownerId])
+  @@index([isDirectory])
+}
