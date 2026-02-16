@@ -3,7 +3,7 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
@@ -46,7 +46,7 @@ const ListView = ({
   onResumeDownload,
   onRemoveDownload,
 }) => {
-  const parentRef = useRef(null);
+  const listRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const longPressTimerRef = useRef(null);
@@ -111,39 +111,20 @@ const ListView = ({
     allItems.unshift({ id: 'new-folder', isCreating: true });
   }
 
-  const rowVirtualizer = useVirtualizer({
-    count: allItems.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 65,
-    overscan: 10,
-  });
-
   // Responsive grid: mobile shows only name and actions, desktop shows all columns
   const gridCols = 'sm:grid-cols-[1fr_150px_150px_200px] grid-cols-[1fr_100px]';
 
-  return (
-    <div ref={parentRef} className="flex-grow overflow-auto">
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const file = allItems[virtualRow.index];
+  const rowRenderer = useCallback(
+    ({ index, key, style }) => {
+      const file = allItems[index];
 
           // Render creating folder UI
           if (file.isCreating) {
             return (
               <div
-                key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
-                style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                key={key}
+                className="left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
+                style={style}
               >
                 <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
                   <FiFolder className="text-blue-400" size={20} />
@@ -175,13 +156,9 @@ const ListView = ({
           if (deletingFile?.id === file.id) {
             return (
               <div
-                key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-red-900/20 border-b border-gray-700"
-                style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                key={key}
+                className="left-0 w-full px-6 py-4 bg-red-900/20 border-b border-gray-700"
+                style={style}
               >
                 <div className="flex items-center justify-between bg-red-900/20 border border-red-800 rounded px-4 py-2">
                   <span className="text-red-200 font-medium">
@@ -203,13 +180,9 @@ const ListView = ({
           if (renamingFile?.id === file.id) {
             return (
               <div
-                key={virtualRow.key}
-                className="absolute left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
-                style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                key={key}
+                className="left-0 w-full px-6 py-4 bg-blue-900/20 border-b border-gray-700"
+                style={style}
               >
                 <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
                   {getFileIcon(file)}
@@ -241,12 +214,10 @@ const ListView = ({
           if (file.isDownloading) {
             return (
               <div
-                key={virtualRow.key}
-                className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 bg-yellow-900/10 border-b border-yellow-700 items-center select-none`}
+                key={key}
+                className={`left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 bg-yellow-900/10 border-b border-yellow-700 items-center select-none`}
                 style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
+                  ...style,
                   WebkitTapHighlightColor: 'transparent',
                   WebkitUserSelect: 'none',
                   userSelect: 'none',
@@ -326,12 +297,10 @@ const ListView = ({
 
           return (
             <div
-              key={virtualRow.key}
-              className={`absolute left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-700 border-b border-gray-700 items-center cursor-pointer transition-colors select-none`}
+              key={key}
+              className={`left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 hover:bg-gray-700 border-b border-gray-700 items-center cursor-pointer transition-colors select-none`}
               style={{
-                top: 0,
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
+                ...style,
                 WebkitTapHighlightColor: 'transparent',
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
@@ -487,8 +456,28 @@ const ListView = ({
               )}
             </div>
           );
-        })}
-      </div>
+    },
+    [allItems, deletingFile, renamingFile, showingActionsFor, isMobile, gridCols, currentPath, sharedPaths, selectionMode, selectedFiles, processingFile, shouldShowActions, getFileIcon, navigateToFolder, isViewableFile, openMediaViewer, initiateRename, setNewFileName, cancelRename, confirmRename, handleDownload, initiateDelete, cancelDelete, confirmDelete, initiateShare, onToggleSelect, onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize],
+  );
+
+  return (
+    <div className="flex-grow overflow-auto">
+      <AutoSizer>
+        {({ height, width }) => (
+          <List
+            ref={listRef}
+            height={height}
+            width={width}
+            rowCount={allItems.length}
+            rowHeight={65}
+            rowRenderer={rowRenderer}
+            overscanRowCount={10}
+            style={{
+              outline: 'none',
+            }}
+          />
+        )}
+      </AutoSizer>
     </div>
   );
 };

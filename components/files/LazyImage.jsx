@@ -27,7 +27,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
         }
       },
       {
-        rootMargin: '200px',
+        rootMargin: '400px',
         threshold: 0.01,
       },
     );

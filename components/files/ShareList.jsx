@@ -2,8 +2,8 @@
 
 'use client';
 
-import { useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useRef, useCallback } from 'react';
+import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
@@ -31,38 +31,20 @@ export default function ShareList({
   selectedFiles,
   onToggleSelect,
 }) {
-  const parentRef = useRef(null);
-  const rowVirtualizer = useVirtualizer({
-    count: files.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
-    overscan: 8,
-  });
+  const listRef = useRef(null);
 
-  return (
-    <div ref={parentRef} className="h-full overflow-auto">
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const file = files[virtualRow.index];
+  const rowRenderer = useCallback(
+    ({ index, key, style }) => {
+      const file = files[index];
           const isDeleting = deletingFile?.name === file.name;
           const isRenaming = renamingFile?.name === file.name;
 
           if (isDeleting) {
             return (
               <div
-                key={virtualRow.key}
-                className="absolute left-0 w-full px-4 py-3 bg-red-900/20 border-b border-gray-700"
-                style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                key={key}
+                className="left-0 w-full px-4 py-3 bg-red-900/20 border-b border-gray-700"
+                style={style}
               >
                 <div className="flex items-center justify-between bg-red-900/20 border border-red-800 rounded px-4 py-2">
                   <span className="text-red-200 font-medium">
@@ -84,13 +66,9 @@ export default function ShareList({
           if (isRenaming) {
             return (
               <div
-                key={virtualRow.key}
-                className="absolute left-0 w-full px-4 py-3 bg-blue-900/20 border-b border-gray-700"
-                style={{
-                  top: 0,
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                key={key}
+                className="left-0 w-full px-4 py-3 bg-blue-900/20 border-b border-gray-700"
+                style={style}
               >
                 <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded px-4 py-2">
                   {file.isDirectory ? <FiFolder className="text-blue-400" size={20} /> : <FiFile className="text-gray-400" size={20} />}
@@ -120,13 +98,9 @@ export default function ShareList({
 
           return (
             <div
-              key={virtualRow.key}
-              className="absolute left-0 w-full flex items-center justify-between px-4 py-3 hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700"
-              style={{
-                top: 0,
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
+              key={key}
+              className="left-0 w-full flex items-center justify-between px-4 py-3 hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700"
+              style={style}
               onClick={() => {
                 if (selectionMode) {
                   onToggleSelect?.(file);
@@ -220,8 +194,28 @@ export default function ShareList({
               </div>
             </div>
           );
-        })}
-      </div>
+    },
+    [files, selectionMode, selectedFiles, processingFile, allowUploads, deletingFile, renamingFile, newFileName, setNewFileName, cancelDelete, confirmDelete, cancelRename, confirmRename, onFileClick, onContextMenu, onToggleSelect, onOpenMediaViewer, onInitiateRename, onDownload, onInitiateDelete, formatFileSize],
+  );
+
+  return (
+    <div className="h-full">
+      <AutoSizer>
+        {({ height, width }) => (
+          <List
+            ref={listRef}
+            height={height}
+            width={width}
+            rowCount={files.length}
+            rowHeight={72}
+            rowRenderer={rowRenderer}
+            overscanRowCount={8}
+            style={{
+              outline: 'none',
+            }}
+          />
+        )}
+      </AutoSizer>
     </div>
   );
 }
