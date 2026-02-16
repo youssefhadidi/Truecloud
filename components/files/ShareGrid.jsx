@@ -409,7 +409,7 @@ export default function ShareGrid({
               rowCount={rowCount}
               rowHeight={rowHeight}
               width={width}
-              overscanRowCount={4}
+              overscanRowCount={5}
               style={{
                 outline: 'none',
                 overflowX: 'hidden',
