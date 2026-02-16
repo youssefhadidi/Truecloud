@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
@@ -12,7 +12,7 @@ import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils'
 // Breakpoint for mobile detection
 const MOBILE_BREAKPOINT = 768;
 
-const ListView = ({
+const ListView = forwardRef(({
   files,
   creatingFolder,
   newFolderName,
@@ -45,7 +45,7 @@ const ListView = ({
   onPauseDownload,
   onResumeDownload,
   onRemoveDownload,
-}) => {
+}, ref) => {
   const listRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -110,6 +110,15 @@ const ListView = ({
   if (creatingFolder) {
     allItems.unshift({ id: 'new-folder', isCreating: true });
   }
+
+  useImperativeHandle(ref, () => ({
+    scrollToFile: (fileName) => {
+      const index = allItems.findIndex((f) => f.name === fileName);
+      if (index >= 0 && listRef.current) {
+        listRef.current.scrollToRow(index);
+      }
+    },
+  }), [allItems]);
 
   // Responsive grid: mobile shows only name and actions, desktop shows all columns
   const gridCols = 'sm:grid-cols-[1fr_150px_150px_200px] grid-cols-[1fr_100px]';
@@ -480,6 +489,8 @@ const ListView = ({
       </AutoSizer>
     </div>
   );
-};
+});
+
+ListView.displayName = 'ListView';
 
 export default ListView;

@@ -4,7 +4,7 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Suspense, lazy, useMemo, useState, useCallback } from 'react';
+import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
@@ -30,6 +30,24 @@ function FilesPageContent() {
   const router = useRouter();
   // Get all state and helpers from custom hook
   const state = useFilesPage(status, session);
+
+  // Refs for virtual scrollers
+  const gridViewRef = useRef(null);
+  const listViewRef = useRef(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
+
+  // After files load, scroll to the pending target file
+  useEffect(() => {
+    if (pendingScrollTarget && !state.isLoading && state.files.length > 0) {
+      const ref = state.viewMode === 'list' ? listViewRef : gridViewRef;
+      // Small delay to let virtual scroller render
+      const timer = setTimeout(() => {
+        ref.current?.scrollToFile(pendingScrollTarget);
+        setPendingScrollTarget(null);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingScrollTarget, state.isLoading, state.files, state.viewMode]);
 
   // Navigation hooks
   const navigation = useNavigation({
@@ -416,7 +434,7 @@ function FilesPageContent() {
             })}
         </div>
         {/* File Grid */}
-        <div className="bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
+        <div className={`bg-gray-800 rounded-lg shadow overflow-y-auto flex flex-col ${state.searchQuery ? 'h-1/2 flex-shrink-0' : 'flex-grow-1'}`}>
           {state.viewMode === 'list' ? (
             /* List View with Virtual Scrolling */
             <div className="overflow-hidden flex-grow flex flex-col">
@@ -447,6 +465,7 @@ function FilesPageContent() {
                     }
                   >
                     <ListView
+                      ref={listViewRef}
                       files={state.files}
                       creatingFolder={state.creatingFolder}
                       newFolderName={state.newFolderName}
@@ -505,6 +524,7 @@ function FilesPageContent() {
                   }
                 >
                   <GridView
+                    ref={gridViewRef}
                     files={state.files}
                     creatingFolder={state.creatingFolder}
                     newFolderName={state.newFolderName}
@@ -548,9 +568,13 @@ function FilesPageContent() {
           <SearchResults
             query={state.searchQuery}
             currentPath={state.currentPath}
-            onNavigate={(path) => {
+            viewMode={state.viewMode}
+            onNavigate={(path, fileName) => {
               state.setCurrentPath(path);
               state.setSearchQuery('');
+              if (fileName) {
+                setPendingScrollTarget(fileName);
+              }
             }}
           />
         )}

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useMemo, useCallback, useState, memo } from 'react';
+import { useRef, useMemo, useCallback, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2, FiPause, FiX } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
@@ -475,7 +475,7 @@ const GridItem = memo(
 
 GridItem.displayName = 'GridItem';
 
-const GridView = ({
+const GridView = forwardRef(({
   files,
   creatingFolder,
   newFolderName,
@@ -507,8 +507,9 @@ const GridView = ({
   onPauseDownload,
   onResumeDownload,
   onRemoveDownload,
-}) => {
+}, ref) => {
   const gridRef = useRef(null);
+  const containerWidthRef = useRef(0);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
   const longPressTimerRef = useRef(null);
 
@@ -519,6 +520,18 @@ const GridView = ({
     }
     return items;
   }, [files, creatingFolder]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToFile: (fileName) => {
+      const index = allItems.findIndex((f) => f.name === fileName);
+      if (index >= 0 && gridRef.current && containerWidthRef.current) {
+        const columns = getColumnsCount(containerWidthRef.current);
+        const rowIndex = Math.floor(index / columns);
+        const columnIndex = index % columns;
+        gridRef.current.scrollToCell({ columnIndex, rowIndex });
+      }
+    },
+  }), [allItems]);
 
   const handleTouchStart = useCallback((item) => {
     longPressTimerRef.current = setTimeout(() => {
@@ -649,6 +662,7 @@ const GridView = ({
     <div className="w-full h-full" style={{ WebkitOverflowScrolling: 'touch' }}>
       <AutoSizer>
         {({ height, width }) => {
+          containerWidthRef.current = width;
           const columns = getColumnsCount(width);
           const cellSize = Math.floor(width / columns);
           const textHeight = 36;
@@ -676,6 +690,8 @@ const GridView = ({
       </AutoSizer>
     </div>
   );
-};
+});
+
+GridView.displayName = 'GridView';
 
 export default GridView;
