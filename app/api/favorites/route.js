@@ -1,17 +1,15 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 // GET - List all favorites for current user
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const favorites = await prisma.favorite.findMany({
       where: { ownerId: session.user.id },
@@ -28,10 +26,8 @@ export async function GET(req) {
 // POST - Add a new favorite
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { path, name, isDirectory } = await req.json();
 
@@ -73,10 +69,8 @@ export async function POST(req) {
 // DELETE - Remove a favorite
 export async function DELETE(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

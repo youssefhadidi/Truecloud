@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuthNoActivity } from '@/lib/authCheck';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { logger } from '@/lib/logger';
@@ -14,11 +14,8 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 export async function GET(req, { params }) {
   try {
     logger.debug('GET /api/files/parse-xlsx - Request received');
-    const session = await auth();
-    if (!session) {
-      logger.warn('GET /api/files/parse-xlsx - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const url = new URL(req.url);
     const fileId = safeDecodeURIComponent(url.searchParams.get('id') || '');

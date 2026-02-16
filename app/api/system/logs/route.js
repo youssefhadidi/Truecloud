@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { readFile, writeFile, appendFile } from 'fs/promises';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
@@ -58,8 +58,10 @@ async function appendToHistory(newLines) {
 
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session || session.user?.role !== 'admin') {
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    if (session.user?.role !== 'admin') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 

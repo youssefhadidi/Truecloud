@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { spawn } from 'child_process';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
@@ -142,8 +142,10 @@ const REQUIRED_PROGRAMS = [
  */
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    if (session.user.role !== 'admin') {
       logger.warn('GET /api/system/check-requirements - Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -191,8 +193,10 @@ export async function GET(req) {
  */
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    if (session.user.role !== 'admin') {
       logger.warn('POST /api/system/install-requirement - Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

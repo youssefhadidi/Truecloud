@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuthNoActivity } from '@/lib/authCheck';
 import fs from 'fs';
 import { stat } from 'fs/promises';
 import { join, basename } from 'node:path';
@@ -17,10 +17,8 @@ export const maxDuration = 300; // 5 minutes
 
 export async function GET(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const { id } = await params;
     const fileName = safeDecodeURIComponent(id);

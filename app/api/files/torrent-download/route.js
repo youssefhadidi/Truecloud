@@ -21,7 +21,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { writeFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'fs';
@@ -46,11 +46,8 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR
  */
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      logger.warn('POST /api/files/torrent-download - Unauthorized');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const formData = await req.formData();
     const torrentFile = formData.get('torrentFile');
@@ -147,11 +144,8 @@ export async function POST(req) {
  */
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      logger.warn('GET /api/files/torrent-download - Unauthorized');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     try {
       // Get optional path filter from query params
@@ -205,11 +199,8 @@ export async function GET(req) {
  */
 export async function PATCH(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      logger.warn('PATCH /api/files/torrent-download - Unauthorized');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const body = await req.json();
     const { gid, action } = body;

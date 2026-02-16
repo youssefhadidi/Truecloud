@@ -6,7 +6,7 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { join, extname, resolve, sep } from 'node:path';
 import { createHash } from 'crypto';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { NextResponse } from 'next/server';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { logger } from '@/lib/logger';
@@ -33,10 +33,8 @@ const NO_CONVERSION_NEEDED = ['glb', 'gltf'];
 
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     const fileName = safeDecodeURIComponent(searchParams.get('id') || '');

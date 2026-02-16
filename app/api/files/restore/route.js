@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
@@ -16,11 +16,8 @@ export async function POST(req) {
   const startTime = Date.now();
   try {
     logger.info('POST /api/files/restore - Restore request');
-    const session = await auth();
-    if (!session) {
-      logger.warn('POST /api/files/restore - Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     let trashPath = searchParams.get('path') || '';

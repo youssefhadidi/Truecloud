@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import { checkUserIsAdmin } from '@/lib/permissions';
 import { serializeBigInt } from '@/lib/serialize';
@@ -9,10 +9,8 @@ import { serializeBigInt } from '@/lib/serialize';
 // GET - Get permissions for a file
 export async function GET(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const fileId = params.id;
 
@@ -51,10 +49,8 @@ export async function GET(req, { params }) {
 // POST - Add permission
 export async function POST(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const fileId = params.id;
     const { userId, canRead, canWrite, canDelete, canShare } = await req.json();
@@ -104,10 +100,8 @@ export async function POST(req, { params }) {
 // DELETE - Remove permission
 export async function DELETE(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const fileId = params.id;
     const { searchParams } = new URL(req.url);

@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuthNoActivity } from '@/lib/authCheck';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
@@ -29,11 +29,8 @@ export async function GET(req, { params }) {
 
   try {
     logger.debug('GET /api/files/thumbnail - Request received');
-    const session = await auth();
-    if (!session) {
-      logger.warn('GET /api/files/thumbnail - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const resolvedParams = await params;
     fileId = safeDecodeURIComponent(resolvedParams.id);

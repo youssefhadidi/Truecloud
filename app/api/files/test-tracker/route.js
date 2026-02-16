@@ -1,16 +1,14 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { testTrackerConnectivity } from '@/lib/webTorrentManager';
 import { logger } from '@/lib/logger';
 
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     // Only admins can test trackers
     if (session.user.role !== 'admin') {

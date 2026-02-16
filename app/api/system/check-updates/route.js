@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuthNoActivity } from '@/lib/authCheck';
 import { logger } from '@/lib/logger';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
@@ -24,11 +24,8 @@ function compareVersions(v1, v2) {
 
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session || !session.user) {
-      logger.warn('GET /api/system/check-updates - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     // Read version from package.json file directly (always current)
     let currentVersion = '0.1.0';

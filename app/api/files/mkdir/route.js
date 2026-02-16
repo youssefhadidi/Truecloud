@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { mkdir } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
@@ -16,11 +16,8 @@ export async function POST(req) {
   let folderName = 'unknown';
   try {
     logger.info('POST /api/files/mkdir - Create folder request');
-    const session = await auth();
-    if (!session) {
-      logger.warn('POST /api/files/mkdir - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { name, path: relativePath } = await req.json();
     folderName = name;

@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuthNoActivity } from '@/lib/authCheck';
 import fs from 'fs';
 import { stat, access } from 'fs/promises';
 import { join, resolve, extname } from 'node:path';
@@ -88,11 +88,8 @@ async function fixMp4ForStreaming(inputPath, outputPath) {
 export async function GET(req, { params }) {
   const startTime = Date.now();
   try {
-    const session = await auth();
-    if (!session) {
-      logger.warn('GET /api/files/stream - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const resolvedParams = await params;
     const fileId = safeDecodeURIComponent(resolvedParams.id);

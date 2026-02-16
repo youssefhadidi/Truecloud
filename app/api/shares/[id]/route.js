@@ -1,17 +1,15 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
 // GET - Get share details
 export async function GET(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const { id } = await params;
 
@@ -38,10 +36,8 @@ export async function GET(req, { params }) {
 // PATCH - Update share (password, expiration)
 export async function PATCH(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { id } = await params;
     const { password, removePassword, expiresAt } = await req.json();
@@ -88,10 +84,8 @@ export async function PATCH(req, { params }) {
 // DELETE - Revoke share
 export async function DELETE(req, { params }) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { id } = await params;
 

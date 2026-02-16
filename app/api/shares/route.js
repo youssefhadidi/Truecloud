@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import bcrypt from 'bcryptjs';
@@ -14,10 +14,8 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 // GET - List all shares for current user
 export async function GET(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuthNoActivity();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     const path = searchParams.get('path');
@@ -51,10 +49,8 @@ export async function GET(req) {
 // POST - Create a new share
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { path, fileName, isDirectory, password, expiresAt, allowUploads } = await req.json();
 

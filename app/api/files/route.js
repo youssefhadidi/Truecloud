@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
@@ -19,11 +19,8 @@ export async function GET(req) {
   const startTime = Date.now();
   try {
     logger.info('GET /api/files - Listing files');
-    const session = await auth();
-    if (!session) {
-      logger.warn('GET /api/files - Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     let relativePath = searchParams.get('path') || '';
@@ -239,11 +236,8 @@ export async function DELETE(req) {
   const startTime = Date.now();
   try {
     logger.info('DELETE /api/files - Delete request');
-    const session = await auth();
-    if (!session) {
-      logger.warn('DELETE /api/files - Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     let relativePath = searchParams.get('path') || '';
@@ -415,11 +409,8 @@ export async function PATCH(req) {
   const startTime = Date.now();
   try {
     logger.info('PATCH /api/files - Rename request');
-    const session = await auth();
-    if (!session) {
-      logger.warn('PATCH /api/files - Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const { searchParams } = new URL(req.url);
     let relativePath = searchParams.get('path') || '';

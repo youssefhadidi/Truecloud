@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '@/lib/logger';
@@ -48,10 +48,8 @@ async function getPkgVersion(pkg, env) {
 
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     // Only admins can install requirements
     if (session.user.role !== 'admin') {

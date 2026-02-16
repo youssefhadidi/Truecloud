@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { spawn } from 'child_process';
 import { logger } from '@/lib/logger';
 import {
@@ -88,11 +88,8 @@ function executeCommand(command, args, stepName) {
 
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session || !session.user) {
-      logger.warn('POST /api/system/run-update - Unauthorized access');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     logger.info('Update requested', { userId: session.user.id, email: session.user.email });
 

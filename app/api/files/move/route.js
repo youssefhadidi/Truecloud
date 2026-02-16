@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { requireAuth } from '@/lib/authCheck';
 import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'fs';
 import { stat, rename } from 'fs/promises';
@@ -20,10 +20,8 @@ const sanitizeName = (name) => {
 export async function POST(req) {
   const startTime = Date.now();
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const body = await req.json().catch(() => null);
     const items = Array.isArray(body?.items) ? body.items : [];
