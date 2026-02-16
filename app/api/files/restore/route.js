@@ -114,8 +114,26 @@ export async function POST(req) {
       finalDestPath = join(destDir, `${nameWithoutExt}_restored_${timestamp}${ext}`);
     }
 
-    // Move file from trash to original location
-    await rename(sourcePath, finalDestPath);
+    // Move file from trash to original location (fall back to copy+delete for cross-device)
+    try {
+      await rename(sourcePath, finalDestPath);
+    } catch (renameError) {
+      if (renameError.code === 'EXDEV') {
+        logger.info('POST /api/files/restore - Cross-device move, using cp+rm fallback', { fileName, trashPath, originalPath });
+        const { cp, rm } = await import('fs/promises');
+        await cp(sourcePath, finalDestPath, { recursive: true, preserveTimestamps: true });
+        await rm(sourcePath, { recursive: true, force: true });
+      } else {
+        logger.error('POST /api/files/restore - Failed to restore', {
+          message: renameError.message,
+          code: renameError.code,
+          source: sourcePath,
+          destination: finalDestPath,
+          fileName,
+        });
+        return NextResponse.json({ error: `Failed to restore: ${renameError.code || renameError.message}` }, { status: 500 });
+      }
+    }
 
     const restoredFileName = finalDestPath.split(sep).pop();
 

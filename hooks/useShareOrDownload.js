@@ -29,8 +29,10 @@ export function useShareOrDownload() {
           type: 'download',
         });
 
-        // Check if Web Share API is available on this device
-        const hasShareAPI = !!navigator.share;
+        // Use Web Share API only on mobile devices (iOS/Android)
+        // Desktop browsers also support navigator.share but we want normal downloads there
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const hasShareAPI = isMobile && !!navigator.share;
 
         if (hasShareAPI) {
           // Only fetch if we're going to use Web Share API

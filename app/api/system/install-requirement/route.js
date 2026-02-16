@@ -106,7 +106,10 @@ export async function POST(req) {
     }
 
     // Install the package
-    const execOpts = { timeout: 120000, maxBuffer: 1024 * 1024 * 5, env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' } };
+    // Ensure Node.js bin dir is on PATH (systemd services often have a minimal PATH)
+    const nodeBinDir = require('path').dirname(process.execPath);
+    const enhancedPath = `${nodeBinDir}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`;
+    const execOpts = { timeout: 120000, maxBuffer: 1024 * 1024 * 5, env: { ...process.env, PATH: enhancedPath, DEBIAN_FRONTEND: 'noninteractive' } };
 
     try {
       logger.info('Executing install command for:', { name, packageName });
@@ -119,7 +122,7 @@ export async function POST(req) {
         const triplet = arch === 'arm64' ? 'aarch64-linux-gnu' : 'x86_64-linux-gnu';
         const pkgConfigPath = `/usr/local/lib/pkgconfig:/usr/local/lib/${triplet}/pkgconfig:/usr/lib/${triplet}/pkgconfig:${process.env.PKG_CONFIG_PATH || ''}`;
         const ldPath = `/usr/local/lib/${triplet}:/usr/local/lib:${process.env.LD_LIBRARY_PATH || ''}`;
-        const buildEnv = { ...process.env, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
+        const buildEnv = { ...process.env, PATH: enhancedPath, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
         // Step 1: Install build dependencies and remove conflicting system packages
         logger.info('Step 1/6: Installing build dependencies...');
@@ -288,9 +291,24 @@ export async function POST(req) {
            sudo ldconfig 2>&1`,
         ).catch((e) => logger.warn('ldconfig registration:', e.message));
 
+        // Resolve pnpm path — corepack shims may not be on /bin/sh's PATH
+        let pnpmBin = 'pnpm';
+        try {
+          const { stdout: pnpmPath } = await execAsync('command -v pnpm 2>/dev/null || which pnpm 2>/dev/null || echo ""', { env: buildEnv });
+          if (pnpmPath.trim()) pnpmBin = pnpmPath.trim();
+          else {
+            // Corepack: try resolving via node's bin directory
+            const { stdout: nodeBin } = await execAsync('dirname "$(command -v node)"');
+            const candidatePath = `${nodeBin.trim()}/pnpm`;
+            const { stdout: exists } = await execAsync(`test -f "${candidatePath}" && echo "yes" || echo "no"`);
+            if (exists.trim() === 'yes') pnpmBin = candidatePath;
+          }
+        } catch {}
+        logger.info(`Using pnpm at: ${pnpmBin}`);
+
         // Ensure sharp is installed normally first (resets bundled dir to stock)
-        await execAsync('pnpm remove sharp 2>&1 || true', { ...longOpts, cwd: projectDir });
-        await execAsync('pnpm add sharp 2>&1', { ...longOpts, cwd: projectDir });
+        await execAsync(`${pnpmBin} remove sharp 2>&1 || true`, { ...longOpts, cwd: projectDir });
+        await execAsync(`${pnpmBin} add sharp 2>&1`, { ...longOpts, cwd: projectDir });
 
         // Find the bundled libvips directory
         const { stdout: libvipsDir } = await execAsync(
