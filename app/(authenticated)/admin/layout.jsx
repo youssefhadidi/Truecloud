@@ -2,14 +2,14 @@
 
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap } from 'react-icons/fi';
 import Link from 'next/link';
 
 export default function AdminLayout({ children }) {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useStableSession();
   const router = useRouter();
   const pathname = usePathname();
 

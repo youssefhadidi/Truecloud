@@ -2,15 +2,15 @@
 
 'use client';
 
-import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { FiArrowLeft } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
+import { useStableSession } from '@/lib/api/session';
 
 function AuthenticatedLayoutContent({ children }) {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useStableSession();
   const router = useRouter();
   const pathname = usePathname();
   const isFilesPage = pathname === '/files';

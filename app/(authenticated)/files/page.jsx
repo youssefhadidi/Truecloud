@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useStableSession } from '@/lib/api/session';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
@@ -26,7 +26,7 @@ const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 function FilesPageContent() {
-  const { status } = useSession();
+  const { status } = useStableSession();
   const router = useRouter();
   // Get all state and helpers from custom hook
   const state = useFilesPage(status);

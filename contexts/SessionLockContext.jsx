@@ -3,32 +3,23 @@
 'use client';
 
 import { createContext, useContext, useCallback, useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useStableSession } from '@/lib/api/session';
 import { setupAxiosInterceptor } from '@/lib/axios';
 
 const SessionLockContext = createContext();
 
 export function SessionLockProvider({ children }) {
-  const { data: session, update: updateSession, status } = useSession();
+  const { data: session, status, update } = useStableSession();
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize and poll for lock status every 30 seconds
   useEffect(() => {
     // Setup axios interceptor to catch 423 (Locked) responses
-    setupAxiosInterceptor(updateSession);
+    setupAxiosInterceptor(update);
 
-    // Only consider loading done when NextAuth session is loaded
     if (status !== 'loading') {
       setIsLoading(false);
     }
-
-    // Poll for session updates every 30 seconds (inactivity detection)
-    const interval = setInterval(() => {
-      updateSession();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [status, updateSession]);
+  }, [status, update]);
 
   const isLocked = session?.user?.isLocked ?? false;
 
@@ -44,9 +35,8 @@ export function SessionLockProvider({ children }) {
         const data = await res.json();
 
         if (data.success) {
-          // Wait a moment for DB to settle, then refresh session
           await new Promise((resolve) => setTimeout(resolve, 100));
-          await updateSession();
+          update();
           return true;
         }
 
@@ -56,7 +46,7 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    [updateSession],
+    [update],
   );
 
   const lockNow = useCallback(async () => {
@@ -67,13 +57,12 @@ export function SessionLockProvider({ children }) {
       });
 
       if (res.ok) {
-        // Refresh session to get updated isLocked status
-        await updateSession();
+        update();
       }
     } catch (error) {
       console.error('Error locking session:', error);
     }
-  }, [updateSession]);
+  }, [update]);
 
   const updateSettings = useCallback(
     async (newSettings) => {
@@ -85,8 +74,7 @@ export function SessionLockProvider({ children }) {
         });
 
         if (res.ok) {
-          // Refresh session after settings update
-          await updateSession();
+          update();
           return true;
         }
 
@@ -96,7 +84,7 @@ export function SessionLockProvider({ children }) {
         return false;
       }
     },
-    [updateSession],
+    [update],
   );
 
   const settings = {

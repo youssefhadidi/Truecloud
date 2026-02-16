@@ -1,7 +1,7 @@
 /** @format */
 
 import { useEffect, useRef } from 'react';
-import { useSession } from 'next-auth/react';
+import { useStableSession } from '@/lib/api/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
@@ -13,7 +13,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
  * Skips invalidation for changes made by the current user to avoid double invalidation.
  */
 export function useFileChanges() {
-  const { data: session } = useSession();
+  const { data: session } = useStableSession();
   const queryClient = useQueryClient();
   const { subscribe } = useWebSocket();
   const sessionRef = useRef(session);
