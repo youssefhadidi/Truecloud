@@ -21,7 +21,6 @@ export async function GET(req) {
     const whereClause = {
       name: {
         contains: query,
-        mode: 'insensitive',
       },
     };
 
@@ -47,7 +46,8 @@ export async function GET(req) {
 
     return NextResponse.json({ results });
   } catch (error) {
-    console.error('Search API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Search API error:', error?.message || error);
+    console.error('Full error:', error);
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
   }
 }
