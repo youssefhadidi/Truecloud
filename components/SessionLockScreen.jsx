@@ -5,15 +5,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock } from 'react-icons/fi';
-import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 
-export default function SessionLockScreen() {
+export default function SessionLockScreen({ children }) {
   const { isLocked, unlock } = useSessionLock();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
-  const router = useRouter();
 
   const handleKeyDown = useCallback(
     async (e) => {
@@ -64,10 +62,12 @@ export default function SessionLockScreen() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked, handleKeyDown]);
 
-  if (!isLocked) return null;
+  // If not locked, render children normally
+  if (!isLocked) return children;
 
+  // If locked, show PIN input screen
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
       <div
         className={`bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 ${
           isShaking ? 'animate-pulse' : ''

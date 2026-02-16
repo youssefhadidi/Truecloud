@@ -36,8 +36,9 @@ export default function RootLayout({ children }) {
               <Notifications />
               <AuthProvider>
                 <SessionLockProvider>
-                  <SessionLockScreen />
-                  <WebSocketProvider>{children}</WebSocketProvider>
+                  <SessionLockScreen>
+                    <WebSocketProvider>{children}</WebSocketProvider>
+                  </SessionLockScreen>
                 </SessionLockProvider>
               </AuthProvider>
             </NotificationsProvider>
