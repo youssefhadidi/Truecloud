@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
-import { spawn } from 'child_process';
+import { join } from 'node:path';
 
 // Global state to track rebuild progress
 let rebuildProcess = null;
@@ -22,12 +22,12 @@ export async function POST(req) {
     // Clear existing index
     await prisma.fileIndex.deleteMany({});
 
-    // Spawn background worker (indirect reference to avoid Turbopack static resolution)
-    const cwd = process['cwd'];
-    const workerPath = cwd() + '/lib/workers/buildFileIndexWorker.mjs';
+    // Spawn background worker (dynamic import avoids Turbopack resolving the worker path)
+    const { spawn } = await import('child_process');
+    const workerPath = join(process.cwd(), 'lib', 'workers', 'buildFileIndexWorker.mjs');
 
-    rebuildProcess = spawn('node', [workerPath], {
-      env: { ...process.env },
+    rebuildProcess = spawn(process.execPath, [workerPath], {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
 
     // Track progress via IPC
