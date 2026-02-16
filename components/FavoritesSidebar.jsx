@@ -159,8 +159,7 @@ export default function FavoritesSidebar({ onNavigate, currentPath, searchQuery,
                 </div>
               ))}
             </div>
-          )
-        )}
+          )}
       </div>
 
       {/* Trash link at bottom */}
