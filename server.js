@@ -2,7 +2,6 @@ const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
-const { startFileWatcher } = require('./lib/fileWatcher.js');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -175,6 +174,6 @@ app.prepare().then(() => {
     startLogStream();
 
     // Start file watcher for search index
-    startFileWatcher();
+    import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
   });
 });
