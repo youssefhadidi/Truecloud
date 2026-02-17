@@ -7,11 +7,12 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
  * Hook to receive real-time logs via unified WebSocket
  *
  * Subscribes to 'logs' messages from the app-level WebSocket connection.
- * First message contains allLines (last 50 lines), subsequent messages contain newLines.
+ * First message contains allLines, subsequent messages contain newLines.
  * All data flows through WebSocket - no API calls.
+ * Backend limits logs to last 200 lines for performance.
  *
  * Returns:
- * - logs: Array of all log lines
+ * - logs: Array of log lines
  * - isLoading: Boolean indicating initial load state
  * - error: Error message if any
  */

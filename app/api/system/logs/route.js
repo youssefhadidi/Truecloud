@@ -8,7 +8,7 @@ import { existsSync } from 'fs';
 
 const STATE_FILE = resolve(process.cwd(), '.logs-state.json');
 const HISTORY_FILE = resolve(process.cwd(), '.logs-history.json');
-const HISTORY_LIMIT = 50; // Keep only last 50 lines
+const HISTORY_LIMIT = 200; // Keep only last 200 lines
 
 async function getLogState() {
   try {
