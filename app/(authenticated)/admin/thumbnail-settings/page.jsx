@@ -87,7 +87,7 @@ export default function ThumbnailSettingsPage() {
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Thumbnail Settings</h1>
         <button onClick={() => refetch()} disabled={isLoading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50">
-          <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+          <FiRefreshCw className={isLoading ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
