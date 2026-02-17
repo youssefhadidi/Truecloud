@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
+import { FiPause, FiPlay, FiTrash2, FiDownload } from 'react-icons/fi';
 import { useDownloadWebSocket } from '@/hooks/useDownloadWebSocket';
 
 /**
@@ -53,119 +53,92 @@ export default function DownloadCard({
   };
 
   return (
-    <div className="relative overflow-hidden">
-      {/* Download Item */}
-      <div className="p-3 sm:p-4 border-b border-gray-700 last:border-b-0 hover:bg-gray-750 transition-colors">
-        {/* Name and Status */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-medium text-gray-100 text-sm sm:text-base truncate flex-1">
-            {download.name}
-          </h3>
-          <span
-            className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${
-              download.status === 'active'
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                : download.status === 'paused'
-                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                  : download.status === 'complete'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-            }`}
-          >
-            {download.status}
-          </span>
-        </div>
-
-        {/* Progress Bar */}
-        {(download.status === 'active' || download.status === 'paused') && (
-          <div className="mb-2">
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-600 transition-all duration-300"
-                style={{ width: `${Math.min(download.progress, 100)}%` }}
-              />
-            </div>
+    <div className="group relative bg-gray-700 rounded-lg p-0 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none" style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}>
+      {/* Thumbnail area with spinner */}
+      <div className="w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 relative overflow-hidden">
+        {download.status === 'active' && (
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <div className="text-xs text-gray-300 font-medium">{Math.round(download.progress)}%</div>
           </div>
         )}
 
-        {/* Download Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm mb-3">
-          <div>
-            <p className="text-gray-500">Progress</p>
-            <p className="text-gray-100 font-medium">{Math.round(download.progress)}%</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Speed</p>
-            <p className="text-gray-100 font-medium">{download.downloadSpeed}</p>
-          </div>
-          {download.isTorrent && (
-            <>
-              <div>
-                <p className="text-gray-500">Peers</p>
-                <p className="text-gray-100 font-medium">{download.peers}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Seeders</p>
-                <p className="text-gray-100 font-medium">{download.seeders}</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Error Display */}
-        {download.error && (
-          <div className="mb-3 p-2 bg-red-900/20 border border-red-800 rounded text-red-400 text-xs">
-            Error: {download.error}
+        {download.status === 'paused' && (
+          <div className="flex flex-col items-center gap-2">
+            <FiPlay className="text-yellow-400" size={24} />
+            <div className="text-xs text-gray-300 font-medium">{Math.round(download.progress)}%</div>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        {download.status === 'complete' && (
+          <div className="flex flex-col items-center gap-2">
+            <FiDownload className="text-green-400" size={24} />
+            <div className="text-xs text-gray-300 font-medium">Done</div>
+          </div>
+        )}
+
+        {(download.status === 'error' || download.status === 'removed') && (
+          <div className="flex flex-col items-center gap-2">
+            <FiTrash2 className="text-red-400" size={24} />
+            <div className="text-xs text-gray-300 font-medium">{download.status === 'error' ? 'Error' : 'Removed'}</div>
+          </div>
+        )}
+      </div>
+
+      {/* File name */}
+      <div className="font-medium text-white truncate px-1" title={download.name}>
+        {download.name}
+      </div>
+
+      {/* Download size and progress */}
+      <div className="text-xs text-gray-400 px-1 mt-auto">
+        {download.downloadSpeed} · {Math.round(download.progress)}%
+      </div>
+
+      {/* Action buttons */}
+      {(download.status === 'active' || download.status === 'paused') && (
+        <div className="absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity opacity-0 group-hover:opacity-100">
           {download.status === 'active' && (
             <button
-              onClick={handlePause}
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePause();
+              }}
               disabled={actionLoading}
-              className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded text-xs sm:text-sm hover:bg-yellow-900/50 disabled:opacity-50 transition-colors"
+              className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Pause download"
             >
-              <FiPause size={14} />
-              <span className="hidden sm:inline">Pause</span>
+              <FiPause size={16} className="text-yellow-400" />
             </button>
           )}
 
           {download.status === 'paused' && (
             <button
-              onClick={handleResume}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleResume();
+              }}
               disabled={actionLoading}
-              className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-green-900/30 text-green-400 rounded text-xs sm:text-sm hover:bg-green-900/50 disabled:opacity-50 transition-colors"
+              className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Resume download"
             >
-              <FiPlay size={14} />
-              <span className="hidden sm:inline">Resume</span>
+              <FiPlay size={16} className="text-green-400" />
             </button>
           )}
 
-          {(download.status === 'complete' || download.status === 'error' || download.status === 'removed') && (
-            <span className="text-xs text-gray-500">
-              {download.status === 'complete'
-                ? 'Completed'
-                : download.status === 'error'
-                  ? 'Failed'
-                  : 'Removed'}
-            </span>
-          )}
-
           <button
-            onClick={handleRemove}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemove();
+            }}
             disabled={actionLoading}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-red-900/30 text-red-400 rounded text-xs sm:text-sm hover:bg-red-900/50 disabled:opacity-50 transition-colors ml-auto"
+            className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Remove download"
           >
-            <FiTrash2 size={14} />
-            <span className="hidden sm:inline">Remove</span>
+            <FiTrash2 size={16} className="text-red-400" />
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -28,53 +28,53 @@ export function useDownloadWebSocket(gid, initialData = {}) {
   useEffect(() => {
     const unsubscribe = subscribe('torrent-downloads', (message) => {
       try {
-        const { payload } = message;
+        const { type, payload: downloadData } = message.payload;
 
         // Only process messages for this download's gid
-        if (payload.gid !== gid) return;
+        if (downloadData.gid !== gid) return;
 
-        if (payload.type === 'download-progress') {
+        if (type === 'download-progress') {
           setDownload((prev) => ({
             ...prev,
-            progress: payload.progress ?? prev.progress,
-            downloadSpeed: payload.downloadSpeed || prev.downloadSpeed,
-            uploadSpeed: payload.uploadSpeed || prev.uploadSpeed,
-            seeders: payload.seeders ?? prev.seeders,
-            peers: payload.peers ?? prev.peers,
+            progress: downloadData.progress ?? prev.progress,
+            downloadSpeed: downloadData.downloadSpeed || prev.downloadSpeed,
+            uploadSpeed: downloadData.uploadSpeed || prev.uploadSpeed,
+            seeders: downloadData.seeders ?? prev.seeders,
+            peers: downloadData.peers ?? prev.peers,
           }));
-        } else if (payload.type === 'download-paused') {
+        } else if (type === 'download-paused') {
           setDownload((prev) => ({
             ...prev,
             status: 'paused',
           }));
-        } else if (payload.type === 'download-resumed') {
+        } else if (type === 'download-resumed') {
           setDownload((prev) => ({
             ...prev,
             status: 'active',
           }));
-        } else if (payload.type === 'download-removed') {
+        } else if (type === 'download-removed') {
           setDownload((prev) => ({
             ...prev,
             status: 'removed',
           }));
-        } else if (payload.type === 'download-complete') {
+        } else if (type === 'download-complete') {
           setDownload((prev) => ({
             ...prev,
             status: 'complete',
           }));
-        } else if (payload.type === 'download-added' && payload.gid === gid) {
+        } else if (type === 'download-added' && downloadData.gid === gid) {
           setDownload((prev) => ({
             ...prev,
-            name: payload.name || prev.name,
-            path: payload.path || prev.path,
-            progress: payload.progress ?? prev.progress,
-            status: payload.status || prev.status,
-            downloadSpeed: payload.downloadSpeed || prev.downloadSpeed,
-            uploadSpeed: payload.uploadSpeed || prev.uploadSpeed,
-            seeders: payload.seeders ?? prev.seeders,
-            peers: payload.peers ?? prev.peers,
-            isTorrent: payload.isTorrent ?? prev.isTorrent,
-            error: payload.error || null,
+            name: downloadData.name || prev.name,
+            path: downloadData.path || prev.path,
+            progress: downloadData.progress ?? prev.progress,
+            status: downloadData.status || prev.status,
+            downloadSpeed: downloadData.downloadSpeed || prev.downloadSpeed,
+            uploadSpeed: downloadData.uploadSpeed || prev.uploadSpeed,
+            seeders: downloadData.seeders ?? prev.seeders,
+            peers: downloadData.peers ?? prev.peers,
+            isTorrent: downloadData.isTorrent ?? prev.isTorrent,
+            error: downloadData.error || null,
           }));
         }
       } catch (err) {
