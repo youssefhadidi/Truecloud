@@ -2,8 +2,18 @@ const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
-const { getToken } = require('next-auth/jwt');
-const { verifyShare } = require('./lib/shareAuth.js');
+
+// Dynamic imports for ES modules
+let getToken;
+let verifyShare;
+
+async function loadEsModules() {
+  const nextAuth = await import('next-auth/jwt');
+  getToken = nextAuth.getToken;
+
+  const shareAuth = await import('./lib/shareAuth.js');
+  verifyShare = shareAuth.verifyShare;
+}
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -90,7 +100,9 @@ global.broadcastFileIndexUpdate = (message) => {
   broadcastMessage({ type: 'file-index', payload: message });
 };
 
-app.prepare().then(() => {
+// Load ES modules before starting server
+loadEsModules().then(() => {
+  app.prepare().then(() => {
   const server = createServer((req, res) => {
     handle(req, res);
   });
@@ -175,5 +187,6 @@ app.prepare().then(() => {
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
+  });
   });
 });
