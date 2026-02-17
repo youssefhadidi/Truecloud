@@ -11,7 +11,7 @@ import FileIndexClient from './FileIndexClient';
 
 export default function CachePage() {
   const { addNotification } = useNotifications();
-  const { data: cacheData, isPending: loading, refetch } = useGetCacheStats();
+  const { data: cacheData, isLoading: loading, refetch } = useGetCacheStats();
   const clearCacheMutation = useClearCache();
   const [confirmClear, setConfirmClear] = useState(null);
 
