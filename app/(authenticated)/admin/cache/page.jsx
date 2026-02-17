@@ -37,7 +37,7 @@ export default function CachePage() {
       <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Cache Management</h1>
         <button
-          onClick={fetchStats}
+          onClick={refetch}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50"
         >
