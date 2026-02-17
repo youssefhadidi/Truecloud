@@ -52,7 +52,7 @@ export default function LogViewer() {
   };
 
   const clearLogs = () => {
-    setLogs([]);
+    setError(null);
   };
 
   return (
