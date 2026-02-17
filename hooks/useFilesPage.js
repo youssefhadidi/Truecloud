@@ -182,11 +182,12 @@ export function useFilesPage(status) {
     }
   }, [selection.selectionMode]);
 
-  // Fetch files for current directory from API
-  const { files: filesData, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
+  // Fetch files and initial downloads from API
+  const { files: filesData, downloads: apiDownloads, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
 
-  // Get real-time download progress via WebSocket
-  const { downloads: wsDownloads, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
+  // Get real-time download progress via WebSocket (has priority over API downloads)
+  // Pass apiDownloads to initialize state without making a separate API call
+  const { downloads: wsDownloads, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads(apiDownloads);
 
   // Listen for file changes via WebSocket and invalidate cache
   useFileChanges();
@@ -210,23 +211,41 @@ export function useFilesPage(status) {
   }, [navigation.currentPath, queryClient]);
 
   const files = useMemo(() => {
-    // Build download placeholders for current path (use real-time WebSocket data)
-    const downloadEntries = Object.values(wsDownloads || {})
-      .filter((d) => d.path === navigation.currentPath)
-      .map((d) => ({
-        id: `dl-${d.gid}`,
-        name: d.name,
-        displayName: d.name,
-        isDirectory: false,
-        isDownloading: true,
-        downloadGid: d.gid,
-        downloadProgress: d.progress || 0,
-        downloadSpeed: d.downloadSpeed || '0 B/s',
-        downloadStatus: d.status || 'active',
-        size: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
+    // Merge downloads from both WebSocket (real-time) and API (initial state)
+    // WebSocket takes priority for real-time updates
+    const mergedDownloads = new Map();
+
+    // First, add API downloads (initial state)
+    if (Array.isArray(apiDownloads)) {
+      for (const d of apiDownloads) {
+        if (d.path === navigation.currentPath) {
+          mergedDownloads.set(d.gid, d);
+        }
+      }
+    }
+
+    // Then, override with WebSocket downloads (real-time updates)
+    for (const [gid, wsDownload] of Object.entries(wsDownloads || {})) {
+      if (wsDownload.path === navigation.currentPath) {
+        mergedDownloads.set(gid, { ...mergedDownloads.get(gid), ...wsDownload });
+      }
+    }
+
+    // Build download placeholders for current path
+    const downloadEntries = Array.from(mergedDownloads.values()).map((d) => ({
+      id: `dl-${d.gid}`,
+      name: d.name,
+      displayName: d.name,
+      isDirectory: false,
+      isDownloading: true,
+      downloadGid: d.gid,
+      downloadProgress: d.progress || 0,
+      downloadSpeed: d.downloadSpeed || '0 B/s',
+      downloadStatus: d.status || 'active',
+      size: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
 
     // Filter out hidden files
     let filtered = (filesData || []).filter((f) => !f.name.startsWith('.'));
@@ -286,7 +305,7 @@ export function useFilesPage(status) {
     });
 
     return sorted;
-  }, [filesData, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath]);
+  }, [filesData, apiDownloads, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath]);
 
   // Store folder display names
   useEffect(() => {

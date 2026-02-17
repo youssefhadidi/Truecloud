@@ -5,8 +5,8 @@
  * file browser (useFilesPage) and the downloads management page.
  *
  * DATA FLOW:
- * 1. On mount, subscribes to 'torrent-downloads' messages from app-level WebSocket
- * 2. On connect, fetches initial state via GET /api/files/torrent-download
+ * 1. On mount, initializes with provided initialDownloads (from API)
+ * 2. Subscribes to 'torrent-downloads' messages from app-level WebSocket
  * 3. Receives real-time updates via subscribed messages:
  *    - download-progress: Updates progress every 1s
  *    - download-added: New download started
@@ -24,13 +24,12 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useGetDownloads, usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
+import { usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
 
-export function useActiveDownloads() {
+export function useActiveDownloads(initialDownloads = []) {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
   const { subscribe } = useWebSocket(); // Call hook at top level
-  const { data: initialDownloads } = useGetDownloads();
   const pauseMutation = usePauseDownload();
   const resumeMutation = useResumeDownload();
   const removeMutation = useRemoveDownload();
@@ -44,7 +43,7 @@ export function useActiveDownloads() {
     setDownloads(obj);
   }, []);
 
-  // Fetch initial download state
+  // Initialize with provided downloads (from API or caller)
   useEffect(() => {
     if (initialDownloads && Array.isArray(initialDownloads)) {
       downloadsRef.current.clear();
