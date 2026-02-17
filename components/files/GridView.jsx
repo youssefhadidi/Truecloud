@@ -4,11 +4,12 @@
 
 import { useRef, useMemo, useCallback, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2, FiPause, FiX } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
+import DownloadCard from '@/components/files/DownloadCard';
 
 // Breakpoints
 const BREAKPOINT = {
@@ -116,73 +117,25 @@ const GridItem = memo(
             </div>
           </div>
         ) : item.isDownloading ? (
-          <div
-            className="group relative bg-yellow-900/30 border border-yellow-700 rounded-lg active:shadow-lg transition-shadow flex flex-col h-full select-none"
-            style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}
-          >
-            {/* Download icon area */}
-            <div className="w-full aspect-square flex items-center justify-center mb-2 bg-yellow-900/20 relative overflow-hidden rounded">
-              {item.downloadStatus === 'active' ? (
-                <>
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
-                  <div className="w-full bg-gray-700 rounded-full h-2 mt-2 overflow-hidden">
-                    <div className="bg-yellow-500 h-full transition-all" style={{ width: `${item.downloadProgress || 0}%` }} />
-                  </div>
-                </>
-              ) : (
-                <FiDownload className="text-yellow-500" size={32} />
-              )}
-            </div>
-
-            {/* Download name */}
-            <div className="font-medium text-white truncate px-1" title={item.name}>
-              {item.name}
-            </div>
-
-            {/* Progress percentage */}
-            <div className="text-xs text-yellow-300 px-1 mt-1">
-              {item.downloadProgress || 0}%{item.downloadSpeed ? ` - ${item.downloadSpeed}` : ''}
-            </div>
-
-            {/* Download speed */}
-            <div className="text-xs text-yellow-300 px-1 mt-2"></div>
-
-            {/* Action buttons - pause/resume and cancel */}
-            {(shouldShowActions(item.id) || containerWidth >= 640) && (
-              <div
-                className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
-                  containerWidth >= 640 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
-                }`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowingActionsFor(null);
-                    if (item.downloadStatus === 'paused') {
-                      onResumeDownload?.(item.downloadGid);
-                    } else {
-                      onPauseDownload?.(item.downloadGid);
-                    }
-                  }}
-                  className="p-1.5 text-yellow-400 hover:bg-yellow-900/20 rounded transition-colors"
-                  title={item.downloadStatus === 'paused' ? 'Resume' : 'Pause'}
-                >
-                  {item.downloadStatus === 'paused' ? <FiPlay size={16} /> : <FiPause size={16} />}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowingActionsFor(null);
-                    onRemoveDownload?.(item.downloadGid);
-                  }}
-                  className="p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-colors"
-                  title="Cancel"
-                >
-                  <FiX size={16} />
-                </button>
-              </div>
-            )}
+          <div style={{ width: '100%', height: '100%', display: 'flex' }}>
+            <DownloadCard
+              gid={item.downloadGid}
+              initialData={{
+                name: item.name,
+                path: item.id?.replace('dl-', '') || '',
+                progress: item.downloadProgress || 0,
+                status: item.downloadStatus || 'active',
+                downloadSpeed: item.downloadSpeed || '0 B/s',
+                uploadSpeed: item.uploadSpeed || '0 B/s',
+                seeders: item.seeders || 0,
+                peers: item.peers || 0,
+                isTorrent: item.isTorrent || false,
+                error: item.error || null,
+              }}
+              onPause={onPauseDownload}
+              onResume={onResumeDownload}
+              onRemove={onRemoveDownload}
+            />
           </div>
         ) : (
           <div

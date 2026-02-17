@@ -4,10 +4,11 @@
 
 import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo, memo } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2, FiPause, FiPlay, FiX } from 'react-icons/fi';
+import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
+import { ListDownloadRow } from '@/components/files/ListDownloadRow';
 
 // Breakpoint for mobile detection
 const MOBILE_BREAKPOINT = 768;
@@ -228,85 +229,18 @@ const ListView = forwardRef(({
           // Render downloading file
           if (file.isDownloading) {
             return (
-              <div
+              <ListDownloadRow
                 key={key}
-                className={`left-0 w-full grid ${gridCols} gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-4 bg-yellow-900/10 border-b border-yellow-700 items-center select-none`}
-                style={{
-                  ...style,
-                  WebkitTapHighlightColor: 'transparent',
-                  WebkitUserSelect: 'none',
-                  userSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  position: 'relative',
-                }}
-              >
-                {/* Progress bar at the bottom of the row */}
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-                  <div
-                    className="h-full bg-yellow-500 transition-all"
-                    style={{ width: `${file.downloadProgress || 0}%` }}
-                  />
-                </div>
-
-                {/* Name and icon */}
-                <div className="flex items-center gap-3 min-w-0">
-                  {selectionMode && (
-                    <input
-                      type="checkbox"
-                      checked={!!selectedFiles?.has(file.name)}
-                      onChange={() => onToggleSelect?.(file)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 rounded border-gray-500 bg-gray-800"
-                    />
-                  )}
-                  <div className="flex-shrink-0">
-                    {file.downloadStatus === 'active' ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-500"></div>
-                    ) : (
-                      <FiDownload className="text-yellow-500" size={18} />
-                    )}
-                  </div>
-                  <div className="font-medium text-yellow-300 truncate">{file.name}</div>
-                </div>
-
-                {/* Progress percentage */}
-                <div className="hidden sm:block text-yellow-300 text-sm">{file.downloadProgress || 0}%</div>
-
-                {/* Download speed */}
-                <div className="hidden sm:block text-yellow-300 text-sm">{file.downloadSpeed || '0 B/s'}</div>
-
-                {/* Action buttons - pause/resume and cancel */}
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (file.downloadStatus === 'paused') {
-                        onResumeDownload?.(file.downloadGid);
-                      } else {
-                        onPauseDownload?.(file.downloadGid);
-                      }
-                    }}
-                    className="text-yellow-400 p-2 hover:bg-yellow-900/20 rounded"
-                    title={file.downloadStatus === 'paused' ? 'Resume' : 'Pause'}
-                  >
-                    {file.downloadStatus === 'paused' ? (
-                      <FiPlay size={18} />
-                    ) : (
-                      <FiPause size={18} />
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveDownload?.(file.downloadGid);
-                    }}
-                    className="text-red-400 p-2 hover:bg-red-900/20 rounded"
-                    title="Cancel"
-                  >
-                    <FiX size={18} />
-                  </button>
-                </div>
-              </div>
+                file={file}
+                style={style}
+                gridCols={gridCols}
+                selectionMode={selectionMode}
+                selectedFiles={selectedFiles}
+                onToggleSelect={onToggleSelect}
+                onPauseDownload={onPauseDownload}
+                onResumeDownload={onResumeDownload}
+                onRemoveDownload={onRemoveDownload}
+              />
             );
           }
 
