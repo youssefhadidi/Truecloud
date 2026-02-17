@@ -11,7 +11,7 @@ async function loadEsModules() {
   const nextAuth = await import('next-auth/jwt');
   getToken = nextAuth.getToken;
 
-  const shareAuth = await import('./lib/shareAuth.js');
+  const shareAuth = await import('./lib/shareAuth.mjs');
   verifyShare = shareAuth.verifyShare;
 }
 
