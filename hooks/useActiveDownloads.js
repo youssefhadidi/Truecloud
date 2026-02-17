@@ -29,6 +29,7 @@ import { usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/ap
 export function useActiveDownloads(initialDownloads = []) {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
+  const initializedRef = useRef(false); // Track if we've initialized to prevent reinitializing on every apiDownloads change
   const { subscribe } = useWebSocket(); // Call hook at top level
   const pauseMutation = usePauseDownload();
   const resumeMutation = useResumeDownload();
@@ -43,10 +44,11 @@ export function useActiveDownloads(initialDownloads = []) {
     setDownloads(obj);
   }, []);
 
-  // Initialize with provided downloads (from API or caller)
+  // Initialize with provided downloads (from API or caller) - only once on mount
+  // Do NOT reinitialize when initialDownloads changes, as that clears WebSocket updates
   useEffect(() => {
-    if (initialDownloads && Array.isArray(initialDownloads)) {
-      downloadsRef.current.clear();
+    if (!initializedRef.current && initialDownloads && Array.isArray(initialDownloads) && initialDownloads.length > 0) {
+      initializedRef.current = true;
       for (const dl of initialDownloads) {
         downloadsRef.current.set(dl.gid, {
           gid: dl.gid,
@@ -64,7 +66,7 @@ export function useActiveDownloads(initialDownloads = []) {
       }
       syncDownloads();
     }
-  }, [initialDownloads, syncDownloads]);
+  }, [syncDownloads]); // Only depend on syncDownloads, not initialDownloads!
 
   // Subscribe to torrent-downloads messages from unified WebSocket
   useEffect(() => {
