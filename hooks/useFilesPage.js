@@ -192,7 +192,7 @@ export function useFilesPage(status) {
   useFileChanges();
 
   // Fetch shared paths for share indicators
-  const { data: sharedPaths } = usePathShares(navigation.currentPath);
+  const { data: sharedPaths } = usePathShares();
 
   // Listen for torrent download completion to refresh file list
   useEffect(() => {
