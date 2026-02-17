@@ -34,10 +34,7 @@ export function SessionLockProvider({ children }) {
         verifyPinMutation.mutate(pin, {
           onSuccess: (data) => {
             if (data.success) {
-              // Small delay to ensure session is updated
-              setTimeout(() => {
-                resolve(true);
-              }, 100);
+              resolve(true);
             } else {
               resolve(false);
             }

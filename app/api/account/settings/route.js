@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuthAllowLocked } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
+import { clearLockStatusCache } from '@/lib/authOptions';
 import bcryptjs from 'bcryptjs';
 
 /**
@@ -92,6 +93,9 @@ export async function PUT(req) {
         sessionLockTimeout: true,
       },
     });
+
+    // Clear the lock status cache so next session fetch gets fresh data
+    clearLockStatusCache(session.user.id);
 
     return NextResponse.json(updatedUser);
   } catch (error) {
