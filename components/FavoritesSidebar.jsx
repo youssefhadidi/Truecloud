@@ -2,12 +2,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
-export default function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryChange }) {
+function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { data: favorites = [], isLoading } = useFavorites();
   const removeFavorite = useRemoveFavorite();
@@ -179,3 +179,5 @@ export default function FavoritesSidebar({ onNavigate, currentPath, searchQuery,
     </div>
   );
 }
+
+export default memo(FavoritesSidebar);

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { FiPlay, FiX, FiFolder } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGenerateCache, useStopCacheGeneration } from '@/lib/api/cache';
 
 export default function CacheGenerationClient() {
   const [status, setStatus] = useState(null);
@@ -13,6 +14,8 @@ export default function CacheGenerationClient() {
   const { connected, subscribe } = useWebSocket();
 
   const { addNotification } = useNotifications();
+  const generateMutation = useGenerateCache();
+  const stopMutation = useStopCacheGeneration();
 
   // Subscribe to cache-generation messages from unified WebSocket
   useEffect(() => {
@@ -40,37 +43,19 @@ export default function CacheGenerationClient() {
 
   const handleGenerate = async () => {
     try {
-      const response = await fetch('/api/admin/cache/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: generatePath, type: generateType }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to start cache generation');
-      }
-
+      await generateMutation.mutateAsync({ path: generatePath, type: generateType });
       addNotification('info', 'Cache generation started');
     } catch (error) {
-      addNotification('error', error.message);
+      addNotification('error', error.response?.data?.error || error.message);
     }
   };
 
   const handleStop = async () => {
     try {
-      const response = await fetch('/api/admin/cache/generate', {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to stop cache generation');
-      }
-
+      await stopMutation.mutateAsync();
       addNotification('info', 'Cache generation cancelled');
     } catch (error) {
-      addNotification('error', error.message);
+      addNotification('error', error.response?.data?.error || error.message);
     }
   };
 

@@ -2,57 +2,33 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FiTrash2, FiRefreshCw, FiHardDrive } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useGetCacheStats, useClearCache } from '@/lib/api/cache';
 import CacheGenerationClient from './CacheGenerationClient';
 import FileIndexClient from './FileIndexClient';
 
 export default function CachePage() {
-  const [caches, setCaches] = useState([]);
-  const [totalSize, setTotalSize] = useState('0 B');
-  const [loading, setLoading] = useState(true);
-  const [clearing, setClearing] = useState(null);
+  const { addNotification } = useNotifications();
+  const { data: cacheData, isPending: loading, refetch } = useGetCacheStats();
+  const clearCacheMutation = useClearCache();
   const [confirmClear, setConfirmClear] = useState(null);
 
-  const { addNotification } = useNotifications();
+  const caches = cacheData?.caches || [];
+  const totalSize = cacheData?.totalSizeFormatted || '0 B';
+  const clearing = clearCacheMutation.isPending ? confirmClear : null;
 
-  // Fetch cache stats
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/admin/cache');
-      if (!response.ok) throw new Error('Failed to fetch cache stats');
-      const data = await response.json();
-      setCaches(data.caches);
-      setTotalSize(data.totalSizeFormatted);
-    } catch (error) {
-      addNotification('error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  // Clear cache
+  // Handle clear cache
   const handleClear = async (type) => {
     try {
-      setClearing(type);
-      const response = await fetch(`/api/admin/cache?type=${type}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to clear cache');
-      const data = await response.json();
-      addNotification('success', `Cleared ${data.filesDeleted} files (${data.freedSpaceFormatted})`);
-      await fetchStats();
+      const response = await clearCacheMutation.mutateAsync(type);
+      addNotification('success', `Cleared ${response.filesDeleted} files (${response.freedSpaceFormatted})`);
     } catch (error) {
-      addNotification('error', error.message);
+      addNotification('error', error.response?.data?.error || error.message);
     } finally {
-      setClearing(null);
       setConfirmClear(null);
+      refetch();
     }
   };
 

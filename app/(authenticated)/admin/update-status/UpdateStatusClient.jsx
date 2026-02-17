@@ -1,34 +1,29 @@
+/** @format */
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { FiChevronDown, FiChevronUp, FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';
 
 export default function UpdateStatusClient() {
   const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
+  const [error, setError] = useState(null);
   const { connected, subscribe } = useWebSocket();
 
-  useEffect(() => {
-    // Fetch initial status
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch('/api/system/update-status');
-        if (!res.ok) throw new Error('Failed to fetch status');
-        const data = await res.json();
-        setStatus(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // React Query hook for initial status fetch
+  const { data: initialStatus, isLoading } = useUpdateStatus();
+  const runUpdateMutation = useRunUpdate();
 
-    fetchStatus();
-  }, []);
+  // Initialize status from query data
+  useEffect(() => {
+    if (initialStatus) {
+      setStatus(initialStatus);
+    }
+  }, [initialStatus]);
 
   // Subscribe to update status messages from unified WebSocket
   useEffect(() => {
@@ -43,7 +38,7 @@ export default function UpdateStatusClient() {
     return unsubscribe;
   }, [subscribe]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -85,14 +80,8 @@ export default function UpdateStatusClient() {
               {/* Timing Info */}
               {status.startTime && (
                 <div className="text-sm text-gray-400">
-                  <p>
-                    Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}
-                  </p>
-                  {status.endTime && (
-                    <p>
-                      Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s
-                    </p>
-                  )}
+                  <p>Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}</p>
+                  {status.endTime && <p>Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s</p>}
                 </div>
               )}
             </div>
@@ -122,13 +111,13 @@ export default function UpdateStatusClient() {
             <div className="mt-4 flex gap-4 text-sm">
               <div>
                 <p className="text-gray-500">Completed:</p>
-                <p className="text-green-400 font-semibold">{completedSteps}/{status.steps.length}</p>
+                <p className="text-green-400 font-semibold">
+                  {completedSteps}/{status.steps.length}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500">Current:</p>
-                <p className="text-blue-400 font-semibold">
-                  {currentStepIndex >= 0 ? status.steps[currentStepIndex].label : '—'}
-                </p>
+                <p className="text-blue-400 font-semibold">{currentStepIndex >= 0 ? status.steps[currentStepIndex].label : '—'}</p>
               </div>
               {failedSteps > 0 && (
                 <div>
@@ -145,90 +134,66 @@ export default function UpdateStatusClient() {
           {/* Steps Timeline */}
           <div className="space-y-4">
             {status.steps.map((step, index) => (
-            <div key={step.name} className="relative">
-              {/* Connector Line */}
-              {index < status.steps.length - 1 && (
-                <div
-                  className={`absolute left-6 top-12 w-1 h-6 ${
-                    step.status === 'completed'
-                      ? 'bg-green-500'
-                      : step.status === 'failed'
-                        ? 'bg-red-500'
-                        : step.status === 'running'
-                          ? 'bg-blue-500'
-                          : 'bg-gray-600'
-                  }`}
-                />
-              )}
+              <div key={step.name} className="relative">
+                {/* Connector Line */}
+                {index < status.steps.length - 1 && (
+                  <div
+                    className={`absolute left-6 top-12 w-1 h-6 ${
+                      step.status === 'completed' ? 'bg-green-500' : step.status === 'failed' ? 'bg-red-500' : step.status === 'running' ? 'bg-blue-500' : 'bg-gray-600'
+                    }`}
+                  />
+                )}
 
-              {/* Step Card */}
-              <div className="relative flex gap-4">
-                {/* Status Circle */}
-                <div className="flex-shrink-0 pt-1">
-                  <StepCircle status={step.status} isRunning={step.status === 'running'} />
-                </div>
-
-                {/* Step Content */}
-                <div
-                  className="flex-1 bg-gray-700/50 rounded-lg border border-gray-600 overflow-hidden hover:border-gray-500 transition-colors"
-                  onClick={() => setExpandedStep(expandedStep === step.name ? null : step.name)}
-                >
-                  <div className="px-4 py-3 flex items-center justify-between cursor-pointer">
-                    <div className="flex-1">
-                      <p className="font-medium text-white">{step.label}</p>
-                      {step.status === 'running' && (
-                        <p className="text-xs text-blue-400 mt-1">Currently executing...</p>
-                      )}
-                      {step.status === 'completed' && step.endTime && step.startTime && (
-                        <p className="text-xs text-green-400 mt-1">
-                          Completed in{' '}
-                          {Math.round((new Date(step.endTime) - new Date(step.startTime)) / 1000)}
-                          s
-                        </p>
-                      )}
-                      {step.status === 'failed' && step.logs.some((l) => l.type === 'error') && (
-                        <p className="text-xs text-red-400 mt-1">
-                          {step.logs.find((l) => l.type === 'error')?.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={step.status} />
-                      {step.logs.length > 0 && (
-                        <div className="text-gray-400">
-                          {expandedStep === step.name ? <FiChevronUp /> : <FiChevronDown />}
-                        </div>
-                      )}
-                    </div>
+                {/* Step Card */}
+                <div className="relative flex gap-4">
+                  {/* Status Circle */}
+                  <div className="flex-shrink-0 pt-1">
+                    <StepCircle status={step.status} isRunning={step.status === 'running'} />
                   </div>
 
-                  {/* Step Logs - Expandable */}
-                  {expandedStep === step.name && step.logs.length > 0 && (
-                    <div className="border-t border-gray-600 bg-black/20 max-h-64 overflow-y-auto">
-                      <div className="p-3 space-y-1 font-mono text-xs">
-                        {step.logs.map((log, idx) => (
-                          <div
-                            key={idx}
-                            className={`${
-                              log.type === 'error'
-                                ? 'text-red-400'
-                                : log.type === 'success'
-                                  ? 'text-green-400'
-                                  : log.type === 'info'
-                                    ? 'text-blue-400'
-                                    : 'text-gray-400'
-                            }`}
-                          >
-                            {log.message}
-                          </div>
-                        ))}
+                  {/* Step Content */}
+                  <div
+                    className="flex-1 bg-gray-700/50 rounded-lg border border-gray-600 overflow-hidden hover:border-gray-500 transition-colors"
+                    onClick={() => setExpandedStep(expandedStep === step.name ? null : step.name)}
+                  >
+                    <div className="px-4 py-3 flex items-center justify-between cursor-pointer">
+                      <div className="flex-1">
+                        <p className="font-medium text-white">{step.label}</p>
+                        {step.status === 'running' && <p className="text-xs text-blue-400 mt-1">Currently executing...</p>}
+                        {step.status === 'completed' && step.endTime && step.startTime && (
+                          <p className="text-xs text-green-400 mt-1">Completed in {Math.round((new Date(step.endTime) - new Date(step.startTime)) / 1000)}s</p>
+                        )}
+                        {step.status === 'failed' && step.logs.some((l) => l.type === 'error') && (
+                          <p className="text-xs text-red-400 mt-1">{step.logs.find((l) => l.type === 'error')?.message}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={step.status} />
+                        {step.logs.length > 0 && <div className="text-gray-400">{expandedStep === step.name ? <FiChevronUp /> : <FiChevronDown />}</div>}
                       </div>
                     </div>
-                  )}
+
+                    {/* Step Logs - Expandable */}
+                    {expandedStep === step.name && step.logs.length > 0 && (
+                      <div className="border-t border-gray-600 bg-black/20 max-h-64 overflow-y-auto">
+                        <div className="p-3 space-y-1 font-mono text-xs">
+                          {step.logs.map((log, idx) => (
+                            <div
+                              key={idx}
+                              className={`${
+                                log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : log.type === 'info' ? 'text-blue-400' : 'text-gray-400'
+                              }`}
+                            >
+                              {log.message}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
             ))}
           </div>
         </div>
@@ -240,15 +205,16 @@ export default function UpdateStatusClient() {
           <button
             onClick={async () => {
               try {
-                const res = await fetch('/api/system/run-update', { method: 'POST' });
-                if (!res.ok) throw new Error('Failed to start update');
+                setError(null);
+                await runUpdateMutation.mutateAsync();
               } catch (err) {
-                setError(err.message);
+                setError(err.response?.data?.error || err.message || 'Failed to start update');
               }
             }}
-            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            disabled={runUpdateMutation.isPending}
+            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
           >
-            Start Update
+            {runUpdateMutation.isPending ? 'Starting...' : 'Start Update'}
           </button>
         </div>
       )}
@@ -272,11 +238,7 @@ function StepCircle({ status, isRunning }) {
     case 'failed':
       return <div className={`${baseClasses} bg-red-500/20 border-2 border-red-500 text-red-400`}>✕</div>;
     case 'running':
-      return (
-        <div className={`${baseClasses} bg-blue-500/20 border-2 border-blue-500 text-blue-400 animate-pulse`}>
-          →
-        </div>
-      );
+      return <div className={`${baseClasses} bg-blue-500/20 border-2 border-blue-500 text-blue-400 animate-pulse`}>→</div>;
     default:
       return <div className={`${baseClasses} bg-gray-600/20 border-2 border-gray-600 text-gray-400`}>—</div>;
   }
@@ -291,8 +253,6 @@ function StatusBadge({ status }) {
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status] || styles.pending}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status] || styles.pending}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
   );
 }

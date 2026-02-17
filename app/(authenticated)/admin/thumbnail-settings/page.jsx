@@ -2,10 +2,11 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FiSave, FiRefreshCw } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useThumbnailSettings, useSaveThumbnailSettings } from '@/lib/api/system';
 
 const SIZE_MIN = 64;
 const SIZE_MAX = 1024;
@@ -13,36 +14,26 @@ const QUALITY_MIN = 30;
 const QUALITY_MAX = 100;
 
 export default function ThumbnailSettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [configPath, setConfigPath] = useState('');
-  const [form, setForm] = useState({ size: 200, quality: 75 });
   const { addNotification } = useNotifications();
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/admin/thumbnail-settings');
-      if (!response.ok) throw new Error('Failed to load thumbnail settings');
-      const data = await response.json();
-      setForm({
-        size: data?.config?.size ?? 200,
-        quality: data?.config?.quality ?? 75,
-      });
-      setConfigPath(data?.path || '');
-    } catch (error) {
-      addNotification('error', error.message || 'Failed to load settings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks
+  const { data: settingsData, isLoading, refetch } = useThumbnailSettings();
+  const saveMutation = useSaveThumbnailSettings();
 
+  // Local UI state
+  const [form, setForm] = useState({ size: 200, quality: 75 });
+
+  // Update form when settings data loads
   useEffect(() => {
-    fetchSettings();
-  }, []);
+    if (settingsData?.config) {
+      setForm({
+        size: settingsData.config.size ?? 200,
+        quality: settingsData.config.quality ?? 75,
+      });
+    }
+  }, [settingsData?.config]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const size = parseInt(form.size, 10);
     const quality = parseInt(form.quality, 10);
 
@@ -56,54 +47,34 @@ export default function ThumbnailSettingsPage() {
       return;
     }
 
-    try {
-      setSaving(true);
-      const response = await fetch('/api/admin/thumbnail-settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size, quality }),
-      });
-
-      if (!response.ok) throw new Error('Failed to save thumbnail settings');
-      const data = await response.json();
-      setForm({
-        size: data?.config?.size ?? size,
-        quality: data?.config?.quality ?? quality,
-      });
-      setConfigPath(data?.path || configPath);
-      addNotification('success', 'Thumbnail settings saved');
-    } catch (error) {
-      addNotification('error', error.message || 'Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
+    saveMutation.mutate(
+      { size, quality },
+      {
+        onSuccess: () => {
+          addNotification('success', 'Thumbnail settings saved');
+        },
+        onError: (error) => {
+          addNotification('error', error.message || 'Failed to save settings');
+        },
+      }
+    );
   };
 
-  const handleReset = async () => {
-    try {
-      setResetting(true);
-      const response = await fetch('/api/admin/thumbnail-settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) throw new Error('Failed to reset thumbnail settings');
-      const data = await response.json();
-      setForm({
-        size: data?.config?.size ?? 200,
-        quality: data?.config?.quality ?? 75,
-      });
-      setConfigPath(data?.path || configPath);
-      addNotification('success', 'Thumbnail settings reset to defaults');
-    } catch (error) {
-      addNotification('error', error.message || 'Failed to reset settings');
-    } finally {
-      setResetting(false);
-    }
+  const handleReset = () => {
+    saveMutation.mutate(
+      {},
+      {
+        onSuccess: () => {
+          addNotification('success', 'Thumbnail settings reset to defaults');
+        },
+        onError: (error) => {
+          addNotification('error', error.message || 'Failed to reset settings');
+        },
+      }
+    );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-gray-400">Loading...</div>
@@ -115,7 +86,7 @@ export default function ThumbnailSettingsPage() {
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Thumbnail Settings</h1>
-        <button onClick={fetchSettings} disabled={loading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50">
+        <button onClick={() => refetch()} disabled={isLoading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50">
           <FiRefreshCw className={loading ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">Refresh</span>
         </button>
@@ -154,12 +125,12 @@ export default function ThumbnailSettingsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleSave} disabled={saveMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
               <FiSave />
-              {saving ? 'Saving...' : 'Save Settings'}
+              {saveMutation.isPending ? 'Saving...' : 'Save Settings'}
             </button>
-            <button onClick={handleReset} disabled={saving || resetting} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:opacity-50">
-              {resetting ? 'Resetting...' : 'Reset to Defaults'}
+            <button onClick={handleReset} disabled={saveMutation.isPending} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:opacity-50">
+              {saveMutation.isPending ? 'Resetting...' : 'Reset to Defaults'}
             </button>
             <p className="text-xs text-gray-400">
               Changes affect new thumbnails only. Clear cache in{' '}
@@ -170,9 +141,9 @@ export default function ThumbnailSettingsPage() {
             </p>
           </div>
 
-          {configPath && (
+          {settingsData?.path && (
             <div className="text-xs text-gray-500">
-              Stored at: <span className="text-gray-400">{configPath}</span>
+              Stored at: <span className="text-gray-400">{settingsData.path}</span>
             </div>
           )}
         </div>

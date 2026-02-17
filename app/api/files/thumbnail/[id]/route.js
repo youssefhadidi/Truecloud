@@ -108,9 +108,6 @@ export async function GET(req, { params }) {
     const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.webp`;
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
-    // Ensure thumbnails directory exists
-    await fsPromises.mkdir(thumbnailsDir, { recursive: true });
-
     // Fast path: check memory cache first
     let cachedBuffer = thumbnailCache.get(thumbnailPath);
     if (cachedBuffer) {
@@ -157,6 +154,9 @@ export async function GET(req, { params }) {
     // If thumbnail doesn't exist, generate it now (synchronously)
     if (!thumbnailExists) {
       logger.info('GET /api/files/thumbnail - Generating thumbnail', { fileId, isPdf, isVideo, isImage });
+
+      // Ensure thumbnails directory exists (only when needed)
+      await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
       await thumbnailSemaphore.acquire();
       try {

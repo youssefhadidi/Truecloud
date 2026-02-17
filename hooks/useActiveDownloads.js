@@ -23,13 +23,17 @@
  * so the file browser can refresh and show the newly completed files.
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
-import axios from 'axios';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGetDownloads, usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
 
 export function useActiveDownloads() {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
   const { subscribe } = useWebSocket(); // Call hook at top level
+  const { data: initialDownloads } = useGetDownloads();
+  const pauseMutation = usePauseDownload();
+  const resumeMutation = useResumeDownload();
+  const removeMutation = useRemoveDownload();
 
   // Sync downloads map to state
   const syncDownloads = useCallback(() => {
@@ -42,35 +46,26 @@ export function useActiveDownloads() {
 
   // Fetch initial download state
   useEffect(() => {
-    const fetchInitialState = async () => {
-      try {
-        const response = await axios.get('/api/files/torrent-download');
-        if (response.data.downloads && Array.isArray(response.data.downloads)) {
-          downloadsRef.current.clear();
-          for (const dl of response.data.downloads) {
-            downloadsRef.current.set(dl.gid, {
-              gid: dl.gid,
-              name: dl.name,
-              path: dl.path || '', // Use relative path from backend
-              progress: dl.progress || 0,
-              status: dl.status || 'active',
-              downloadSpeed: dl.downloadSpeed || '0 B/s',
-              uploadSpeed: dl.uploadSpeed || '0 B/s',
-              seeders: dl.seeders || 0,
-              peers: dl.peers || 0,
-              isTorrent: dl.isTorrent || false,
-              error: dl.error || null,
-            });
-          }
-          syncDownloads();
-        }
-      } catch (err) {
-        console.warn('[DOWNLOADS] Failed to fetch initial download state:', err.message);
+    if (initialDownloads && Array.isArray(initialDownloads)) {
+      downloadsRef.current.clear();
+      for (const dl of initialDownloads) {
+        downloadsRef.current.set(dl.gid, {
+          gid: dl.gid,
+          name: dl.name,
+          path: dl.path || '', // Use relative path from backend
+          progress: dl.progress || 0,
+          status: dl.status || 'active',
+          downloadSpeed: dl.downloadSpeed || '0 B/s',
+          uploadSpeed: dl.uploadSpeed || '0 B/s',
+          seeders: dl.seeders || 0,
+          peers: dl.peers || 0,
+          isTorrent: dl.isTorrent || false,
+          error: dl.error || null,
+        });
       }
-    };
-
-    fetchInitialState();
-  }, [syncDownloads]);
+      syncDownloads();
+    }
+  }, [initialDownloads, syncDownloads]);
 
   // Subscribe to torrent-downloads messages from unified WebSocket
   useEffect(() => {
@@ -191,32 +186,32 @@ export function useActiveDownloads() {
   // Pause a download
   const pauseDownload = useCallback(async (gid) => {
     try {
-      await axios.patch('/api/files/torrent-download', { gid, action: 'pause' });
+      await pauseMutation.mutateAsync(gid);
     } catch (err) {
       console.error('[DOWNLOADS] Failed to pause download:', err.message);
       throw err;
     }
-  }, []);
+  }, [pauseMutation]);
 
   // Resume a download
   const resumeDownload = useCallback(async (gid) => {
     try {
-      await axios.patch('/api/files/torrent-download', { gid, action: 'resume' });
+      await resumeMutation.mutateAsync(gid);
     } catch (err) {
       console.error('[DOWNLOADS] Failed to resume download:', err.message);
       throw err;
     }
-  }, []);
+  }, [resumeMutation]);
 
   // Remove a download
   const removeDownload = useCallback(async (gid) => {
     try {
-      await axios.patch('/api/files/torrent-download', { gid, action: 'remove' });
+      await removeMutation.mutateAsync(gid);
     } catch (err) {
       console.error('[DOWNLOADS] Failed to remove download:', err.message);
       throw err;
     }
-  }, []);
+  }, [removeMutation]);
 
   return {
     downloads,

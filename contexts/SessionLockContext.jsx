@@ -3,7 +3,7 @@
 'use client';
 
 import { createContext, useContext, useCallback, useEffect, useState } from 'react';
-import { useStableSession } from '@/lib/api/session';
+import { useStableSession, useVerifyPin, useLockAccount, useUpdateAccountSettings } from '@/lib/api/session';
 import { setupAxiosInterceptor } from '@/lib/axios';
 
 const SessionLockContext = createContext();
@@ -11,6 +11,11 @@ const SessionLockContext = createContext();
 export function SessionLockProvider({ children }) {
   const { data: session, status, update } = useStableSession();
   const [isLoading, setIsLoading] = useState(true);
+
+  // React Query mutations
+  const verifyPinMutation = useVerifyPin();
+  const lockAccountMutation = useLockAccount();
+  const updateAccountSettingsMutation = useUpdateAccountSettings();
 
   useEffect(() => {
     // Setup axios interceptor to catch 423 (Locked) responses
@@ -25,66 +30,57 @@ export function SessionLockProvider({ children }) {
 
   const unlock = useCallback(
     async (pin) => {
-      try {
-        const res = await fetch('/api/account/verify-pin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin }),
+      return new Promise((resolve) => {
+        verifyPinMutation.mutate(pin, {
+          onSuccess: (data) => {
+            if (data.success) {
+              // Small delay to ensure session is updated
+              setTimeout(() => {
+                resolve(true);
+              }, 100);
+            } else {
+              resolve(false);
+            }
+          },
+          onError: () => {
+            console.error('Error unlocking');
+            resolve(false);
+          },
         });
-
-        const data = await res.json();
-
-        if (data.success) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          update();
-          return true;
-        }
-
-        return false;
-      } catch (error) {
-        console.error('Error unlocking:', error);
-        return false;
-      }
+      });
     },
-    [update],
+    [verifyPinMutation],
   );
 
   const lockNow = useCallback(async () => {
-    try {
-      const res = await fetch('/api/account/lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    return new Promise((resolve) => {
+      lockAccountMutation.mutate(undefined, {
+        onSuccess: () => {
+          resolve(true);
+        },
+        onError: (error) => {
+          console.error('Error locking session:', error);
+          resolve(false);
+        },
       });
-
-      if (res.ok) {
-        update();
-      }
-    } catch (error) {
-      console.error('Error locking session:', error);
-    }
-  }, [update]);
+    });
+  }, [lockAccountMutation]);
 
   const updateSettings = useCallback(
     async (newSettings) => {
-      try {
-        const res = await fetch('/api/account/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newSettings),
+      return new Promise((resolve) => {
+        updateAccountSettingsMutation.mutate(newSettings, {
+          onSuccess: () => {
+            resolve(true);
+          },
+          onError: (error) => {
+            console.error('Error updating settings:', error);
+            resolve(false);
+          },
         });
-
-        if (res.ok) {
-          update();
-          return true;
-        }
-
-        return false;
-      } catch (error) {
-        console.error('Error updating settings:', error);
-        return false;
-      }
+      });
     },
-    [update],
+    [updateAccountSettingsMutation],
   );
 
   const settings = {

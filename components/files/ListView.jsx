@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo, memo } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiShare2, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
@@ -107,10 +107,13 @@ const ListView = forwardRef(({
   );
 
   // Create all items including the creating folder
-  const allItems = [...files];
-  if (creatingFolder) {
-    allItems.unshift({ id: 'new-folder', isCreating: true });
-  }
+  const allItems = useMemo(() => {
+    const items = [...files];
+    if (creatingFolder) {
+      items.unshift({ id: 'new-folder', isCreating: true });
+    }
+    return items;
+  }, [files, creatingFolder]);
 
   useImperativeHandle(ref, () => ({
     scrollToFile: (fileName) => {

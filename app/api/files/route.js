@@ -9,10 +9,13 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getActiveDownloads, getWaitingDownloads } from '@/lib/webTorrentManager';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { Semaphore } from '@/lib/semaphore.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
+// Semaphore to limit concurrent file stat calls (prevent overwhelming NAS/network storage)
+const statSemaphore = new Semaphore(20);
 
 // GET - List files
 export async function GET(req) {
@@ -126,32 +129,38 @@ export async function GET(req) {
       }
     }
 
-    // Get file stats for each file
+    // Get file stats for each file with concurrency limit
     let files = await Promise.all(
       fileNames.map(async (name) => {
-        const filePath = join(targetDir, name);
-        const stats = await stat(filePath);
+        // Acquire semaphore before stat call
+        await statSemaphore.acquire();
+        try {
+          const filePath = join(targetDir, name);
+          const stats = await stat(filePath);
 
-        // Get user info for user folders to display username (from pre-fetched map)
-        let displayName = name;
-        if (!relativePath && name.startsWith('user_')) {
-          const userId = name.replace('user_', '');
-          const username = userMap[userId];
-          if (username) {
-            displayName = `📁 ${username} (Private)`;
+          // Get user info for user folders to display username (from pre-fetched map)
+          let displayName = name;
+          if (!relativePath && name.startsWith('user_')) {
+            const userId = name.replace('user_', '');
+            const username = userMap[userId];
+            if (username) {
+              displayName = `📁 ${username} (Private)`;
+            }
           }
-        }
 
-        return {
-          id: name, // Use filename as ID
-          name: name,
-          displayName: displayName,
-          path: filePath.replace(/\\/g, '/'),
-          size: stats.size,
-          isDirectory: stats.isDirectory(),
-          createdAt: stats.birthtime,
-          updatedAt: stats.mtime,
-        };
+          return {
+            id: name, // Use filename as ID
+            name: name,
+            displayName: displayName,
+            path: filePath.replace(/\\/g, '/'),
+            size: stats.size,
+            isDirectory: stats.isDirectory(),
+            createdAt: stats.birthtime,
+            updatedAt: stats.mtime,
+          };
+        } finally {
+          statSemaphore.release();
+        }
       }),
     );
 

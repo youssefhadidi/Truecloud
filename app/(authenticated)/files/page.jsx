@@ -5,6 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
@@ -12,10 +13,11 @@ import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { useSearch } from '@/lib/api/search';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
-import { useMoveFiles } from '@/lib/api/files';
+import { useMoveFiles, useFolders, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
 
 // Lazy load heavy components
@@ -33,7 +35,8 @@ function FilesPageContent() {
 
   // Global search (sidebar)
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
-  const { data: globalSearchResults = [] } = useSearch(globalSearchQuery);
+  const debouncedSearchQuery = useDebounce(globalSearchQuery, 300);
+  const { data: globalSearchResults = [] } = useSearch(debouncedSearchQuery);
   const isGlobalSearch = globalSearchQuery.length >= 2 && globalSearchResults.length > 0;
 
   // Transform search results into file-like objects for GridView/ListView
@@ -159,14 +162,14 @@ function FilesPageContent() {
     state.setSelectedFiles(newSelected);
   }, [state.selectedFiles, state.setSelectedFiles]);
 
-  const fetchMoveFolders = async (path) => {
-    const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to load folders');
-    }
-    return (data.files || []).filter((file) => file.isDirectory);
-  };
+  const queryClient = useQueryClient();
+
+  const fetchMoveFolders = useCallback(async (path) => {
+    return queryClient.fetchQuery({
+      queryKey: ['folders', path],
+      queryFn: () => fetchFoldersHelper(path),
+    });
+  }, [queryClient]);
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === state.currentPath) {

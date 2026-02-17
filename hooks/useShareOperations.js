@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
+import { useCreateShareFolder, useDeleteShareFile, useRenameShareFile, useMoveShareFiles, useUploadShareFile } from '@/lib/api/publicShares';
 
 /**
  * useShareOperations - File and folder operations for public shares
@@ -39,6 +40,13 @@ export function useShareOperations({
   const queryClient = useQueryClient();
   const { handleShareOrDownload } = useShareOrDownload();
 
+  // React Query mutations for share operations
+  const createFolderMutation = useCreateShareFolder();
+  const deleteFileMutation = useDeleteShareFile();
+  const renameFileMutation = useRenameShareFile();
+  const moveFilesMutation = useMoveShareFiles();
+  const uploadFileMutation = useUploadShareFile();
+
   const refreshListing = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['share-files', token] });
     queryClient.invalidateQueries({ queryKey: ['share', token] });
@@ -68,35 +76,23 @@ export function useShareOperations({
       }
 
       setProcessingFile('creating-folder');
-      try {
-        const response = await fetch(`/api/public/${token}/mkdir`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sharePassword && { 'x-share-password': sharePassword }),
+      createFolderMutation.mutate(
+        { token, sharePassword, folderName, currentSubPath },
+        {
+          onSuccess: () => {
+            setCreatingFolder(false);
+            setNewFolderName('');
+            setProcessingFile(null);
+            addNotification('success', 'Folder created successfully');
+            refreshListing();
           },
-          body: JSON.stringify({
-            name: folderName,
-            path: currentSubPath,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to create folder');
+          onError: (error) => {
+            console.error('Create folder error:', error);
+            addNotification('error', error.response?.data?.error || error.message || 'Failed to create folder', 'Error');
+            setProcessingFile(null);
+          },
         }
-
-        setCreatingFolder(false);
-        setNewFolderName('');
-        setProcessingFile(null);
-        addNotification('success', 'Folder created successfully');
-
-        refreshListing();
-      } catch (error) {
-        console.error('Create folder error:', error);
-        addNotification('error', error.message || 'Failed to create folder', 'Error');
-        setProcessingFile(null);
-      }
+      );
     },
     [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder, refreshListing],
   );
@@ -129,36 +125,23 @@ export function useShareOperations({
       }
 
       setProcessingFile(deletingFile.name);
-      try {
-        const params = new URLSearchParams();
-        params.append('file', deletingFile.name);
-        if (currentSubPath) {
-          params.append('path', currentSubPath);
-        }
-
-        const response = await fetch(`/api/public/${token}/delete?${params.toString()}`, {
-          method: 'DELETE',
-          headers: {
-            ...(sharePassword && { 'x-share-password': sharePassword }),
+      deleteFileMutation.mutate(
+        { token, sharePassword, fileName: deletingFile.name, currentSubPath },
+        {
+          onSuccess: () => {
+            setDeletingFile(null);
+            setProcessingFile(null);
+            addNotification('success', deletingFile.isDirectory ? 'Folder deleted' : 'File deleted');
+            refreshListing();
           },
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to delete file');
+          onError: (error) => {
+            console.error('Delete error:', error);
+            addNotification('error', error.response?.data?.error || error.message || 'Failed to delete file', 'Delete Error');
+            setDeletingFile(null);
+            setProcessingFile(null);
+          },
         }
-
-        setDeletingFile(null);
-        setProcessingFile(null);
-        addNotification('success', deletingFile.isDirectory ? 'Folder deleted' : 'File deleted');
-
-        refreshListing();
-      } catch (error) {
-        console.error('Delete error:', error);
-        addNotification('error', error.message || 'Failed to delete file', 'Delete Error');
-        setDeletingFile(null);
-        setProcessingFile(null);
-      }
+      );
     },
     [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification, refreshListing],
   );
@@ -198,37 +181,24 @@ export function useShareOperations({
       }
 
       setProcessingFile(renamingFile.name);
-      try {
-        const response = await fetch(`/api/public/${token}/rename`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sharePassword && { 'x-share-password': sharePassword }),
+      renameFileMutation.mutate(
+        { token, sharePassword, oldName: renamingFile.name, newName: newFileName, currentSubPath },
+        {
+          onSuccess: () => {
+            setRenamingFile(null);
+            setNewFileName('');
+            setProcessingFile(null);
+            addNotification('success', 'File renamed successfully');
+            refreshListing();
           },
-          body: JSON.stringify({
-            oldName: renamingFile.name,
-            newName: newFileName,
-            path: currentSubPath,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to rename file');
+          onError: (error) => {
+            console.error('Rename error:', error);
+            addNotification('error', error.response?.data?.error || error.message || 'Failed to rename file', 'Rename Error');
+            setRenamingFile(null);
+            setProcessingFile(null);
+          },
         }
-
-        setRenamingFile(null);
-        setNewFileName('');
-        setProcessingFile(null);
-        addNotification('success', 'File renamed successfully');
-
-        refreshListing();
-      } catch (error) {
-        console.error('Rename error:', error);
-        addNotification('error', error.message || 'Failed to rename file', 'Rename Error');
-        setRenamingFile(null);
-        setProcessingFile(null);
-      }
+      );
     },
     [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename, refreshListing],
   );
@@ -247,35 +217,25 @@ export function useShareOperations({
       }
 
       setProcessingFile('moving');
-      try {
-        const response = await fetch(`/api/public/${token}/move`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sharePassword && { 'x-share-password': sharePassword }),
-          },
-          body: JSON.stringify({
-            items,
-            sourcePath: currentSubPath,
-            destinationPath,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to move items');
-        }
-
-        setProcessingFile(null);
-        addNotification('success', `Moved ${items.length} item(s)`);
-        refreshListing();
-        return true;
-      } catch (error) {
-        console.error('Move error:', error);
-        addNotification('error', error.message || 'Failed to move items', 'Move Error');
-        setProcessingFile(null);
-        return false;
-      }
+      return new Promise((resolve) => {
+        moveFilesMutation.mutate(
+          { token, sharePassword, items, sourcePath: currentSubPath, destinationPath },
+          {
+            onSuccess: () => {
+              setProcessingFile(null);
+              addNotification('success', `Moved ${items.length} item(s)`);
+              refreshListing();
+              resolve(true);
+            },
+            onError: (error) => {
+              console.error('Move error:', error);
+              addNotification('error', error.response?.data?.error || error.message || 'Failed to move items', 'Move Error');
+              setProcessingFile(null);
+              resolve(false);
+            },
+          }
+        );
+      });
     },
     [token, sharePassword, currentSubPath, allowUploads, setProcessingFile, addNotification, refreshListing],
   );
@@ -301,42 +261,26 @@ export function useShareOperations({
           },
         ]);
 
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
+        uploadFileMutation.mutate(
+          { token, sharePassword, file, currentSubPath },
+          {
+            onSuccess: () => {
+              setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
 
-          const params = new URLSearchParams();
-          if (currentSubPath) {
-            params.append('path', currentSubPath);
-          }
+              setTimeout(() => {
+                setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
+              }, 2000);
 
-          const response = await fetch(`/api/public/${token}/upload?${params.toString()}`, {
-            method: 'POST',
-            headers: {
-              ...(sharePassword && { 'x-share-password': sharePassword }),
+              addNotification('success', `${file.name} uploaded`);
+              refreshListing();
             },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Upload failed');
+            onError: (error) => {
+              console.error('Upload error:', error);
+              setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
+              addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
+            },
           }
-
-          setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
-
-          setTimeout(() => {
-            setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
-          }, 2000);
-
-          addNotification('success', `${file.name} uploaded`);
-
-          refreshListing();
-        } catch (error) {
-          console.error('Upload error:', error);
-          setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
-          addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
-        }
+        );
       }
     },
     [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification, refreshListing],

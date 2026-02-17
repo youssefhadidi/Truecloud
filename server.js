@@ -2,6 +2,8 @@ const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
+const { getToken } = require('next-auth/jwt');
+const { verifyShare } = require('./lib/shareAuth.js');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -99,7 +101,6 @@ app.prepare().then(() => {
   async function authenticateWsUpgrade(request) {
     // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
     try {
-      const { getToken } = await import('next-auth/jwt');
       const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
       if (token) return true;
     } catch {
@@ -113,7 +114,6 @@ app.prepare().then(() => {
 
     if (shareToken && sharePassword) {
       try {
-        const { verifyShare } = await import('./lib/shareAuth.js');
         const result = await verifyShare(shareToken, sharePassword);
         if (result.valid) return true;
       } catch {

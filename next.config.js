@@ -88,10 +88,12 @@ const nextConfig = {
   },
 };
 
-console.log('Next.js Configuration:');
-console.log('- Image domains:', nextConfig?.images?.domains);
-console.log('- Port:', nextConfig.serverRuntimeConfig.PORT);
-console.log('- Environment:', process.env.NODE_ENV || 'development');
-console.log('- Node version:', process.version);
+if (process.env.NODE_ENV !== 'production') {
+  console.log('Next.js Configuration:');
+  console.log('- Image domains:', nextConfig?.images?.domains);
+  console.log('- Port:', nextConfig.serverRuntimeConfig.PORT);
+  console.log('- Environment:', process.env.NODE_ENV || 'development');
+  console.log('- Node version:', process.version);
+}
 
 module.exports = nextConfig;

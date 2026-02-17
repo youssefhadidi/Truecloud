@@ -1,9 +1,9 @@
 /** @format */
 
-import axios from 'axios';
 import { useCallback } from 'react';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
+import { useDownloadFileBlob } from '@/lib/api/publicShares';
 
 /**
  * Hook for handling file downloads with Web Share API fallback
@@ -14,6 +14,7 @@ import { useTransfersDispatch } from '@/lib/redux/hooks';
 export function useShareOrDownload() {
   const { addNotification } = useNotifications();
   const { addTransfer, updateTransfer, removeTransfer } = useTransfersDispatch();
+  const downloadMutation = useDownloadFileBlob();
 
   const handleShareOrDownload = useCallback(
     async (fileUrl, fileName) => {
@@ -37,9 +38,9 @@ export function useShareOrDownload() {
         if (hasShareAPI) {
           // Only fetch if we're going to use Web Share API
           try {
-            const response = await axios.get(fileUrl, {
-              responseType: 'blob',
-              onDownloadProgress: (progressEvent) => {
+            const blob = await downloadMutation.mutateAsync({
+              url: fileUrl,
+              onProgress: (progressEvent) => {
                 if (progressEvent.total) {
                   const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
                   updateTransfer(downloadId, { progress });
@@ -47,8 +48,7 @@ export function useShareOrDownload() {
               },
             });
 
-            const blob = response.data;
-            const mimeType = response.headers['content-type'] || 'application/octet-stream';
+            const mimeType = blob.type || 'application/octet-stream';
             const file = new File([blob], fileName, { type: mimeType });
 
             // Check if this device can share files
@@ -103,7 +103,7 @@ export function useShareOrDownload() {
         updateTransfer(downloadId, { status: 'error', error: error.message });
       }
     },
-    [addNotification, addTransfer, updateTransfer, removeTransfer],
+    [addNotification, addTransfer, updateTransfer, removeTransfer, downloadMutation],
   );
 
   return { handleShareOrDownload };

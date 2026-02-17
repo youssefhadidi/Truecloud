@@ -3,13 +3,13 @@
 'use client';
 
 import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from '@/components/files/Viewer3D';
+import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicShares';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
@@ -37,21 +37,7 @@ export default function SharePage({ params }) {
     data: shareResponse,
     isLoading: loading,
     error: shareError,
-  } = useQuery({
-    queryKey: ['share', token, submittedPassword],
-    queryFn: async () => {
-      const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
-      const res = await fetch(`/api/public/${token}`, { headers });
-      const data = await res.json();
-      if (!res.ok && data.requiresPassword) {
-        return { requiresPassword: true, fileName: data.fileName, isDirectory: data.isDirectory };
-      }
-      if (!res.ok) throw new Error(data.error || 'Share not found');
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
+  } = useShare(token, submittedPassword);
 
   // Connect WebSocket with share credentials once password is verified
   useEffect(() => {
@@ -64,23 +50,12 @@ export default function SharePage({ params }) {
   const shareState = useSharePage(token, shareResponse ? { ...shareResponse, files: shareFiles } : null);
 
   // Fetch directory listing
-  const { data: directoryFiles = null } = useQuery({
-    queryKey: ['share-files', token, submittedPassword, shareState.currentSubPath],
-    queryFn: async () => {
-      const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
-      const params = new URLSearchParams();
-      if (shareState.currentSubPath) {
-        params.append('path', shareState.currentSubPath);
-      }
-      const url = params.toString() ? `/api/public/${token}/files?${params.toString()}` : `/api/public/${token}/files`;
-      const res = await fetch(url, { headers });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load files');
-      return data.files;
-    },
-    enabled: !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory,
-    staleTime: 30 * 1000,
-  });
+  const { data: directoryFiles = null } = useShareFiles(
+    token,
+    submittedPassword,
+    shareState.currentSubPath,
+    !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory
+  );
 
   useEffect(() => {
     if (directoryFiles) {
@@ -129,20 +104,15 @@ export default function SharePage({ params }) {
     shareState.setSelectedFiles(newSelected);
   }, [shareState.selectedFiles, shareState.setSelectedFiles]);
 
-  const fetchShareFolders = async (path) => {
-    const params = new URLSearchParams();
-    if (path) {
-      params.append('path', path);
-    }
-    const url = params.toString() ? `/api/public/${token}/files?${params.toString()}` : `/api/public/${token}/files`;
-    const headers = submittedPassword ? { 'x-share-password': submittedPassword } : {};
-    const res = await fetch(url, { headers });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to load folders');
-    }
-    return (data.files || []).filter((file) => file.isDirectory);
-  };
+  const getShareFoldersMutation = useGetShareFolders();
+
+  const fetchShareFolders = useCallback(async (path) => {
+    return getShareFoldersMutation.mutateAsync({
+      token,
+      submittedPassword,
+      path,
+    });
+  }, [getShareFoldersMutation, token, submittedPassword]);
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === shareState.currentSubPath) {

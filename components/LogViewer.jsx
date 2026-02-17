@@ -3,9 +3,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { FiRefreshCw, FiDownload } from 'react-icons/fi';
 import { useLogsStream } from '@/hooks/useLogsStream';
+import { useLogs } from '@/lib/api/logs';
 
 export default function LogViewer() {
   const { logs, isLoading, error: streamError } = useLogsStream();
+  const { refetch } = useLogs();
   const [autoScroll, setAutoScroll] = useState(true);
   const [error, setError] = useState(null);
   const logsEndRef = useRef(null);
@@ -29,13 +31,9 @@ export default function LogViewer() {
 
   // Manual refresh - re-fetch initial logs from API
   const refreshLogs = async () => {
+    setError(null);
     try {
-      setError(null);
-      // Re-fetch from API to reset
-      const response = await fetch('/api/system/logs');
-      if (!response.ok) {
-        setError('Failed to refresh logs');
-      }
+      await refetch();
     } catch (err) {
       setError('Failed to refresh logs');
       console.error('[LOGS] Error refreshing:', err);

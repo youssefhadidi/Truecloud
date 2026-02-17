@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 
+const SEARCH_RESULT_LIMIT = 500;
+
 export async function GET(req) {
   try {
     const { session, error } = await requireAuthNoActivity();
@@ -29,10 +31,11 @@ export async function GET(req) {
       whereClause.OR = [{ ownerId: null }, { ownerId: session.user.id }];
     }
 
-    // Query the index (no limit - virtual scroller on frontend handles large result sets)
+    // Query the index with limit to prevent returning too many results
     const results = await prisma.fileIndex.findMany({
       where: whereClause,
       orderBy: [{ isDirectory: 'desc' }, { name: 'asc' }],
+      take: SEARCH_RESULT_LIMIT,
       select: {
         name: true,
         path: true,
@@ -45,8 +48,9 @@ export async function GET(req) {
 
     // Convert BigInt size to Number for JSON serialization
     const serialized = results.map((r) => ({ ...r, size: Number(r.size) }));
+    const truncated = results.length >= SEARCH_RESULT_LIMIT;
 
-    return NextResponse.json({ results: serialized });
+    return NextResponse.json({ results: serialized, truncated });
   } catch (error) {
     console.error('Search API error:', error?.message || error);
     console.error('Full error:', error);

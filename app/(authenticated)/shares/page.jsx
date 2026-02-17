@@ -2,10 +2,11 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FiShare2, FiCopy, FiTrash2, FiLock, FiUnlock, FiFolder, FiFile, FiArrowLeft, FiCheck, FiEdit2 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useShares, useUpdateShare, useDeleteShare } from '@/lib/api/files';
 
 // Format file size
 function formatFileSize(bytes) {
@@ -29,37 +30,19 @@ function formatDate(dateString) {
 }
 
 export default function SharesPage() {
-  const [shares, setShares] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const router = useRouter();
+  const { addNotification } = useNotifications();
+
+  // React Query hooks
+  const { data: shares = [], isLoading, error } = useShares();
+  const updateMutation = useUpdateShare();
+  const deleteMutation = useDeleteShare();
+
+  // Local UI state
   const [copiedId, setCopiedId] = useState(null);
   const [editingShare, setEditingShare] = useState(null);
   const [editPassword, setEditPassword] = useState('');
   const [removePassword, setRemovePassword] = useState(false);
-  const router = useRouter();
-  const { addNotification } = useNotifications();
-
-  useEffect(() => {
-    fetchShares();
-  }, []);
-
-  const fetchShares = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/shares');
-      const data = await res.json();
-
-      if (res.ok) {
-        setShares(data.shares || []);
-      } else {
-        setError(data.error || 'Failed to load shares');
-      }
-    } catch (e) {
-      setError('Failed to load shares');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const copyLink = async (share) => {
     const baseUrl = window.location.origin;
@@ -78,53 +61,43 @@ export default function SharesPage() {
   const deleteShare = async (shareId) => {
     if (!confirm('Are you sure you want to delete this share?')) return;
 
-    try {
-      const res = await fetch(`/api/shares/${shareId}`, { method: 'DELETE' });
-
-      if (res.ok) {
-        setShares((prev) => prev.filter((s) => s.id !== shareId));
+    deleteMutation.mutate(shareId, {
+      onSuccess: () => {
         addNotification('success', 'Share deleted');
-      } else {
+      },
+      onError: () => {
         addNotification('error', 'Failed to delete share');
-      }
-    } catch (e) {
-      addNotification('error', 'Failed to delete share');
-    }
+      },
+    });
   };
 
   const updateShare = async () => {
     if (!editingShare) return;
 
-    try {
-      const body = {};
-      if (removePassword) {
-        body.removePassword = true;
-      } else if (editPassword) {
-        body.password = editPassword;
-      }
-
-      const res = await fetch(`/api/shares/${editingShare.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setShares((prev) => prev.map((s) => (s.id === editingShare.id ? data.share : s)));
-        addNotification('success', 'Share updated');
-        setEditingShare(null);
-        setEditPassword('');
-        setRemovePassword(false);
-      } else {
-        addNotification('error', 'Failed to update share');
-      }
-    } catch (e) {
-      addNotification('error', 'Failed to update share');
+    const body = {};
+    if (removePassword) {
+      body.removePassword = true;
+    } else if (editPassword) {
+      body.password = editPassword;
     }
+
+    updateMutation.mutate(
+      { shareId: editingShare.id, data: body },
+      {
+        onSuccess: () => {
+          addNotification('success', 'Share updated');
+          setEditingShare(null);
+          setEditPassword('');
+          setRemovePassword(false);
+        },
+        onError: () => {
+          addNotification('error', 'Failed to update share');
+        },
+      }
+    );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
