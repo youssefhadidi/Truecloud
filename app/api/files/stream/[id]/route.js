@@ -12,16 +12,12 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import {
   checkMoovAtom,
   fixMp4ForStreaming,
-  probeCodecs,
-  detectHardwareAccel,
-  buildMkvTranscodeArgs,
-  transcodeToMp4,
 } from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
-// Track in-progress fixes to avoid duplicate work
+// Track in-progress MP4 fixes to avoid duplicate work
 const inProgressFixes = new Map();
 
 export async function GET(req, { params }) {
@@ -60,95 +56,8 @@ export async function GET(req, { params }) {
     let streamPath = fullPath;
     const fileExt = extname(fileId).toLowerCase();
 
-    // Parse optional transcoding parameters from query string
-    const maxWidth = url.searchParams.has('maxWidth') ? parseInt(url.searchParams.get('maxWidth'), 10) : undefined;
-    const maxHeight = url.searchParams.has('maxHeight') ? parseInt(url.searchParams.get('maxHeight'), 10) : undefined;
-    const bitrate = url.searchParams.get('bitrate');
-
-    // Check if it's an MKV file that needs transcoding for browser compatibility
-    if (fileExt === '.mkv') {
-      // Include resolution/bitrate in cache key so different versions are cached separately
-      let cacheKeySuffix = '';
-      if (maxWidth || maxHeight || bitrate) {
-        const resolutionStr = [maxWidth || 'auto', maxHeight || 'auto', bitrate || 'auto'].join('_');
-        cacheKeySuffix = `_${resolutionStr}`;
-      }
-
-      const pathHash = createHash('md5').update(fullPath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}${cacheKeySuffix}.mp4`);
-      const tmpPath = cachedPath + '.tmp';
-
-      // 1. Check cache validity
-      let useCache = false;
-      try {
-        const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
-        if (cachedStats.mtime >= sourceStats.mtime) {
-          useCache = true;
-          streamPath = cachedPath;
-          logger.debug('GET /api/files/stream - Using cached transcoded MP4', { fileId });
-        }
-      } catch {
-        // Cache file does not exist yet
-      }
-
-      if (!useCache) {
-        if (!inProgressFixes.has(pathHash)) {
-          // Store Promise so concurrent requests await the same job
-          const transcodePromise = (async () => {
-            await fs.promises.mkdir(cacheDir, { recursive: true });
-            const [{ videoCodec, audioCodec }, hwaccel] = await Promise.all([
-              probeCodecs(fullPath),
-              detectHardwareAccel(),
-            ]);
-            logger.info('GET /api/files/stream - MKV codec probe', {
-              fileId,
-              videoCodec,
-              audioCodec,
-              hwaccel,
-              maxWidth,
-              maxHeight,
-              bitrate,
-            });
-            const args = buildMkvTranscodeArgs(fullPath, tmpPath, videoCodec, audioCodec, hwaccel, {
-              maxWidth,
-              maxHeight,
-              bitrate,
-            });
-            await transcodeToMp4(fullPath, tmpPath, args);
-            await fs.promises.rename(tmpPath, cachedPath);
-          })();
-
-          inProgressFixes.set(pathHash, transcodePromise);
-
-          try {
-            await transcodePromise;
-            streamPath = cachedPath;
-            logger.info('GET /api/files/stream - MKV transcode complete, serving MP4', { fileId });
-          } catch (err) {
-            logger.error('GET /api/files/stream - MKV transcode failed', {
-              fileId,
-              error: err.message,
-            });
-            inProgressFixes.delete(pathHash);
-            throw err; // Fail the request instead of fallback
-          }
-          inProgressFixes.delete(pathHash);
-        } else {
-          // Another request is already transcoding — wait for it
-          logger.debug('GET /api/files/stream - MKV transcode in progress, waiting', { fileId });
-          await inProgressFixes.get(pathHash);
-          // Re-check cache after waiting
-          const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
-          if (cachedStats.mtime >= sourceStats.mtime) {
-            streamPath = cachedPath;
-          } else {
-            throw new Error('MKV transcode failed to produce cached file');
-          }
-        }
-      }
-    }
     // Check if it's an MP4 that might need fixing for streaming
-    else if (fileExt === '.mp4') {
+    if (fileExt === '.mp4') {
       const pathHash = createHash('md5').update(fullPath).digest('hex');
       const cachedPath = join(cacheDir, `${pathHash}.mp4`);
 

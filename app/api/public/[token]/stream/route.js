@@ -11,17 +11,13 @@ import { logger } from '@/lib/logger';
 import {
   checkMoovAtom,
   fixMp4ForStreaming,
-  probeCodecs,
-  detectHardwareAccel,
-  buildMkvTranscodeArgs,
-  transcodeToMp4,
 } from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
-// Track in-progress MKV transcodes to deduplicate concurrent public requests
+// Track in-progress MP4 fixes to deduplicate concurrent public requests
 const inProgressFixes = new Map();
 
 export async function GET(req, { params }) {
@@ -80,80 +76,8 @@ export async function GET(req, { params }) {
     let streamPath = filePath;
     const fileExt = extname(filePath).toLowerCase();
 
-    // Parse optional transcoding parameters from query string
-    const maxWidth = url.searchParams.has('maxWidth') ? parseInt(url.searchParams.get('maxWidth'), 10) : undefined;
-    const maxHeight = url.searchParams.has('maxHeight') ? parseInt(url.searchParams.get('maxHeight'), 10) : undefined;
-    const bitrate = url.searchParams.get('bitrate');
-
-    // Check if it's an MKV file that needs transcoding for browser compatibility
-    if (fileExt === '.mkv') {
-      const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
-
-      // Include resolution/bitrate in cache key so different versions are cached separately
-      let cacheKeySuffix = '';
-      if (maxWidth || maxHeight || bitrate) {
-        const resolutionStr = [maxWidth || 'auto', maxHeight || 'auto', bitrate || 'auto'].join('_');
-        cacheKeySuffix = `_${resolutionStr}`;
-      }
-
-      const pathHash = createHash('md5').update(filePath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}${cacheKeySuffix}.mp4`);
-      const tmpPath = cachedPath + '.tmp';
-
-      let useCache = false;
-      try {
-        const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
-        if (cachedStats.mtime >= sourceStats.mtime) {
-          useCache = true;
-          streamPath = cachedPath;
-        }
-      } catch {
-        // Cache does not exist
-      }
-
-      if (!useCache) {
-        if (!inProgressFixes.has(pathHash)) {
-          const transcodePromise = (async () => {
-            await mkdir(cacheDir, { recursive: true });
-            const [{ videoCodec, audioCodec }, hwaccel] = await Promise.all([
-              probeCodecs(filePath),
-              detectHardwareAccel(),
-            ]);
-            const args = buildMkvTranscodeArgs(filePath, tmpPath, videoCodec, audioCodec, hwaccel, {
-              maxWidth,
-              maxHeight,
-              bitrate,
-            });
-            await transcodeToMp4(filePath, tmpPath, args);
-            await fs.promises.rename(tmpPath, cachedPath);
-          })();
-
-          inProgressFixes.set(pathHash, transcodePromise);
-
-          try {
-            await transcodePromise;
-            streamPath = cachedPath;
-          } catch (err) {
-            logger.error('GET /api/public/[token]/stream - MKV transcode failed', {
-              error: err.message,
-            });
-            inProgressFixes.delete(pathHash);
-            throw err; // Fail the request instead of fallback
-          }
-          inProgressFixes.delete(pathHash);
-        } else {
-          await inProgressFixes.get(pathHash);
-          const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
-          if (cachedStats.mtime >= sourceStats.mtime) {
-            streamPath = cachedPath;
-          } else {
-            throw new Error('MKV transcode failed to produce cached file');
-          }
-        }
-      }
-    }
     // Check if it's an MP4 that might need fixing for streaming
-    else if (fileExt === '.mp4') {
+    if (fileExt === '.mp4') {
       const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
       const pathHash = createHash('md5').update(filePath).digest('hex');
       const cachedPath = join(cacheDir, `${pathHash}.mp4`);
