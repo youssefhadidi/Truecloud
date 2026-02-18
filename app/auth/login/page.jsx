@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { data: session, status } = useSession();
+  const queryClient = useQueryClient();
 
   // Redirect to files if already logged in
   useEffect(() => {
@@ -37,6 +39,9 @@ export default function LoginPage() {
       if (result?.error) {
         setError('Invalid email or password');
       } else {
+        // Invalidate React Query session cache so useStableSession
+        // fetches fresh data immediately (prevents redirect loop)
+        await queryClient.invalidateQueries({ queryKey: ['session'] });
         router.push('/files');
       }
     } catch (err) {
