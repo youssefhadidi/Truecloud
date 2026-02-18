@@ -3,11 +3,13 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock } from 'react-icons/fi';
 import { signOut } from 'next-auth/react';
 
 export default function SessionLockScreen({ children }) {
+  const router = useRouter();
   const { isLocked, isLoading, unlock } = useSessionLock();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -166,9 +168,10 @@ export default function SessionLockScreen({ children }) {
 
         {/* Sign Out Link */}
         <button
-          onClick={() => {
+          onClick={async () => {
             setIsSigningOut(true);
-            signOut({ redirect: true, callbackUrl: '/auth/login' });
+            await signOut({ redirect: false });
+            router.push('/auth/login');
           }}
           className="w-full text-center text-gray-400 hover:text-gray-300 text-sm py-2 transition-colors"
         >
