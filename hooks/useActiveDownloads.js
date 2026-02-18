@@ -21,7 +21,10 @@
  *
  * On download completion, a 'torrent-download-complete' custom event is dispatched
  * so the file browser can refresh and show the newly completed files.
+ *
+ * @format
  */
+
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
@@ -148,15 +151,17 @@ export function useActiveDownloads(initialDownloads = []) {
           downloadsRef.current.delete(gid);
           syncDownloads();
         } else if (payload.type === 'download-complete') {
-          // Download completed - remove from downloads list
+          // Download completed - mark as complete instead of removing
           const { gid, targetPath } = payload;
-          downloadsRef.current.delete(gid);
-          syncDownloads();
-
-          // Trigger file browser refresh event
-          window.dispatchEvent(new CustomEvent('torrent-download-complete', {
-            detail: { path: targetPath }
-          }));
+          const existing = downloadsRef.current.get(gid);
+          if (existing) {
+            downloadsRef.current.set(gid, {
+              ...existing,
+              status: 'complete',
+              progress: 100,
+            });
+            syncDownloads();
+          }
         }
       } catch (err) {
         console.error('[DOWNLOADS] Error processing WebSocket message:', err);
@@ -167,52 +172,64 @@ export function useActiveDownloads(initialDownloads = []) {
   }, [syncDownloads]);
 
   // Add a download to the tracked map (called when user starts a download from UI)
-  const addDownload = useCallback((gid, name, path) => {
-    downloadsRef.current.set(gid, {
-      gid,
-      name,
-      path,
-      progress: 0,
-      status: 'active',
-      downloadSpeed: '0 B/s',
-      uploadSpeed: '0 B/s',
-      seeders: 0,
-      peers: 0,
-      isTorrent: name.toLowerCase().endsWith('.torrent') || false,
-      error: null,
-    });
-    syncDownloads();
-  }, [syncDownloads]);
+  const addDownload = useCallback(
+    (gid, name, path) => {
+      downloadsRef.current.set(gid, {
+        gid,
+        name,
+        path,
+        progress: 0,
+        status: 'active',
+        downloadSpeed: '0 B/s',
+        uploadSpeed: '0 B/s',
+        seeders: 0,
+        peers: 0,
+        isTorrent: name.toLowerCase().endsWith('.torrent') || false,
+        error: null,
+      });
+      syncDownloads();
+    },
+    [syncDownloads],
+  );
 
   // Pause a download
-  const pauseDownload = useCallback(async (gid) => {
-    try {
-      await pauseMutation.mutateAsync(gid);
-    } catch (err) {
-      console.error('[DOWNLOADS] Failed to pause download:', err.message);
-      throw err;
-    }
-  }, [pauseMutation]);
+  const pauseDownload = useCallback(
+    async (gid) => {
+      try {
+        await pauseMutation.mutateAsync(gid);
+      } catch (err) {
+        console.error('[DOWNLOADS] Failed to pause download:', err.message);
+        throw err;
+      }
+    },
+    [pauseMutation],
+  );
 
   // Resume a download
-  const resumeDownload = useCallback(async (gid) => {
-    try {
-      await resumeMutation.mutateAsync(gid);
-    } catch (err) {
-      console.error('[DOWNLOADS] Failed to resume download:', err.message);
-      throw err;
-    }
-  }, [resumeMutation]);
+  const resumeDownload = useCallback(
+    async (gid) => {
+      try {
+        await resumeMutation.mutateAsync(gid);
+      } catch (err) {
+        console.error('[DOWNLOADS] Failed to resume download:', err.message);
+        throw err;
+      }
+    },
+    [resumeMutation],
+  );
 
   // Remove a download
-  const removeDownload = useCallback(async (gid) => {
-    try {
-      await removeMutation.mutateAsync(gid);
-    } catch (err) {
-      console.error('[DOWNLOADS] Failed to remove download:', err.message);
-      throw err;
-    }
-  }, [removeMutation]);
+  const removeDownload = useCallback(
+    async (gid) => {
+      try {
+        await removeMutation.mutateAsync(gid);
+      } catch (err) {
+        console.error('[DOWNLOADS] Failed to remove download:', err.message);
+        throw err;
+      }
+    },
+    [removeMutation],
+  );
 
   return {
     downloads,

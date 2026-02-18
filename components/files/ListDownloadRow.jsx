@@ -10,17 +10,7 @@ import { useDownloadWebSocket } from '@/hooks/useDownloadWebSocket';
  * ListDownloadRow - A download row for ListView with real-time WebSocket updates.
  * Each row independently subscribes to WebSocket messages for its specific download.
  */
-export function ListDownloadRow({
-  file,
-  style,
-  gridCols,
-  selectionMode,
-  selectedFiles,
-  onToggleSelect,
-  onPauseDownload,
-  onResumeDownload,
-  onRemoveDownload,
-}) {
+export function ListDownloadRow({ file, style, gridCols, selectionMode, selectedFiles, onToggleSelect, onPauseDownload, onResumeDownload, onRemoveDownload }) {
   const download = useDownloadWebSocket(file.downloadGid, {
     name: file.name,
     path: file.id?.replace('dl-', '') || '',
@@ -66,11 +56,6 @@ export function ListDownloadRow({
     }
   };
 
-  // Don't render completed or removed downloads
-  if (download.status === 'complete' || download.status === 'removed') {
-    return null;
-  }
-
   return (
     <div
       style={{
@@ -85,10 +70,7 @@ export function ListDownloadRow({
     >
       {/* Progress bar at the bottom of the row */}
       <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-        <div
-          className="h-full bg-yellow-500 transition-all"
-          style={{ width: `${Math.min(download.progress, 100)}%` }}
-        />
+        <div className="h-full bg-yellow-500 transition-all" style={{ width: `${Math.min(download.progress, 100)}%` }} />
       </div>
 
       {/* Name and icon */}

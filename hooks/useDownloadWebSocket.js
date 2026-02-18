@@ -1,6 +1,7 @@
 /** @format */
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
 /**
@@ -23,6 +24,7 @@ export function useDownloadWebSocket(gid, initialData = {}) {
   });
 
   const { subscribe } = useWebSocket();
+  const queryClient = useQueryClient();
 
   // Subscribe to WebSocket updates for this specific download
   useEffect(() => {
@@ -66,6 +68,9 @@ export function useDownloadWebSocket(gid, initialData = {}) {
             status: 'complete',
             progress: 100,
           }));
+          // Invalidate files cache for the download path so completed files appear
+          const downloadPath = downloadData.path || '';
+          queryClient.invalidateQueries({ queryKey: ['files', downloadPath] });
         } else if (type === 'download-added' && downloadData?.gid === gid) {
           setDownload((prev) => ({
             ...prev,
