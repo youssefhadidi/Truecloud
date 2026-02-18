@@ -93,14 +93,12 @@ export default function SessionLockScreen({ children }) {
     [unlock]
   );
 
-  // While session is loading or signing out, don't render anything to prevent race conditions
-  if (isLoading || isSigningOut) return null;
+  // If signing out, don't render anything to prevent race conditions
+  if (isSigningOut) return null;
 
-  // If not locked, render children normally
-  if (!isLocked) return children;
-
-  // If locked, show PIN input screen
-  return (
+  // If locked, show PIN input screen (take priority over children)
+  if (isLocked) {
+    return (
     <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
       {/* Hidden input for mobile keyboard support */}
       <input
@@ -179,5 +177,9 @@ export default function SessionLockScreen({ children }) {
         </button>
       </div>
     </div>
-  );
+    );
+  }
+
+  // If not locked and not loading, render children normally
+  return children;
 }
