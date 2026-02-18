@@ -12,6 +12,7 @@ export default function SessionLockScreen({ children }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const inputRef = useRef(null);
 
   const handleKeyDown = useCallback(
@@ -90,8 +91,8 @@ export default function SessionLockScreen({ children }) {
     [unlock]
   );
 
-  // While session is loading, don't render anything to prevent race conditions
-  if (isLoading) return null;
+  // While session is loading or signing out, don't render anything to prevent race conditions
+  if (isLoading || isSigningOut) return null;
 
   // If not locked, render children normally
   if (!isLocked) return children;
@@ -165,7 +166,10 @@ export default function SessionLockScreen({ children }) {
 
         {/* Sign Out Link */}
         <button
-          onClick={() => signOut({ redirect: true, callbackUrl: '/auth/login' })}
+          onClick={() => {
+            setIsSigningOut(true);
+            signOut({ redirect: true, callbackUrl: '/auth/login' });
+          }}
           className="w-full text-center text-gray-400 hover:text-gray-300 text-sm py-2 transition-colors"
         >
           Sign out instead

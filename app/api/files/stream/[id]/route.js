@@ -9,15 +9,12 @@ import mime from 'mime-types';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import {
-  checkMoovAtom,
-  fixMp4ForStreaming,
-} from '@/lib/ffmpegUtils';
+import { checkMoovAtom, fixMp4ForStreaming } from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
-// Track in-progress MP4 fixes to avoid duplicate work
+// Track in-progress fixes to avoid duplicate work
 const inProgressFixes = new Map();
 
 export async function GET(req, { params }) {
