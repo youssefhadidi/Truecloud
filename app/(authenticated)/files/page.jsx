@@ -17,7 +17,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
-import { useMoveFiles, useFolders, fetchFoldersHelper } from '@/lib/api/files';
+import { useMoveFiles, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
 
 // Lazy load heavy components
@@ -145,31 +145,35 @@ function FilesPageContent() {
   // Detect HEIC files in current folder
   const heicFiles = useMemo(() => {
     return state.files
-      .filter(f => {
+      .filter((f) => {
         if (f.isDirectory) return false;
         const ext = getFileExtension(f.name);
         return ext === 'heic' || ext === 'heif';
       })
-      .map(f => f.name);
+      .map((f) => f.name);
   }, [state.files]);
 
   const hasHeicFiles = heicFiles.length > 0;
 
-  const toggleSelection = useCallback((file) => {
-    const newSelected = state.selectedFiles.includes(file.name)
-      ? state.selectedFiles.filter((name) => name !== file.name)
-      : [...state.selectedFiles, file.name];
-    state.setSelectedFiles(newSelected);
-  }, [state.selectedFiles, state.setSelectedFiles]);
+  const toggleSelection = useCallback(
+    (file) => {
+      const newSelected = state.selectedFiles.includes(file.name) ? state.selectedFiles.filter((name) => name !== file.name) : [...state.selectedFiles, file.name];
+      state.setSelectedFiles(newSelected);
+    },
+    [state.selectedFiles, state.setSelectedFiles],
+  );
 
   const queryClient = useQueryClient();
 
-  const fetchMoveFolders = useCallback(async (path) => {
-    return queryClient.fetchQuery({
-      queryKey: ['folders', path],
-      queryFn: () => fetchFoldersHelper(path),
-    });
-  }, [queryClient]);
+  const fetchMoveFolders = useCallback(
+    async (path) => {
+      return queryClient.fetchQuery({
+        queryKey: ['folders', path],
+        queryFn: () => fetchFoldersHelper(path),
+      });
+    },
+    [queryClient],
+  );
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === state.currentPath) {
@@ -210,7 +214,7 @@ function FilesPageContent() {
           format: 'jpeg',
           quality: '100',
           w: '0',
-          h: '0'
+          h: '0',
         });
 
         const downloadUrl = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
@@ -220,22 +224,22 @@ function FilesPageContent() {
         await handleShareOrDownload(downloadUrl, outputFileName);
 
         // Update progress
-        setConversionStatus(prev => ({
+        setConversionStatus((prev) => ({
           ...prev,
-          completed: prev.completed + 1
+          completed: prev.completed + 1,
         }));
 
         // Small delay between downloads to avoid browser blocking
         if (i < heicFiles.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
       } catch (error) {
         console.error(`Failed to convert ${fileName}:`, error);
         failed.push(fileName);
-        setConversionStatus(prev => ({
+        setConversionStatus((prev) => ({
           ...prev,
           completed: prev.completed + 1,
-          failed: [...prev.failed, fileName]
+          failed: [...prev.failed, fileName],
         }));
       }
     }
@@ -246,9 +250,7 @@ function FilesPageContent() {
       if (failed.length === 0) {
         state.addNotification('success', `Successfully converted ${successCount} HEIC file(s) to JPEG`);
       } else {
-        state.addNotification('warning',
-          `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`
-        );
+        state.addNotification('warning', `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`);
       }
       setConvertingHeic(false);
       setConversionStatus({ completed: 0, total: 0, failed: [] });
@@ -271,7 +273,10 @@ function FilesPageContent() {
       {/* Favorites Sidebar - hidden on mobile */}
       <div className="hidden sm:block">
         <FavoritesSidebar
-          onNavigate={(path) => { setGlobalSearchQuery(''); state.setCurrentPath(path); }}
+          onNavigate={(path) => {
+            setGlobalSearchQuery('');
+            state.setCurrentPath(path);
+          }}
           currentPath={state.currentPath}
           searchQuery={globalSearchQuery}
           onSearchQueryChange={setGlobalSearchQuery}
@@ -307,9 +312,9 @@ function FilesPageContent() {
                 <>
                   {/* Upload Button */}
                   <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors">
-                  <FiUpload size={16} />
-                  <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
-                  <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
+                    <FiUpload size={16} />
+                    <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
+                    <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
                   </label>
 
                   {/* Selection Mode */}
@@ -342,17 +347,9 @@ function FilesPageContent() {
                     >
                       <FiImage size={16} />
                       <span className="hidden sm:inline">
-                        {convertingHeic
-                          ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...`
-                          : `HEIC→JPEG (${heicFiles.length})`
-                        }
+                        {convertingHeic ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...` : `HEIC→JPEG (${heicFiles.length})`}
                       </span>
-                      <span className="sm:hidden">
-                        {convertingHeic
-                          ? `${conversionStatus.completed}/${conversionStatus.total}`
-                          : `HEIC→JPEG`
-                        }
-                      </span>
+                      <span className="sm:hidden">{convertingHeic ? `${conversionStatus.completed}/${conversionStatus.total}` : `HEIC→JPEG`}</span>
                     </button>
                   )}
 
@@ -454,7 +451,13 @@ function FilesPageContent() {
 
         {/* Breadcrumb Navigation */}
         <div className="mb-1 mt-1 sm:mb-2 flex items-center gap-2 sm:gap-3  text-gray-400">
-          <button onClick={() => { setGlobalSearchQuery(''); navigation.navigateToBreadcrumb(0); }} className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap">
+          <button
+            onClick={() => {
+              setGlobalSearchQuery('');
+              navigation.navigateToBreadcrumb(0);
+            }}
+            className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap"
+          >
             <FiHome size={16} />
             <span className="hidden sm:inline">Home</span>
           </button>
@@ -465,20 +468,20 @@ function FilesPageContent() {
             </div>
           ) : (
             state.currentPath &&
-              state.currentPath.split('/').map((folder, index, arr) => {
-                const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
-                return (
-                  <div key={index} className="flex items-center gap-1.5 sm:gap-2">
-                    <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
-                    <button
-                      onClick={() => navigation.navigateToBreadcrumb(index + 1)}
-                      className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
-                    >
-                      {displayName}
-                    </button>
-                  </div>
-                );
-              })
+            state.currentPath.split('/').map((folder, index, arr) => {
+              const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
+              return (
+                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
+                  <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
+                  <button
+                    onClick={() => navigation.navigateToBreadcrumb(index + 1)}
+                    className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
+                  >
+                    {displayName}
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
         {/* File Grid */}
@@ -532,24 +535,30 @@ function FilesPageContent() {
                       processingFile={state.processingFile}
                       handleContextMenu={contextMenu.handleContextMenu}
                       getFileIcon={fileUtils.getFileIcon}
-                      navigateToFolder={isGlobalSearch
-                        ? (name, file) => {
-                            const path = file?._fullPath || file?._parentPath || name;
-                            setGlobalSearchQuery('');
-                            if (file?.isDirectory) {
-                              state.setCurrentPath(path);
-                            } else {
-                              state.setCurrentPath(file?._parentPath || '');
-                              setPendingScrollTarget(name);
+                      navigateToFolder={
+                        isGlobalSearch
+                          ? (name, file) => {
+                              const path = file?._fullPath || file?._parentPath || name;
+                              setGlobalSearchQuery('');
+                              if (file?.isDirectory) {
+                                state.setCurrentPath(path);
+                              } else {
+                                state.setCurrentPath(file?._parentPath || '');
+                                setPendingScrollTarget(name);
+                              }
                             }
-                          }
-                        : navigation.navigateToFolder}
+                          : navigation.navigateToFolder
+                      }
                       formatFileSize={fileUtils.formatFileSize}
-                      openMediaViewer={isGlobalSearch ? (file) => {
-                        setGlobalSearchQuery('');
-                        state.setCurrentPath(file._parentPath || '');
-                        setPendingScrollTarget(file.name);
-                      } : mediaViewer.openMediaViewer}
+                      openMediaViewer={
+                        isGlobalSearch
+                          ? (file) => {
+                              setGlobalSearchQuery('');
+                              state.setCurrentPath(file._parentPath || '');
+                              setPendingScrollTarget(file.name);
+                            }
+                          : mediaViewer.openMediaViewer
+                      }
                       initiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
                       handleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
                       initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
@@ -604,23 +613,29 @@ function FilesPageContent() {
                     onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
                     processingFile={state.processingFile}
                     currentPath={state.currentPath}
-                    onNavigateToFolder={isGlobalSearch
-                      ? (name, file) => {
-                          const item = displayFiles.find(f => f.name === name) || file;
-                          setGlobalSearchQuery('');
-                          if (item?.isDirectory) {
-                            state.setCurrentPath(item._fullPath || item._parentPath || name);
-                          } else {
-                            state.setCurrentPath(item?._parentPath || '');
-                            setPendingScrollTarget(name);
+                    onNavigateToFolder={
+                      isGlobalSearch
+                        ? (name, file) => {
+                            const item = displayFiles.find((f) => f.name === name) || file;
+                            setGlobalSearchQuery('');
+                            if (item?.isDirectory) {
+                              state.setCurrentPath(item._fullPath || item._parentPath || name);
+                            } else {
+                              state.setCurrentPath(item?._parentPath || '');
+                              setPendingScrollTarget(name);
+                            }
                           }
-                        }
-                      : navigation.navigateToFolder}
-                    onOpenMediaViewer={isGlobalSearch ? (file) => {
-                      setGlobalSearchQuery('');
-                      state.setCurrentPath(file._parentPath || '');
-                      setPendingScrollTarget(file.name);
-                    } : mediaViewer.openMediaViewer}
+                        : navigation.navigateToFolder
+                    }
+                    onOpenMediaViewer={
+                      isGlobalSearch
+                        ? (file) => {
+                            setGlobalSearchQuery('');
+                            state.setCurrentPath(file._parentPath || '');
+                            setPendingScrollTarget(file.name);
+                          }
+                        : mediaViewer.openMediaViewer
+                    }
                     onInitiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
                     onHandleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
                     onInitiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
@@ -643,7 +658,6 @@ function FilesPageContent() {
             </div>
           )}
         </div>
-
       </main>
 
       {/* Context Menu */}
@@ -680,23 +694,25 @@ function FilesPageContent() {
         }}
         onToggleFavorite={async () => {
           if (state.selectedContextFile) {
-            const fullPath = state.currentPath
-              ? `${state.currentPath}/${state.selectedContextFile.name}`
-              : state.selectedContextFile.name;
+            const fullPath = state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name;
             try {
               await toggleFavorite({
                 path: fullPath,
                 name: state.selectedContextFile.name,
                 isDirectory: state.selectedContextFile.isDirectory,
               });
-              state.addNotification('success', favorites.some(f => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites');
+              state.addNotification('success', favorites.some((f) => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites');
             } catch (error) {
               state.addNotification('error', 'Failed to update favorites');
             }
           }
           contextMenu.closeContextMenu();
         }}
-        isFavorite={state.selectedContextFile ? favorites.some(f => f.path === (state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name)) : false}
+        isFavorite={
+          state.selectedContextFile
+            ? favorites.some((f) => f.path === (state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name))
+            : false
+        }
         onClose={contextMenu.closeContextMenu}
       />
 
@@ -732,11 +748,7 @@ function FilesPageContent() {
       {/* Share Modal */}
       {state.sharingFile && (
         <Suspense fallback={null}>
-          <ShareModal
-            file={state.sharingFile}
-            currentPath={state.currentPath}
-            onClose={handlers.cancelShare}
-          />
+          <ShareModal file={state.sharingFile} currentPath={state.currentPath} onClose={handlers.cancelShare} />
         </Suspense>
       )}
 

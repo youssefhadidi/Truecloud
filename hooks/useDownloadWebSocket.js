@@ -69,7 +69,8 @@ export function useDownloadWebSocket(gid, initialData = {}) {
             progress: 100,
           }));
           // Invalidate files cache for the download path so completed files appear
-          const downloadPath = downloadData.path || '';
+          const downloadPath = msgPayload.targetPath || '';
+          console.log('[DOWNLOAD WEBSOCKET] Invalidating files cache for path:', downloadPath);
           queryClient.invalidateQueries({ queryKey: ['files', downloadPath] });
         } else if (type === 'download-added' && downloadData?.gid === gid) {
           setDownload((prev) => ({
@@ -92,7 +93,7 @@ export function useDownloadWebSocket(gid, initialData = {}) {
     });
 
     return unsubscribe;
-  }, [gid, subscribe]);
+  }, [gid, subscribe, queryClient]);
 
   return download;
 }

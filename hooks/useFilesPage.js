@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -22,7 +22,6 @@ import {
 
 export function useFilesPage(status) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
 
