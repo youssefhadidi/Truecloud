@@ -59,6 +59,14 @@ export default function SessionLockScreen({ children }) {
     [isLocked, pin, unlock]
   );
 
+  // Reset PIN when unlocking
+  useEffect(() => {
+    if (!isLocked) {
+      setPin('');
+      setError('');
+    }
+  }, [isLocked]);
+
   // Add keyboard listener and focus input when locked
   useEffect(() => {
     if (!isLocked) return;
