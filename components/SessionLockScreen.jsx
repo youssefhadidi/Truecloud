@@ -96,6 +96,15 @@ export default function SessionLockScreen({ children }) {
   // If signing out, don't render anything to prevent race conditions
   if (isSigningOut) return null;
 
+  // While loading the session, show a loading screen to prevent flicker
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   // If locked, show PIN input screen (take priority over children)
   if (isLocked) {
     return (
