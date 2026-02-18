@@ -117,7 +117,7 @@ const GridItem = memo(
             </div>
           </div>
         ) : item.isDownloading ? (
-          <div style={{ width: '100%', height: '100%', display: 'flex' }}>
+          <div style={{ width: '100%', height: '100%' }}>
             <DownloadCard
               gid={item.downloadGid}
               initialData={{
@@ -322,7 +322,9 @@ const GridItem = memo(
             </div>
 
             {isGlobalSearch && item._parentPath != null && (
-              <div className="text-[10px] text-gray-500 truncate px-1" title={item._parentPath || '/'}>{item._parentPath || '/'}</div>
+              <div className="text-[10px] text-gray-500 truncate px-1" title={item._parentPath || '/'}>
+                {item._parentPath || '/'}
+              </div>
             )}
 
             <div className="text-xs text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
@@ -435,225 +437,234 @@ const GridItem = memo(
 
 GridItem.displayName = 'GridItem';
 
-const GridView = forwardRef(({
-  files,
-  creatingFolder,
-  newFolderName,
-  onNewFolderNameChange,
-  onCancelCreateFolder,
-  onConfirmCreateFolder,
-  deletingFile,
-  renamingFile,
-  newFileName,
-  onNewFileNameChange,
-  onCancelRename,
-  onConfirmRename,
-  processingFile,
-  currentPath,
-  onNavigateToFolder,
-  onOpenMediaViewer,
-  onInitiateRename,
-  onHandleDownload,
-  onInitiateDelete,
-  onConfirmDelete,
-  onCancelDelete,
-  formatFileSize,
-  onInitiateShare,
-  sharedPaths,
-  onContextMenu,
-  selectionMode,
-  selectedFiles,
-  onToggleSelect,
-  onPauseDownload,
-  onResumeDownload,
-  onRemoveDownload,
-  isGlobalSearch,
-}, ref) => {
-  const gridRef = useRef(null);
-  const containerWidthRef = useRef(0);
-  const [showingActionsFor, setShowingActionsFor] = useState(null);
-  const longPressTimerRef = useRef(null);
-
-  const allItems = useMemo(() => {
-    const items = [...files];
-    if (creatingFolder) {
-      items.unshift({ id: 'new-folder', isCreating: true });
-    }
-    return items;
-  }, [files, creatingFolder]);
-
-  useImperativeHandle(ref, () => ({
-    scrollToFile: (fileName) => {
-      const index = allItems.findIndex((f) => f.name === fileName);
-      if (index >= 0 && gridRef.current && containerWidthRef.current) {
-        const columns = getColumnsCount(containerWidthRef.current);
-        const rowIndex = Math.floor(index / columns);
-        const columnIndex = index % columns;
-        gridRef.current.scrollToCell({ columnIndex, rowIndex });
-      }
-    },
-  }), [allItems]);
-
-  const handleTouchStart = useCallback((item) => {
-    longPressTimerRef.current = setTimeout(() => {
-      setShowingActionsFor(item.id);
-    }, 500);
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const handleTouchMove = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const shouldShowActions = useCallback(
-    (itemId) => {
-      if (deletingFile?.id || renamingFile?.id) {
-        return false;
-      }
-      return showingActionsFor === itemId;
-    },
-    [deletingFile, renamingFile, showingActionsFor],
-  );
-
-  const cellRenderer = useCallback(
-    ({ columnIndex, key, rowIndex, style, parent }) => {
-      const containerWidth = parent.props.width;
-      const columns = getColumnsCount(containerWidth);
-      const gap = 8;
-      const itemIndex = rowIndex * columns + columnIndex;
-      const item = allItems[itemIndex];
-
-      if (!item) return <div key={key} style={style} />;
-
-      const cellWidth = style.width - gap;
-      const isShared = sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
-
-      return (
-        <GridItem
-          key={key}
-          item={item}
-          cellWidth={cellWidth}
-          containerWidth={containerWidth}
-          style={style}
-          gap={gap}
-          isCreating={item.isCreating}
-          newFolderName={newFolderName}
-          onNewFolderNameChange={onNewFolderNameChange}
-          onCancelCreateFolder={onCancelCreateFolder}
-          onConfirmCreateFolder={onConfirmCreateFolder}
-          isDeletingFile={deletingFile?.id === item.id}
-          isRenamingFile={renamingFile?.id === item.id}
-          newFileName={newFileName}
-          onNewFileNameChange={onNewFileNameChange}
-          onCancelRename={onCancelRename}
-          onConfirmRename={onConfirmRename}
-          processingFile={processingFile}
-          currentPath={currentPath}
-          onNavigateToFolder={onNavigateToFolder}
-          onOpenMediaViewer={onOpenMediaViewer}
-          onInitiateRename={onInitiateRename}
-          onHandleDownload={onHandleDownload}
-          onInitiateDelete={onInitiateDelete}
-          onConfirmDelete={onConfirmDelete}
-          onCancelDelete={onCancelDelete}
-          formatFileSize={formatFileSize}
-          onInitiateShare={onInitiateShare}
-          sharedPath={isShared}
-          onContextMenu={onContextMenu}
-          selectionMode={selectionMode}
-          isSelected={!!selectedFiles?.has(item.name)}
-          onToggleSelect={onToggleSelect}
-          shouldShowActions={shouldShowActions}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchMove={handleTouchMove}
-          setShowingActionsFor={setShowingActionsFor}
-          onPauseDownload={onPauseDownload}
-          onResumeDownload={onResumeDownload}
-          onRemoveDownload={onRemoveDownload}
-          isGlobalSearch={isGlobalSearch}
-        />
-      );
-    },
-    [
-      allItems,
+const GridView = forwardRef(
+  (
+    {
+      files,
+      creatingFolder,
       newFolderName,
       onNewFolderNameChange,
-      onConfirmCreateFolder,
       onCancelCreateFolder,
+      onConfirmCreateFolder,
       deletingFile,
-      onCancelDelete,
-      onConfirmDelete,
       renamingFile,
       newFileName,
       onNewFileNameChange,
-      onConfirmRename,
       onCancelRename,
-      onNavigateToFolder,
+      onConfirmRename,
       processingFile,
       currentPath,
+      onNavigateToFolder,
       onOpenMediaViewer,
       onInitiateRename,
       onHandleDownload,
       onInitiateDelete,
-      onInitiateShare,
+      onConfirmDelete,
+      onCancelDelete,
       formatFileSize,
-      showingActionsFor,
-      handleTouchStart,
-      handleTouchEnd,
-      handleTouchMove,
-      shouldShowActions,
+      onInitiateShare,
       sharedPaths,
       onContextMenu,
       selectionMode,
       selectedFiles,
       onToggleSelect,
+      onPauseDownload,
+      onResumeDownload,
+      onRemoveDownload,
       isGlobalSearch,
-    ],
-  );
+    },
+    ref,
+  ) => {
+    const gridRef = useRef(null);
+    const containerWidthRef = useRef(0);
+    const [showingActionsFor, setShowingActionsFor] = useState(null);
+    const longPressTimerRef = useRef(null);
 
-  return (
-    <div className="w-full h-full" style={{ WebkitOverflowScrolling: 'touch' }}>
-      <AutoSizer>
-        {({ height, width }) => {
-          containerWidthRef.current = width;
-          const columns = getColumnsCount(width);
-          const cellSize = Math.floor(width / columns);
-          const textHeight = 36;
-          const rowHeight = cellSize + textHeight;
-          const rowCount = Math.ceil(allItems.length / columns);
+    const allItems = useMemo(() => {
+      const items = [...files];
+      if (creatingFolder) {
+        items.unshift({ id: 'new-folder', isCreating: true });
+      }
+      return items;
+    }, [files, creatingFolder]);
 
-          return (
-            <Grid
-              ref={gridRef}
-              cellRenderer={(props) => cellRenderer({ ...props, parent: { props: { width } } })}
-              columnCount={columns}
-              columnWidth={cellSize}
-              height={height}
-              rowCount={rowCount}
-              rowHeight={rowHeight}
-              width={width}
-              overscanRowCount={5}
-              style={{
-                outline: 'none',
-                overflowX: 'hidden',
-              }}
-            />
-          );
-        }}
-      </AutoSizer>
-    </div>
-  );
-});
+    useImperativeHandle(
+      ref,
+      () => ({
+        scrollToFile: (fileName) => {
+          const index = allItems.findIndex((f) => f.name === fileName);
+          if (index >= 0 && gridRef.current && containerWidthRef.current) {
+            const columns = getColumnsCount(containerWidthRef.current);
+            const rowIndex = Math.floor(index / columns);
+            const columnIndex = index % columns;
+            gridRef.current.scrollToCell({ columnIndex, rowIndex });
+          }
+        },
+      }),
+      [allItems],
+    );
+
+    const handleTouchStart = useCallback((item) => {
+      longPressTimerRef.current = setTimeout(() => {
+        setShowingActionsFor(item.id);
+      }, 500);
+    }, []);
+
+    const handleTouchEnd = useCallback(() => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }, []);
+
+    const handleTouchMove = useCallback(() => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }, []);
+
+    const shouldShowActions = useCallback(
+      (itemId) => {
+        if (deletingFile?.id || renamingFile?.id) {
+          return false;
+        }
+        return showingActionsFor === itemId;
+      },
+      [deletingFile, renamingFile, showingActionsFor],
+    );
+
+    const cellRenderer = useCallback(
+      ({ columnIndex, key, rowIndex, style, parent }) => {
+        const containerWidth = parent.props.width;
+        const columns = getColumnsCount(containerWidth);
+        const gap = 8;
+        const itemIndex = rowIndex * columns + columnIndex;
+        const item = allItems[itemIndex];
+
+        if (!item) return <div key={key} style={style} />;
+
+        const cellWidth = style.width - gap;
+        const isShared = sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
+
+        return (
+          <GridItem
+            key={key}
+            item={item}
+            cellWidth={cellWidth}
+            containerWidth={containerWidth}
+            style={style}
+            gap={gap}
+            isCreating={item.isCreating}
+            newFolderName={newFolderName}
+            onNewFolderNameChange={onNewFolderNameChange}
+            onCancelCreateFolder={onCancelCreateFolder}
+            onConfirmCreateFolder={onConfirmCreateFolder}
+            isDeletingFile={deletingFile?.id === item.id}
+            isRenamingFile={renamingFile?.id === item.id}
+            newFileName={newFileName}
+            onNewFileNameChange={onNewFileNameChange}
+            onCancelRename={onCancelRename}
+            onConfirmRename={onConfirmRename}
+            processingFile={processingFile}
+            currentPath={currentPath}
+            onNavigateToFolder={onNavigateToFolder}
+            onOpenMediaViewer={onOpenMediaViewer}
+            onInitiateRename={onInitiateRename}
+            onHandleDownload={onHandleDownload}
+            onInitiateDelete={onInitiateDelete}
+            onConfirmDelete={onConfirmDelete}
+            onCancelDelete={onCancelDelete}
+            formatFileSize={formatFileSize}
+            onInitiateShare={onInitiateShare}
+            sharedPath={isShared}
+            onContextMenu={onContextMenu}
+            selectionMode={selectionMode}
+            isSelected={!!selectedFiles?.has(item.name)}
+            onToggleSelect={onToggleSelect}
+            shouldShowActions={shouldShowActions}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
+            setShowingActionsFor={setShowingActionsFor}
+            onPauseDownload={onPauseDownload}
+            onResumeDownload={onResumeDownload}
+            onRemoveDownload={onRemoveDownload}
+            isGlobalSearch={isGlobalSearch}
+          />
+        );
+      },
+      [
+        allItems,
+        newFolderName,
+        onNewFolderNameChange,
+        onConfirmCreateFolder,
+        onCancelCreateFolder,
+        deletingFile,
+        onCancelDelete,
+        onConfirmDelete,
+        renamingFile,
+        newFileName,
+        onNewFileNameChange,
+        onConfirmRename,
+        onCancelRename,
+        onNavigateToFolder,
+        processingFile,
+        currentPath,
+        onOpenMediaViewer,
+        onInitiateRename,
+        onHandleDownload,
+        onInitiateDelete,
+        onInitiateShare,
+        formatFileSize,
+        showingActionsFor,
+        handleTouchStart,
+        handleTouchEnd,
+        handleTouchMove,
+        shouldShowActions,
+        sharedPaths,
+        onContextMenu,
+        selectionMode,
+        selectedFiles,
+        onToggleSelect,
+        isGlobalSearch,
+      ],
+    );
+
+    return (
+      <div className="w-full h-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <AutoSizer>
+          {({ height, width }) => {
+            containerWidthRef.current = width;
+            const columns = getColumnsCount(width);
+            const cellSize = Math.floor(width / columns);
+            const textHeight = 36;
+            const rowHeight = cellSize + textHeight;
+            const rowCount = Math.ceil(allItems.length / columns);
+
+            return (
+              <Grid
+                ref={gridRef}
+                cellRenderer={(props) => cellRenderer({ ...props, parent: { props: { width } } })}
+                columnCount={columns}
+                columnWidth={cellSize}
+                height={height}
+                rowCount={rowCount}
+                rowHeight={rowHeight}
+                width={width}
+                overscanRowCount={5}
+                style={{
+                  outline: 'none',
+                  overflowX: 'hidden',
+                }}
+              />
+            );
+          }}
+        </AutoSizer>
+      </div>
+    );
+  },
+);
 
 GridView.displayName = 'GridView';
 

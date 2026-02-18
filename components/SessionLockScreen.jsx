@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock } from 'react-icons/fi';
 import { signOut } from 'next-auth/react';
@@ -12,6 +12,7 @@ export default function SessionLockScreen({ children }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const inputRef = useRef(null);
 
   const handleKeyDown = useCallback(
     async (e) => {
@@ -54,13 +55,40 @@ export default function SessionLockScreen({ children }) {
     [isLocked, pin, unlock]
   );
 
-  // Add keyboard listener when locked
+  // Add keyboard listener and focus input when locked
   useEffect(() => {
     if (!isLocked) return;
 
     window.addEventListener('keydown', handleKeyDown);
+    // Focus the hidden input on mobile to trigger keyboard
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked, handleKeyDown]);
+
+  const handleInputChange = useCallback(
+    async (e) => {
+      const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+      setPin(value);
+      setError('');
+
+      // Auto-submit on 4th digit
+      if (value.length === 4) {
+        const success = await unlock(value);
+        if (!success) {
+          e.target.value = '';
+          setPin('');
+          setError('Incorrect PIN');
+          setIsShaking(true);
+          setTimeout(() => setIsShaking(false), 500);
+        } else {
+          e.target.value = '';
+        }
+      }
+    },
+    [unlock]
+  );
 
   // While session is loading, don't render anything to prevent race conditions
   if (isLoading) return null;
@@ -71,6 +99,19 @@ export default function SessionLockScreen({ children }) {
   // If locked, show PIN input screen
   return (
     <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
+      {/* Hidden input for mobile keyboard support */}
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={pin}
+        onChange={handleInputChange}
+        className="sr-only"
+        aria-label="PIN input"
+        autoComplete="off"
+        maxLength="4"
+      />
+
       <div
         className={`bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 ${
           isShaking ? 'animate-pulse' : ''
@@ -94,7 +135,10 @@ export default function SessionLockScreen({ children }) {
         </p>
 
         {/* PIN Display */}
-        <div className="flex justify-center gap-3 mb-6">
+        <div
+          className="flex justify-center gap-3 mb-6 cursor-pointer"
+          onClick={() => inputRef.current?.focus()}
+        >
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}

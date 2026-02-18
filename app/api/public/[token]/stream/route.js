@@ -6,66 +6,23 @@ import fs from 'fs';
 import { stat, access, mkdir } from 'fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
 import mime from 'mime-types';
-import { spawn } from 'child_process';
 import { createHash } from 'crypto';
+import { logger } from '@/lib/logger';
+import {
+  checkMoovAtom,
+  fixMp4ForStreaming,
+  probeCodecs,
+  detectHardwareAccel,
+  buildMkvTranscodeArgs,
+  transcodeToMp4,
+} from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
-// Check if MP4 has moov atom at the beginning (required for streaming)
-async function checkMoovAtom(filePath) {
-  return new Promise((resolve) => {
-    const ffprobe = spawn('ffprobe', [
-      '-v',
-      'error',
-      '-show_entries',
-      'format=start_time',
-      '-of',
-      'default=noprint_wrappers=1:nokey=1',
-      filePath,
-    ]);
-
-    ffprobe.on('close', (code) => {
-      resolve(code === 0);
-    });
-
-    setTimeout(() => {
-      ffprobe.kill();
-      resolve(false);
-    }, 1000);
-  });
-}
-
-// Fix MP4 for streaming by moving moov atom to beginning
-async function fixMp4ForStreaming(inputPath, outputPath) {
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
-      '-i',
-      inputPath,
-      '-c:v',
-      'copy',
-      '-c:a',
-      'copy',
-      '-movflags',
-      'faststart',
-      '-y',
-      outputPath,
-    ]);
-
-    ffmpeg.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`FFmpeg failed with code ${code}`));
-      }
-    });
-
-    ffmpeg.on('error', (err) => {
-      reject(err);
-    });
-  });
-}
+// Track in-progress MKV transcodes to deduplicate concurrent public requests
+const inProgressFixes = new Map();
 
 export async function GET(req, { params }) {
   try {
@@ -123,8 +80,84 @@ export async function GET(req, { params }) {
     let streamPath = filePath;
     const fileExt = extname(filePath).toLowerCase();
 
+    // Parse optional transcoding parameters from query string
+    const maxWidth = url.searchParams.has('maxWidth') ? parseInt(url.searchParams.get('maxWidth'), 10) : undefined;
+    const maxHeight = url.searchParams.has('maxHeight') ? parseInt(url.searchParams.get('maxHeight'), 10) : undefined;
+    const bitrate = url.searchParams.get('bitrate');
+
+    // Check if it's an MKV file that needs transcoding for browser compatibility
+    if (fileExt === '.mkv') {
+      const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
+
+      // Include resolution/bitrate in cache key so different versions are cached separately
+      let cacheKeySuffix = '';
+      if (maxWidth || maxHeight || bitrate) {
+        const resolutionStr = [maxWidth || 'auto', maxHeight || 'auto', bitrate || 'auto'].join('_');
+        cacheKeySuffix = `_${resolutionStr}`;
+      }
+
+      const pathHash = createHash('md5').update(filePath).digest('hex');
+      const cachedPath = join(cacheDir, `${pathHash}${cacheKeySuffix}.mp4`);
+      const tmpPath = cachedPath + '.tmp';
+
+      let useCache = false;
+      try {
+        const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
+        if (cachedStats.mtime >= sourceStats.mtime) {
+          useCache = true;
+          streamPath = cachedPath;
+        }
+      } catch {
+        // Cache does not exist
+      }
+
+      if (!useCache) {
+        if (!inProgressFixes.has(pathHash)) {
+          const transcodePromise = (async () => {
+            await mkdir(cacheDir, { recursive: true });
+            const [{ videoCodec, audioCodec }, hwaccel] = await Promise.all([
+              probeCodecs(filePath),
+              detectHardwareAccel(),
+            ]);
+            const args = buildMkvTranscodeArgs(filePath, tmpPath, videoCodec, audioCodec, hwaccel, {
+              maxWidth,
+              maxHeight,
+              bitrate,
+            });
+            await transcodeToMp4(filePath, tmpPath, args);
+            await fs.promises.rename(tmpPath, cachedPath);
+          })();
+
+          inProgressFixes.set(pathHash, transcodePromise);
+
+          try {
+            await transcodePromise;
+            streamPath = cachedPath;
+          } catch (err) {
+            logger.error('GET /api/public/[token]/stream - MKV transcode failed, serving original', {
+              error: err.message,
+            });
+            // Fall through: serve original MKV
+          } finally {
+            inProgressFixes.delete(pathHash);
+          }
+        } else {
+          try {
+            await inProgressFixes.get(pathHash);
+            try {
+              const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
+              if (cachedStats.mtime >= sourceStats.mtime) streamPath = cachedPath;
+            } catch {
+              /* serve original */
+            }
+          } catch {
+            /* serve original */
+          }
+        }
+      }
+    }
     // Check if it's an MP4 that might need fixing for streaming
-    if (fileExt === '.mp4') {
+    else if (fileExt === '.mp4') {
       const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
       const pathHash = createHash('md5').update(filePath).digest('hex');
       const cachedPath = join(cacheDir, `${pathHash}.mp4`);
@@ -193,7 +226,7 @@ export async function GET(req, { params }) {
       },
     });
   } catch (error) {
-    console.error('GET /api/public/[token]/stream - Error:', error);
+    logger.error('GET /api/public/[token]/stream - Error', { error: error.message });
     return NextResponse.json({ error: 'Streaming failed' }, { status: 500 });
   }
 }

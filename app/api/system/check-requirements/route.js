@@ -63,6 +63,27 @@ function getCommandVersion(command, versionFlag = '--version') {
 }
 
 /**
+ * Check if VAAPI hardware acceleration is available for FFmpeg
+ * Tests if FFmpeg supports the VAAPI hwaccel for GPU-accelerated encoding
+ */
+async function checkVaapiSupport() {
+  try {
+    const { execSync } = await import('child_process');
+    const result = execSync('ffmpeg -hwaccels 2>/dev/null | grep vaapi || true', {
+      encoding: 'utf-8',
+      timeout: 5000,
+    })
+      .trim();
+
+    const installed = result.includes('vaapi');
+    const version = installed ? 'VAAPI hardware acceleration available' : 'VAAPI not detected';
+    return { installed, version };
+  } catch {
+    return { installed: false, version: null };
+  }
+}
+
+/**
  * Check if sharp can decode HEIC/HEIF via HEVC codec.
  * We check two things at runtime:
  * 1. The patched libvips-cpp in sharp's bundled dir has libheif linked
@@ -121,6 +142,13 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y ffmpeg',
   },
   {
+    name: 'VAAPI Hardware Acceleration',
+    checkType: 'vaapi',
+    description: 'GPU-accelerated video encoding for MKV transcoding (Intel/AMD iGPU)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y i965-va-driver libva2 libva-drm2 vainfo',
+  },
+  {
     name: 'Sharp HEVC',
     checkType: 'sharp-hevc',
     description: 'HEIC/HEIF image support (requires libde265 + libheif + libvips)',
@@ -154,7 +182,11 @@ export async function GET(req) {
       REQUIRED_PROGRAMS.map(async (prog) => {
         let installed, version;
 
-        if (prog.checkType === 'sharp-hevc') {
+        if (prog.checkType === 'vaapi') {
+          const result = await checkVaapiSupport();
+          installed = result.installed;
+          version = result.version;
+        } else if (prog.checkType === 'sharp-hevc') {
           const result = await checkSharpHevcSupport();
           installed = result.installed;
           version = result.version;

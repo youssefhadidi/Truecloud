@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiPause, FiPlay, FiTrash2, FiDownload } from 'react-icons/fi';
 import { useDownloadWebSocket } from '@/hooks/useDownloadWebSocket';
 
@@ -52,6 +52,11 @@ export default function DownloadCard({
     }
   };
 
+  // Don't render completed or removed downloads
+  if (download.status === 'complete' || download.status === 'removed') {
+    return null;
+  }
+
   return (
     <div className="group relative bg-gray-700 rounded-lg p-0 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none" style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}>
       {/* Thumbnail area with spinner */}
@@ -81,6 +86,16 @@ export default function DownloadCard({
           <div className="flex flex-col items-center gap-2">
             <FiTrash2 className="text-red-400" size={24} />
             <div className="text-xs text-gray-300 font-medium">{download.status === 'error' ? 'Error' : 'Removed'}</div>
+          </div>
+        )}
+
+        {/* Progress bar at bottom */}
+        {(download.status === 'active' || download.status === 'paused') && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+            <div
+              className="h-full bg-indigo-500 transition-all"
+              style={{ width: `${Math.min(download.progress, 100)}%` }}
+            />
           </div>
         )}
       </div>

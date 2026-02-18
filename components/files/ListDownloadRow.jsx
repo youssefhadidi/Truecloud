@@ -66,6 +66,11 @@ export function ListDownloadRow({
     }
   };
 
+  // Don't render completed or removed downloads
+  if (download.status === 'complete' || download.status === 'removed') {
+    return null;
+  }
+
   return (
     <div
       style={{

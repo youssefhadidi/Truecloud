@@ -28,10 +28,13 @@ export function useDownloadWebSocket(gid, initialData = {}) {
   useEffect(() => {
     const unsubscribe = subscribe('torrent-downloads', (message) => {
       try {
-        const { type, payload: downloadData } = message.payload;
+        const { type, payload: msgPayload } = message.payload;
+
+        // Handle both nested payload (download-progress) and direct gid (download-complete, etc.)
+        const downloadData = msgPayload.gid ? msgPayload : message.payload.payload;
 
         // Only process messages for this download's gid
-        if (downloadData.gid !== gid) return;
+        if (downloadData?.gid !== gid) return;
 
         if (type === 'download-progress') {
           setDownload((prev) => ({
@@ -61,8 +64,9 @@ export function useDownloadWebSocket(gid, initialData = {}) {
           setDownload((prev) => ({
             ...prev,
             status: 'complete',
+            progress: 100,
           }));
-        } else if (type === 'download-added' && downloadData.gid === gid) {
+        } else if (type === 'download-added' && downloadData?.gid === gid) {
           setDownload((prev) => ({
             ...prev,
             name: downloadData.name || prev.name,
