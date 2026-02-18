@@ -134,24 +134,20 @@ export async function GET(req, { params }) {
             await transcodePromise;
             streamPath = cachedPath;
           } catch (err) {
-            logger.error('GET /api/public/[token]/stream - MKV transcode failed, serving original', {
+            logger.error('GET /api/public/[token]/stream - MKV transcode failed', {
               error: err.message,
             });
-            // Fall through: serve original MKV
-          } finally {
             inProgressFixes.delete(pathHash);
+            throw err; // Fail the request instead of fallback
           }
+          inProgressFixes.delete(pathHash);
         } else {
-          try {
-            await inProgressFixes.get(pathHash);
-            try {
-              const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
-              if (cachedStats.mtime >= sourceStats.mtime) streamPath = cachedPath;
-            } catch {
-              /* serve original */
-            }
-          } catch {
-            /* serve original */
+          await inProgressFixes.get(pathHash);
+          const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
+          if (cachedStats.mtime >= sourceStats.mtime) {
+            streamPath = cachedPath;
+          } else {
+            throw new Error('MKV transcode failed to produce cached file');
           }
         }
       }

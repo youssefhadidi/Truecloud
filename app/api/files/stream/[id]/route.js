@@ -125,31 +125,24 @@ export async function GET(req, { params }) {
             streamPath = cachedPath;
             logger.info('GET /api/files/stream - MKV transcode complete, serving MP4', { fileId });
           } catch (err) {
-            logger.error('GET /api/files/stream - MKV transcode failed, serving original', {
+            logger.error('GET /api/files/stream - MKV transcode failed', {
               fileId,
               error: err.message,
             });
-            // streamPath stays as fullPath (original MKV — graceful degradation)
-          } finally {
             inProgressFixes.delete(pathHash);
+            throw err; // Fail the request instead of fallback
           }
+          inProgressFixes.delete(pathHash);
         } else {
           // Another request is already transcoding — wait for it
           logger.debug('GET /api/files/stream - MKV transcode in progress, waiting', { fileId });
-          try {
-            await inProgressFixes.get(pathHash);
-            // Re-check cache after waiting
-            try {
-              const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
-              if (cachedStats.mtime >= sourceStats.mtime) {
-                streamPath = cachedPath;
-              }
-            } catch {
-              // Cache still missing: serve original
-            }
-          } catch {
-            // The other transcode failed: serve original
-            logger.warn('GET /api/files/stream - Concurrent MKV transcode failed, serving original', { fileId });
+          await inProgressFixes.get(pathHash);
+          // Re-check cache after waiting
+          const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
+          if (cachedStats.mtime >= sourceStats.mtime) {
+            streamPath = cachedPath;
+          } else {
+            throw new Error('MKV transcode failed to produce cached file');
           }
         }
       }
