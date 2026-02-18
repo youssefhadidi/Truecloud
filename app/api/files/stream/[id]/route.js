@@ -9,7 +9,7 @@ import mime from 'mime-types';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { checkMoovAtom, fixMp4ForStreaming } from '@/lib/ffmpegUtils';
+import { checkMoovAtom, fixMp4ForStreaming, remuxMkvToMp4 } from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -104,6 +104,54 @@ export async function GET(req, { params }) {
             logger.debug('GET /api/files/stream - Fix already in progress, streaming original', { fileId });
           }
           // Stream original file immediately (may buffer more but no wait)
+        }
+      }
+    }
+
+    // MKV files need remuxing to MP4 for browser playback (audio codec compatibility)
+    if (fileExt === '.mkv') {
+      const pathHash = createHash('md5').update(fullPath).digest('hex');
+      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
+
+      // Check if we already have a cached MP4 version
+      let useCache = false;
+      try {
+        const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
+        if (cachedStats.mtime >= sourceStats.mtime) {
+          useCache = true;
+          streamPath = cachedPath;
+          logger.debug('GET /api/files/stream - Using cached MKV→MP4', { fileId });
+        }
+      } catch {
+        // Cache doesn't exist
+      }
+
+      if (!useCache) {
+        // Check if remux is already in progress
+        if (inProgressFixes.has(pathHash)) {
+          logger.debug('GET /api/files/stream - MKV remux already in progress', { fileId });
+          return NextResponse.json(
+            { error: 'Video is being prepared for playback. Please try again shortly.' },
+            { status: 202 }
+          );
+        }
+
+        inProgressFixes.set(pathHash, true);
+        try {
+          await fs.promises.mkdir(cacheDir, { recursive: true });
+          const tmpPath = cachedPath + '.tmp';
+
+          logger.info('GET /api/files/stream - Starting MKV→MP4 remux', { fileId });
+          await remuxMkvToMp4(fullPath, tmpPath);
+          await fs.promises.rename(tmpPath, cachedPath);
+
+          streamPath = cachedPath;
+          logger.info('GET /api/files/stream - MKV remux complete', { fileId });
+        } catch (err) {
+          logger.error('GET /api/files/stream - MKV remux failed', { fileId, error: err.message });
+          // Fall back to streaming original MKV
+        } finally {
+          inProgressFixes.delete(pathHash);
         }
       }
     }

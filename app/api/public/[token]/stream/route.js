@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import fs from 'fs';
-import { stat, access, mkdir } from 'fs/promises';
+import { stat, access, mkdir, rename } from 'fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
 import mime from 'mime-types';
 import { createHash } from 'crypto';
@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import {
   checkMoovAtom,
   fixMp4ForStreaming,
+  remuxMkvToMp4,
 } from '@/lib/ffmpegUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -106,6 +107,37 @@ export async function GET(req, { params }) {
           } catch (err) {
             // Fall back to original file
           }
+        }
+      }
+    }
+
+    // MKV files need remuxing to MP4 for browser playback (audio codec compatibility)
+    if (fileExt === '.mkv') {
+      const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
+      const pathHash = createHash('md5').update(filePath).digest('hex');
+      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
+
+      let useCache = false;
+      try {
+        const [sourceStats, cachedStats] = await Promise.all([stat(filePath), stat(cachedPath)]);
+        if (cachedStats.mtime >= sourceStats.mtime) {
+          useCache = true;
+          streamPath = cachedPath;
+        }
+      } catch {
+        // Cache doesn't exist
+      }
+
+      if (!useCache) {
+        await mkdir(cacheDir, { recursive: true });
+
+        try {
+          const tmpPath = cachedPath + '.tmp';
+          await remuxMkvToMp4(filePath, tmpPath);
+          await rename(tmpPath, cachedPath);
+          streamPath = cachedPath;
+        } catch (err) {
+          // Fall back to original MKV
         }
       }
     }
