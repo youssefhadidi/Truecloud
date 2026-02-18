@@ -14,7 +14,6 @@ export default function SessionLockScreen({ children }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
   const inputRef = useRef(null);
 
   const handleKeyDown = useCallback(
@@ -92,9 +91,6 @@ export default function SessionLockScreen({ children }) {
     },
     [unlock]
   );
-
-  // If signing out, don't render anything to prevent race conditions
-  if (isSigningOut) return null;
 
   // While loading the session, show a loading screen to prevent flicker
   if (isLoading) {
@@ -176,7 +172,6 @@ export default function SessionLockScreen({ children }) {
         {/* Sign Out Link */}
         <button
           onClick={async () => {
-            setIsSigningOut(true);
             await signOut({ redirect: false });
             router.push('/auth/login');
           }}

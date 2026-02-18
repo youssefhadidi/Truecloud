@@ -38,7 +38,6 @@ export default function LoginPage() {
         setError('Invalid email or password');
       } else {
         router.push('/files');
-        router.refresh();
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
