@@ -6,10 +6,11 @@ import { useState, useRef } from 'react';
 import { FiUpload, FiLink, FiPlay, FiDownload } from 'react-icons/fi';
 import { useStartDownload } from '@/lib/api/downloads';
 
-export default function TorrentDownloadComponent({ onDownloadStart }) {
+export default function TorrentDownloadComponent({ onDownloadStart, currentPath = '' }) {
   const [url, setUrl] = useState('');
   const [torrentFile, setTorrentFile] = useState(null);
   const [downloadType, setDownloadType] = useState('http'); // 'http' or 'torrent'
+  const [downloadPath, setDownloadPath] = useState(currentPath);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
   const startDownloadMutation = useStartDownload();
@@ -62,6 +63,11 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
         formData.append('downloadType', downloadType);
       }
 
+      // Add download path if specified
+      if (downloadPath) {
+        formData.append('path', downloadPath);
+      }
+
       const data = await startDownloadMutation.mutateAsync(formData);
       onDownloadStart?.(data);
 
@@ -69,6 +75,7 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
       setUrl('');
       setTorrentFile(null);
       setDownloadType('http');
+      setDownloadPath(currentPath);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -84,6 +91,24 @@ export default function TorrentDownloadComponent({ onDownloadStart }) {
       {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{error}</div>}
 
       <div className="space-y-6">
+        {/* Download Path */}
+        <div>
+          <label htmlFor="path" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Download Path (Optional)
+          </label>
+          <input
+            id="path"
+            type="text"
+            value={downloadPath}
+            onChange={(e) => setDownloadPath(e.target.value)}
+            placeholder="Leave empty for root directory"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            e.g., my-folder, subfolder/downloads
+          </p>
+        </div>
+
         {/* URL Input - HTTP/HTTPS or Magnet Link */}
         <div>
           <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
