@@ -26,19 +26,12 @@ import { writeFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'fs';
 import { logger } from '@/lib/logger';
-import {
-  addDownload,
-  getActiveDownloads,
-  getWaitingDownloads,
-  pauseDownload,
-  resumeDownload,
-  removeDownload,
-} from '@/lib/webTorrentManager';
+import { addDownload, getActiveDownloads, getWaitingDownloads, pauseDownload, resumeDownload, removeDownload } from '@/lib/webTorrentManager';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
 const UPLOAD_DIR = process.env.UPLOAD_DIR
-  ? resolve(process.env.UPLOAD_DIR)          // absolute path from env
-  : resolve(process.cwd(), './uploads');     // fallback relative to cwd
+  ? resolve(process.env.UPLOAD_DIR) // absolute path from env
+  : resolve(process.cwd(), './uploads'); // fallback relative to cwd
 
 /**
  * POST /api/files/torrent-download
@@ -64,7 +57,7 @@ export async function POST(req) {
     }
 
     // Build absolute download directory - use UPLOAD_DIR from env if available
-    let downloadDir = UPLOAD_DIR;             // default: root of UPLOAD_DIR
+    let downloadDir = UPLOAD_DIR; // default: root of UPLOAD_DIR
     if (downloadPath) {
       downloadDir = resolve(UPLOAD_DIR, downloadPath.replace(/^\/+/, ''));
     }
@@ -102,6 +95,25 @@ export async function POST(req) {
     // relativePath = browser-relative path for frontend display/filtering
     const gid = await addDownload(downloadUrl, { dir: downloadDir, relativePath: downloadPath });
 
+    // Verify torrent was added to WebTorrent before returning
+    // This ensures the download appears in getActiveDownloads() immediately
+    let verifyAttempts = 0;
+    const maxAttempts = 10;
+    let torrentFound = false;
+
+    while (verifyAttempts < maxAttempts && !torrentFound) {
+      const activeDownloads = await getActiveDownloads(downloadPath);
+      torrentFound = activeDownloads.some((d) => d.gid === gid);
+      if (!torrentFound) {
+        verifyAttempts++;
+        await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms before retry
+      }
+    }
+
+    if (!torrentFound) {
+      logger.warn('POST /api/files/torrent-download - Torrent added but not found in active downloads after verification', { gid });
+    }
+
     // Get initial status
     const status = {
       gid,
@@ -118,6 +130,7 @@ export async function POST(req) {
     logger.info('POST /api/files/torrent-download - Download started', {
       gid,
       path: downloadPath,
+      verificationAttempts: verifyAttempts,
     });
 
     // Broadcast to WebSocket clients
