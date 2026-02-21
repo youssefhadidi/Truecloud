@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { mkdir, rmdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'node:path';
+import { addOrUpdateSmbUser, deleteSmbUser } from '@/lib/samba';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -82,6 +83,14 @@ export async function POST(req) {
       }
     }
 
+    // Add user to Samba (best-effort, don't fail the request if Samba is unavailable)
+    try {
+      await addOrUpdateSmbUser(user.username, password);
+    } catch (sambaError) {
+      console.error('Warning: Failed to add user to Samba:', sambaError.message);
+      // Don't fail the request if Samba update fails
+    }
+
     return NextResponse.json(
       {
         user: {
@@ -131,6 +140,14 @@ export async function DELETE(req) {
     await prisma.user.delete({
       where: { id: userId },
     });
+
+    // Delete user from Samba (best-effort, don't fail the request if Samba is unavailable)
+    try {
+      await deleteSmbUser(userToDelete.username);
+    } catch (sambaError) {
+      console.error('Warning: Failed to delete user from Samba:', sambaError.message);
+      // Don't fail the user deletion if Samba update fails
+    }
 
     // Delete user's personal folder if it exists
     const userDir = join(UPLOAD_DIR, `user_${userId}`);
@@ -189,6 +206,16 @@ export async function PATCH(req) {
         hasRootAccess: true,
       },
     });
+
+    // Update Samba user if password was changed (best-effort, don't fail the request)
+    if (password) {
+      try {
+        await addOrUpdateSmbUser(user.username, password);
+      } catch (sambaError) {
+        console.error('Warning: Failed to update Samba password:', sambaError.message);
+        // Don't fail the user update if Samba update fails
+      }
+    }
 
     return NextResponse.json({ user });
   } catch (error) {
