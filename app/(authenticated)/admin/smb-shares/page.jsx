@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiX, FiRefreshCw } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import { useSmbShares, useCreateSmbShare, useUpdateSmbShare, useDeleteSmbShare } from '@/lib/api/smbShares';
 import { useUsers } from '@/lib/api/users';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -172,38 +172,51 @@ export default function SmbSharesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
-                  {shares.map((share) => (
-                    <tr key={share.id} className="hover:bg-gray-700">
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap font-medium text-white">{share.name}</td>
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-gray-300 text-sm">{share.path || '/'}</td>
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${share.readOnly ? 'bg-blue-900 text-blue-200' : 'bg-gray-700 text-gray-300'}`}>
-                          {share.readOnly ? 'Yes' : 'No'}
-                        </span>
-                      </td>
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${share.guestOk ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
-                          {share.guestOk ? 'Yes' : 'No'}
-                        </span>
-                      </td>
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => openEditForm(share)} className="text-blue-400 hover:text-blue-300" title="Edit">
-                            <FiEdit size={18} />
-                          </button>
-                          <button onClick={() => setDeletingShare(share)} className="text-red-400 hover:text-red-300" title="Delete">
-                            <FiTrash2 size={18} />
-                          </button>
-                        </div>
+                  {shares.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">
+                        No SMB shares configured. Create one to get started.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    shares.map((share) => (
+                      <tr key={share.id} className="hover:bg-gray-700">
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap font-medium text-white">{share.name}</td>
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-gray-300 text-sm">{share.path || '/'}</td>
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${share.readOnly ? 'bg-blue-900 text-blue-200' : 'bg-gray-700 text-gray-300'}`}>
+                            {share.readOnly ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${share.guestOk ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
+                            {share.guestOk ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => openEditForm(share)} className="text-blue-400 hover:text-blue-300" title="Edit">
+                              <FiEdit size={18} />
+                            </button>
+                            <button onClick={() => setDeletingShare(share)} className="text-red-400 hover:text-red-300" title="Delete">
+                              <FiTrash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Card View */}
             <div className="md:hidden divide-y divide-gray-700">
+              {shares.length === 0 && (
+                <div className="p-6 text-center text-gray-400 text-sm">
+                  No SMB shares configured. Create one to get started.
+                </div>
+              )}
               {shares.map((share) => (
                 <div key={share.id} className="p-4 hover:bg-gray-700">
                   <div className="flex items-start justify-between mb-2">
@@ -349,8 +362,16 @@ export default function SmbSharesPage() {
                   <button type="button" onClick={closeForm} className="flex-1 px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700">
                     Cancel
                   </button>
-                  <button type="submit" className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    {editingShare ? 'Update' : 'Create'}
+                  <button
+                    type="submit"
+                    disabled={createShareMutation.isPending || updateShareMutation.isPending}
+                    className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
+                  >
+                    {createShareMutation.isPending || updateShareMutation.isPending
+                      ? 'Saving...'
+                      : editingShare
+                        ? 'Update'
+                        : 'Create'}
                   </button>
                 </div>
               </form>
