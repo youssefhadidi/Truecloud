@@ -9,7 +9,8 @@ export async function GET(req, { params }) {
     const { session, error } = await requireAdmin();
     if (error) return error;
 
-    const { name } = params;
+    // Fix #8: params is a Promise in Next.js 15+ App Router
+    const { name } = await params;
 
     if (!name) {
       return NextResponse.json({ error: 'Pool name is required' }, { status: 400 });
@@ -23,7 +24,7 @@ export async function GET(req, { params }) {
 
     return NextResponse.json({ status, datasets });
   } catch (error) {
-    console.error(`Error fetching ZFS pool details for ${params.name}:`, error);
+    console.error('Error fetching ZFS pool details:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to fetch pool details' },
       { status: 500 }

@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiX, FiChevronDown, FiChevronUp, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiPlus, FiX, FiChevronDown, FiChevronUp, FiAlertCircle } from 'react-icons/fi';
 import { useZfsPools, useZfsPoolDetail, useAvailableDisks, useCreateZfsPool } from '@/lib/api/zfsPools';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
@@ -27,7 +27,7 @@ function PoolCard({ pool, isSelected, onSelect }) {
       className={`p-4 border rounded-lg cursor-pointer transition-colors ${
         isSelected
           ? 'border-blue-500 bg-gray-700'
-          : 'border-gray-700 bg-gray-800 hover:bg-gray-750'
+          : 'border-gray-700 bg-gray-800 hover:bg-gray-700'
       }`}
       onClick={onSelect}
     >
@@ -217,7 +217,7 @@ export default function ZfsPoolsPage() {
           {selectedPool && (
             <div className="bg-gray-800 rounded-lg shadow">
               <div
-                className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700 cursor-pointer hover:bg-gray-750 transition-colors"
+                className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700 cursor-pointer hover:bg-gray-700 transition-colors"
                 onClick={() => setExpandedDatasets(!expandedDatasets)}
               >
                 <div className="flex items-center justify-between">
