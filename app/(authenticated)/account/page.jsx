@@ -4,7 +4,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSessionLock } from '@/contexts/SessionLockContext';
-import { FiLock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
+import { FiLock, FiCheckCircle, FiAlertCircle, FiKey } from 'react-icons/fi';
+import axios from '@/lib/axiosConfig';
 
 const TIMEOUT_OPTIONS = [60, 120, 240, 480, 720]; // 1h, 2h, 4h, 8h, 12h in minutes
 
@@ -17,6 +18,14 @@ export default function AccountPage() {
   const [pinError, setPinError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Initialize from settings
   useEffect(() => {
@@ -66,6 +75,36 @@ export default function AccountPage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } else {
       setPinError('Failed to save settings');
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await axios.put('/api/account/password', { currentPassword, newPassword });
+      setPasswordSuccess('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(''), 4000);
+    } catch (err) {
+      setPasswordError(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -216,6 +255,75 @@ export default function AccountPage() {
                   Lock Now
                 </button>
               )}
+            </div>
+          </form>
+        </div>
+
+        {/* Change Password Section */}
+        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-8">
+          <div className="border-b border-gray-700 px-6 py-4 bg-gray-800/50">
+            <div className="flex items-center gap-3">
+              <FiKey className="text-indigo-500" size={24} />
+              <h2 className="text-xl font-semibold text-white">Change Password</h2>
+            </div>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+            <div>
+              <label className="block text-gray-300 text-sm font-medium mb-2">Current Password</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-300 text-sm font-medium mb-2">New Password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-300 text-sm font-medium mb-2">Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            {passwordError && (
+              <div className="flex items-center gap-3 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+                <FiAlertCircle className="text-red-400 flex-shrink-0" size={20} />
+                <p className="text-red-300 text-sm">{passwordError}</p>
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="flex items-center gap-3 p-4 bg-green-900/20 border border-green-800 rounded-lg">
+                <FiCheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                <p className="text-green-300 text-sm">{passwordSuccess}</p>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-gray-700">
+              <button
+                type="submit"
+                disabled={isChangingPassword}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                {isChangingPassword ? 'Changing...' : 'Change Password'}
+              </button>
             </div>
           </form>
         </div>
