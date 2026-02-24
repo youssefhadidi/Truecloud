@@ -39,12 +39,10 @@ export default function AdminLayout({ children }) {
 
   const navItems = [
     { href: '/admin/accounts', icon: FiUsers, label: 'Accounts' },
-    { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
-    { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
     { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
     { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
-    components.zfs && { href: '/admin/zfs', icon: FiDatabase, label: 'ZFS Pools' },
-    components.smb && { href: '/admin/smb', icon: FiShare2, label: 'SMB Shares' },
+    components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
+    components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
     { href: '/admin/requirements', icon: FiCheckSquare, label: 'System Requirements' },
     { href: '/admin/update-status', icon: FiZap, label: 'Update Status' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },
