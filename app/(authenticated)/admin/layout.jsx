@@ -5,13 +5,17 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiDatabase, FiShare2, FiSliders } from 'react-icons/fi';
 import Link from 'next/link';
+import { useComponentsConfig } from '@/lib/api/system';
 
 export default function AdminLayout({ children }) {
   const { data: session, status } = useStableSession();
   const router = useRouter();
   const pathname = usePathname();
+  const { data: componentsData } = useComponentsConfig();
+
+  const components = componentsData?.config ?? { zfs: true, smb: true };
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -37,10 +41,13 @@ export default function AdminLayout({ children }) {
     { href: '/admin/accounts', icon: FiUsers, label: 'Accounts' },
     { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
     { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
+    components.zfs && { href: '/admin/zfs', icon: FiDatabase, label: 'ZFS Pools' },
+    components.smb && { href: '/admin/smb', icon: FiShare2, label: 'SMB Shares' },
     { href: '/admin/requirements', icon: FiCheckSquare, label: 'System Requirements' },
     { href: '/admin/update-status', icon: FiZap, label: 'Update Status' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },
-  ];
+    { href: '/admin/components', icon: FiSliders, label: 'Components' },
+  ].filter(Boolean);
 
   return (
     <div className="bg-gray-900 flex flex-grow flex-col lg:flex-row">

@@ -125,8 +125,7 @@ export async function GET(req, { params }) {
         failOn: 'none',
         failOnError: false,
         limitInputPixels: false,
-      })
-        .rotate();
+      }).rotate();
 
       // Only resize if dimensions are not 0x0 (0x0 means preserve original)
       if (maxWidth !== 0 || maxHeight !== 0) {
