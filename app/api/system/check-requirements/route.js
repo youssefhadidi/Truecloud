@@ -162,6 +162,20 @@ const REQUIRED_PROGRAMS = [
     installable: true,
     installCommand: 'sudo apt-get install -y ghostscript',
   },
+  {
+    name: 'ZFS',
+    command: 'zpool',
+    description: 'ZFS pool management (zfsutils-linux)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y zfsutils-linux',
+  },
+  {
+    name: 'Samba',
+    command: 'smbd',
+    description: 'SMB/CIFS network share daemon',
+    installable: true,
+    installCommand: 'sudo apt-get install -y samba',
+  },
 ];
 
 /**
