@@ -30,7 +30,7 @@ function AuthenticatedLayoutContent({ children }) {
           <div className="flex justify-between items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-3">
               <h1
-                className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors flex flex-col"
+                className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors flex flex-row"
                 onClick={() => router.push('/files')}
               >
                 {!isFilesPage && <FiArrowLeft className="text-gray-400 hover:text-white p-1" size={24} />} Truecloud

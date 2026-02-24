@@ -5,7 +5,12 @@
       "Bash(pnpm add:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+<<<<<<< HEAD
       "Bash(ls -la \"c:/Users/yhadidi/Desktop/Truecloud/app/\\(authenticated\\)/\")"
+=======
+      "Bash(ls:*)",
+      "Bash(find:*)"
+>>>>>>> 0a5d44a8f3e6278a993305ae04170b4f0a269d5b
     ]
   }
 }

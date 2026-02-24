@@ -126,3 +126,16 @@ model FileIndex {
   @@index([ownerId])
   @@index([isDirectory])
 }
+
+model SmbShare {
+  id         String   @id @default(cuid())
+  name       String   @unique   // becomes [share_name] in smb.conf
+  path       String             // relative to UPLOAD_DIR (e.g. "" for root, "user_xxx" for user folder)
+  comment    String?
+  readOnly   Boolean  @default(false)
+  browsable  Boolean  @default(true)
+  guestOk    Boolean  @default(false)
+  validUsers String   @default("[]") // JSON array of usernames (empty = all users)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

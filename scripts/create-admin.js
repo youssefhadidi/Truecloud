@@ -3,7 +3,10 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const readline = require('readline');
+const { execFile, spawn } = require('child_process');
+const { promisify } = require('util');
 
+const execFileAsync = promisify(execFile);
 const prisma = new PrismaClient();
 
 const rl = readline.createInterface({
@@ -13,6 +16,48 @@ const rl = readline.createInterface({
 
 function question(query) {
   return new Promise((resolve) => rl.question(query, resolve));
+}
+
+async function ensureSystemUser(username) {
+  try {
+    await execFileAsync('id', [username]);
+    console.log(`  (Linux user '${username}' already exists)`);
+  } catch {
+    await execFileAsync('useradd', [
+      '--no-create-home',
+      '--shell', '/usr/sbin/nologin',
+      '--system',
+      username,
+    ]);
+    console.log(`  ✓ Linux system user '${username}' created`);
+  }
+}
+
+async function addSmbUser(username, password) {
+  await ensureSystemUser(username);
+
+  await new Promise((resolve, reject) => {
+    const proc = spawn('smbpasswd', ['-s', '-a', username], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    proc.stderr.on('data', (d) => (stderr += d.toString()));
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`smbpasswd exited with code ${code}: ${stderr}`));
+      } else {
+        resolve();
+      }
+    });
+
+    proc.on('error', reject);
+    proc.stdin.write(`${password}\n${password}\n`);
+    proc.stdin.end();
+  });
+
+  console.log(`  ✓ Samba user '${username}' registered`);
 }
 
 async function createAdminUser() {
@@ -33,6 +78,7 @@ async function createAdminUser() {
         password: hashedPassword,
         name: name || username,
         role: 'admin',
+        hasRootAccess: true,
       },
     });
 
@@ -40,6 +86,14 @@ async function createAdminUser() {
     console.log(`  ID: ${user.id}`);
     console.log(`  Email: ${user.email}`);
     console.log(`  Username: ${user.username}`);
+
+    console.log('\nSetting up system user for SMB access...');
+    try {
+      await addSmbUser(username, password);
+    } catch (sambaError) {
+      console.warn(`  ⚠ SMB setup failed: ${sambaError.message}`);
+      console.warn('  Run manually: sudo smbpasswd -a ' + username);
+    }
   } catch (error) {
     console.error('\n✗ Error creating user:', error.message);
   } finally {
