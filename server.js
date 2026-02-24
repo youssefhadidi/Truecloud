@@ -152,6 +152,7 @@ loadEsModules().then(() => {
       }
 
       wss.handleUpgrade(request, socket, head, (ws) => {
+        ws.isAlive = true;
         wsClients.add(ws);
 
         ws.send(JSON.stringify({
@@ -163,6 +164,10 @@ loadEsModules().then(() => {
           type: 'cache-generation',
           payload: global.cacheGenerationStatus,
         }));
+
+        ws.on('pong', () => {
+          ws.isAlive = true;
+        });
 
         ws.on('close', () => {
           wsClients.delete(ws);
@@ -178,6 +183,20 @@ loadEsModules().then(() => {
     });
   });
 
+  // Heartbeat: ping all clients every 30 s so proxies don't close idle connections.
+  // Clients that never respond with a pong are terminated (dead connections).
+  const heartbeatInterval = setInterval(() => {
+    wsClients.forEach((ws) => {
+      if (ws.isAlive === false) {
+        wsClients.delete(ws);
+        ws.terminate();
+        return;
+      }
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30_000);
+
   server.listen(3000, (err) => {
     if (err) throw err;
     console.log('> Ready on http://localhost:3000');
@@ -188,5 +207,7 @@ loadEsModules().then(() => {
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
   });
+
+  server.on('close', () => clearInterval(heartbeatInterval));
   });
 });

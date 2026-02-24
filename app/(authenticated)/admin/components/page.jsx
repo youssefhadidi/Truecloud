@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiDatabase, FiShare2, FiRefreshCw } from 'react-icons/fi';
+import { FiDatabase, FiShare2, FiRefreshCw, FiCpu } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useComponentsConfig, useSaveComponentsConfig } from '@/lib/api/system';
 
@@ -20,6 +20,12 @@ const COMPONENT_DEFS = [
     description: 'Configure and manage Samba (SMB/CIFS) network shares.',
     icon: FiShare2,
   },
+  {
+    key: 'transcoding',
+    label: 'Hardware Accelerated Transcoding',
+    description: 'GPU-accelerated video transcoding via VAAPI (Intel/AMD iGPU).',
+    icon: FiCpu,
+  },
 ];
 
 export default function ComponentsPage() {
@@ -27,7 +33,7 @@ export default function ComponentsPage() {
   const { data, isLoading, refetch } = useComponentsConfig();
   const saveMutation = useSaveComponentsConfig();
 
-  const [settings, setSettings] = useState({ zfs: true, smb: true });
+  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false });
 
   useEffect(() => {
     if (data?.config) {
