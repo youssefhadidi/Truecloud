@@ -143,7 +143,7 @@ export default function MediaViewer({
         return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
 
       case 'video':
-        return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} />;
+        return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} />;
 
       case 'audio':
         return <AudioPlayer file={viewerFile} getFileUrl={getFileUrl} />;

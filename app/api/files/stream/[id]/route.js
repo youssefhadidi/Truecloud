@@ -9,7 +9,9 @@ import mime from 'mime-types';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { checkMoovAtom, fixMp4ForStreaming, remuxMkvToMp4 } from '@/lib/ffmpegUtils';
+import { checkMoovAtom, fixMp4ForStreaming, remuxMkvToMp4, getFileDuration, probeCodecs, detectHardwareAccel } from '@/lib/ffmpegUtils';
+import { readComponentsConfig } from '@/lib/componentsConfig';
+import { TRANSCODE_EXTENSIONS, isCacheReady, startTranscodeJob } from '@/lib/transcodeManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -154,6 +156,47 @@ export async function GET(req, { params }) {
           inProgressFixes.delete(pathHash);
         }
       }
+    }
+
+    // On-demand transcoding for non-streamable formats (AVI, MOV, WMV, FLV, TS, etc.)
+    if (TRANSCODE_EXTENSIONS.has(fileExt)) {
+      const components = await readComponentsConfig();
+
+      if (components.transcoding) {
+        // Check cache first — if ready, serve it directly
+        const cachedMp4 = await isCacheReady(fullPath, cacheDir);
+        if (cachedMp4) {
+          streamPath = cachedMp4;
+          logger.debug('GET /api/files/stream - Using transcoded cache', { fileId });
+        } else {
+          // Start transcode job in background (non-blocking)
+          const [codecs, hwaccel, durationSecs] = await Promise.all([
+            probeCodecs(fullPath).catch(() => ({ videoCodec: null, audioCodec: null })),
+            detectHardwareAccel(),
+            getFileDuration(fullPath),
+          ]);
+
+          const job = await startTranscodeJob(fullPath, cacheDir, codecs, hwaccel, durationSecs);
+
+          if (job.status === 'transcoding') {
+            logger.info('GET /api/files/stream - Transcoding in progress', { fileId, progress: job.progress });
+            return NextResponse.json(
+              {
+                error: 'Video is being transcoded for playback. Please try again shortly.',
+                status: 'transcoding',
+                progress: job.progress,
+              },
+              { status: 202 },
+            );
+          }
+
+          if (job.status === 'error') {
+            // Serve original as best-effort fallback
+            logger.warn('GET /api/files/stream - Transcode failed, serving original', { fileId });
+          }
+        }
+      }
+      // If transcoding disabled: fall through and serve the original file as-is
     }
 
     const fileStats = await stat(streamPath);

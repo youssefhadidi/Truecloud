@@ -79,6 +79,8 @@ export async function POST(req) {
       ffmpeg: 'ffmpeg',
       ghostscript: 'ghostscript',
       'sharp hevc': 'sharp-hevc-custom',
+      'java 21': 'openjdk-21-jre-headless',
+      unzip: 'unzip',
     };
 
     const packageName = packages[name.toLowerCase()];

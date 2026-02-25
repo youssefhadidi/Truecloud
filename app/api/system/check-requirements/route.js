@@ -63,6 +63,38 @@ function getCommandVersion(command, versionFlag = '--version') {
 }
 
 /**
+ * Check if Java >= 21 is installed and return the version string.
+ */
+async function checkJava21() {
+  try {
+    // 'java -version' writes to stderr on older JDKs; '--version' writes to stdout on Java 9+
+    const proc = spawn('java', ['--version']);
+    let output = '';
+
+    proc.stdout.on('data', (d) => { output += d.toString(); });
+    proc.stderr.on('data', (d) => { output += d.toString(); });
+
+    const code = await new Promise((res) => {
+      proc.on('close', res);
+      proc.on('error', () => res(1));
+      setTimeout(() => { proc.kill(); res(1); }, 3000);
+    });
+
+    if (code !== 0 || !output.trim()) return { installed: false, version: null };
+
+    // First line typically looks like: "openjdk 21.0.3 2024-04-16"
+    const firstLine = output.split('\n')[0].trim();
+    const match = firstLine.match(/(\d+)(?:\.\d+)*/);
+    const major = match ? parseInt(match[1], 10) : 0;
+    const installed = major >= 21;
+    const version = installed ? firstLine : `${firstLine} (Java ${major} — need ≥ 21)`;
+    return { installed, version };
+  } catch {
+    return { installed: false, version: null };
+  }
+}
+
+/**
  * Check if VAAPI hardware acceleration is available for FFmpeg
  * Tests if FFmpeg supports the VAAPI hwaccel for GPU-accelerated encoding
  */
@@ -176,6 +208,20 @@ const REQUIRED_PROGRAMS = [
     installable: true,
     installCommand: 'sudo apt-get install -y samba',
   },
+  {
+    name: 'Java 21',
+    checkType: 'java-21',
+    description: 'Required to run PaperMC Minecraft servers (openjdk-21-jre-headless)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y openjdk-21-jre-headless',
+  },
+  {
+    name: 'unzip',
+    command: 'unzip',
+    description: 'Required for Minecraft world ZIP import',
+    installable: true,
+    installCommand: 'sudo apt-get install -y unzip',
+  },
 ];
 
 /**
@@ -196,7 +242,11 @@ export async function GET(req) {
       REQUIRED_PROGRAMS.map(async (prog) => {
         let installed, version;
 
-        if (prog.checkType === 'vaapi') {
+        if (prog.checkType === 'java-21') {
+          const result = await checkJava21();
+          installed = result.installed;
+          version = result.version;
+        } else if (prog.checkType === 'vaapi') {
           const result = await checkVaapiSupport();
           installed = result.installed;
           version = result.version;
