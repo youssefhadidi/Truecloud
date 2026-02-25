@@ -8,7 +8,7 @@ const nextConfig = {
   experimental: {
     proxyClientMaxBodySize: '100gb',
   },
-  serverExternalPackages: ['webtorrent', 'xlsx'],
+  serverExternalPackages: ['webtorrent', 'xlsx', '@prisma/client', 'prisma'],
   images: {
     remotePatterns: [{ hostname: '192.168.1.240' }, { hostname: 'localhost' }],
   },
@@ -38,7 +38,9 @@ const nextConfig = {
     }
     return config;
   },
-  turbopack: {},
+  turbopack: {
+    memoryLimit: 2 * 1024 * 1024 * 1024, // 2 GB cap — lower if RAM is tight
+  },
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
