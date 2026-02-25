@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders, FiServer } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -43,6 +43,7 @@ export default function AdminLayout({ children }) {
     { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
     components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
     components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
+    components.minecraft && { href: '/admin/minecraft', icon: FiServer, label: 'Minecraft' },
     { href: '/admin/requirements', icon: FiCheckSquare, label: 'System Requirements' },
     { href: '/admin/update-status', icon: FiZap, label: 'Update Status' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },

@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiDatabase, FiShare2, FiRefreshCw, FiCpu } from 'react-icons/fi';
+import { FiDatabase, FiShare2, FiRefreshCw, FiCpu, FiServer } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useComponentsConfig, useSaveComponentsConfig } from '@/lib/api/system';
 
@@ -26,6 +26,12 @@ const COMPONENT_DEFS = [
     description: 'GPU-accelerated video transcoding via VAAPI (Intel/AMD iGPU).',
     icon: FiCpu,
   },
+  {
+    key: 'minecraft',
+    label: 'Minecraft Server Manager',
+    description: 'Host and manage PaperMC Minecraft servers with a live console.',
+    icon: FiServer,
+  },
 ];
 
 export default function ComponentsPage() {
@@ -33,7 +39,7 @@ export default function ComponentsPage() {
   const { data, isLoading, refetch } = useComponentsConfig();
   const saveMutation = useSaveComponentsConfig();
 
-  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false });
+  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false, minecraft: false });
 
   useEffect(() => {
     if (data?.config) {

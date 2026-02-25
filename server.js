@@ -100,6 +100,17 @@ global.broadcastFileIndexUpdate = (message) => {
   broadcastMessage({ type: 'file-index', payload: message });
 };
 
+// Minecraft: broadcast console lines and status changes
+global.minecraftProcesses = new Map();
+
+global.broadcastMinecraftConsole = (serverId, lines) => {
+  broadcastMessage({ type: 'minecraft-console', payload: { serverId, lines } });
+};
+
+global.broadcastMinecraftStatus = (serverId, status) => {
+  broadcastMessage({ type: 'minecraft-status', payload: { serverId, status } });
+};
+
 // Load ES modules before starting server
 loadEsModules().then(() => {
   app.prepare().then(() => {
@@ -206,6 +217,24 @@ loadEsModules().then(() => {
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
+
+    // Auto-start Minecraft servers that have autoStart = true
+    import('./lib/minecraft.js').then(async ({ spawnServer }) => {
+      try {
+        const { PrismaClient } = await import('@prisma/client');
+        const prisma = global.prisma || new PrismaClient();
+        const autoStartServers = await prisma.minecraftServer.findMany({
+          where: { autoStart: true },
+        });
+        for (const server of autoStartServers) {
+          spawnServer(server, prisma).catch((err) => {
+            console.error(`[Minecraft] Failed to auto-start ${server.name}:`, err.message);
+          });
+        }
+      } catch (err) {
+        console.error('[Minecraft] Auto-start failed:', err.message);
+      }
+    });
   });
 
   server.on('close', () => clearInterval(heartbeatInterval));

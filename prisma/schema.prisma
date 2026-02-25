@@ -139,3 +139,17 @@ model SmbShare {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+model MinecraftServer {
+  id           String   @id @default(cuid())
+  name         String   @unique        // also used as directory name
+  port         Int      @default(25565)
+  maxRam       Int      @default(2048) // MB
+  minRam       Int      @default(512)  // MB
+  autoStart    Boolean  @default(false)
+  directory    String                  // absolute path e.g. /opt/minecraft-servers/<name>
+  paperVersion String   @default("latest") // PaperMC build version
+  status       String   @default("stopped") // stopped | starting | running | stopping
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
