@@ -39,8 +39,6 @@ const nextConfig = {
     }
     return config;
   },
-  // Turbopack config for Next.js 16 (default bundler)
-  turbopack: {},
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
