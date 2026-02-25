@@ -39,6 +39,8 @@ const nextConfig = {
     }
     return config;
   },
+  // Empty turbopack config — keeps dev mode working with Turbopack
+  turbopack: {},
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
