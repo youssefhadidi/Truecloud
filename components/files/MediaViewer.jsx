@@ -2,7 +2,8 @@
 
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { FiArrowLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiDownload } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
@@ -13,9 +14,8 @@ import { ThumbnailItem } from './ThumbnailItem';
 import { useMediaViewerState, useMediaViewerScroll } from './hooks/useMediaViewerState';
 import ContextMenu from './ContextMenu';
 
-// Lazy load heavy viewers
-const Viewer3D = lazy(() => import('./Viewer3D').then((m) => ({ default: m.default })));
-const XlsxViewer = lazy(() => import('./XlsxViewer'));
+const Viewer3D = dynamic(() => import('./Viewer3D'), { ssr: false, loading: () => <div className="text-gray-400">Loading 3D viewer...</div> });
+const XlsxViewer = dynamic(() => import('./XlsxViewer'), { ssr: false, loading: () => <div className="text-gray-400">Loading spreadsheet viewer...</div> });
 
 function PDFViewer({ file, getFileUrl, onClick }) {
   return <iframe src={getFileUrl(file, 'pdf')} className="w-full h-full" title={file.name} onClick={onClick} />;
@@ -134,9 +134,7 @@ export default function MediaViewer({
     switch (fileType) {
       case '3d':
         return (
-          <Suspense fallback={<div className="text-gray-400">Loading 3D viewer...</div>}>
-            <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />
-          </Suspense>
+          <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />
         );
 
       case 'image':
@@ -153,9 +151,7 @@ export default function MediaViewer({
 
       case 'xlsx':
         return (
-          <Suspense fallback={<div className="text-gray-400">Loading spreadsheet viewer...</div>}>
-            <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />
-          </Suspense>
+          <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />
         );
 
       default:

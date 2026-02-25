@@ -3,6 +3,7 @@
 'use client';
 
 import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
@@ -14,8 +15,8 @@ import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicSha
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const ContextMenu = lazy(() => import('@/components/files/ContextMenu'));
-const Viewer3D = lazy(() => import('@/components/files/Viewer3D'));
-const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
+const Viewer3D = dynamic(() => import('@/components/files/Viewer3D'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div> });
+const XlsxViewer = dynamic(() => import('@/components/files/XlsxViewer'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div> });
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
@@ -232,17 +233,13 @@ export default function SharePage({ params }) {
 
             {is3dFile(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
-                </Suspense>
+                <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
               </div>
             )}
 
             {isXlsx(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div>}>
-                  <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
-                </Suspense>
+                <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
               </div>
             )}
 

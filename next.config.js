@@ -8,7 +8,7 @@ const nextConfig = {
   experimental: {
     proxyClientMaxBodySize: '100gb',
   },
-  serverExternalPackages: ['webtorrent'],
+  serverExternalPackages: ['webtorrent', 'xlsx'],
   images: {
     remotePatterns: [{ hostname: '192.168.1.240' }, { hostname: 'localhost' }],
   },
