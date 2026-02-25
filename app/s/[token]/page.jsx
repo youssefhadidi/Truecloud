@@ -15,13 +15,11 @@ import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicSha
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const ContextMenu = lazy(() => import('@/components/files/ContextMenu'));
 const Viewer3D = lazy(() => import('@/components/files/Viewer3D'));
-const SkpViewer = lazy(() => import('@/components/files/SkpViewer'));
 const XlsxViewer = lazy(() => import('@/components/files/XlsxViewer'));
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
-const isSkp = (fileName) => fileName?.toLowerCase().endsWith('.skp');
 
 export default function SharePage({ params }) {
   const { token } = use(params);
@@ -232,18 +230,10 @@ export default function SharePage({ params }) {
               </div>
             )}
 
-            {is3dFile(shareResponse.fileName) && !isSkp(shareResponse.fileName) && (
+            {is3dFile(shareResponse.fileName) && (
               <div className="mb-6 rounded overflow-hidden h-[500px]">
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
                   <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
-                </Suspense>
-              </div>
-            )}
-
-            {isSkp(shareResponse.fileName) && (
-              <div className="mb-6 rounded overflow-hidden h-[500px]">
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div>}>
-                  <SkpViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
                 </Suspense>
               </div>
             )}

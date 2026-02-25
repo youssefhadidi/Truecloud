@@ -27,8 +27,8 @@ const CACHE_DIRS = {
     defaultPath: './.stream-cache',
   },
   '3d': {
-    name: '3D/SKP Cache',
-    description: '3D and SketchUp file conversions',
+    name: '3D Cache',
+    description: '3D file conversions',
     envVar: 'CACHE_DIR',
     defaultPath: './.cache',
   },
