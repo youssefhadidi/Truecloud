@@ -10,13 +10,7 @@ const nextConfig = {
   },
   serverExternalPackages: ['webtorrent'],
   images: {
-    domains: ['192.168.1.240', 'localhost'],
-  },
-  serverRuntimeConfig: {
-    PORT: process.env.PORT || 3000,
-  },
-  publicRuntimeConfig: {
-    staticFolder: '/mnt/Truenas/truecloud/uploads',
+    remotePatterns: [{ hostname: '192.168.1.240' }, { hostname: 'localhost' }],
   },
 
   // Enable compression (gzip + Brotli for production)
@@ -90,8 +84,11 @@ const nextConfig = {
 
 if (process.env.NODE_ENV !== 'production') {
   console.log('Next.js Configuration:');
-  console.log('- Image domains:', nextConfig?.images?.domains);
-  console.log('- Port:', nextConfig.serverRuntimeConfig.PORT);
+  console.log(
+    '- Image patterns:',
+    nextConfig?.images?.remotePatterns?.map((p) => p.hostname),
+  );
+  console.log('- Port:', process.env.PORT || 3000);
   console.log('- Environment:', process.env.NODE_ENV || 'development');
   console.log('- Node version:', process.version);
 }
