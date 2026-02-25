@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 
-export function middleware(request) {
+export function proxy(request) {
   // For now, let route handlers manage their own auth
   // This can be enhanced later if needed
   const response = NextResponse.next();
