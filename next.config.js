@@ -28,18 +28,16 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Webpack config for fallback (when explicitly used, not Turbopack)
+  // Webpack config (used when --webpack flag is passed explicitly)
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];
-      // Mark webtorrent as external so it's not bundled during build
       if (!config.externals.includes('webtorrent')) {
         config.externals.push('webtorrent');
       }
     }
     return config;
   },
-  // Empty turbopack config — keeps dev mode working with Turbopack
   turbopack: {},
   // Add headers for cache busting and security
   async headers() {
