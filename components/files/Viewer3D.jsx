@@ -3,7 +3,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  Scene,
+  CanvasTexture,
+  PerspectiveCamera,
+  WebGLRenderer,
+  AmbientLight,
+  DirectionalLight,
+  GridHelper,
+  AxesHelper,
+  MOUSE,
+  TOUCH,
+  Box3,
+  Vector3,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
@@ -132,7 +145,7 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
     if (!mountRef.current) return;
 
     // Initialize Three.js scene
-    const scene = new THREE.Scene();
+    const scene = new Scene();
 
     // Create gradient background
     const canvas = document.createElement('canvas');
@@ -145,18 +158,18 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 256, 256);
 
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = new CanvasTexture(canvas);
     scene.background = texture;
     sceneRef.current = scene;
 
     const width = mountRef.current.clientWidth;
     const height = mountRef.current.clientHeight;
 
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 10000);
+    const camera = new PerspectiveCamera(75, width / height, 0.1, 10000);
     camera.position.set(0, 0, 100);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
 
@@ -169,21 +182,21 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
     rendererRef.current = renderer;
 
     // Add lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     scene.add(directionalLight);
 
     // Add grid helper
-    const gridHelper = new THREE.GridHelper(200, 40, 0x444444, 0x222222);
+    const gridHelper = new GridHelper(200, 40, 0x444444, 0x222222);
     gridHelper.position.y = -100;
     scene.add(gridHelper);
 
     // Add axis helper
-    const axesHelper = new THREE.AxesHelper(100);
+    const axesHelper = new AxesHelper(100);
     axesHelper.position.y = -100;
     scene.add(axesHelper);
 
@@ -197,15 +210,15 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
 
     // Fusion 360-like controls
     controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
     };
 
     // Enable two-finger touch controls
     controls.touches = {
-      ONE: THREE.TOUCH.ROTATE,
-      TWO: THREE.TOUCH.DOLLY_PAN,
+      ONE: TOUCH.ROTATE,
+      TWO: TOUCH.DOLLY_PAN,
     };
 
     controlsRef.current = controls;
@@ -282,8 +295,8 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
         const loadedObject = object.scene || object;
 
         // Calculate bounding box
-        const box = new THREE.Box3().setFromObject(loadedObject);
-        const size = box.getSize(new THREE.Vector3());
+        const box = new Box3().setFromObject(loadedObject);
+        const size = box.getSize(new Vector3());
 
         // Scale model to fit 50% of grid (grid is 200x200, so target is ~100 units)
         const targetSize = 100; // 50% of 200 unit grid
@@ -292,9 +305,9 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
         loadedObject.scale.multiplyScalar(scale);
 
         // Recalculate bounding box after scaling
-        const scaledBox = new THREE.Box3().setFromObject(loadedObject);
-        const scaledSize = scaledBox.getSize(new THREE.Vector3());
-        const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+        const scaledBox = new Box3().setFromObject(loadedObject);
+        const scaledSize = scaledBox.getSize(new Vector3());
+        const scaledCenter = scaledBox.getCenter(new Vector3());
 
         // Position model: center horizontally (X, Z), position on floor (Y)
         const floorY = -100;
@@ -303,8 +316,8 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
         loadedObject.position.z = -scaledCenter.z;
 
         // Recalculate bounding box after positioning
-        const finalBox = new THREE.Box3().setFromObject(loadedObject);
-        const finalCenter = finalBox.getCenter(new THREE.Vector3());
+        const finalBox = new Box3().setFromObject(loadedObject);
+        const finalCenter = finalBox.getCenter(new Vector3());
 
         // Store model bounds for camera control
         modelBoundsRef.current = { center: finalCenter, size: scaledSize };

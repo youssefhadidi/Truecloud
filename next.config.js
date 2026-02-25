@@ -7,6 +7,13 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     proxyClientMaxBodySize: '100gb',
+    optimizePackageImports: [
+      'three',
+      'react-icons',
+      '@reduxjs/toolkit',
+      'react-redux',
+      'date-fns',
+    ],
   },
   serverExternalPackages: ['webtorrent', 'xlsx', '@prisma/client', 'prisma'],
   images: {
