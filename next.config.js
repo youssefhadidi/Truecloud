@@ -38,6 +38,7 @@ const nextConfig = {
   // Webpack config
   webpack: (config, { isServer }) => {
     config.parallelism = 1; // reduce concurrent workers to save memory
+    config.cache = false; // disable build cache to reduce memory usage
     if (isServer) {
       config.externals = config.externals || [];
       if (!config.externals.includes('webtorrent')) {
