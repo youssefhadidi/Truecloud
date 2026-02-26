@@ -47,7 +47,7 @@ const nextConfig = {
   },
   productionBrowserSourceMaps: false,
   turbopack: {
-    memoryLimit: 1 * 1024 * 1024 * 1024, // 1 GB cap
+    memoryLimit: 768 * 1024 * 1024, // 768 MB cap
   },
   // Add headers for cache busting and security
   async headers() {

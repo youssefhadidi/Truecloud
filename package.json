@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node server.js",
-    "build": "NODE_OPTIONS='--max-old-space-size=2048 --max-semi-space-size=64' next build",
+    "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='--max-old-space-size=1024' next build --turbopack",
     "start": "node server.js",
     "lint": "eslint",
     "restart": "systemctl restart truecloud",
