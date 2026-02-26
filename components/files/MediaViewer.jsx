@@ -169,9 +169,9 @@ export default function MediaViewer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700 px-6 py-4">
-          <div>
-            <h3 className="text-lg font-semibold text-white">{viewerFile.name}</h3>
+        <div className="flex items-center justify-between border-b border-gray-700 px-6 py-4 gap-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-semibold text-white truncate">{viewerFile.name}</h3>
             {viewableFiles.length > 1 && (
               <p className="text-gray-400">
                 {currentIndex + 1} / {viewableFiles.length}

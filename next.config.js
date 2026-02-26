@@ -7,13 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     proxyClientMaxBodySize: '100gb',
-    optimizePackageImports: [
-      'three',
-      'react-icons',
-      '@reduxjs/toolkit',
-      'react-redux',
-      'date-fns',
-    ],
+    optimizePackageImports: ['three', 'react-icons', '@reduxjs/toolkit', 'react-redux', 'date-fns'],
   },
   serverExternalPackages: ['webtorrent', 'xlsx', '@prisma/client', 'prisma'],
   images: {
@@ -37,7 +31,7 @@ const nextConfig = {
   },
   // Webpack config
   webpack: (config, { isServer }) => {
-    config.parallelism = 1; // reduce concurrent workers to save memory
+    // config.parallelism = 1; // reduce concurrent workers to save memory
     config.cache = false; // disable build cache to reduce memory usage
     if (isServer) {
       config.externals = config.externals || [];
