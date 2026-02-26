@@ -35,8 +35,9 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Webpack config (used when --webpack flag is passed explicitly)
+  // Webpack config
   webpack: (config, { isServer }) => {
+    config.parallelism = 1; // reduce concurrent workers to save memory
     if (isServer) {
       config.externals = config.externals || [];
       if (!config.externals.includes('webtorrent')) {
@@ -46,9 +47,6 @@ const nextConfig = {
     return config;
   },
   productionBrowserSourceMaps: false,
-  turbopack: {
-    memoryLimit: 768 * 1024 * 1024, // 768 MB cap
-  },
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
