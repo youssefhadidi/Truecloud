@@ -237,10 +237,24 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Parse range
+    // Parse range and clamp to valid bounds
     const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const start = parseInt(parts[0], 10) || 0;
+    const end = Math.min(
+      parts[1] ? parseInt(parts[1], 10) : fileSize - 1,
+      fileSize - 1
+    );
+
+    // Reject unsatisfiable ranges (includes 0-byte files with any range request)
+    if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${fileSize}`,
+        },
+      });
+    }
+
     const chunkSize = end - start + 1;
 
     // Stream file chunk
