@@ -12,6 +12,7 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
+import { readTranscodingConfig } from '@/lib/transcodingConfig';
 import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
 
@@ -168,12 +169,13 @@ export async function GET(req, { params }) {
           // HWACCEL=none env var is the only escape hatch to force software encoding.
           const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
 
-          const [codecs, durationSecs] = await Promise.all([
+          const [codecs, durationSecs, transcodingConfig] = await Promise.all([
             probeCodecs(fullPath).catch((err) => {
               logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
               return { videoCodec: null, audioCodec: null };
             }),
             getFileDuration(fullPath),
+            readTranscodingConfig(),
           ]);
 
           logger.info('GET /api/files/stream - Probing complete', {
@@ -181,10 +183,11 @@ export async function GET(req, { params }) {
             videoCodec: codecs?.videoCodec,
             audioCodec: codecs?.audioCodec,
             hwaccel,
-            durationSecs
+            durationSecs,
+            maxHeight: transcodingConfig.maxHeight ?? 'original',
           });
 
-          const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs);
+          const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
 
           if (job.status === 'transcoding') {
             logger.info('GET /api/files/stream - HLS transcoding in progress', {

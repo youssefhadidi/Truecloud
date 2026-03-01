@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders, FiServer } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders, FiServer, FiFilm } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -40,6 +40,7 @@ export default function AdminLayout({ children }) {
   const navItems = [
     { href: '/admin/accounts', icon: FiUsers, label: 'Accounts' },
     { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
+    components.transcoding && { href: '/admin/transcoding-settings', icon: FiFilm, label: 'Transcoding' },
     { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
     components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
     components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
