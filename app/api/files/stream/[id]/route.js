@@ -3,15 +3,15 @@
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
 import fs from 'fs';
-import { stat, access } from 'fs/promises';
+import { stat, access, lstat, realpath } from 'fs/promises';
 import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { checkMoovAtom, fixMp4ForStreaming, remuxMkvToMp4, getFileDuration, probeCodecs, detectHardwareAccel } from '@/lib/ffmpegUtils';
+import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs, detectHardwareAccel } from '@/lib/ffmpegUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
-import { TRANSCODE_EXTENSIONS, isCacheReady, startTranscodeJob } from '@/lib/transcodeManager';
+import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -23,7 +23,7 @@ const inProgressFixes = new Map();
 export async function GET(req, { params }) {
   const startTime = Date.now();
   try {
-    const { session, error } = await requireAuthNoActivity();
+    const { error } = await requireAuthNoActivity();
     if (error) return error;
 
     const resolvedParams = await params;
@@ -51,6 +51,32 @@ export async function GET(req, { params }) {
     } catch {
       logger.warn('GET /api/files/stream - File not found', { fullPath });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Debug: Check if file is a symlink
+    try {
+      const linkStats = await lstat(fullPath);
+      logger.debug('GET /api/files/stream - File symlink check', {
+        fullPath,
+        isSymlink: linkStats.isSymbolicLink(),
+        lstatSize: linkStats.size
+      });
+
+      if (linkStats.isSymbolicLink()) {
+        const realPath = await realpath(fullPath);
+        const realStats = await stat(realPath);
+        logger.info('GET /api/files/stream - File is a symlink', {
+          originalPath: fullPath,
+          realPath,
+          lstatSize: linkStats.size,
+          realstatSize: realStats.size
+        });
+      }
+    } catch (err) {
+      logger.warn('GET /api/files/stream - Error checking symlink', {
+        fullPath,
+        error: err.message
+      });
     }
 
     let streamPath = fullPath;
@@ -111,55 +137,7 @@ export async function GET(req, { params }) {
       }
     }
 
-    // MKV files need remuxing to MP4 for browser playback (audio codec compatibility)
-    if (fileExt === '.mkv') {
-      const pathHash = createHash('md5').update(fullPath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
-
-      // Check if we already have a cached MP4 version
-      let useCache = false;
-      try {
-        const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
-        if (cachedStats.mtime >= sourceStats.mtime) {
-          useCache = true;
-          streamPath = cachedPath;
-          logger.debug('GET /api/files/stream - Using cached MKV→MP4', { fileId });
-        }
-      } catch {
-        // Cache doesn't exist
-      }
-
-      if (!useCache) {
-        // Check if remux is already in progress
-        if (inProgressFixes.has(pathHash)) {
-          logger.debug('GET /api/files/stream - MKV remux already in progress', { fileId });
-          return NextResponse.json(
-            { error: 'Video is being prepared for playback. Please try again shortly.' },
-            { status: 202 }
-          );
-        }
-
-        inProgressFixes.set(pathHash, true);
-        try {
-          await fs.promises.mkdir(cacheDir, { recursive: true });
-          const tmpPath = cachedPath + '.tmp';
-
-          logger.info('GET /api/files/stream - Starting MKV→MP4 remux', { fileId });
-          await remuxMkvToMp4(fullPath, tmpPath);
-          await fs.promises.rename(tmpPath, cachedPath);
-
-          streamPath = cachedPath;
-          logger.info('GET /api/files/stream - MKV remux complete', { fileId });
-        } catch (err) {
-          logger.error('GET /api/files/stream - MKV remux failed', { fileId, error: err.message });
-          // Fall back to streaming original MKV
-        } finally {
-          inProgressFixes.delete(pathHash);
-        }
-      }
-    }
-
-    // On-demand transcoding for non-streamable formats (AVI, MOV, WMV, FLV, TS, etc.)
+    // On-demand HLS transcoding for non-streamable formats (MKV, AVI, MOV, WMV, FLV, TS, etc.)
     if (TRANSCODE_EXTENSIONS.has(fileExt)) {
       const components = await readComponentsConfig();
 
@@ -171,11 +149,31 @@ export async function GET(req, { params }) {
           logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
         } else {
           // Start HLS job in background (non-blocking)
+          // Debug: Log file stats and probing info
+          logger.info('GET /api/files/stream - Before HLS probing', {
+            fullPath,
+            fileId,
+            fileExists: true,
+            uploadDir: UPLOAD_DIR,
+            relativePath
+          });
+
           const [codecs, hwaccel, durationSecs] = await Promise.all([
-            probeCodecs(fullPath).catch(() => ({ videoCodec: null, audioCodec: null })),
+            probeCodecs(fullPath).catch((err) => {
+              logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
+              return { videoCodec: null, audioCodec: null };
+            }),
             detectHardwareAccel(),
             getFileDuration(fullPath),
           ]);
+
+          logger.info('GET /api/files/stream - Probing complete', {
+            fullPath,
+            videoCodec: codecs?.videoCodec,
+            audioCodec: codecs?.audioCodec,
+            hwaccel,
+            durationSecs
+          });
 
           const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs);
 
@@ -192,6 +190,13 @@ export async function GET(req, { params }) {
               },
               { status: 202 },
             );
+          }
+
+          if (job.status === 'done') {
+            const hlsParams = new URLSearchParams({ path: relativePath });
+            const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}`;
+            logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
+            return NextResponse.json({ status: 'ready', hlsUrl });
           }
 
           if (job.status === 'error') {

@@ -6,12 +6,7 @@ import { resolve, join, extname } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { readComponentsConfig } from '@/lib/componentsConfig';
-import {
-  TRANSCODE_EXTENSIONS,
-  isCacheReady,
-  getJobStatus,
-  getFileHash,
-} from '@/lib/transcodeManager';
+import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import {
   isHlsCacheComplete,
   getHlsSegmentCount,
@@ -24,9 +19,6 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 // Extensions that browsers can play natively without any processing
 const NATIVE_EXTENSIONS = new Set(['.mp4', '.webm', '.ogv', '.ogg']);
-
-// Extensions that are already handled by the stream route's existing remux logic
-const MKV_EXTENSIONS = new Set(['.mkv']);
 
 export async function GET(req, { params }) {
   try {
@@ -53,14 +45,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ status: 'native' });
     }
 
-    // MKV — handled by stream route's existing remux logic
-    // Report ready if cache exists, pending otherwise (stream route will trigger remux)
-    if (MKV_EXTENSIONS.has(fileExt)) {
-      const cachedMp4 = await isCacheReady(fullPath, cacheDir);
-      return NextResponse.json({ status: cachedMp4 ? 'ready' : 'pending' });
-    }
-
-    // Other formats that need transcoding
+    // Formats that need HLS transcoding
     if (TRANSCODE_EXTENSIONS.has(fileExt)) {
       const components = await readComponentsConfig();
 
