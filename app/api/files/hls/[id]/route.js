@@ -55,14 +55,25 @@ export async function GET(req, { params }) {
     }
 
     if (segment) {
-      // Serve a .ts segment with byte-range support
+      // Serve a .ts segment with byte-range support.
+      // If the segment hasn't been written yet (transcoding in progress), wait up
+      // to 30s for FFmpeg to produce it rather than returning a 404 that would
+      // stall hls.js when using the pre-written VOD manifest.
       const segmentPath = join(hlsDir, segment);
 
-      let segmentStat;
-      try {
-        segmentStat = await stat(segmentPath);
-      } catch {
-        return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
+      let segmentStat = null;
+      const waitDeadline = Date.now() + 30_000;
+      while (!segmentStat) {
+        try {
+          segmentStat = await stat(segmentPath);
+        } catch {
+          if (req.signal?.aborted) return new NextResponse(null, { status: 499 });
+          if (Date.now() >= waitDeadline) {
+            logger.warn('GET /api/files/hls - Segment not ready after 30s', { segment });
+            return NextResponse.json({ error: 'Segment not ready' }, { status: 504 });
+          }
+          await new Promise((r) => setTimeout(r, 200));
+        }
       }
 
       const fileSize = segmentStat.size;
@@ -96,18 +107,22 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Serve index.m3u8
-    const m3u8Path = join(hlsDir, 'index.m3u8');
+    // Serve the pre-written VOD manifest if available (has correct total duration
+    // from the start), otherwise fall back to FFmpeg's growing index.m3u8.
+    let m3u8Raw;
     try {
-      await stat(m3u8Path);
+      m3u8Raw = await fs.promises.readFile(join(hlsDir, 'playlist.m3u8'), 'utf8');
     } catch {
-      return NextResponse.json({ error: 'Playlist not ready' }, { status: 404 });
+      try {
+        m3u8Raw = await fs.promises.readFile(join(hlsDir, 'index.m3u8'), 'utf8');
+      } catch {
+        return NextResponse.json({ error: 'Playlist not ready' }, { status: 404 });
+      }
     }
 
     // Rewrite segment URIs so they point back to this endpoint
     // This is necessary because FFmpeg writes bare "seg000.ts" lines in the manifest,
     // but the browser needs full API URLs with auth.
-    const m3u8Raw = await fs.promises.readFile(m3u8Path, 'utf8');
     const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}&segment=`;
     const m3u8Rewritten = m3u8Raw.replace(/^(seg\d+\.ts)$/gm, `${baseUrl}$1`);
 
