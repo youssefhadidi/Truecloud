@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
+import { nodeToWebStream } from '@/lib/streamUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
@@ -225,10 +226,9 @@ export async function GET(req, { params }) {
 
     if (!range) {
       // No range, send entire file
-      const fileStream = fs.createReadStream(streamPath);
       const duration = Date.now() - startTime;
       logger.debug('GET /api/files/stream - Streaming full file', { fileId, duration: `${duration}ms` });
-      return new NextResponse(fileStream, {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath)), {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileSize.toString(),
@@ -258,7 +258,6 @@ export async function GET(req, { params }) {
     const chunkSize = end - start + 1;
 
     // Stream file chunk
-    const fileStream = fs.createReadStream(streamPath, { start, end });
     const duration = Date.now() - startTime;
     logger.debug('GET /api/files/stream - Streaming range', {
       fileId,
@@ -267,7 +266,7 @@ export async function GET(req, { params }) {
       duration: `${duration}ms`,
     });
 
-    return new NextResponse(fileStream, {
+    return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { start, end })), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,

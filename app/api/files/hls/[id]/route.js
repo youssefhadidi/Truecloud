@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { getHlsOutputDir } from '@/lib/hlsManager';
+import { nodeToWebStream } from '@/lib/streamUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -69,12 +70,11 @@ export async function GET(req, { params }) {
 
       if (range) {
         const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const start = parseInt(parts[0], 10) || 0;
+        const end = Math.min(parts[1] ? parseInt(parts[1], 10) : fileSize - 1, fileSize - 1);
         const chunkSize = end - start + 1;
 
-        const stream = fs.createReadStream(segmentPath, { start, end });
-        return new NextResponse(stream, {
+        return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { start, end })), {
           status: 206,
           headers: {
             'Content-Type': 'video/mp2t',
@@ -86,8 +86,7 @@ export async function GET(req, { params }) {
         });
       }
 
-      const stream = fs.createReadStream(segmentPath);
-      return new NextResponse(stream, {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath)), {
         headers: {
           'Content-Type': 'video/mp2t',
           'Content-Length': fileSize.toString(),
@@ -99,9 +98,8 @@ export async function GET(req, { params }) {
 
     // Serve index.m3u8
     const m3u8Path = join(hlsDir, 'index.m3u8');
-    let m3u8Stat;
     try {
-      m3u8Stat = await stat(m3u8Path);
+      await stat(m3u8Path);
     } catch {
       return NextResponse.json({ error: 'Playlist not ready' }, { status: 404 });
     }
