@@ -22,6 +22,9 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const mountedRef = useRef(true);
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
+  // Abort controller for the fire-and-forget transcode trigger fetch.
+  // Stored in a ref so we can abort it when the component unmounts (e.g. rapid scroll).
+  const triggerAbortRef = useRef(null);
 
   const fileExt = getExt(file.name);
   const streamUrl = getFileUrl(file, 'video');
@@ -62,11 +65,12 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   }, [hlsUrl]);
 
   // ─── Status polling ───────────────────────────────────────────────────────
-  const checkStatus = useCallback(async () => {
+  const checkStatus = useCallback(async (signal) => {
     try {
       const params = new URLSearchParams({ path: currentPath || '' });
       const res = await fetch(
-        `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`
+        `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`,
+        { signal }
       );
       if (!res.ok) return null;
       const data = await res.json();
@@ -75,21 +79,32 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       if (data.progress !== undefined) setProgress(data.progress);
       if (data.hlsUrl) setHlsUrl(data.hlsUrl);
       return data.status;
-    } catch {
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
       return null;
     }
   }, [file.id, currentPath]);
 
-  // Fire-and-forget the stream route to kick off the HLS transcode job
+  // Fire-and-forget the stream route to kick off the HLS transcode job.
+  // Uses an AbortController stored in triggerAbortRef so it can be cancelled
+  // on unmount — preventing orphaned ffprobe/ffmpeg processes on the server.
   const triggerTranscode = useCallback(() => {
     if (triggeredRef.current) return;
     triggeredRef.current = true;
-    fetch(streamUrl).catch(() => {});
+    const ac = new AbortController();
+    triggerAbortRef.current = ac;
+    fetch(streamUrl, { signal: ac.signal }).catch(() => {});
   }, [streamUrl]);
 
   useEffect(() => {
     mountedRef.current = true;
     triggeredRef.current = false;
+
+    // Reset state for the new file immediately so stale status from a previous
+    // file (including any error state) never bleeds into the next one.
+    setStatus(null);
+    setProgress(0);
+    setHlsUrl(null);
 
     // Share links bypass auth — serve directly without status check
     if (shareToken) {
@@ -103,11 +118,13 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       return;
     }
 
-    let cancelled = false;
+    // Single AbortController covers both status-check fetches and the poll loop.
+    const ac = new AbortController();
+    let debounceTimer = null;
 
     const poll = async () => {
-      const s = await checkStatus();
-      if (cancelled) return;
+      const s = await checkStatus(ac.signal);
+      if (ac.signal.aborted) return;
 
       if (s === 'pending') {
         triggerTranscode();
@@ -116,16 +133,35 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         // Continue polling even when hlsUrl is set — we want to update progress
         // and catch the transition to 'ready'
         pollRef.current = setTimeout(poll, 3000);
+      } else if (s === null) {
+        // Network failure (e.g. server temporarily overloaded) — retry after a
+        // longer delay rather than leaving the user stuck on a spinner forever.
+        pollRef.current = setTimeout(poll, 5000);
       }
       // ready / native / disabled → stop polling
     };
 
-    poll();
+    // Debounce: wait 400ms before starting work on this file.
+    // When the user scrolls rapidly, they navigate away before the timer fires,
+    // so no status check or transcode trigger is ever sent to the server.
+    // This prevents a flood of ffprobe/ffmpeg subprocess spawns that exhaust
+    // the OS file-descriptor limit and produce ECONNREFUSED errors.
+    debounceTimer = setTimeout(() => {
+      if (!ac.signal.aborted) {
+        poll();
+      }
+    }, 400);
 
     return () => {
-      cancelled = true;
+      ac.abort(); // cancels in-flight status-check fetches
       mountedRef.current = false;
       clearTimeout(pollRef.current);
+      clearTimeout(debounceTimer);
+      // Cancel the trigger fetch so the server can stop the expensive probing
+      if (triggerAbortRef.current) {
+        triggerAbortRef.current.abort();
+        triggerAbortRef.current = null;
+      }
     };
   }, [file.id, fileExt, shareToken, checkStatus, triggerTranscode]);
 

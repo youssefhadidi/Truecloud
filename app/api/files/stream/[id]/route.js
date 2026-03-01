@@ -15,9 +15,15 @@ import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
 import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
+import { Semaphore } from '@/lib/semaphore.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
+
+// Limit concurrent ffprobe invocations. Each probe spawns 2 processes (codecs +
+// duration) each holding 3 pipe FDs. Without a cap, rapid media viewer scrolling
+// exhausts the OS FD limit and causes ECONNREFUSED for every subsequent request.
+const probeSemaphore = new Semaphore(3);
 
 // Track in-progress fixes to avoid duplicate work
 const inProgressFixes = new Map();
@@ -155,6 +161,12 @@ export async function GET(req, { params }) {
           streamPath = cachedMp4;
           logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
         } else {
+          // Short-circuit if the client already navigated away before we start
+          // the expensive ffprobe work — prevents FD exhaustion from rapid scrolling.
+          if (req.signal?.aborted) {
+            return new NextResponse(null, { status: 499 });
+          }
+
           // Start HLS job in background (non-blocking)
           // Debug: Log file stats and probing info
           logger.info('GET /api/files/stream - Before HLS probing', {
@@ -169,14 +181,41 @@ export async function GET(req, { params }) {
           // HWACCEL=none env var is the only escape hatch to force software encoding.
           const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
 
-          const [codecs, durationSecs, transcodingConfig] = await Promise.all([
-            probeCodecs(fullPath).catch((err) => {
-              logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
-              return { videoCodec: null, audioCodec: null };
-            }),
-            getFileDuration(fullPath),
-            readTranscodingConfig(),
-          ]);
+          // Acquire the probe semaphore: at most 3 concurrent ffprobe pairs can run
+          // at the same time. Requests beyond that wait in queue rather than spawning
+          // unlimited subprocesses. Pass req.signal so waiting requests are cancelled
+          // immediately if the client disconnects while queued.
+          try {
+            await probeSemaphore.acquire(1, req.signal);
+          } catch (err) {
+            if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+            throw err;
+          }
+          let codecs, durationSecs, transcodingConfig;
+          try {
+            // Check again after waiting for the semaphore — client may have left
+            if (req.signal?.aborted) {
+              return new NextResponse(null, { status: 499 });
+            }
+
+            [codecs, durationSecs, transcodingConfig] = await Promise.all([
+              probeCodecs(fullPath, req.signal).catch((err) => {
+                if (err.name !== 'AbortError') {
+                  logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
+                }
+                return { videoCodec: null, audioCodec: null };
+              }),
+              getFileDuration(fullPath, req.signal),
+              readTranscodingConfig(),
+            ]);
+          } finally {
+            probeSemaphore.release();
+          }
+
+          // If the client disconnected while we were probing, don't start ffmpeg
+          if (req.signal?.aborted) {
+            return new NextResponse(null, { status: 499 });
+          }
 
           logger.info('GET /api/files/stream - Probing complete', {
             fullPath,
