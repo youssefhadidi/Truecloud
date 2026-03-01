@@ -74,7 +74,7 @@ export async function GET(req, { params }) {
         const end = Math.min(parts[1] ? parseInt(parts[1], 10) : fileSize - 1, fileSize - 1);
         const chunkSize = end - start + 1;
 
-        return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { start, end, highWaterMark: 256 * 1024 })), {
+        return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { start, end })), {
           status: 206,
           headers: {
             'Content-Type': 'video/mp2t',
@@ -86,7 +86,7 @@ export async function GET(req, { params }) {
         });
       }
 
-      return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { highWaterMark: 256 * 1024 })), {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath)), {
         headers: {
           'Content-Type': 'video/mp2t',
           'Content-Length': fileSize.toString(),

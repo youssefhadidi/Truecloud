@@ -140,7 +140,7 @@ export async function GET(req, { params }) {
     const mimeType = lookup(downloadName) || 'application/octet-stream';
 
     return new NextResponse(
-      nodeToWebStream(fs.createReadStream(filePath, { highWaterMark: 256 * 1024 })),
+      nodeToWebStream(fs.createReadStream(filePath)),
       {
         headers: {
           'Content-Type': mimeType,

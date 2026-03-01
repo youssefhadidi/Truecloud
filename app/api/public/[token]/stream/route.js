@@ -152,7 +152,7 @@ export async function GET(req, { params }) {
 
     if (!range) {
       return new NextResponse(
-        nodeToWebStream(fs.createReadStream(streamPath, { highWaterMark: 256 * 1024 })),
+        nodeToWebStream(fs.createReadStream(streamPath)),
         {
           headers: {
             'Content-Type': mimeType,
@@ -170,7 +170,7 @@ export async function GET(req, { params }) {
     const chunkSize = end - start + 1;
 
     return new NextResponse(
-      nodeToWebStream(fs.createReadStream(streamPath, { start, end, highWaterMark: 256 * 1024 })),
+      nodeToWebStream(fs.createReadStream(streamPath, { start, end })),
       {
         status: 206,
         headers: {

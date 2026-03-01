@@ -231,7 +231,7 @@ export async function GET(req, { params }) {
       // No range, send entire file
       const duration = Date.now() - startTime;
       logger.debug('GET /api/files/stream - Streaming full file', { fileId, duration: `${duration}ms` });
-      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { highWaterMark: 256 * 1024 })), {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath)), {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileSize.toString(),
