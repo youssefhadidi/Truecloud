@@ -9,6 +9,7 @@ import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { nodeToWebStream } from '@/lib/streamUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -62,25 +63,64 @@ export async function GET(req, { params }) {
         zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
       });
 
-      // Create a ReadableStream that pipes from the archive
+      // Create a ReadableStream that pipes from the archive with proper error handling
       const stream = new ReadableStream({
+        cancel() {
+          // Client disconnected — abort the archive so all file descriptors are released
+          archive.abort();
+        },
+
         start(controller) {
+          let isErrored = false;
+
           archive.on('data', (chunk) => {
-            controller.enqueue(chunk);
+            try {
+              if (!isErrored) {
+                controller.enqueue(chunk);
+              }
+            } catch (err) {
+              console.error('Error enqueueing archive chunk:', err);
+              isErrored = true;
+              controller.error(err);
+              archive.abort();
+            }
           });
 
           archive.on('end', () => {
-            controller.close();
+            if (!isErrored) {
+              controller.close();
+            }
           });
 
           archive.on('error', (err) => {
             console.error('Archive error:', err);
-            controller.error(err);
+            if (!isErrored) {
+              isErrored = true;
+              controller.error(err);
+            }
           });
 
-          // Add directory contents to archive
-          archive.directory(filePath, false);
-          archive.finalize();
+          archive.on('warning', (err) => {
+            if (err.code === 'ENOENT') {
+              // File not found warning, continue
+              console.warn('Archive warning:', err.message);
+            } else {
+              console.error('Archive warning:', err);
+              isErrored = true;
+              controller.error(err);
+              archive.abort();
+            }
+          });
+
+          try {
+            // Add directory contents to archive
+            archive.directory(filePath, false);
+            archive.finalize();
+          } catch (err) {
+            console.error('Error finalizing archive:', err);
+            isErrored = true;
+            controller.error(err);
+          }
         },
       });
 
@@ -93,8 +133,11 @@ export async function GET(req, { params }) {
       });
     }
 
-    // If it's a file, stream it directly (don't load entire file into memory)
-    const fileStream = fs.createReadStream(filePath);
+    // If it's a file, stream it directly (don't load entire file into memory).
+    // nodeToWebStream wraps the Node.js Readable in a Web ReadableStream with a
+    // cancel() hook that calls nodeStream.destroy() when the client disconnects.
+    // Without this, disconnected clients leave file descriptors open indefinitely
+    // until the OS FD limit is hit, crashing the entire app.
     const mimeType = lookup(fileName) || 'application/octet-stream';
 
     // Determine cache duration based on file type
@@ -105,14 +148,17 @@ export async function GET(req, { params }) {
       cacheControl = 'public, max-age=604800'; // 1 week for media
     }
 
-    return new NextResponse(fileStream, {
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Length': fileStats.size.toString(),
-        'Content-Disposition': `inline; filename="${basename(fileName)}"`,
-        'Cache-Control': cacheControl,
-      },
-    });
+    return new NextResponse(
+      nodeToWebStream(fs.createReadStream(filePath, { highWaterMark: 256 * 1024 })),
+      {
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': fileStats.size.toString(),
+          'Content-Disposition': `inline; filename="${basename(fileName)}"`,
+          'Cache-Control': cacheControl,
+        },
+      }
+    );
   } catch (error) {
     console.error('Download error:', error);
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });

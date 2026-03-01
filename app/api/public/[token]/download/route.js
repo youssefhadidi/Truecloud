@@ -7,6 +7,7 @@ import { stat } from 'fs/promises';
 import { join, basename, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
+import { nodeToWebStream } from '@/lib/streamUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -63,25 +64,64 @@ export async function GET(req, { params }) {
         zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
       });
 
-      // Create a ReadableStream that pipes from the archive
+      // Create a ReadableStream that pipes from the archive with proper error handling
       const stream = new ReadableStream({
+        cancel() {
+          // Client disconnected — abort the archive so all file descriptors are released
+          archive.abort();
+        },
+
         start(controller) {
+          let isErrored = false;
+
           archive.on('data', (chunk) => {
-            controller.enqueue(chunk);
+            try {
+              if (!isErrored) {
+                controller.enqueue(chunk);
+              }
+            } catch (err) {
+              console.error('Error enqueueing archive chunk:', err);
+              isErrored = true;
+              controller.error(err);
+              archive.abort();
+            }
           });
 
           archive.on('end', () => {
-            controller.close();
+            if (!isErrored) {
+              controller.close();
+            }
           });
 
           archive.on('error', (err) => {
             console.error('Archive error:', err);
-            controller.error(err);
+            if (!isErrored) {
+              isErrored = true;
+              controller.error(err);
+            }
           });
 
-          // Add directory contents to archive
-          archive.directory(filePath, false);
-          archive.finalize();
+          archive.on('warning', (err) => {
+            if (err.code === 'ENOENT') {
+              // File not found warning, continue
+              console.warn('Archive warning:', err.message);
+            } else {
+              console.error('Archive warning:', err);
+              isErrored = true;
+              controller.error(err);
+              archive.abort();
+            }
+          });
+
+          try {
+            // Add directory contents to archive
+            archive.directory(filePath, false);
+            archive.finalize();
+          } catch (err) {
+            console.error('Error finalizing archive:', err);
+            isErrored = true;
+            controller.error(err);
+          }
         },
       });
 
@@ -94,18 +134,22 @@ export async function GET(req, { params }) {
       });
     }
 
-    // If it's a file, stream it directly (don't load entire file into memory)
-    const fileStream = fs.createReadStream(filePath);
+    // If it's a file, stream it directly.
+    // nodeToWebStream ensures the underlying fs.ReadStream is destroyed
+    // when the client disconnects, preventing file descriptor leaks.
     const mimeType = lookup(downloadName) || 'application/octet-stream';
 
-    return new NextResponse(fileStream, {
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Length': fileStats.size.toString(),
-        'Content-Disposition': `attachment; filename="${basename(downloadName)}"`,
-        'Cache-Control': 'public, max-age=3600',
-      },
-    });
+    return new NextResponse(
+      nodeToWebStream(fs.createReadStream(filePath, { highWaterMark: 256 * 1024 })),
+      {
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': fileStats.size.toString(),
+          'Content-Disposition': `attachment; filename="${basename(downloadName)}"`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      }
+    );
   } catch (error) {
     console.error('GET /api/public/[token]/download - Error:', error);
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });

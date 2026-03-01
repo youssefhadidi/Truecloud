@@ -13,6 +13,7 @@ import {
   fixMp4ForStreaming,
   remuxMkvToMp4,
 } from '@/lib/ffmpegUtils';
+import { nodeToWebStream } from '@/lib/streamUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -150,14 +151,16 @@ export async function GET(req, { params }) {
     const range = req.headers.get('range');
 
     if (!range) {
-      const fileStream = fs.createReadStream(streamPath);
-      return new NextResponse(fileStream, {
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': fileSize.toString(),
-          'Accept-Ranges': 'bytes',
-        },
-      });
+      return new NextResponse(
+        nodeToWebStream(fs.createReadStream(streamPath, { highWaterMark: 256 * 1024 })),
+        {
+          headers: {
+            'Content-Type': mimeType,
+            'Content-Length': fileSize.toString(),
+            'Accept-Ranges': 'bytes',
+          },
+        }
+      );
     }
 
     // Parse range
@@ -166,17 +169,18 @@ export async function GET(req, { params }) {
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
     const chunkSize = end - start + 1;
 
-    const fileStream = fs.createReadStream(streamPath, { start, end });
-
-    return new NextResponse(fileStream, {
-      status: 206,
-      headers: {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize.toString(),
-        'Content-Type': mimeType,
-      },
-    });
+    return new NextResponse(
+      nodeToWebStream(fs.createReadStream(streamPath, { start, end, highWaterMark: 256 * 1024 })),
+      {
+        status: 206,
+        headers: {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize.toString(),
+          'Content-Type': mimeType,
+        },
+      }
+    );
   } catch (error) {
     logger.error('GET /api/public/[token]/stream - Error', { error: error.message });
     return NextResponse.json({ error: 'Streaming failed' }, { status: 500 });
