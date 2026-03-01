@@ -9,7 +9,7 @@ import mime from 'mime-types';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs, detectHardwareAccel } from '@/lib/ffmpegUtils';
+import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
@@ -115,18 +115,23 @@ export async function GET(req, { params }) {
             inProgressFixes.set(pathHash, true);
 
             // Create cache directory and fix in background
-            fs.promises.mkdir(cacheDir, { recursive: true }).then(() => {
-              fixMp4ForStreaming(fullPath, cachedPath)
-                .then(() => {
-                  logger.info('GET /api/files/stream - Background MP4 fix complete', { fileId });
-                })
-                .catch((err) => {
-                  logger.error('GET /api/files/stream - Background MP4 fix failed', { fileId, error: err.message });
-                })
-                .finally(() => {
-                  inProgressFixes.delete(pathHash);
-                });
-            });
+            fs.promises.mkdir(cacheDir, { recursive: true })
+              .then(() =>
+                fixMp4ForStreaming(fullPath, cachedPath)
+                  .then(() => {
+                    logger.info('GET /api/files/stream - Background MP4 fix complete', { fileId });
+                  })
+                  .catch((err) => {
+                    logger.error('GET /api/files/stream - Background MP4 fix failed', { fileId, error: err.message });
+                  })
+                  .finally(() => {
+                    inProgressFixes.delete(pathHash);
+                  })
+              )
+              .catch((err) => {
+                logger.error('GET /api/files/stream - cache mkdir failed', { fileId, error: err.message });
+                inProgressFixes.delete(pathHash);
+              });
 
             logger.info('GET /api/files/stream - Started background fix, streaming original', { fileId });
           } else {
@@ -158,12 +163,15 @@ export async function GET(req, { params }) {
             relativePath
           });
 
-          const [codecs, hwaccel, durationSecs] = await Promise.all([
+          // Hardware transcoding is explicitly enabled in admin — use VAAPI.
+          // HWACCEL=none env var is the only escape hatch to force software encoding.
+          const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
+
+          const [codecs, durationSecs] = await Promise.all([
             probeCodecs(fullPath).catch((err) => {
               logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
               return { videoCodec: null, audioCodec: null };
             }),
-            detectHardwareAccel(),
             getFileDuration(fullPath),
           ]);
 
