@@ -121,8 +121,11 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         triggerTranscode();
         pollRef.current = setTimeout(poll, 3000);
       } else if (s === 'transcoding') {
-        // Continue polling even when hlsUrl is set — we want to update progress
-        // and catch the transition to 'ready'
+        // Kick off on-demand full transcode if not already running.
+        // This covers the pre-cached case: the worker only generated the first
+        // N segments, so when the user opens the video we start the full job.
+        triggerTranscode();
+        // Continue polling to update progress and catch the transition to 'ready'
         pollRef.current = setTimeout(poll, 3000);
       } else if (s === null) {
         // Network failure (e.g. server temporarily overloaded) — retry after a
