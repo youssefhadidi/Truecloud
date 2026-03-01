@@ -5,9 +5,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 
-// Native browser-playable extensions — no status check needed
-const NATIVE_EXTS = new Set(['.mp4', '.webm', '.ogv', '.ogg']);
-
 function getExt(filename) {
   const dot = filename.lastIndexOf('.');
   return dot >= 0 ? filename.slice(dot).toLowerCase() : '';
@@ -108,12 +105,6 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
 
     // Share links bypass auth — serve directly without status check
     if (shareToken) {
-      setStatus('native');
-      return;
-    }
-
-    // Native formats — no processing needed
-    if (NATIVE_EXTS.has(fileExt)) {
       setStatus('native');
       return;
     }

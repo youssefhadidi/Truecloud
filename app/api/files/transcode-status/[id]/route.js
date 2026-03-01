@@ -6,7 +6,8 @@ import { resolve, join, extname } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { readComponentsConfig } from '@/lib/componentsConfig';
-import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
+import { isCacheReady } from '@/lib/transcodeManager';
+import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 import {
   isHlsCacheComplete,
   getHlsSegmentCount,
@@ -17,8 +18,7 @@ import {
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
-// Extensions that browsers can play natively without any processing
-const NATIVE_EXTENSIONS = new Set(['.mp4', '.webm', '.ogv', '.ogg']);
+const VIDEO_EXTENSIONS_SET = new Set(VIDEO_EXTENSIONS);
 
 export async function GET(req, { params }) {
   try {
@@ -40,13 +40,8 @@ export async function GET(req, { params }) {
     const fullPath = join(uploadsDir, relativePath, fileId);
     const fileExt = extname(fileId).toLowerCase();
 
-    // Native formats — play directly, no processing needed
-    if (NATIVE_EXTENSIONS.has(fileExt)) {
-      return NextResponse.json({ status: 'native' });
-    }
-
-    // Formats that need HLS transcoding
-    if (TRANSCODE_EXTENSIONS.has(fileExt)) {
+    // All video formats go through HLS
+    if (VIDEO_EXTENSIONS_SET.has(fileExt)) {
       const components = await readComponentsConfig();
 
       if (!components.transcoding) {

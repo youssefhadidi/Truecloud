@@ -6,16 +6,16 @@ import fs from 'fs';
 import { stat, access, lstat, realpath } from 'fs/promises';
 import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
-import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { checkMoovAtom, fixMp4ForStreaming, getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
+import { getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
-import { TRANSCODE_EXTENSIONS, isCacheReady } from '@/lib/transcodeManager';
+import { isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
 import { Semaphore } from '@/lib/semaphore.mjs';
+import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -25,8 +25,7 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 // exhausts the OS FD limit and causes ECONNREFUSED for every subsequent request.
 const probeSemaphore = new Semaphore(3);
 
-// Track in-progress fixes to avoid duplicate work
-const inProgressFixes = new Map();
+const VIDEO_EXTENSIONS_SET = new Set(VIDEO_EXTENSIONS);
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
@@ -90,80 +89,8 @@ export async function GET(req, { params }) {
     let streamPath = fullPath;
     const fileExt = extname(fileId).toLowerCase();
 
-    // Check if it's an MP4 that might need fixing for streaming
-    if (fileExt === '.mp4') {
-      const pathHash = createHash('md5').update(fullPath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
-
-      // Check if we already have a fixed version cached
-      let useCache = false;
-      try {
-        const [sourceStats, cachedStats] = await Promise.all([stat(fullPath), stat(cachedPath)]);
-
-        // Use cache if it's newer than source
-        if (cachedStats.mtime >= sourceStats.mtime) {
-          useCache = true;
-          streamPath = cachedPath;
-          logger.debug('GET /api/files/stream - Using cached fixed MP4', { fileId });
-        }
-      } catch {
-        // Cache doesn't exist
-      }
-
-      // If not using cache, check if file needs fixing
-      if (!useCache) {
-        if (req.signal?.aborted) return new NextResponse(null, { status: 499 });
-        try {
-          await probeSemaphore.acquire(1, req.signal);
-        } catch (err) {
-          if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
-          throw err;
-        }
-        let hasMoovAtStart;
-        try {
-          hasMoovAtStart = await checkMoovAtom(fullPath);
-        } finally {
-          probeSemaphore.release();
-        }
-
-        if (!hasMoovAtStart) {
-          logger.info('GET /api/files/stream - MP4 needs moov atom fix', { fileId });
-
-          // Check if fix is already in progress
-          if (!inProgressFixes.has(pathHash)) {
-            // Start background fix - don't wait for it
-            inProgressFixes.set(pathHash, true);
-
-            // Create cache directory and fix in background
-            fs.promises.mkdir(cacheDir, { recursive: true })
-              .then(() =>
-                fixMp4ForStreaming(fullPath, cachedPath)
-                  .then(() => {
-                    logger.info('GET /api/files/stream - Background MP4 fix complete', { fileId });
-                  })
-                  .catch((err) => {
-                    logger.error('GET /api/files/stream - Background MP4 fix failed', { fileId, error: err.message });
-                  })
-                  .finally(() => {
-                    inProgressFixes.delete(pathHash);
-                  })
-              )
-              .catch((err) => {
-                logger.error('GET /api/files/stream - cache mkdir failed', { fileId, error: err.message });
-                inProgressFixes.delete(pathHash);
-              });
-
-            logger.info('GET /api/files/stream - Started background fix, streaming original', { fileId });
-          } else {
-            logger.debug('GET /api/files/stream - Fix already in progress, streaming original', { fileId });
-          }
-          // Stream original file immediately (may buffer more but no wait)
-        }
-      }
-    }
-
-    // On-demand HLS transcoding for non-streamable formats (MKV, AVI, MOV, WMV, FLV, TS, etc.)
-    if (TRANSCODE_EXTENSIONS.has(fileExt)) {
+    // On-demand HLS transcoding for all video formats
+    if (VIDEO_EXTENSIONS_SET.has(fileExt)) {
       const components = await readComponentsConfig();
 
       if (components.transcoding) {
