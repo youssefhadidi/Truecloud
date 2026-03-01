@@ -112,7 +112,19 @@ export async function GET(req, { params }) {
 
       // If not using cache, check if file needs fixing
       if (!useCache) {
-        const hasMoovAtStart = await checkMoovAtom(fullPath);
+        if (req.signal?.aborted) return new NextResponse(null, { status: 499 });
+        try {
+          await probeSemaphore.acquire(1, req.signal);
+        } catch (err) {
+          if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+          throw err;
+        }
+        let hasMoovAtStart;
+        try {
+          hasMoovAtStart = await checkMoovAtom(fullPath);
+        } finally {
+          probeSemaphore.release();
+        }
 
         if (!hasMoovAtStart) {
           logger.info('GET /api/files/stream - MP4 needs moov atom fix', { fileId });
