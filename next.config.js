@@ -29,17 +29,14 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Webpack config
-  webpack: (config, { isServer }) => {
-    // config.parallelism = 1; // reduce concurrent workers to save memory
-    config.cache = false; // disable build cache to reduce memory usage
-    if (isServer) {
-      config.externals = config.externals || [];
-      if (!config.externals.includes('webtorrent')) {
-        config.externals.push('webtorrent');
-      }
-    }
-    return config;
+  // Turbopack config
+  turbo: {
+    rules: {
+      '*.client': {
+        loaders: ['next-swc-loader'],
+        as: '*.js',
+      },
+    },
   },
   productionBrowserSourceMaps: false,
   // Add headers for cache busting and security
