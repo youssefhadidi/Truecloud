@@ -12,6 +12,7 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { checkMoovAtom, fixMp4ForStreaming, remuxMkvToMp4, getFileDuration, probeCodecs, detectHardwareAccel } from '@/lib/ffmpegUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { TRANSCODE_EXTENSIONS, isCacheReady, startTranscodeJob } from '@/lib/transcodeManager';
+import { startHlsJob } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -163,23 +164,26 @@ export async function GET(req, { params }) {
       const components = await readComponentsConfig();
 
       if (components.transcoding) {
-        // Check cache first — if ready, serve it directly
+        // Backward compat: serve existing MP4 cache directly
         const cachedMp4 = await isCacheReady(fullPath, cacheDir);
         if (cachedMp4) {
           streamPath = cachedMp4;
-          logger.debug('GET /api/files/stream - Using transcoded cache', { fileId });
+          logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
         } else {
-          // Start transcode job in background (non-blocking)
+          // Start HLS job in background (non-blocking)
           const [codecs, hwaccel, durationSecs] = await Promise.all([
             probeCodecs(fullPath).catch(() => ({ videoCodec: null, audioCodec: null })),
             detectHardwareAccel(),
             getFileDuration(fullPath),
           ]);
 
-          const job = await startTranscodeJob(fullPath, cacheDir, codecs, hwaccel, durationSecs);
+          const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs);
 
           if (job.status === 'transcoding') {
-            logger.info('GET /api/files/stream - Transcoding in progress', { fileId, progress: job.progress });
+            logger.info('GET /api/files/stream - HLS transcoding in progress', {
+              fileId,
+              progress: job.progress,
+            });
             return NextResponse.json(
               {
                 error: 'Video is being transcoded for playback. Please try again shortly.',
@@ -191,8 +195,8 @@ export async function GET(req, { params }) {
           }
 
           if (job.status === 'error') {
-            // Serve original as best-effort fallback
-            logger.warn('GET /api/files/stream - Transcode failed, serving original', { fileId });
+            logger.warn('GET /api/files/stream - HLS transcode failed, serving original', { fileId });
+            // Fall through to serve original file as best-effort
           }
         }
       }

@@ -12,6 +12,12 @@ import {
   getJobStatus,
   getFileHash,
 } from '@/lib/transcodeManager';
+import {
+  isHlsCacheComplete,
+  getHlsSegmentCount,
+  getHlsJobStatus,
+  getHlsHash,
+} from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -63,30 +69,48 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'disabled' });
       }
 
-      // Check if a ready cache exists
+      // 1. Backward compat: existing MP4 cache still wins
       const cachedMp4 = await isCacheReady(fullPath, cacheDir);
       if (cachedMp4) {
         return NextResponse.json({ status: 'ready' });
       }
 
-      // Check in-progress job
-      const hash = getFileHash(fullPath);
-      const job = getJobStatus(hash);
+      // Build the hlsUrl used for early and complete playback
+      const params = new URLSearchParams({ path: relativePath });
+      const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${params}`;
+
+      // 2. HLS fully complete (manifest has #EXT-X-ENDLIST)
+      const hlsComplete = await isHlsCacheComplete(fullPath, cacheDir);
+      if (hlsComplete) {
+        return NextResponse.json({ status: 'ready', hlsUrl });
+      }
+
+      // 3. HLS has >= 2 segments — start early playback while still transcoding
+      const segCount = await getHlsSegmentCount(fullPath, cacheDir);
+      if (segCount >= 2) {
+        const hash = getHlsHash(fullPath);
+        const job = getHlsJobStatus(hash);
+        const progress = job.status === 'transcoding' ? job.progress : 99;
+        return NextResponse.json({ status: 'transcoding', progress, hlsUrl });
+      }
+
+      // 4. In-memory HLS job status
+      const hash = getHlsHash(fullPath);
+      const job = getHlsJobStatus(hash);
 
       if (job.status === 'transcoding') {
         return NextResponse.json({ status: 'transcoding', progress: job.progress });
       }
 
       if (job.status === 'done') {
-        return NextResponse.json({ status: 'ready' });
+        return NextResponse.json({ status: 'ready', hlsUrl });
       }
 
       if (job.status === 'error') {
-        // Job failed — let the player try the original (may not play)
         return NextResponse.json({ status: 'disabled', reason: 'transcode_failed' });
       }
 
-      // Not started yet
+      // 5. Not started yet
       return NextResponse.json({ status: 'pending' });
     }
 
