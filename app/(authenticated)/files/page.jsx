@@ -6,7 +6,7 @@ import { useStableSession } from '@/lib/api/session';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage } from 'react-icons/fi';
+import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage, FiDownload, FiTrash2 } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
@@ -17,7 +17,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
-import { useMoveFiles, fetchFoldersHelper } from '@/lib/api/files';
+import { useMoveFiles, useDeleteFile, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
 
 // Lazy load heavy components
@@ -118,7 +118,10 @@ function FilesPageContent() {
   const { data: favorites = [] } = useFavorites();
   const { toggleFavorite, isPending: togglingFavorite } = useToggleFavorite();
   const moveMutation = useMoveFiles();
+  const bulkDeleteMutation = useDeleteFile(state.currentPath);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [convertingHeic, setConvertingHeic] = useState(false);
   const [conversionStatus, setConversionStatus] = useState({ completed: 0, total: 0, failed: [] });
 
@@ -139,6 +142,46 @@ function FilesPageContent() {
     resumeDownload: state.resumeDownload,
     removeDownload: state.removeDownload,
   });
+
+  // Reset bulk-delete confirmation when selection mode is turned off
+  useEffect(() => {
+    if (!state.selectionMode) setBulkDeleteConfirming(false);
+  }, [state.selectionMode]);
+
+  const handleBulkDownload = useCallback(async () => {
+    const filesToDownload = state.files.filter((f) => state.selectedFiles.includes(f.name));
+    for (let i = 0; i < filesToDownload.length; i++) {
+      const f = filesToDownload[i];
+      await fileUtils.handleDownload(f.id, f.name);
+      if (i < filesToDownload.length - 1) await new Promise((r) => setTimeout(r, 300));
+    }
+    state.setSelectionMode(false);
+    state.setSelectedFiles([]);
+  }, [state, fileUtils]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (bulkDeleting) return;
+    setBulkDeleting(true);
+    setBulkDeleteConfirming(false);
+    let succeeded = 0;
+    let failed = 0;
+    for (const name of state.selectedFiles) {
+      try {
+        await bulkDeleteMutation.mutateAsync(name);
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkDeleting(false);
+    state.setSelectionMode(false);
+    state.setSelectedFiles([]);
+    if (failed === 0) {
+      state.addNotification('success', `Deleted ${succeeded} item(s)`);
+    } else {
+      state.addNotification('warning', `Deleted ${succeeded}, failed to delete ${failed}`);
+    }
+  }, [bulkDeleting, bulkDeleteMutation, state]);
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
 
@@ -327,14 +370,54 @@ function FilesPageContent() {
                   </button>
 
                   {state.selectionMode && (
-                    <button
-                      onClick={() => setMoveModalOpen(true)}
-                      disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
-                      className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <FiFolder size={16} />
-                      <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setMoveModalOpen(true)}
+                        disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FiFolder size={16} />
+                        <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
+                      </button>
+
+                      <button
+                        onClick={handleBulkDownload}
+                        disabled={state.selectedFiles.length === 0 || bulkDeleting}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FiDownload size={16} />
+                        <span className="hidden sm:inline">Download ({state.selectedFiles.length})</span>
+                      </button>
+
+                      {bulkDeleteConfirming ? (
+                        <>
+                          <span className="hidden sm:inline text-xs text-red-400 px-1">Delete {state.selectedFiles.length} item(s)?</span>
+                          <button
+                            onClick={handleBulkDelete}
+                            disabled={bulkDeleting}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-red-400 hover:bg-red-500/20 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {bulkDeleting ? 'Deleting…' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={() => setBulkDeleteConfirming(false)}
+                            disabled={bulkDeleting}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setBulkDeleteConfirming(true)}
+                          disabled={state.selectedFiles.length === 0 || bulkDeleting}
+                          className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <FiTrash2 size={16} />
+                          <span className="hidden sm:inline">Delete ({state.selectedFiles.length})</span>
+                        </button>
+                      )}
+                    </>
                   )}
 
                   {/* HEIC to JPEG Conversion Button */}
