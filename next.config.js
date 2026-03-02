@@ -29,15 +29,6 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Turbopack config
-  turbo: {
-    rules: {
-      '*.client': {
-        loaders: ['next-swc-loader'],
-        as: '*.js',
-      },
-    },
-  },
   productionBrowserSourceMaps: false,
   // Add headers for cache busting and security
   async headers() {
