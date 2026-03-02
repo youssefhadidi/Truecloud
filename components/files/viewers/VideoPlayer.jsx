@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 
 function getExt(filename) {
@@ -25,6 +25,15 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
 
   const fileExt = getExt(file.name);
   const streamUrl = getFileUrl(file, 'video');
+
+  // Reset state synchronously before paint when the file changes so stale
+  // 'native'/'ready' status never briefly renders with the new file's stream URL
+  // (which would fire a premature GET /stream request before the first status poll).
+  useLayoutEffect(() => {
+    setStatus(null);
+    setProgress(0);
+    setHlsUrl(null);
+  }, [file.id]);
 
   // ─── hls.js lifecycle ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -96,12 +105,6 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   useEffect(() => {
     mountedRef.current = true;
     triggeredRef.current = false;
-
-    // Reset state for the new file immediately so stale status from a previous
-    // file (including any error state) never bleeds into the next one.
-    setStatus(null);
-    setProgress(0);
-    setHlsUrl(null);
 
     // Share links bypass auth — serve directly without status check
     if (shareToken) {
