@@ -291,24 +291,17 @@ export async function POST(req) {
            sudo ldconfig 2>&1`,
         ).catch((e) => logger.warn('ldconfig registration:', e.message));
 
-        // Resolve pnpm path — corepack shims may not be on /bin/sh's PATH
-        let pnpmBin = 'pnpm';
+        // Resolve bun path
+        let bunBin = 'bun';
         try {
-          const { stdout: pnpmPath } = await execAsync('command -v pnpm 2>/dev/null || which pnpm 2>/dev/null || echo ""', { env: buildEnv });
-          if (pnpmPath.trim()) pnpmBin = pnpmPath.trim();
-          else {
-            // Corepack: try resolving via node's bin directory
-            const { stdout: nodeBin } = await execAsync('dirname "$(command -v node)"');
-            const candidatePath = `${nodeBin.trim()}/pnpm`;
-            const { stdout: exists } = await execAsync(`test -f "${candidatePath}" && echo "yes" || echo "no"`);
-            if (exists.trim() === 'yes') pnpmBin = candidatePath;
-          }
+          const { stdout: bunPath } = await execAsync('command -v bun 2>/dev/null || which bun 2>/dev/null || echo ""', { env: buildEnv });
+          if (bunPath.trim()) bunBin = bunPath.trim();
         } catch {}
-        logger.info(`Using pnpm at: ${pnpmBin}`);
+        logger.info(`Using bun at: ${bunBin}`);
 
         // Ensure sharp is installed normally first (resets bundled dir to stock)
-        await execAsync(`${pnpmBin} remove sharp 2>&1 || true`, { ...longOpts, cwd: projectDir });
-        await execAsync(`${pnpmBin} add sharp 2>&1`, { ...longOpts, cwd: projectDir });
+        await execAsync(`${bunBin} remove sharp 2>&1 || true`, { ...longOpts, cwd: projectDir });
+        await execAsync(`${bunBin} add sharp 2>&1`, { ...longOpts, cwd: projectDir });
 
         // Find the bundled libvips directory
         const { stdout: libvipsDir } = await execAsync(
