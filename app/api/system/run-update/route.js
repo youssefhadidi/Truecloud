@@ -16,12 +16,12 @@ import {
 async function runUpdateProcess() {
   const updateStatus = startUpdate();
   const steps = [
-    { name: STEPS.PULLING, command: 'npm', args: ['run', 'pull'] },
+    { name: STEPS.PULLING, command: 'bun', args: ['run', 'pull'] },
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
-    { name: STEPS.REBUILDING, command: 'npm', args: ['rebuild', 'node-datachannel'] },
-    { name: STEPS.DB_PUSH, command: 'npm', args: ['run', 'db:push'] },
-    { name: STEPS.BUILDING, command: 'npm', args: ['run', 'build'] },
-    { name: STEPS.RESTARTING, command: 'npm', args: ['run', 'restart'] },
+    { name: STEPS.REBUILDING, command: 'sh', args: ['-c', 'SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all'] },
+    { name: STEPS.DB_PUSH, command: 'bun', args: ['run', 'db:push'] },
+    { name: STEPS.BUILDING, command: 'bun', args: ['run', 'build'] },
+    { name: STEPS.RESTARTING, command: 'bun', args: ['run', 'restart'] },
   ];
 
   for (const step of steps) {

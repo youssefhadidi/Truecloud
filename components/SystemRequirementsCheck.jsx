@@ -47,7 +47,7 @@ export default function SystemRequirementsCheck() {
   const totalCount = requirements.length;
 
   return (
-    <div className="bg-gray-800 rounded-lg shadow p-6">
+    <>
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-white mb-2">System Requirements</h2>
         <p className="text-sm text-gray-400">
@@ -101,6 +101,6 @@ export default function SystemRequirementsCheck() {
       <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 font-medium">
         Refresh
       </button>
-    </div>
+    </>
   );
 }
