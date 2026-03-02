@@ -17,7 +17,7 @@ async function runUpdateProcess() {
   const updateStatus = startUpdate();
   const steps = [
     { name: STEPS.PULLING, command: 'npm', args: ['run', 'pull'] },
-    { name: STEPS.INSTALLING, command: 'pnpm', args: ['i'] },
+    { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
     { name: STEPS.REBUILDING, command: 'npm', args: ['rebuild', 'node-datachannel'] },
     { name: STEPS.DB_PUSH, command: 'npm', args: ['run', 'db:push'] },
     { name: STEPS.BUILDING, command: 'npm', args: ['run', 'build'] },

@@ -34,11 +34,11 @@ git pull origin "$BRANCH" >> "$LOG_FILE" 2>&1
 
 # Install dependencies
 echo "[3/5] Installing dependencies..." | tee -a "$LOG_FILE"
-pnpm install >> "$LOG_FILE" 2>&1
+bun install >> "$LOG_FILE" 2>&1
 
 # Build Next.js
 echo "[4/5] Building Next.js application..." | tee -a "$LOG_FILE"
-pnpm build >> "$LOG_FILE" 2>&1
+bun run build >> "$LOG_FILE" 2>&1
 
 # Restart service
 echo "[5/5] Restarting systemctl service..." | tee -a "$LOG_FILE"
