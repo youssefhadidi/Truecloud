@@ -3,22 +3,22 @@
   "version": "1.208.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "bun server.js",
     "build": "next build",
-    "start": "node server.js",
+    "start": "bun server.js",
     "lint": "eslint",
     "restart": "systemctl restart truecloud",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "setup": "npm run db:generate && npm run db:push",
-    "create-admin": "node scripts/create-admin.js",
-    "generate-secret": "node scripts/generate-secret.js",
+    "setup": "bun run db:generate && bun run db:push",
+    "create-admin": "bun scripts/create-admin.js",
+    "generate-secret": "bun scripts/generate-secret.js",
     "pull": "git pull",
     "stopServ": "systemctl stop truecloud",
-    "runUpdate": "npm run pull && pnpm i && npm rebuild node-datachannel && npm run db:push && npm run build && npm run restart",
-    "bump-version": "npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'",
-    "rebuild-native": "npm rebuild node-datachannel"
+    "runUpdate": "bun run pull && bun install && bun pm trust node_datachannel && bun run db:push && bun run build && bun run restart",
+    "bump-version": "bun run --bun npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'",
+    "rebuild-native": "bun pm trust node_datachannel"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -55,5 +55,5 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^4"
   },
-  "packageManager": "pnpm@10.28.1+sha512.7d7dbbca9e99447b7c3bf7a73286afaaf6be99251eb9498baefa7d406892f67b879adb3a1d7e687fc4ccc1a388c7175fbaae567a26ab44d1067b54fcb0d6a316"
+  "packageManager": "bun@1.2.4"
 }
