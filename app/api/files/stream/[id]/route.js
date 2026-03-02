@@ -169,12 +169,14 @@ export async function GET(req, { params }) {
               maxHeight: transcodingConfig.maxHeight ?? 'original',
             });
 
-            // H.264 + browser-compatible audio in an MP4 container → serve natively,
-            // no HLS transcoding needed.
-            if (fileExt === '.mp4' && codecs.videoCodec === 'h264' &&
+            // H.264 + browser-compatible audio in a natively playable container → serve
+            // directly without HLS transcoding.
+            // Note: MKV is supported by Chrome but not Firefox/Safari.
+            if ((fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv') &&
+                codecs.videoCodec === 'h264' &&
                 isAudioBrowserCompatible(codecs.audioCodec)) {
               markNative(fullPath);
-              logger.info('GET /api/files/stream - Native MP4 detected, serving directly', { fileId });
+              logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
               // Fall through to byte-range serving
             } else {
               const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
