@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
+import { probeCodecs, isAudioBrowserCompatible } from '@/lib/ffmpegUtils';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 import {
   isHlsCacheComplete,
@@ -14,6 +15,7 @@ import {
   getHlsJobStatus,
   getHlsHash,
   isMarkedNative,
+  markNative,
 } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -100,7 +102,24 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'disabled', reason: 'transcode_failed' });
       }
 
-      // 5. Not started yet
+      // 5. Unknown — probe once to detect natively streamable files (H.264 + compatible audio
+      //    in mp4/m4v/mkv). markNative() populates the in-memory Set so subsequent calls
+      //    return 'native' immediately without probing again.
+      if (fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv') {
+        try {
+          const codecs = await probeCodecs(fullPath, req.signal);
+          if (codecs.videoCodec === 'h264' && isAudioBrowserCompatible(codecs.audioCodec)) {
+            markNative(fullPath);
+            return NextResponse.json({ status: 'native' });
+          }
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            logger.warn('transcode-status: probeCodecs failed', { fullPath, error: err.message });
+          }
+        }
+      }
+
+      // 6. Not started yet — stream route will begin HLS transcoding
       return NextResponse.json({ status: 'pending' });
     }
 
