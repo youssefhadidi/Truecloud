@@ -23,10 +23,10 @@ echo "[2/5] Pulling code from origin/$BRANCH..." | tee -a "$LOG_FILE"
 git pull origin "$BRANCH" >> "$LOG_FILE" 2>&1
 
 echo "[3/5] Installing dependencies..." | tee -a "$LOG_FILE"
-pnpm install >> "$LOG_FILE" 2>&1
+bun install >> "$LOG_FILE" 2>&1
 
 echo "[4/5] Building Next.js application..." | tee -a "$LOG_FILE"
-pnpm build >> "$LOG_FILE" 2>&1
+bun build >> "$LOG_FILE" 2>&1
 
 echo "[5/5] Restarting systemctl service..." | tee -a "$LOG_FILE"
 systemctl restart "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
