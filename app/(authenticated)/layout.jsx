@@ -9,6 +9,10 @@ import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
 import JobsBadge from '@/components/JobsBadge';
 import { useStableSession } from '@/lib/api/session';
+import AuthProvider from '@/components/AuthProvider';
+import { SessionLockProvider } from '@/contexts/SessionLockContext';
+import SessionLockScreen from '@/components/SessionLockScreen';
+import { WebSocketProvider } from '@/contexts/WebSocketContext';
 
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useStableSession();
@@ -55,5 +59,15 @@ function AuthenticatedLayoutContent({ children }) {
 }
 
 export default function AuthenticatedLayout({ children }) {
-  return <AuthenticatedLayoutContent>{children}</AuthenticatedLayoutContent>;
+  return (
+    <AuthProvider>
+      <SessionLockProvider>
+        <SessionLockScreen>
+          <WebSocketProvider>
+            <AuthenticatedLayoutContent>{children}</AuthenticatedLayoutContent>
+          </WebSocketProvider>
+        </SessionLockScreen>
+      </SessionLockProvider>
+    </AuthProvider>
+  );
 }

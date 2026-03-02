@@ -2,14 +2,10 @@
 
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import AuthProvider from '@/components/AuthProvider';
 import QueryProvider from '@/components/QueryProvider';
 import ReduxProvider from '@/components/ReduxProvider';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
-import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import Notifications from '@/components/Notifications';
-import { SessionLockProvider } from '@/contexts/SessionLockContext';
-import SessionLockScreen from '@/components/SessionLockScreen';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -34,13 +30,7 @@ export default function RootLayout({ children }) {
           <QueryProvider>
             <NotificationsProvider>
               <Notifications />
-              <AuthProvider>
-                <SessionLockProvider>
-                  <SessionLockScreen>
-                    <WebSocketProvider>{children}</WebSocketProvider>
-                  </SessionLockScreen>
-                </SessionLockProvider>
-              </AuthProvider>
+              {children}
             </NotificationsProvider>
           </QueryProvider>
         </ReduxProvider>

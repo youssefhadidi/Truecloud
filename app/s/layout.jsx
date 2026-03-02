@@ -1,7 +1,5 @@
 /** @format */
 
-import QueryProvider from '@/components/QueryProvider';
-
 export const metadata = {
   title: 'Shared File - TrueCloud',
   description: 'View shared file',
@@ -9,8 +7,7 @@ export const metadata = {
 
 export default function ShareLayout({ children }) {
   return (
-    <QueryProvider>
-      <div className="h-dvh bg-gray-50 dark:bg-gray-900 flex flex-col flex-grow">
+    <div className="h-dvh bg-gray-50 dark:bg-gray-900 flex flex-col flex-grow">
         {/* Minimal header */}
         <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -29,6 +26,5 @@ export default function ShareLayout({ children }) {
         {/* Main content */}
         <main className="flex-1 w-full min-h-0 flex flex-col">{children}</main>
       </div>
-    </QueryProvider>
   );
 }
