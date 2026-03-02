@@ -80,6 +80,10 @@ global.broadcastUpdate = (message) => {
 
 global.broadcastCacheGenerationUpdate = (message) => {
   broadcastMessage({ type: 'cache-generation', payload: message.payload });
+  // Mirror into the generic job manager (lazy import to avoid CJS/ESM issues at startup)
+  import('./lib/jobManager.js').then(({ syncCacheJobToManager }) => {
+    syncCacheJobToManager(global.cacheGenerationStatus);
+  }).catch(() => {});
 };
 
 global.broadcastTorrentDownloadUpdate = (message) => {
@@ -109,6 +113,10 @@ global.broadcastMinecraftConsole = (serverId, lines) => {
 
 global.broadcastMinecraftStatus = (serverId, status) => {
   broadcastMessage({ type: 'minecraft-status', payload: { serverId, status } });
+};
+
+global.broadcastJobUpdate = (job) => {
+  broadcastMessage({ type: 'job-status', payload: job });
 };
 
 // Load ES modules before starting server
@@ -175,6 +183,10 @@ loadEsModules().then(() => {
           type: 'cache-generation',
           payload: global.cacheGenerationStatus,
         }));
+
+        import('./lib/jobManager.js').then(({ listJobs }) => {
+          ws.send(JSON.stringify({ type: 'job-list', payload: listJobs() }));
+        }).catch(() => {});
 
         ws.on('pong', () => {
           ws.isAlive = true;

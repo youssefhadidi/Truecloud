@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { FiArrowLeft } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
+import JobsBadge from '@/components/JobsBadge';
 import { useStableSession } from '@/lib/api/session';
 
 function AuthenticatedLayoutContent({ children }) {
@@ -37,6 +38,7 @@ function AuthenticatedLayoutContent({ children }) {
               </h1>
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <JobsBadge />
               <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
             </div>
           </div>
