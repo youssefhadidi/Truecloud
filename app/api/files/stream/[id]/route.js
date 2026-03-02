@@ -8,12 +8,12 @@ import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { getFileDuration, probeCodecs } from '@/lib/ffmpegUtils';
+import { getFileDuration, probeCodecs, isAudioBrowserCompatible } from '@/lib/ffmpegUtils';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
-import { startHlsJob } from '@/lib/hlsManager';
+import { startHlsJob, markNative, isMarkedNative } from '@/lib/hlsManager';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 
@@ -94,104 +94,118 @@ export async function GET(req, { params }) {
       const components = await readComponentsConfig();
 
       if (components.transcoding) {
-        // Backward compat: serve existing MP4 cache directly
-        const cachedMp4 = await isCacheReady(fullPath, cacheDir);
-        if (cachedMp4) {
-          streamPath = cachedMp4;
-          logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
+        // Fast path: already confirmed natively streamable on a previous request — skip probing
+        if (isMarkedNative(fullPath)) {
+          logger.debug('GET /api/files/stream - Native MP4 (cached), serving directly', { fileId });
         } else {
-          // Short-circuit if the client already navigated away before we start
-          // the expensive ffprobe work — prevents FD exhaustion from rapid scrolling.
-          if (req.signal?.aborted) {
-            return new NextResponse(null, { status: 499 });
-          }
-
-          // Start HLS job in background (non-blocking)
-          // Debug: Log file stats and probing info
-          logger.info('GET /api/files/stream - Before HLS probing', {
-            fullPath,
-            fileId,
-            fileExists: true,
-            uploadDir: UPLOAD_DIR,
-            relativePath
-          });
-
-          // Hardware transcoding is explicitly enabled in admin — use VAAPI.
-          // HWACCEL=none env var is the only escape hatch to force software encoding.
-          const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
-
-          // Acquire the probe semaphore: at most 3 concurrent ffprobe pairs can run
-          // at the same time. Requests beyond that wait in queue rather than spawning
-          // unlimited subprocesses. Pass req.signal so waiting requests are cancelled
-          // immediately if the client disconnects while queued.
-          try {
-            await probeSemaphore.acquire(1, req.signal);
-          } catch (err) {
-            if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
-            throw err;
-          }
-          let codecs, durationSecs, transcodingConfig;
-          try {
-            // Check again after waiting for the semaphore — client may have left
+          // Backward compat: serve existing MP4 cache directly
+          const cachedMp4 = await isCacheReady(fullPath, cacheDir);
+          if (cachedMp4) {
+            streamPath = cachedMp4;
+            logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
+          } else {
+            // Short-circuit if the client already navigated away before we start
+            // the expensive ffprobe work — prevents FD exhaustion from rapid scrolling.
             if (req.signal?.aborted) {
               return new NextResponse(null, { status: 499 });
             }
 
-            [codecs, durationSecs, transcodingConfig] = await Promise.all([
-              probeCodecs(fullPath, req.signal).catch((err) => {
-                if (err.name !== 'AbortError') {
-                  logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
-                }
-                return { videoCodec: null, audioCodec: null };
-              }),
-              getFileDuration(fullPath, req.signal),
-              readTranscodingConfig(),
-            ]);
-          } finally {
-            probeSemaphore.release();
-          }
-
-          // If the client disconnected while we were probing, don't start ffmpeg
-          if (req.signal?.aborted) {
-            return new NextResponse(null, { status: 499 });
-          }
-
-          logger.info('GET /api/files/stream - Probing complete', {
-            fullPath,
-            videoCodec: codecs?.videoCodec,
-            audioCodec: codecs?.audioCodec,
-            hwaccel,
-            durationSecs,
-            maxHeight: transcodingConfig.maxHeight ?? 'original',
-          });
-
-          const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
-
-          if (job.status === 'transcoding') {
-            logger.info('GET /api/files/stream - HLS transcoding in progress', {
+            // Start HLS job in background (non-blocking)
+            // Debug: Log file stats and probing info
+            logger.info('GET /api/files/stream - Before HLS probing', {
+              fullPath,
               fileId,
-              progress: job.progress,
+              fileExists: true,
+              uploadDir: UPLOAD_DIR,
+              relativePath
             });
-            return NextResponse.json(
-              {
-                error: 'Video is being transcoded for playback. Please try again shortly.',
-                status: 'transcoding',
-                progress: job.progress,
-              },
-              { status: 202 },
-            );
-          }
 
-          if (job.status === 'done') {
-            const hlsParams = new URLSearchParams({ path: relativePath });
-            const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}`;
-            logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
-            return NextResponse.json({ status: 'ready', hlsUrl });
-          }
+            // Hardware transcoding is explicitly enabled in admin — use VAAPI.
+            // HWACCEL=none env var is the only escape hatch to force software encoding.
+            const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
 
-          if (job.status === 'error') {
-            logger.warn('GET /api/files/stream - HLS transcode failed, serving original', { fileId });
-            // Fall through to serve original file as best-effort
+            // Acquire the probe semaphore: at most 3 concurrent ffprobe pairs can run
+            // at the same time. Requests beyond that wait in queue rather than spawning
+            // unlimited subprocesses. Pass req.signal so waiting requests are cancelled
+            // immediately if the client disconnects while queued.
+            try {
+              await probeSemaphore.acquire(1, req.signal);
+            } catch (err) {
+              if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+              throw err;
+            }
+            let codecs, durationSecs, transcodingConfig;
+            try {
+              // Check again after waiting for the semaphore — client may have left
+              if (req.signal?.aborted) {
+                return new NextResponse(null, { status: 499 });
+              }
+
+              [codecs, durationSecs, transcodingConfig] = await Promise.all([
+                probeCodecs(fullPath, req.signal).catch((err) => {
+                  if (err.name !== 'AbortError') {
+                    logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
+                  }
+                  return { videoCodec: null, audioCodec: null };
+                }),
+                getFileDuration(fullPath, req.signal),
+                readTranscodingConfig(),
+              ]);
+            } finally {
+              probeSemaphore.release();
+            }
+
+            // If the client disconnected while we were probing, don't start ffmpeg
+            if (req.signal?.aborted) {
+              return new NextResponse(null, { status: 499 });
+            }
+
+            logger.info('GET /api/files/stream - Probing complete', {
+              fullPath,
+              videoCodec: codecs?.videoCodec,
+              audioCodec: codecs?.audioCodec,
+              hwaccel,
+              durationSecs,
+              maxHeight: transcodingConfig.maxHeight ?? 'original',
+            });
+
+            // H.264 + browser-compatible audio in an MP4 container → serve natively,
+            // no HLS transcoding needed.
+            if (fileExt === '.mp4' && codecs.videoCodec === 'h264' &&
+                isAudioBrowserCompatible(codecs.audioCodec)) {
+              markNative(fullPath);
+              logger.info('GET /api/files/stream - Native MP4 detected, serving directly', { fileId });
+              // Fall through to byte-range serving
+            } else {
+              const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
+
+              if (job.status === 'transcoding') {
+                logger.info('GET /api/files/stream - HLS transcoding in progress', {
+                  fileId,
+                  progress: job.progress,
+                });
+                return NextResponse.json(
+                  {
+                    error: 'Video is being transcoded for playback. Please try again shortly.',
+                    status: 'transcoding',
+                    progress: job.progress,
+                  },
+                  { status: 202 },
+                );
+              }
+
+              if (job.status === 'done') {
+                const hlsParams = new URLSearchParams({ path: relativePath });
+                const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}`;
+                logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
+                return NextResponse.json({ status: 'ready', hlsUrl });
+              }
+
+              if (job.status === 'error') {
+                logger.warn('GET /api/files/stream - HLS transcode failed, serving original', { fileId });
+                // Fall through to serve original file as best-effort
+              }
+            }
           }
         }
       }

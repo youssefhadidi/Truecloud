@@ -13,6 +13,7 @@ import {
   getHlsSegmentCount,
   getHlsJobStatus,
   getHlsHash,
+  isMarkedNative,
 } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -47,6 +48,11 @@ export async function GET(req, { params }) {
       if (!components.transcoding) {
         // Transcoding is disabled — tell the player to try as-is
         return NextResponse.json({ status: 'disabled' });
+      }
+
+      // 0. Native streamable MP4 (H.264 + browser-compatible audio) — no HLS needed
+      if (isMarkedNative(fullPath)) {
+        return NextResponse.json({ status: 'native' });
       }
 
       // 1. Backward compat: existing MP4 cache still wins
