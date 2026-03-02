@@ -71,13 +71,17 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'ready', hlsUrl });
       }
 
-      // 3. HLS has >= 2 segments — start early playback while still transcoding
+      // 3. HLS has >= 2 segments AND an active in-memory job — start early playback.
+      //    If segments exist but no active job (pre-cached state, manifest deleted),
+      //    fall through to 'pending' so the stream route starts on-demand transcoding.
       const segCount = await getHlsSegmentCount(fullPath, cacheDir);
       if (segCount >= 2) {
         const hash = getHlsHash(fullPath);
         const job = getHlsJobStatus(hash);
-        const progress = job.status === 'transcoding' ? job.progress : 99;
-        return NextResponse.json({ status: 'transcoding', progress, hlsUrl });
+        if (job.status === 'transcoding') {
+          return NextResponse.json({ status: 'transcoding', progress: job.progress, hlsUrl });
+        }
+        // Segments exist but no active job — fall through to pending
       }
 
       // 4. In-memory HLS job status

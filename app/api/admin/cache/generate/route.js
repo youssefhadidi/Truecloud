@@ -7,7 +7,7 @@ import fsPromises from 'fs/promises';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
-const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
+const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 export async function POST(req) {
   const { error } = await requireAdmin();
