@@ -2,6 +2,36 @@ const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
+const fs = require('fs');
+const path = require('path');
+
+// Patch webrtc-polyfill synchronously before any ESM imports.
+// webrtc-polyfill -> node-datachannel fails in Bun's ESM-CJS interop (__dirname='').
+// We replace it with no-op stubs since WebRTC (browser peers) is not needed
+// for server-side torrent downloads. The package.json override + bun install
+// makes this permanent; this patch bridges the gap on restart.
+(function patchWebrtcPolyfill() {
+  const polyfillPath = path.join(__dirname, 'node_modules/webrtc-polyfill/index.js');
+  try {
+    if (!fs.existsSync(polyfillPath)) return;
+    if (!fs.readFileSync(polyfillPath, 'utf8').includes('node-datachannel')) return;
+    fs.writeFileSync(polyfillPath, [
+      'export class RTCPeerConnection { constructor() {} createOffer() { return Promise.reject(); } createAnswer() { return Promise.reject(); } setLocalDescription() { return Promise.reject(); } setRemoteDescription() { return Promise.reject(); } addIceCandidate() { return Promise.reject(); } close() {} addEventListener() {} removeEventListener() {} }',
+      'export class RTCSessionDescription { constructor(d={}) { Object.assign(this,d); } }',
+      'export class RTCIceCandidate { constructor(d={}) { Object.assign(this,d); } }',
+      'export class RTCIceTransport {}',
+      'export class RTCDataChannel {}',
+      'export class RTCSctpTransport {}',
+      'export class RTCDtlsTransport {}',
+      'export class RTCCertificate {}',
+      'export class MediaStream { getTracks() { return []; } }',
+      'export default {};',
+    ].join('\n'));
+    console.log('> Patched webrtc-polyfill stub (run bun install to make permanent)');
+  } catch (e) {
+    console.error('> webrtc-polyfill patch failed:', e.message);
+  }
+}());
 
 // Dynamic imports for ES modules
 let getToken;
