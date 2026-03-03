@@ -18,7 +18,7 @@ async function runUpdateProcess() {
   const steps = [
     { name: STEPS.PULLING, command: 'bun', args: ['run', 'pull'] },
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
-    { name: STEPS.REBUILDING, command: 'bash', args: ['-c', 'SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all; cd node_modules/node-datachannel && npm run install; true'] },
+    { name: STEPS.REBUILDING, command: 'bash', args: ['-c', 'cd node_modules/node-datachannel && npm run install; true'] },
     { name: STEPS.DB_PUSH, command: 'bun', args: ['run', 'db:push'] },
     { name: STEPS.BUILDING, command: 'bun', args: ['run', 'build'] },
     { name: STEPS.RESTARTING, command: 'bun', args: ['run', 'restart'] },
