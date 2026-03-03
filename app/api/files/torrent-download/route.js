@@ -26,7 +26,7 @@ import { writeFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'fs';
 import { logger } from '@/lib/logger';
-import { addDownload, getActiveDownloads, getWaitingDownloads, pauseDownload, resumeDownload, removeDownload } from '@/lib/webTorrentManager';
+import { addDownload, getActiveDownloads, getWaitingDownloads, pauseDownload, resumeDownload, removeDownload } from '@/lib/torrentManagerProxy';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
 const UPLOAD_DIR = process.env.UPLOAD_DIR
