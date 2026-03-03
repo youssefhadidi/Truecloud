@@ -15,7 +15,6 @@
     "create-admin": "bun scripts/create-admin.js",
     "generate-secret": "bun scripts/generate-secret.js",
     "pull": "git pull",
-    "postinstall": "sed -i 's|require(\"../../../build/Release/node_datachannel.node\")|require(require(\"path\").join(process.cwd(),\"node_modules/node-datachannel/build/Release/node_datachannel.node\"))|g' node_modules/node-datachannel/dist/cjs/lib/node-datachannel.cjs || true",
     "stopServ": "systemctl stop truecloud",
     "runUpdate": "bun run pull && bun install && bun run db:push && bun run build && bun run restart",
     "bump-version": "bun run --bun npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'",
