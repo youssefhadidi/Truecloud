@@ -57,9 +57,6 @@
     "tailwindcss": "^4"
   },
   "packageManager": "bun@1.2.4",
-  "overrides": {
-    "webrtc-polyfill": "file:./stubs/webrtc-polyfill"
-  },
   "trustedDependencies": [
     "node-datachannel",
     "unrs-resolver",
