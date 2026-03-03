@@ -16,7 +16,7 @@
     "generate-secret": "bun scripts/generate-secret.js",
     "pull": "git pull",
     "stopServ": "systemctl stop truecloud",
-    "runUpdate": "bun run pull && bun install && (SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all || true) && bun run db:push && bun run build && bun run restart",
+    "runUpdate": "bun run pull && bun install && (SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all || true) && (cd node_modules/node-datachannel && node install.js || true) && bun run db:push && bun run build && bun run restart",
     "bump-version": "bun run --bun npm version minor --no-git-tag-version && git add package.json && git commit -m 'chore: bump minor version'",
     "rebuild-native": "SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all || true"
   },
