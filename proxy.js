@@ -1,19 +1,48 @@
 /** @format */
 
+import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 
-export function proxy(request) {
-  // For now, let route handlers manage their own auth
-  // This can be enhanced later if needed
-  const response = NextResponse.next();
-  
+export async function proxy(request) {
+  const { pathname } = request.nextUrl;
+
   // Add version header to force cache invalidation on deployments
   const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
+
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  const isAuthenticated = !!token;
+
+  // Root: redirect based on auth status
+  if (pathname === '/') {
+    return NextResponse.redirect(
+      new URL(isAuthenticated ? '/files' : '/auth/login', request.url)
+    );
+  }
+
+  // Login page: redirect to /files if already authenticated
+  if (pathname.startsWith('/auth/login') && isAuthenticated) {
+    return NextResponse.redirect(new URL('/files', request.url));
+  }
+
+  // Protected routes: redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
+  }
+
+  const response = NextResponse.next();
   response.headers.set('X-App-Version', buildId);
-  
   return response;
 }
 
 export const config = {
-  matcher: ['/files/:path*', '/api/:path*'],
+  matcher: [
+    /*
+     * Match all paths except:
+     * - api routes
+     * - _next/static, _next/image (Next.js internals)
+     * - favicon.ico
+     * - s/ (public share routes - no auth required)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|s/).*)',
+  ],
 };
