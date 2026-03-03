@@ -17,7 +17,8 @@ async function loadEsModules() {
   // Start the WebTorrent worker as a Node.js child process.
   // This sidesteps Bun's ESM-CJS interop issue with the node-datachannel native addon.
   // torrentProcess.js spawns `node lib/torrentWorker.mjs` and exports the same API.
-  await import('./lib/torrentProcess.js');
+  // Stored on globalThis so torrentManagerProxy.js (bundled by Turbopack) can access it.
+  globalThis.torrentProcess = await import('./lib/torrentProcess.js');
 }
 
 const dev = process.env.NODE_ENV !== 'production';
