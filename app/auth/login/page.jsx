@@ -2,11 +2,10 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { useState } from 'react';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,15 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { data: session, status } = useSession();
   const queryClient = useQueryClient();
-
-  // Redirect to files if already logged in
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.push('/files');
-    }
-  }, [status, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
