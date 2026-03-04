@@ -11,6 +11,7 @@ async function runUpdateProcess() {
   const steps = [
     { name: STEPS.PULLING, command: 'bun', args: ['run', 'pull'] },
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
+    { name: STEPS.REBUILDING, command: 'bash', args: ['-c', 'sed -i \'s|require("../../../build/Release/node_datachannel.node")|require(require("path").join(process.cwd(),"node_modules/node-datachannel/build/Release/node_datachannel.node"))|g\' node_modules/node-datachannel/dist/cjs/lib/node-datachannel.cjs'] },
     { name: STEPS.DB_PUSH, command: 'bun', args: ['run', 'db:push'] },
     { name: STEPS.BUILDING, command: 'bun', args: ['run', 'build'] },
     { name: STEPS.RESTARTING, command: 'bun', args: ['run', 'restart'] },
