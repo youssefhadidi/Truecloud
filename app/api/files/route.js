@@ -7,7 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentManagerProxy';
+import { getActiveDownloads, getWaitingDownloads } from '@/lib/webTorrentManager';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
 

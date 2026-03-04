@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authCheck';
-import { testTrackerConnectivity } from '@/lib/torrentManagerProxy';
+import { testTrackerConnectivity } from '@/lib/webTorrentManager';
 import { logger } from '@/lib/logger';
 
 export async function POST(req) {
