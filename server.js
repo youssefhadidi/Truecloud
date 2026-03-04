@@ -17,10 +17,10 @@ async function loadEsModules() {
   // Load WebTorrent manager before server starts so the native node-datachannel addon
   // is resolved in Bun's unbundled context. global.torrentManager is ready for all requests.
   try {
-    globalThis.torrentManager = await import('./lib/webTorrentManager.js');
+    global.torrentManager = await import('./lib/webTorrentManager.js');
     console.log('> WebTorrent manager ready');
   } catch (err) {
-    console.error('> WebTorrent manager failed to load:', err.stack || err);
+    console.error('> WebTorrent manager failed to load:', err.message);
   }
 }
 
