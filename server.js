@@ -3,17 +3,6 @@ const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
 
-// Pre-load node-datachannel via CJS require before any ESM imports.
-// Bun's ESM-CJS interop loses __dirname for native addon packages when loaded
-// transitively through ESM (webtorrent -> node-datachannel). Pre-loading via
-// require() populates Bun's shared module registry with the correct path context,
-// so webtorrent finds it already cached when it does import('node-datachannel').
-try {
-  require('node-datachannel');
-} catch (e) {
-  console.error('node-datachannel pre-load failed:', e.message);
-}
-
 // Dynamic imports for ES modules
 let getToken;
 let verifyShare;
