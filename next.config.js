@@ -9,7 +9,7 @@ const nextConfig = {
     proxyClientMaxBodySize: '100gb',
     optimizePackageImports: ['three', 'react-icons', '@reduxjs/toolkit', 'react-redux', 'date-fns'],
   },
-  serverExternalPackages: ['webtorrent', 'node-datachannel', 'xlsx', '@prisma/client', 'prisma'],
+  serverExternalPackages: ['webtorrent', 'xlsx', '@prisma/client', 'prisma'],
   images: {
     remotePatterns: [{ hostname: '192.168.1.240' }, { hostname: 'localhost' }],
   },
