@@ -62,6 +62,12 @@ export async function POST(req) {
       downloadDir = resolve(UPLOAD_DIR, downloadPath.replace(/^\/+/, ''));
     }
 
+    // Security: prevent directory traversal via downloadPath
+    const resolvedDownloadDir = resolve(downloadDir);
+    if (!resolvedDownloadDir.startsWith(resolve(UPLOAD_DIR))) {
+      return NextResponse.json({ error: 'Invalid download path' }, { status: 400 });
+    }
+
     // Ensure directory exists
     if (!existsSync(downloadDir)) {
       mkdirSync(downloadDir, { recursive: true });
@@ -95,25 +101,6 @@ export async function POST(req) {
     // relativePath = browser-relative path for frontend display/filtering
     const gid = await addDownload(downloadUrl, { dir: downloadDir, relativePath: downloadPath });
 
-    // Verify torrent was added to WebTorrent before returning
-    // This ensures the download appears in getActiveDownloads() immediately
-    let verifyAttempts = 0;
-    const maxAttempts = 10;
-    let torrentFound = false;
-
-    while (verifyAttempts < maxAttempts && !torrentFound) {
-      const activeDownloads = await getActiveDownloads(downloadPath);
-      torrentFound = activeDownloads.some((d) => d.gid === gid);
-      if (!torrentFound) {
-        verifyAttempts++;
-        await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms before retry
-      }
-    }
-
-    if (!torrentFound) {
-      logger.warn('POST /api/files/torrent-download - Torrent added but not found in active downloads after verification', { gid });
-    }
-
     // Get initial status
     const status = {
       gid,
@@ -130,7 +117,6 @@ export async function POST(req) {
     logger.info('POST /api/files/torrent-download - Download started', {
       gid,
       path: downloadPath,
-      verificationAttempts: verifyAttempts,
     });
 
     // Broadcast to WebSocket clients
@@ -167,11 +153,11 @@ export async function GET(req) {
 
       logger.debug('GET /api/files/torrent-download', { filterPath });
 
-      // Get active downloads (optionally filtered by path)
-      const activeDownloads = await getActiveDownloads(filterPath);
-
-      // Get waiting/paused downloads (optionally filtered by path)
-      const waitingDownloads = await getWaitingDownloads(0, 100, filterPath);
+      // Fetch active and paused downloads in parallel
+      const [activeDownloads, waitingDownloads] = await Promise.all([
+        getActiveDownloads(filterPath),
+        getWaitingDownloads(0, 100, filterPath),
+      ]);
 
       // Combine active and paused downloads
       const allDownloads = [...activeDownloads, ...waitingDownloads];

@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authCheck';
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, rm, unlink, rename, mkdir, cp } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -190,8 +190,10 @@ export async function GET(req) {
     // Fetch torrent downloads for this directory (filter by relative path)
     let downloads = [];
     try {
-      const activeDownloads = await getActiveDownloads(relativePath);
-      const waitingDownloads = await getWaitingDownloads(0, 100, relativePath);
+      const [activeDownloads, waitingDownloads] = await Promise.all([
+        getActiveDownloads(relativePath),
+        getWaitingDownloads(0, 100, relativePath),
+      ]);
       downloads = [...activeDownloads, ...waitingDownloads];
 
       logger.debug('GET /api/files - Downloads fetched', {
@@ -309,7 +311,6 @@ export async function DELETE(req) {
       });
 
       if (stats.isDirectory()) {
-        const { rm } = await import('fs/promises');
         await rm(targetPath, { recursive: true, force: true });
         logger.info('DELETE /api/files - Directory permanently deleted', {
           fileName,
@@ -317,7 +318,6 @@ export async function DELETE(req) {
           duration: `${Date.now() - startTime}ms`,
         });
       } else {
-        const { unlink } = await import('fs/promises');
         await unlink(targetPath);
         logger.info('DELETE /api/files - File permanently deleted', {
           fileName,
@@ -332,8 +332,6 @@ export async function DELETE(req) {
       return NextResponse.json({ success: true, permanent: true });
     } else {
       // Move to trash (mirror the folder structure)
-      const { rename, mkdir } = await import('fs/promises');
-      const { existsSync } = await import('fs');
 
       // Construct trash path: /trash/{original_path}/{filename}
       const trashPath = join(UPLOAD_DIR, 'trash', relativePath, fileName);
@@ -371,7 +369,6 @@ export async function DELETE(req) {
         if (renameError.code === 'EXDEV') {
           // Cross-device: copy then remove original
           logger.info('DELETE /api/files - Cross-device move, using cp+rm fallback', { fileName, path: relativePath });
-          const { cp, rm } = await import('fs/promises');
           await cp(targetPath, finalTrashPath, { recursive: true, preserveTimestamps: true });
           await rm(targetPath, { recursive: true, force: true });
         } else {
@@ -477,7 +474,6 @@ export async function PATCH(req) {
     }
 
     // Rename using fs.rename
-    const { rename } = await import('fs/promises');
     await rename(oldPath, newPath);
 
     const duration = Date.now() - startTime;
