@@ -1,5 +1,5 @@
 const { createServer } = require('http');
-const { WebSocketServer, WebSocket } = require('ws');
+const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
 
@@ -14,11 +14,11 @@ async function loadEsModules() {
   const shareAuth = await import('./lib/shareAuth.mjs');
   verifyShare = shareAuth.verifyShare;
 
-  // Load the fetch-based client for the external torrent microservice.
-  // Stored on globalThis so torrentManagerProxy.js (bundled by Turbopack) can access it at runtime.
-  // Start the microservice separately: cd torrent-service && pnpm install && node index.mjs
-  globalThis.torrentClient = await import('./lib/torrentClient.js');
-  connectTorrentServiceWs();
+  // Start the WebTorrent worker as a Node.js child process.
+  // This sidesteps Bun's ESM-CJS interop issue with the node-datachannel native addon.
+  // torrentProcess.js spawns `node lib/torrentWorker.mjs` and exports the same API.
+  // Stored on globalThis so torrentManagerProxy.js (bundled by Turbopack) can access it.
+  globalThis.torrentProcess = await import('./lib/torrentProcess.js');
 }
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -124,28 +124,6 @@ global.broadcastMinecraftStatus = (serverId, status) => {
 global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
-
-// Connect to the torrent microservice WebSocket and relay events to browser clients.
-// Reconnects automatically every 3 s if the service is not yet running.
-function connectTorrentServiceWs() {
-  const url = process.env.TORRENT_SERVICE_WS_URL || 'ws://localhost:9669/events';
-  const ws = new WebSocket(url);
-
-  ws.on('open', () => console.log('> Connected to torrent service WebSocket'));
-
-  ws.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data);
-      if (global.broadcastTorrentDownloadUpdate) {
-        global.broadcastTorrentDownloadUpdate(msg);
-      }
-    } catch {}
-  });
-
-  // Reconnect on close or error; 'close' always fires after 'error'
-  ws.on('error', () => {});
-  ws.on('close', () => setTimeout(connectTorrentServiceWs, 3000));
-}
 
 // Load ES modules before starting server
 loadEsModules().then(() => {
