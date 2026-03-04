@@ -13,15 +13,6 @@ async function loadEsModules() {
 
   const shareAuth = await import('./lib/shareAuth.mjs');
   verifyShare = shareAuth.verifyShare;
-
-  // Load WebTorrent manager before server starts so the native node-datachannel addon
-  // is resolved in Bun's unbundled context. global.torrentManager is ready for all requests.
-  try {
-    global.torrentManager = await import('./lib/webTorrentManager.js');
-    console.log('> WebTorrent manager ready');
-  } catch (err) {
-    console.error('> WebTorrent manager failed to load:', err.message);
-  }
 }
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -232,6 +223,15 @@ loadEsModules().then(() => {
   server.listen(3000, (err) => {
     if (err) throw err;
     console.log('> Ready on http://localhost:3000');
+
+    // Pre-load WebTorrent manager in unbundled Bun context so native node-datachannel
+    // addon loads with correct file path context. API routes access it via global.torrentManager.
+    import('./lib/webTorrentManager.js').then((wt) => {
+      global.torrentManager = wt;
+      console.log('> WebTorrent manager ready');
+    }).catch((err) => {
+      console.error('> WebTorrent manager failed to load:', err.message);
+    });
 
     // Start log stream manager
     startLogStream();
