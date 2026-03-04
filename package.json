@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "bun server.js",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "bun server.js",
     "lint": "eslint",
     "restart": "systemctl restart truecloud",
@@ -22,10 +22,10 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@reduxjs/toolkit": "^2.0.0",
-    "@tanstack/react-query": "^5.90.18",
+    "@reduxjs/toolkit": "^2.11.2",
+    "@tanstack/react-query": "^5.90.21",
     "archiver": "^7.0.1",
-    "axios": "^1.13.2",
+    "axios": "^1.13.6",
     "bcryptjs": "^2.4.3",
     "busboy": "^1.6.0",
     "chokidar": "^5.0.0",
@@ -35,10 +35,12 @@
     "next": "16.1.2",
     "next-auth": "5.0.0-beta.30",
     "node-addon-api": "^8.6.0",
+    "node-datachannel": "^0.32.1",
+    "node-gyp": "^12.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-icons": "^5.3.0",
-    "react-redux": "^9.0.0",
+    "react-icons": "^5.6.0",
+    "react-redux": "^9.2.0",
     "react-virtualized": "^9.22.6",
     "react-zoom-pan-pinch": "^3.7.0",
     "sharp": "^0.34.5",
@@ -48,13 +50,24 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "25.0.8",
     "@types/react": "19.2.8",
-    "eslint": "^9",
+    "eslint": "^9.39.3",
     "eslint-config-next": "16.1.2",
     "prisma": "^5.22.0",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4.2.1"
   },
-  "packageManager": "bun@1.2.4"
+  "packageManager": "bun@1.2.4",
+  "trustedDependencies": [
+    "@prisma/client",
+    "@prisma/engines",
+    "bufferutil",
+    "node-datachannel",
+    "prisma",
+    "sharp",
+    "unrs-resolver",
+    "utf-8-validate",
+    "utp-native"
+  ]
 }

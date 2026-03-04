@@ -3,6 +3,7 @@ const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream } = require('./lib/logStreamManager');
 
+
 // Dynamic imports for ES modules
 let getToken;
 let verifyShare;
@@ -13,6 +14,7 @@ async function loadEsModules() {
 
   const shareAuth = await import('./lib/shareAuth.mjs');
   verifyShare = shareAuth.verifyShare;
+
 }
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -121,7 +123,8 @@ global.broadcastJobUpdate = (job) => {
 
 // Load ES modules before starting server
 loadEsModules().then(() => {
-  app.prepare().then(() => {
+  return app.prepare();
+}).then(() => {
   const server = createServer((req, res) => {
     handle(req, res);
   });
@@ -224,6 +227,29 @@ loadEsModules().then(() => {
     if (err) throw err;
     console.log('> Ready on http://localhost:3000');
 
+    // Bridge WebSocket events from the torrent microservice to main app WebSocket clients
+    const { WebSocket: WsClient } = require('ws');
+    const torrentServiceBase = process.env.TORRENT_SERVICE_URL || 'http://localhost:9669';
+    const torrentWsUrl = torrentServiceBase.replace(/^http/, 'ws') + '/events';
+    function connectTorrentServiceWs() {
+      const ws = new WsClient(torrentWsUrl);
+      ws.on('open', () => console.log('[server] Connected to torrent service WS'));
+      ws.on('message', (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          if (global.broadcastTorrentDownloadUpdate) {
+            global.broadcastTorrentDownloadUpdate(message);
+          }
+        } catch (_) {}
+      });
+      ws.on('close', () => {
+        console.log('[server] Torrent service WS disconnected, reconnecting in 3s...');
+        setTimeout(connectTorrentServiceWs, 3000);
+      });
+      ws.on('error', (err) => console.error('[server] Torrent service WS error:', err.message));
+    }
+    connectTorrentServiceWs();
+
     // Start log stream manager
     startLogStream();
 
@@ -250,5 +276,4 @@ loadEsModules().then(() => {
   });
 
   server.on('close', () => clearInterval(heartbeatInterval));
-  });
 });
