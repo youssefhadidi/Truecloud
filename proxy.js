@@ -19,9 +19,13 @@ export async function proxy(request) {
     );
   }
 
-  // Login page: redirect to /files if already authenticated
-  if (pathname.startsWith('/auth/login') && isAuthenticated) {
-    return NextResponse.redirect(new URL('/files', request.url));
+  // Auth routes (/auth/*): allow through — never redirect to login from here
+  if (pathname.startsWith('/auth/')) {
+    // If already authenticated, bounce away from login page
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL('/files', request.url));
+    }
+    return NextResponse.next();
   }
 
   // Protected routes: redirect to login if not authenticated
