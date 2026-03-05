@@ -28,6 +28,7 @@ import {
   useMinecraftServer,
   useUpdateMinecraftServer,
   useMinecraftLogs,
+  usePaperVersions,
 } from '@/lib/api/minecraft';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ function StatusBadge({ status }) {
 function CreateServerForm({ onClose }) {
   const { addNotification } = useNotifications();
   const createMutation = useCreateMinecraftServer();
+  const { data: paperVersions, isPending: versionsLoading } = usePaperVersions();
   const [form, setForm] = useState({
     name: '',
     port: '25565',
@@ -104,13 +106,17 @@ function CreateServerForm({ onClose }) {
         </div>
         <div>
           <label className="block text-xs text-gray-400 mb-1">PaperMC version</label>
-          <input
-            type="text"
-            placeholder="latest"
+          <select
             value={form.paperVersion}
             onChange={(e) => setForm({ ...form, paperVersion: e.target.value })}
+            disabled={versionsLoading}
             className={inputClass}
-          />
+          >
+            <option value="latest">latest</option>
+            {paperVersions.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
         </div>
       </div>
 
