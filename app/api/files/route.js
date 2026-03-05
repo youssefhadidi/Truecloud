@@ -174,6 +174,9 @@ export async function GET(req) {
       });
     }
 
+    // Filter out trash folder at root (system folder, not for direct browsing)
+    files = files.filter((file) => file.name !== 'trash');
+
     // Normalize paths for frontend (hide uploads/ prefix only, preserve user folder structure)
     files = files.map((file) => {
       let normalizedPath = file.path.replace(/\\/g, '/');
