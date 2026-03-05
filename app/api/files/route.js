@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authCheck';
 import { readdir, stat, rm, unlink, rename, mkdir, cp } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
