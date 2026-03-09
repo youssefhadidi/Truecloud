@@ -26,7 +26,7 @@ export async function POST(req) {
     const { session, error } = await requireAdmin();
     if (error) return error;
 
-    const { name, vdevType, devices } = await req.json();
+    const { name, vdevType, devices, force = false } = await req.json();
 
     // Validation
     if (!name) {
@@ -61,13 +61,19 @@ export async function POST(req) {
     }
 
     // Create the pool
-    await createPool(name, vdevType, devices);
+    await createPool(name, vdevType, devices, force);
 
     return NextResponse.json(
       { success: true, message: `ZFS pool '${name}' created successfully` },
       { status: 201 }
     );
   } catch (error) {
+    if (error.code === 'EXISTING_FILESYSTEM') {
+      return NextResponse.json(
+        { error: error.message, code: 'EXISTING_FILESYSTEM', details: error.details },
+        { status: 409 }
+      );
+    }
     console.error('Error creating ZFS pool:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to create ZFS pool' },

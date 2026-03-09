@@ -108,6 +108,7 @@ export default function ZfsPoolsPage() {
     vdevType: 'stripe',
     devices: [],
   });
+  const [forceConfirm, setForceConfirm] = useState(null); // holds pending payload when existing filesystem detected
 
   const { addNotification } = useNotifications();
 
@@ -137,15 +138,30 @@ export default function ZfsPoolsPage() {
         devices: formData.devices,
       });
       setShowForm(false);
-      setFormData({
-        name: '',
-        vdevType: 'stripe',
-        devices: [],
-      });
+      setFormData({ name: '', vdevType: 'stripe', devices: [] });
       addNotification('success', `ZFS pool '${formData.name}' created successfully`);
     } catch (error) {
+      if (error.response?.status === 409 && error.response?.data?.code === 'EXISTING_FILESYSTEM') {
+        setForceConfirm({ name: formData.name, vdevType: formData.vdevType, devices: formData.devices });
+        return;
+      }
       console.error('Error creating pool:', error);
       addNotification('error', error.response?.data?.error || 'Failed to create ZFS pool');
+    }
+  };
+
+  const handleForceCreate = async () => {
+    if (!forceConfirm) return;
+    try {
+      await createPoolMutation.mutateAsync({ ...forceConfirm, force: true });
+      setForceConfirm(null);
+      setShowForm(false);
+      setFormData({ name: '', vdevType: 'stripe', devices: [] });
+      addNotification('success', `ZFS pool '${forceConfirm.name}' created successfully`);
+    } catch (error) {
+      console.error('Error force creating pool:', error);
+      addNotification('error', error.response?.data?.error || 'Failed to create ZFS pool');
+      setForceConfirm(null);
     }
   };
 
@@ -181,6 +197,33 @@ export default function ZfsPoolsPage() {
 
   return (
     <>
+      {/* Force confirmation dialog */}
+      {forceConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-red-700 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-red-400 mb-2">Existing Filesystem Detected</h3>
+            <p className="text-gray-300 text-sm mb-4">
+              One or more selected devices already contain a filesystem. Creating the pool will <span className="text-red-400 font-semibold">permanently destroy all existing data</span> on these devices.
+            </p>
+            <p className="text-gray-400 text-sm mb-6">Are you sure you want to continue?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setForceConfirm(null)}
+                className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceCreate}
+                disabled={createPoolMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+              >
+                {createPoolMutation.isPending ? 'Creating...' : 'Yes, overwrite and create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-4 sm:mb-6 lg:mb-8">ZFS Pools</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

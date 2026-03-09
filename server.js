@@ -31,7 +31,9 @@ global.updateStatus = {
   steps: [
     { name: 'pull', label: 'Pulling latest code', status: 'pending', startTime: null, endTime: null, logs: [] },
     { name: 'install', label: 'Installing dependencies', status: 'pending', startTime: null, endTime: null, logs: [] },
-    { name: 'db_push', label: 'Updating database', status: 'pending', startTime: null, endTime: null, logs: [] },
+    { name: 'rebuild', label: 'Rebuilding native modules', status: 'pending', startTime: null, endTime: null, logs: [] },
+    { name: 'db_push', label: 'Updating database schema', status: 'pending', startTime: null, endTime: null, logs: [] },
+    { name: 'db_migrate', label: 'Running database migrations', status: 'pending', startTime: null, endTime: null, logs: [] },
     { name: 'build', label: 'Building application', status: 'pending', startTime: null, endTime: null, logs: [] },
     { name: 'restart', label: 'Restarting service', status: 'pending', startTime: null, endTime: null, logs: [] },
   ],
