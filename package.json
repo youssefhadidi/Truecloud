@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.209.0",
+  "version": "1.210.0",
   "private": true,
   "scripts": {
     "dev": "bun server.js",
@@ -10,6 +10,7 @@
     "restart": "systemctl restart truecloud",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "setup": "bun run db:generate && bun run db:push",
     "create-admin": "bun scripts/create-admin.js",
