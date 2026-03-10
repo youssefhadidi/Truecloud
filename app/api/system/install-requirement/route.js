@@ -81,6 +81,7 @@ export async function POST(req) {
       'sharp hevc': 'sharp-hevc-custom',
       'java 21': 'openjdk-21-jre-headless',
       unzip: 'unzip',
+      samba: 'samba',
     };
 
     const packageName = packages[name.toLowerCase()];
