@@ -60,8 +60,9 @@ export async function POST(req) {
       );
     }
 
-    // Create the pool
-    await createPool(name, vdevType, devices, force);
+    // Create the pool, mounting it to UPLOAD_DIR
+    const mountpoint = process.env.UPLOAD_DIR || null;
+    await createPool(name, vdevType, devices, force, mountpoint);
 
     return NextResponse.json(
       { success: true, message: `ZFS pool '${name}' created successfully` },
