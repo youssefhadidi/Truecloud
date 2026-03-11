@@ -1,3 +1,4 @@
+  GNU nano 8.4                              /etc/systemd/system/truecloud.service
 [Unit]
 Description=Truecloud Next.js Application
 After=network.target
@@ -5,17 +6,14 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/mnt/Truenas/Truecloud
+WorkingDirectory=/home/truecloud/Truecloud
 Environment="NODE_ENV=production"
 Environment="PORT=3000"
-Environment="PATH=/root/.bun/bin:/root/.nvm/versions/node/v25.6.0/bin:/usr/bin:/bin"
-Environment="UPLOAD_DIR=/mnt/nextcloud"
-Environment="THUMBNAIL_DIR=/mnt/Truenas/Truecloud/thumbnails"
-Environment="SHARP_FORCE_GLOBAL_LIBVIPS=1"
-Environment="LD_LIBRARY_PATH=/usr/local/lib"
-ExecStart=/root/.bun/bin/bun start
+ExecStart=/root/.bun/bin/bun server.js
 PrivateMounts=no
 Restart=always
+Environment="SHARP_FORCE_GLOBAL_LIBVIPS=1"
+Environment="LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:/usr/local/lib"
 RestartSec=10
 StandardOutput=append:/var/log/truecloud/output.log
 StandardError=append:/var/log/truecloud/error.log
