@@ -314,10 +314,16 @@ export async function POST(req) {
           );
           logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
 
+          // Build with -j1 (sequential) to avoid a race condition in the parallel build
+          // where GCC tries to write dependency (.d) files to directories that haven't
+          // been created yet by ninja's parallel mkdir steps. Sequential build is slower
+          // but completely reliable. Timeout extended to 30 min to accommodate this.
+          // Use bash explicitly for set -o pipefail (PIPESTATUS is bash-only, not dash/sh).
           await execAsync(
             `cd ${vipsDir}/vips-${VIPS_VERSION}/build && \
-            ninja 2>&1 && sudo ninja install 2>&1 && sudo ldconfig 2>&1`,
-            { ...longOpts, timeout: 900000, env: buildEnv },
+            bash -c 'set -o pipefail; ninja -j1 2>&1 | tee /tmp/vips-ninja.log' && \
+            sudo ninja install 2>&1 && sudo ldconfig 2>&1`,
+            { ...longOpts, timeout: 1800000, maxBuffer: 1024 * 1024 * 50, env: buildEnv },
           );
 
           // Verify libvips has heif
@@ -558,8 +564,10 @@ export async function POST(req) {
       });
     } catch (installError) {
       const stderr = installError.stderr?.trim() || '';
-      const stdout = installError.stdout?.trim() || '';
-      logger.error('Installation error:', { name, stderr, stdout, code: installError.code });
+      // stdout can be huge (ninja build log); only keep the tail for logging
+      const stdoutRaw = installError.stdout || '';
+      const stdout = stdoutRaw.length > 4000 ? '...(truncated)...\n' + stdoutRaw.slice(-4000) : stdoutRaw.trim();
+      logger.error('Installation error:', { name, stderr: stderr.slice(-4000), stdout, code: installError.code });
 
       if (stderr.includes('sudo') || installError.message.includes('sudo')) {
         return NextResponse.json(
