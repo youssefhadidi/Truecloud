@@ -26,7 +26,8 @@ export async function POST(req) {
     const { spawn } = await import('child_process');
     const workerPath = join(process.cwd(), 'lib', 'workers', 'buildFileIndexWorker.mjs');
 
-    rebuildProcess = spawn(process.execPath, [workerPath], {
+    const nodeBin = process.execPath.includes('bun') ? 'node' : process.execPath;
+    rebuildProcess = spawn(nodeBin, [workerPath], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
 
