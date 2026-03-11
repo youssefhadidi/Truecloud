@@ -274,7 +274,7 @@ export async function POST(req) {
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
             PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
             meson setup build --prefix=/usr/local --buildtype=release \
-              -Dintrospection=disabled -Dheif=enabled -Draw=enabled -Dmodules=disabled 2>&1`,
+              -Dintrospection=disabled -Dheif=enabled -Dmodules=disabled 2>&1`,
             { ...longOpts, env: buildEnv },
           );
           logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
