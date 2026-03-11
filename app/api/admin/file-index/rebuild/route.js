@@ -28,32 +28,33 @@ export async function POST(req) {
 
     const nodeBin = process.execPath.includes('bun') ? 'node' : process.execPath;
     rebuildProcess = spawn(nodeBin, [workerPath], {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    // Track progress via IPC
-    rebuildProcess.on('message', (msg) => {
-      if (msg.type === 'progress') {
-        rebuildProgress = { processed: msg.processed, total: msg.total };
-        // Broadcast to connected clients via WebSocket
-        global.broadcastFileIndexUpdate?.({
-          type: 'progress',
-          processed: msg.processed,
-          total: msg.total,
-        });
-      } else if (msg.type === 'done') {
-        rebuildProgress = { processed: msg.total, total: msg.total };
-        global.broadcastFileIndexUpdate?.({
-          type: 'done',
-          total: msg.total,
-        });
-        rebuildProcess = null;
-      } else if (msg.type === 'error') {
-        global.broadcastFileIndexUpdate?.({
-          type: 'error',
-          error: msg.error,
-        });
-        rebuildProcess = null;
+    // Track progress via stdout JSON lines (IPC not reliable when parent is bun)
+    let stdoutBuffer = '';
+    rebuildProcess.stdout.on('data', (chunk) => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split('\n');
+      stdoutBuffer = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === 'progress') {
+            rebuildProgress = { processed: msg.processed, total: msg.total };
+            global.broadcastFileIndexUpdate?.({ type: 'progress', processed: msg.processed, total: msg.total });
+          } else if (msg.type === 'done') {
+            rebuildProgress = { processed: msg.total, total: msg.total };
+            global.broadcastFileIndexUpdate?.({ type: 'done', total: msg.total });
+            rebuildProcess = null;
+          } else if (msg.type === 'error') {
+            global.broadcastFileIndexUpdate?.({ type: 'error', error: msg.error });
+            rebuildProcess = null;
+          }
+        } catch {
+          // non-JSON stdout line, ignore
+        }
       }
     });
 
