@@ -3,8 +3,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiX, FiChevronDown, FiChevronUp, FiAlertCircle } from 'react-icons/fi';
-import { useZfsPools, useZfsPoolDetail, useAvailableDisks, useCreateZfsPool } from '@/lib/api/zfsPools';
+import { FiPlus, FiX, FiChevronDown, FiChevronUp, FiAlertCircle, FiZap } from 'react-icons/fi';
+import { useZfsPools, useZfsPoolDetail, useAvailableDisks, useCreateZfsPool, useAddCacheDevice } from '@/lib/api/zfsPools';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 function getHealthColor(health) {
@@ -21,7 +21,7 @@ function getHealthColor(health) {
   }
 }
 
-function PoolCard({ pool, isSelected, onSelect }) {
+function PoolCard({ pool, isSelected, onSelect, onAddCache }) {
   return (
     <div
       className={`p-4 border rounded-lg cursor-pointer transition-colors ${
@@ -33,9 +33,19 @@ function PoolCard({ pool, isSelected, onSelect }) {
     >
       <div className="flex items-start justify-between mb-3">
         <h3 className="text-lg font-semibold text-white">{pool.name}</h3>
-        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getHealthColor(pool.health)}`}>
-          {pool.health}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getHealthColor(pool.health)}`}>
+            {pool.health}
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddCache(pool); }}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 rounded transition-colors"
+            title="Add cache (L2ARC) device"
+          >
+            <FiZap size={11} />
+            Add Cache
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-sm">
@@ -109,14 +119,29 @@ export default function ZfsPoolsPage() {
     devices: [],
   });
   const [forceConfirm, setForceConfirm] = useState(null); // holds pending payload when existing filesystem detected
+  const [addCacheTarget, setAddCacheTarget] = useState(null); // pool to add cache to
+  const [selectedCacheDisk, setSelectedCacheDisk] = useState('');
 
   const { addNotification } = useNotifications();
 
   // React Query hooks
   const { data: pools = [], isLoading: loadingPools } = useZfsPools(true);
   const { data: poolDetail, isLoading: loadingDetail } = useZfsPoolDetail(selectedPool?.name, !!selectedPool);
-  const { data: disks = [], isLoading: loadingDisks } = useAvailableDisks(showForm);
+  const { data: disks = [], isLoading: loadingDisks } = useAvailableDisks(showForm || !!addCacheTarget);
   const createPoolMutation = useCreateZfsPool();
+  const addCacheMutation = useAddCacheDevice();
+
+  const handleAddCache = async () => {
+    if (!addCacheTarget || !selectedCacheDisk) return;
+    try {
+      await addCacheMutation.mutateAsync({ poolName: addCacheTarget.name, device: selectedCacheDisk });
+      addNotification('success', `Cache device '${selectedCacheDisk}' added to pool '${addCacheTarget.name}'`);
+      setAddCacheTarget(null);
+      setSelectedCacheDisk('');
+    } catch (error) {
+      addNotification('error', error.response?.data?.error || 'Failed to add cache device');
+    }
+  };
 
   const handleCreatePool = async (e) => {
     e.preventDefault();
@@ -197,6 +222,70 @@ export default function ZfsPoolsPage() {
 
   return (
     <>
+      {/* Add Cache modal */}
+      {addCacheTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FiZap className="text-yellow-400" />
+                Add Cache Device
+              </h3>
+              <button onClick={() => { setAddCacheTarget(null); setSelectedCacheDisk(''); }} className="text-gray-400 hover:text-gray-300">
+                <FiX size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              Adding an L2ARC cache device to pool <span className="text-white font-mono">{addCacheTarget.name}</span> will use the selected disk as a read cache. The disk will be formatted and all existing data on it will be lost.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Select Cache Device *</label>
+              {loadingDisks ? (
+                <div className="text-gray-400 text-xs">Loading available disks...</div>
+              ) : disks.length === 0 ? (
+                <div className="text-gray-400 text-xs p-3 bg-gray-700 rounded">
+                  No available disks found. All devices may be in use.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {disks.map((disk) => (
+                    <label key={disk.name} className="flex items-start gap-2 p-2 rounded hover:bg-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="cacheDisk"
+                        value={disk.name}
+                        checked={selectedCacheDisk === disk.name}
+                        onChange={() => setSelectedCacheDisk(disk.name)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-mono">{disk.name}</p>
+                        <p className="text-xs text-gray-400">{disk.size}{disk.model && ` (${disk.model})`}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setAddCacheTarget(null); setSelectedCacheDisk(''); }}
+                className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddCache}
+                disabled={!selectedCacheDisk || addCacheMutation.isPending}
+                className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                {addCacheMutation.isPending ? 'Adding...' : 'Add Cache'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Force confirmation dialog */}
       {forceConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -250,6 +339,7 @@ export default function ZfsPoolsPage() {
                       setSelectedPool(pool);
                       setExpandedDatasets(false);
                     }}
+                    onAddCache={(p) => { setAddCacheTarget(p); setSelectedCacheDisk(''); }}
                   />
                 ))
               )}
