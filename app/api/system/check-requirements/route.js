@@ -3,9 +3,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authCheck';
 import { spawn } from 'child_process';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import { join, resolve } from 'node:path';
-import { createReadStream, existsSync, mkdirSync } from 'fs';
 import { logger } from '@/lib/logger';
 
 /**
@@ -182,7 +179,7 @@ async function checkSharpHevcSupport() {
       vipsRaw = vipsOut.length > 0;
     } catch {}
 
-    const installed = hasLibheif && vipsHeic;
+    const installed = hasLibheif && vipsHeic && hasLibraw && vipsRaw;
     const parts = [
       `libheif: ${hasLibheif ? 'yes' : 'no'}`,
       `vips .heic: ${vipsHeic ? 'yes' : 'no'}`,
@@ -260,7 +257,7 @@ const REQUIRED_PROGRAMS = [
  * GET /api/system/check-requirements
  * Check which system programs are installed
  */
-export async function GET(req) {
+export async function GET() {
   try {
     const { session, error } = await requireAuth();
     if (error) return error;
