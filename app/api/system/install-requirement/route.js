@@ -126,25 +126,44 @@ export async function POST(req) {
         const buildEnv = { ...process.env, PATH: enhancedPath, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
         // Step 1: Install build dependencies and remove conflicting system packages
-        logger.info('Step 1/6: Installing build dependencies...');
-        // Remove old system libheif/libde265/libvips dev packages to prevent conflicts
+        logger.info('Step 1/7: Installing build dependencies...');
+        // Remove old system libheif/libde265/libvips/libraw dev packages to prevent conflicts
         await execAsync(
           `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && \
-            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq libheif-dev libde265-dev libvips-dev libvips42 2>&1 || true && \
+            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq libheif-dev libde265-dev libvips-dev libvips42 libraw-dev 2>&1 || true && \
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             apt-utils build-essential pkg-config cmake meson ninja-build \
             libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
-            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev libraw-dev curl xz-utils 2>&1`,
+            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
           longOpts,
         );
 
-        // Step 2: Build libde265 if needed (HEVC decoder)
+        // Step 2: Build libraw from source for broadest camera support
+        const LIBRAW_VERSION = '0.21.3';
+        const rawDir = '/tmp/libraw-build';
+        const rawVer = await getPkgVersion('libraw', buildEnv);
+        if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) {
+          logger.info(`Step 2/7: Skipped — libraw ${rawVer} >= ${LIBRAW_VERSION}`);
+        } else {
+          logger.info(`Step 2/7: Building libraw ${LIBRAW_VERSION} from source (current: ${rawVer || 'not found'})...`);
+          await execAsync(
+            `rm -rf ${rawDir} && mkdir -p ${rawDir} && cd ${rawDir} && \
+            curl -fsSL --retry 3 https://www.libraw.org/data/LibRaw-${LIBRAW_VERSION}.tar.gz -o libraw.tar.gz 2>&1 && \
+            tar xzf libraw.tar.gz 2>&1 && cd LibRaw-${LIBRAW_VERSION} && \
+            ./configure --prefix=/usr/local --disable-examples --disable-static 2>&1 && \
+            make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
+            { ...longOpts, env: buildEnv },
+          );
+          logger.info('libraw built successfully');
+        }
+
+        // Step 3: Build libde265 if needed (HEVC decoder)
         const de265Dir = '/tmp/libde265-build';
         const de265Ver = await getPkgVersion('libde265', buildEnv);
         if (de265Ver && versionSatisfies(de265Ver, MIN_VERSIONS.libde265)) {
-          logger.info(`Step 2/6: Skipped — libde265 ${de265Ver} >= ${MIN_VERSIONS.libde265}`);
+          logger.info(`Step 3/7: Skipped — libde265 ${de265Ver} >= ${MIN_VERSIONS.libde265}`);
         } else {
-          logger.info(`Step 2/6: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
+          logger.info(`Step 3/7: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
           await execAsync(
             `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
             curl -fsSL --retry 3 https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
@@ -177,10 +196,10 @@ export async function POST(req) {
         }
 
         if (heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265) {
-          logger.info(`Step 3/6: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif} with built-in libde265`);
+          logger.info(`Step 4/7: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif} with built-in libde265`);
         } else {
           logger.info(
-            `Step 3/6: Building libheif from source (current: ${heifVer || 'not found'}, de265 built-in: ${heifHasBuiltinDe265}, need >= ${MIN_VERSIONS.libheif} with built-in de265)...`,
+            `Step 4/7: Building libheif from source (current: ${heifVer || 'not found'}, de265 built-in: ${heifHasBuiltinDe265}, need >= ${MIN_VERSIONS.libheif} with built-in de265)...`,
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
@@ -221,12 +240,12 @@ export async function POST(req) {
         }
 
         if (vipsHasHeif && !heifWasRebuilt) {
-          logger.info(`Steps 4-5/6: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
+          logger.info(`Steps 5-6/7: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
         } else {
           if (heifWasRebuilt) {
-            logger.info(`Step 4/6: Forcing libvips rebuild because libheif was just rebuilt...`);
+            logger.info(`Step 5/7: Forcing libvips rebuild because libheif was just rebuilt...`);
           } else {
-            logger.info(`Step 4/6: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
+            logger.info(`Step 5/7: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
           }
           await execAsync(
             `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
@@ -234,7 +253,7 @@ export async function POST(req) {
             longOpts,
           );
 
-          logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
+          logger.info('Step 6/7: Building libvips with HEIF/HEVC support...');
           // Verify pkg-config finds our /usr/local libheif before building
           try {
             const { stdout: heifPc } = await execAsync('pkg-config --modversion libheif 2>&1 && pkg-config --libs libheif 2>&1', { env: buildEnv });
@@ -268,7 +287,7 @@ export async function POST(req) {
         }
 
         // Cleanup build dirs
-        await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
+        await execAsync(`rm -rf ${rawDir} ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
         // Step 6: Patch sharp's bundled libvips with our HEIF-enabled version
         //
@@ -283,7 +302,7 @@ export async function POST(req) {
         // Solution: REPLACE the fat library file with our thin HEIF-enabled
         // wrapper RENAMED to the same filename. Transitive deps are resolved
         // via ldconfig cache and LD_LIBRARY_PATH.
-        logger.info('Step 6/6: Patching sharp bundled libvips with HEIF-enabled version...');
+        logger.info('Step 7/7: Patching sharp bundled libvips with HEIF-enabled version...');
 
         // Register custom lib dirs in the system linker cache
         await execAsync(
