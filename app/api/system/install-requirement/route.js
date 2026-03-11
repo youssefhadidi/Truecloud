@@ -139,11 +139,12 @@ export async function POST(req) {
         );
 
         // Step 2: Build libraw from source for broadest camera support
+        // NOTE: libvips looks for 'libraw_r' (thread-safe) via pkg-config, not 'libraw'
         const LIBRAW_VERSION = '0.21.3';
         const rawDir = '/tmp/libraw-build';
-        const rawVer = await getPkgVersion('libraw', buildEnv);
+        const rawVer = await getPkgVersion('libraw_r', buildEnv);
         if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) {
-          logger.info(`Step 2/7: Skipped — libraw ${rawVer} >= ${LIBRAW_VERSION}`);
+          logger.info(`Step 2/7: Skipped — libraw_r ${rawVer} >= ${LIBRAW_VERSION}`);
         } else {
           logger.info(`Step 2/7: Building libraw ${LIBRAW_VERSION} from source (current: ${rawVer || 'not found'})...`);
           await execAsync(
@@ -224,6 +225,7 @@ export async function POST(req) {
         // Track whether libheif or libraw was just rebuilt — if so, force libvips rebuild
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
         const rawWasRebuilt = !(rawVer && versionSatisfies(rawVer, LIBRAW_VERSION));
+        // rawVer was checked against libraw_r above
 
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF+RAW support
         const VIPS_VERSION = '8.17.3';
@@ -236,9 +238,9 @@ export async function POST(req) {
             const { stdout: heifCheck } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || true`, { env: buildEnv });
             vipsHasHeif = heifCheck.trim().length > 0;
           } catch {}
-          // Check if existing libvips was built with libraw by inspecting its ldd
+          // Check if existing libvips was built with libraw_r by inspecting its ldd
           try {
-            const { stdout: rawCheck } = await execAsync(`ldd /usr/local/lib/libvips.so 2>/dev/null | grep -q libraw && echo "YES" || echo "NO"`);
+            const { stdout: rawCheck } = await execAsync(`ldd /usr/local/lib/libvips.so 2>/dev/null | grep -q libraw_r && echo "YES" || echo "NO"`);
             vipsHasRaw = rawCheck.trim() === 'YES';
           } catch {}
         }
@@ -259,13 +261,19 @@ export async function POST(req) {
             longOpts,
           );
 
-          logger.info('Step 6/7: Building libvips with HEIF/HEVC support...');
-          // Verify pkg-config finds our /usr/local libheif before building
+          logger.info('Step 6/7: Building libvips with HEIF/HEVC+RAW support...');
+          // Verify pkg-config finds libheif and libraw_r before building
           try {
             const { stdout: heifPc } = await execAsync('pkg-config --modversion libheif 2>&1 && pkg-config --libs libheif 2>&1', { env: buildEnv });
             logger.info('pkg-config libheif before vips build:', heifPc.trim().replace(/\n/g, ' | '));
           } catch (e) {
             logger.error('libheif not found by pkg-config before vips build:', e.message);
+          }
+          try {
+            const { stdout: rawPc } = await execAsync('pkg-config --modversion libraw_r 2>&1 && pkg-config --libs libraw_r 2>&1', { env: buildEnv });
+            logger.info('pkg-config libraw_r before vips build:', rawPc.trim().replace(/\n/g, ' | '));
+          } catch (e) {
+            logger.error('libraw_r not found by pkg-config before vips build:', e.message);
           }
           // Also remove any previously installed libvips to avoid stale cached .so
           await execAsync(`sudo rm -f /usr/local/lib/libvips*.so* /usr/local/lib/${triplet}/libvips*.so* 2>&1 && sudo ldconfig 2>&1`).catch(() => {});
