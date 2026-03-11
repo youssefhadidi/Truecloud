@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FiActivity, FiCpu, FiHardDrive, FiWifi, FiDatabase,
   FiArrowUp, FiArrowDown, FiCheckCircle, FiAlertTriangle,
-  FiXCircle, FiClock,
+  FiXCircle, FiClock, FiThermometer,
 } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
@@ -51,6 +51,20 @@ function usageTextColor(pct) {
   if (pct >= 90) return 'text-red-400';
   if (pct >= 70) return 'text-yellow-400';
   return 'text-blue-400';
+}
+
+function tempTextColor(celsius, driveTresholds = false) {
+  const [warn, crit] = driveTresholds ? [45, 55] : [60, 80];
+  if (celsius >= crit) return 'text-red-400';
+  if (celsius >= warn) return 'text-yellow-400';
+  return 'text-green-400';
+}
+
+function tempBadgeClass(celsius, driveThresholds = false) {
+  const [warn, crit] = driveThresholds ? [45, 55] : [60, 80];
+  if (celsius >= crit) return 'bg-red-500/20 border-red-500/40 text-red-400';
+  if (celsius >= warn) return 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400';
+  return 'bg-green-500/20 border-green-500/40 text-green-400';
 }
 
 function zfsHealthColor(health) {
@@ -186,6 +200,56 @@ function CoreGrid({ cores }) {
   );
 }
 
+function TemperaturesCard({ cpuTemp, driveTemps }) {
+  const hasCpu = cpuTemp && typeof cpuTemp.packageTemp === 'number';
+  const driveEntries = Object.entries(driveTemps ?? {});
+
+  if (!hasCpu && driveEntries.length === 0) return null;
+
+  // Sensors to show as badges: exclude the one already shown as the headline
+  const pkgLabel = cpuTemp?.sensors?.find(
+    (s) => s.value === cpuTemp.packageTemp
+  )?.label;
+  const coreSensors = cpuTemp?.sensors?.filter((s) => s.label !== pkgLabel) ?? [];
+
+  return (
+    <Card title="Temperatures" icon={FiThermometer}>
+      {hasCpu && (
+        <div className={driveEntries.length > 0 ? 'mb-4' : ''}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 uppercase tracking-wide">CPU Package</span>
+            <span className={`text-2xl font-bold font-mono ${tempTextColor(cpuTemp.packageTemp)}`}>
+              {cpuTemp.packageTemp.toFixed(1)}°C
+            </span>
+          </div>
+          {coreSensors.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {coreSensors.map((s, i) => (
+                <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${tempBadgeClass(s.value)}`}>
+                  {s.label}: {s.value.toFixed(0)}°C
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {driveEntries.length > 0 && (
+        <div>
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-2">Drives</span>
+          <div className="flex flex-wrap gap-2">
+            {driveEntries.map(([disk, temp]) => (
+              <span key={disk} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono ${tempBadgeClass(temp, true)}`}>
+                <FiThermometer size={11} />
+                {disk}: {temp}°C
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MonitoringClient() {
@@ -311,6 +375,9 @@ export default function MonitoringClient() {
               </div>
             </Card>
           </div>
+
+          {/* Temperatures */}
+          <TemperaturesCard cpuTemp={latest.cpuTemp} driveTemps={latest.driveTemps} />
 
           {/* Network */}
           {Object.keys(latest.network.interfaces).length > 0 && (
