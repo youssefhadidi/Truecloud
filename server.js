@@ -24,6 +24,9 @@ const handle = app.getRequestHandler();
 // Unified WebSocket clients set - all messages route through here
 const wsClients = new Set();
 
+// Clients that have subscribed to system-metrics (opt-in polling)
+const metricsSubscribers = new Set();
+
 // Global update status state
 global.updateStatus = {
   isRunning: false,
@@ -124,7 +127,12 @@ global.broadcastJobUpdate = (job) => {
 };
 
 global.broadcastSystemMetrics = (metrics) => {
-  broadcastMessage({ type: 'system-metrics', payload: metrics });
+  const message = JSON.stringify({ type: 'system-metrics', payload: metrics });
+  metricsSubscribers.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(message);
+    }
+  });
 };
 
 // Load ES modules before starting server
@@ -201,12 +209,37 @@ loadEsModules().then(() => {
           ws.isAlive = true;
         });
 
+        ws.on('message', (data) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            if (msg.channel === 'system-metrics') {
+              if (msg.type === 'subscribe') {
+                metricsSubscribers.add(ws);
+                if (metricsSubscribers.size === 1) {
+                  import('./lib/metricsCollector.js').then(({ startMetricsCollector }) => startMetricsCollector());
+                }
+              } else if (msg.type === 'unsubscribe') {
+                metricsSubscribers.delete(ws);
+                if (metricsSubscribers.size === 0) {
+                  import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
+                }
+              }
+            }
+          } catch {}
+        });
+
         ws.on('close', () => {
           wsClients.delete(ws);
+          if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
+            import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
+          }
         });
 
         ws.on('error', () => {
           wsClients.delete(ws);
+          if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
+            import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
+          }
         });
       });
     }).catch(() => {
@@ -258,9 +291,6 @@ loadEsModules().then(() => {
 
     // Start log stream manager
     startLogStream();
-
-    // Start system metrics collector
-    import('./lib/metricsCollector.js').then(({ startMetricsCollector }) => startMetricsCollector());
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());

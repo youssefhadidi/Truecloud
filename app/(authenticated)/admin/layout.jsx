@@ -38,6 +38,7 @@ export default function AdminLayout({ children }) {
   }
 
   const navItems = [
+    { href: '/admin/monitoring', icon: FiMonitor, label: 'Monitoring' },
     { href: '/admin/accounts', icon: FiUsers, label: 'Accounts' },
     { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
     components.transcoding && { href: '/admin/transcoding-settings', icon: FiFilm, label: 'Transcoding' },
@@ -46,7 +47,6 @@ export default function AdminLayout({ children }) {
     components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
     components.minecraft && { href: '/admin/minecraft', icon: FiServer, label: 'Minecraft' },
     { href: '/admin/requirements', icon: FiCheckSquare, label: 'System Requirements' },
-    { href: '/admin/monitoring', icon: FiMonitor, label: 'Monitoring' },
     { href: '/admin/jobs', icon: FiActivity, label: 'Jobs' },
     { href: '/admin/update-status', icon: FiZap, label: 'Update Status' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },

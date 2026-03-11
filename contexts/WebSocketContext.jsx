@@ -31,6 +31,12 @@ export function WebSocketProvider({ children }) {
   const reconnectTimeoutRef = useRef(null);
   const shareCredentialsRef = useRef(null);
 
+  const sendToServer = useCallback((message) => {
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
   const connectWebSocket = useCallback(() => {
     // Close existing connection
     if (wsRef.current) {
@@ -58,6 +64,13 @@ export function WebSocketProvider({ children }) {
       ws.onopen = () => {
         wsRef.current = ws;
         setConnected(true);
+        // Re-announce all active subscriptions so the server can resume any
+        // server-driven polling (e.g. system-metrics) after a reconnect.
+        subscribersRef.current.forEach((subscribers, messageType) => {
+          if (subscribers.size > 0) {
+            ws.send(JSON.stringify({ type: 'subscribe', channel: messageType }));
+          }
+        });
       };
 
       ws.onmessage = (event) => {
@@ -124,28 +137,37 @@ export function WebSocketProvider({ children }) {
   );
 
   /**
-   * Subscribe to a specific message type
+   * Subscribe to a specific message type.
+   * When the first subscriber registers for a type, notifies the server so it can
+   * start server-driven polling (e.g. system-metrics). When the last subscriber
+   * leaves, notifies the server to stop.
    * @param {string} messageType - Type of message to listen for (e.g., 'file-change')
    * @param {function} callback - Function to call when message of this type arrives
    * @returns {function} Unsubscribe function
    */
-  const subscribe = (messageType, callback) => {
+  const subscribe = useCallback((messageType, callback) => {
     if (!subscribersRef.current.has(messageType)) {
       subscribersRef.current.set(messageType, new Set());
     }
-    subscribersRef.current.get(messageType).add(callback);
+    const subscribers = subscribersRef.current.get(messageType);
+    const isFirst = subscribers.size === 0;
+    subscribers.add(callback);
+
+    // Notify server when the first local subscriber joins
+    if (isFirst) {
+      sendToServer({ type: 'subscribe', channel: messageType });
+    }
 
     // Return unsubscribe function
     return () => {
-      const subscribers = subscribersRef.current.get(messageType);
-      if (subscribers) {
-        subscribers.delete(callback);
-        if (subscribers.size === 0) {
-          subscribersRef.current.delete(messageType);
-        }
+      subscribers.delete(callback);
+      if (subscribers.size === 0) {
+        subscribersRef.current.delete(messageType);
+        // Notify server when the last local subscriber leaves
+        sendToServer({ type: 'unsubscribe', channel: messageType });
       }
     };
-  };
+  }, [sendToServer]);
 
   const value = {
     connected,
