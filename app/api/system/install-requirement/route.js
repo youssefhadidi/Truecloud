@@ -158,23 +158,45 @@ export async function POST(req) {
           logger.info('libraw built successfully');
         }
 
-        // Normalize libraw_r.pc to remove optional lcms2 plugins (-llcms2_fast_float,
-        // -llcms2_threaded) and -fopenmp from Libs. These are not universally available
-        // and cause meson's link test to fail, making libvips skip RAW support entirely.
+        // Normalize libraw_r.pc: check the RESOLVED pkg-config output (not just the Libs: line)
+        // because Requires: entries expand recursively and still pull in lcms2_fast_float etc.
+        // If problematic libs appear in the resolved output, rewrite the entire pc file with
+        // a minimal clean version so meson's link test can succeed.
         let pcNormalized = false;
         try {
-          const { stdout: pcBefore } = await execAsync(
-            `grep "^Libs:" /usr/local/lib/pkgconfig/libraw_r.pc 2>/dev/null || true`,
+          const { stdout: resolvedLibs } = await execAsync(
+            `pkg-config --libs libraw_r 2>/dev/null || true`,
+            { env: buildEnv },
           );
-          if (pcBefore.includes('lcms2_fast_float') || pcBefore.includes('lcms2_threaded') || pcBefore.includes('-fopenmp')) {
-            await execAsync(
-              `sed -i 's/ -llcms2_fast_float//g; s/ -llcms2_threaded//g; s/ -fopenmp//g' /usr/local/lib/pkgconfig/libraw_r.pc`,
-            );
+          const hasProblematicLibs =
+            resolvedLibs.includes('lcms2_fast_float') ||
+            resolvedLibs.includes('lcms2_threaded') ||
+            resolvedLibs.includes('-fopenmp');
+
+          if (hasProblematicLibs) {
+            // Rewrite the entire pc file with a minimal clean version.
+            // The Requires: entries are what pull in these optional lcms2 plugins
+            // even after stripping them from Libs:.
+            const { writeFileSync } = await import('fs');
+            const minimalPc = [
+              'prefix=/usr/local',
+              'exec_prefix=${prefix}',
+              'libdir=${exec_prefix}/lib',
+              'includedir=${prefix}/include',
+              '',
+              'Name: libraw_r',
+              'Description: Raw image decoder library (reentrant)',
+              `Version: ${LIBRAW_VERSION}`,
+              'Libs: -L${libdir} -lraw_r',
+              'Libs.private: -lstdc++ -lpthread -lm',
+              'Cflags: -I${includedir}',
+              '',
+            ].join('\n');
+            writeFileSync('/usr/local/lib/pkgconfig/libraw_r.pc', minimalPc);
             pcNormalized = true;
-            const { stdout: pcAfter } = await execAsync(`grep "^Libs:" /usr/local/lib/pkgconfig/libraw_r.pc`);
-            logger.info(`libraw_r.pc normalized (removed optional lcms2 plugins). Libs now: ${pcAfter.trim()}`);
+            logger.info(`libraw_r.pc rewritten (was pulling in lcms2_fast_float via Requires). Resolved libs were: ${resolvedLibs.trim()}`);
           } else {
-            logger.info(`libraw_r.pc Libs already clean: ${pcBefore.trim()}`);
+            logger.info(`libraw_r.pc resolved libs already clean: ${resolvedLibs.trim()}`);
           }
         } catch (e) {
           logger.warn('Could not normalize libraw_r.pc:', e.message);
