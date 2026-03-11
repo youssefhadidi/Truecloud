@@ -221,31 +221,37 @@ export async function POST(req) {
           logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
         }
 
-        // Track whether libheif was just rebuilt — if so, force libvips rebuild
-        // so it compiles with the new libheif headers (needed for
-        // heif_context_set_strict_decoding support to handle metadata quirks).
+        // Track whether libheif or libraw was just rebuilt — if so, force libvips rebuild
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
+        const rawWasRebuilt = !(rawVer && versionSatisfies(rawVer, LIBRAW_VERSION));
 
-        // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
+        // Step 4-5: Build libvips to match sharp's bundled version, with HEIF+RAW support
         const VIPS_VERSION = '8.17.3';
         const vipsDir = '/tmp/libvips-build';
         const vipsVer = await getPkgVersion('vips', buildEnv);
         let vipsHasHeif = false;
+        let vipsHasRaw = false;
         if (vipsVer && versionSatisfies(vipsVer, MIN_VERSIONS.vips)) {
-          // Version is sufficient, check if HEIF is actually enabled
           try {
             const { stdout: heifCheck } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || true`, { env: buildEnv });
             vipsHasHeif = heifCheck.trim().length > 0;
           } catch {}
+          // Check if existing libvips was built with libraw by inspecting its ldd
+          try {
+            const { stdout: rawCheck } = await execAsync(`ldd /usr/local/lib/libvips.so 2>/dev/null | grep -q libraw && echo "YES" || echo "NO"`);
+            vipsHasRaw = rawCheck.trim() === 'YES';
+          } catch {}
         }
 
-        if (vipsHasHeif && !heifWasRebuilt) {
-          logger.info(`Steps 5-6/7: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
+        if (vipsHasHeif && vipsHasRaw && !heifWasRebuilt && !rawWasRebuilt) {
+          logger.info(`Steps 5-6/7: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF+RAW support`);
         } else {
           if (heifWasRebuilt) {
             logger.info(`Step 5/7: Forcing libvips rebuild because libheif was just rebuilt...`);
+          } else if (rawWasRebuilt || !vipsHasRaw) {
+            logger.info(`Step 5/7: Forcing libvips rebuild to include libraw support...`);
           } else {
-            logger.info(`Step 5/7: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
+            logger.info(`Step 5/7: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF+RAW)...`);
           }
           await execAsync(
             `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
