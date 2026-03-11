@@ -126,112 +126,26 @@ export async function POST(req) {
         const buildEnv = { ...process.env, PATH: enhancedPath, PKG_CONFIG_PATH: pkgConfigPath, LD_LIBRARY_PATH: ldPath, DEBIAN_FRONTEND: 'noninteractive' };
 
         // Step 1: Install build dependencies and remove conflicting system packages
-        logger.info('Step 1/7: Installing build dependencies...');
-        // Remove old system libheif/libde265/libvips/libraw dev packages to prevent conflicts
+        logger.info('Step 1/6: Installing build dependencies...');
+        // Remove old system libheif/libde265/libvips dev packages to prevent conflicts
         await execAsync(
           `sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && \
-            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq libheif-dev libde265-dev libvips-dev libvips42 libraw-dev 2>&1 || true && \
+            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq libheif-dev libde265-dev libvips-dev libvips42 2>&1 || true && \
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             apt-utils build-essential pkg-config cmake meson ninja-build \
             libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
-            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
+            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils \
+            libraw-dev 2>&1`,
           longOpts,
         );
 
-        // Step 2: Build libraw from source for broadest camera raw support
-        // IMPORTANT: Build WITHOUT lcms2 (LCMS2_CFLAGS/LIBS="") so the installed headers
-        // do not include <lcms2_fast_float.h>. If libraw is built with lcms2_fast_float,
-        // that header gets embedded in <libraw/libraw.h> — and since lcms2_fast_float.h
-        // is not a standard system header, meson's compile test for libraw fails silently,
-        // causing libvips to be built without camera RAW support.
-        const LIBRAW_VERSION = '0.21.3';
-        const rawDir = '/tmp/libraw-build';
-        const rawVer = await getPkgVersion('libraw_r', buildEnv);
-
-        // Check if installed libraw headers compile cleanly without extra system deps.
-        // libraw was built with lcms2_fast_float if the header includes it, causing
-        // meson's test to fail. Detect this by attempting a minimal compile.
-        let rawHeadersOk = false;
-        if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) {
-          try {
-            const { stdout: headerTest } = await execAsync(
-              `echo '#include <libraw/libraw.h>' | \
-               g++ -x c++ - $(pkg-config --cflags libraw_r 2>/dev/null) -fsyntax-only 2>/dev/null && echo OK || echo FAIL`,
-              { env: buildEnv },
-            );
-            rawHeadersOk = headerTest.trim() === 'OK';
-            logger.info(`libraw header compile check: ${headerTest.trim()}`);
-          } catch {}
-        }
-
-        let rawWasBuilt = false;
-        if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION) && rawHeadersOk) {
-          logger.info(`Step 2/7: Skipped — libraw_r ${rawVer} >= ${LIBRAW_VERSION} with clean headers`);
-        } else {
-          const reason = !rawVer || !versionSatisfies(rawVer, LIBRAW_VERSION)
-            ? `version ${rawVer || 'not found'}`
-            : 'headers include optional deps (lcms2_fast_float) that break meson detection';
-          logger.info(`Step 2/7: Building libraw ${LIBRAW_VERSION} from source (${reason})...`);
-          await execAsync(
-            `rm -rf ${rawDir} && mkdir -p ${rawDir} && cd ${rawDir} && \
-            curl -fsSL --retry 3 https://www.libraw.org/data/LibRaw-${LIBRAW_VERSION}.tar.gz -o libraw.tar.gz 2>&1 && \
-            tar xzf libraw.tar.gz 2>&1 && cd LibRaw-${LIBRAW_VERSION} && \
-            ./configure --prefix=/usr/local --disable-examples --disable-static --disable-openmp \
-              LCMS2_CFLAGS="" LCMS2_LIBS="" \
-              ac_cv_lib_lcms2_fast_float_cmsFastFloatExtensionsInit=no \
-              ac_cv_lib_lcms2_threaded_cmsThreadingExtensionsInitMutex=no 2>&1 && \
-            make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
-            { ...longOpts, env: buildEnv },
-          );
-          rawWasBuilt = true;
-          logger.info('libraw built successfully (without lcms2 optional plugins)');
-        }
-
-        // If the pc file still resolves problematic libs (e.g., from old system state),
-        // rewrite it with a minimal clean version as a safety net.
-        let pcNormalized = false;
-        try {
-          const { stdout: resolvedLibs } = await execAsync(
-            `pkg-config --libs libraw_r 2>/dev/null || true`,
-            { env: buildEnv },
-          );
-          const hasProblematicLibs =
-            resolvedLibs.includes('lcms2_fast_float') ||
-            resolvedLibs.includes('lcms2_threaded') ||
-            resolvedLibs.includes('-fopenmp');
-          if (hasProblematicLibs) {
-            const { writeFileSync } = await import('fs');
-            const minimalPc = [
-              'prefix=/usr/local',
-              'exec_prefix=${prefix}',
-              'libdir=${exec_prefix}/lib',
-              'includedir=${prefix}/include',
-              '',
-              'Name: libraw_r',
-              'Description: Raw image decoder library (reentrant)',
-              `Version: ${LIBRAW_VERSION}`,
-              'Libs: -L${libdir} -lraw_r',
-              'Libs.private: -lstdc++ -lpthread -lm',
-              'Cflags: -I${includedir}',
-              '',
-            ].join('\n');
-            writeFileSync('/usr/local/lib/pkgconfig/libraw_r.pc', minimalPc);
-            pcNormalized = true;
-            logger.info(`libraw_r.pc rewritten as safety net. Was: ${resolvedLibs.trim()}`);
-          } else {
-            logger.info(`libraw_r.pc resolved libs clean: ${resolvedLibs.trim()}`);
-          }
-        } catch (e) {
-          logger.warn('Could not check libraw_r.pc:', e.message);
-        }
-
-        // Step 3: Build libde265 if needed (HEVC decoder)
+        // Step 2: Build libde265 if needed (HEVC decoder)
         const de265Dir = '/tmp/libde265-build';
         const de265Ver = await getPkgVersion('libde265', buildEnv);
         if (de265Ver && versionSatisfies(de265Ver, MIN_VERSIONS.libde265)) {
-          logger.info(`Step 3/7: Skipped — libde265 ${de265Ver} >= ${MIN_VERSIONS.libde265}`);
+          logger.info(`Step 2/6: Skipped — libde265 ${de265Ver} >= ${MIN_VERSIONS.libde265}`);
         } else {
-          logger.info(`Step 3/7: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
+          logger.info(`Step 2/6: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
           await execAsync(
             `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
             curl -fsSL --retry 3 https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz -o libde265.tar.gz 2>&1 && \
@@ -264,10 +178,10 @@ export async function POST(req) {
         }
 
         if (heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265) {
-          logger.info(`Step 4/7: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif} with built-in libde265`);
+          logger.info(`Step 3/6: Skipped — libheif ${heifVer} >= ${MIN_VERSIONS.libheif} with built-in libde265`);
         } else {
           logger.info(
-            `Step 4/7: Building libheif from source (current: ${heifVer || 'not found'}, de265 built-in: ${heifHasBuiltinDe265}, need >= ${MIN_VERSIONS.libheif} with built-in de265)...`,
+            `Step 3/6: Building libheif from source (current: ${heifVer || 'not found'}, de265 built-in: ${heifHasBuiltinDe265}, need >= ${MIN_VERSIONS.libheif} with built-in de265)...`,
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
@@ -289,43 +203,28 @@ export async function POST(req) {
           logger.info(`libheif installed: ${newHeifVer || 'unknown'}`);
         }
 
-        // Track whether libheif or libraw was just rebuilt — if so, force libvips rebuild
+        // Track whether libheif was just rebuilt — if so, force libvips rebuild
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
-        const rawWasRebuilt = rawWasBuilt || pcNormalized;
-        // rawVer was checked against libraw_r above
 
-        // Step 4-5: Build libvips to match sharp's bundled version, with HEIF+RAW support
+        // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
         const VIPS_VERSION = '8.17.3';
         const vipsDir = '/tmp/libvips-build';
         const vipsVer = await getPkgVersion('vips', buildEnv);
         let vipsHasHeif = false;
-        let vipsHasRaw = false;
         if (vipsVer && versionSatisfies(vipsVer, MIN_VERSIONS.vips)) {
           try {
             const { stdout: heifCheck } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || true`, { env: buildEnv });
             vipsHasHeif = heifCheck.trim().length > 0;
           } catch {}
-          // Check if existing libvips was built with libraw_r by inspecting its ldd
-          // Use the real .so file (not the symlink) for accurate ldd output
-          try {
-            const { stdout: rawCheck } = await execAsync(
-              `libvips_so=$(find /usr/local/lib -name "libvips.so.*.*.*" -type f 2>/dev/null | head -1); \
-               [ -n "$libvips_so" ] && ldd "$libvips_so" 2>/dev/null | grep -qi "libraw" && echo "YES" || echo "NO"`,
-            );
-            vipsHasRaw = rawCheck.trim() === 'YES';
-            logger.info(`vipsHasRaw pre-check: ${rawCheck.trim()}`);
-          } catch {}
         }
 
-        if (vipsHasHeif && vipsHasRaw && !heifWasRebuilt && !rawWasRebuilt) {
-          logger.info(`Steps 5-6/7: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF+RAW support`);
+        if (vipsHasHeif && !heifWasRebuilt) {
+          logger.info(`Steps 4-5/6: Skipped — libvips ${vipsVer} >= ${MIN_VERSIONS.vips} with HEIF support`);
         } else {
           if (heifWasRebuilt) {
-            logger.info(`Step 5/7: Forcing libvips rebuild because libheif was just rebuilt...`);
-          } else if (rawWasRebuilt || !vipsHasRaw) {
-            logger.info(`Step 5/7: Forcing libvips rebuild to include libraw support...`);
+            logger.info(`Step 4/6: Forcing libvips rebuild because libheif was just rebuilt...`);
           } else {
-            logger.info(`Step 5/7: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF+RAW)...`);
+            logger.info(`Step 4/6: Downloading libvips source (current: ${vipsVer || 'not found'}, need >= ${MIN_VERSIONS.vips} with HEIF)...`);
           }
           await execAsync(
             `rm -rf ${vipsDir} && mkdir -p ${vipsDir} && cd ${vipsDir} && \
@@ -333,35 +232,16 @@ export async function POST(req) {
             longOpts,
           );
 
-          logger.info('Step 6/7: Building libvips with HEIF/HEVC+RAW support...');
-          // Verify pkg-config finds libheif and libraw_r before building
+          logger.info('Step 5/6: Building libvips with HEIF/HEVC support...');
+          // Verify pkg-config finds libheif before building
           try {
             const { stdout: heifPc } = await execAsync('pkg-config --modversion libheif 2>&1 && pkg-config --libs libheif 2>&1', { env: buildEnv });
             logger.info('pkg-config libheif before vips build:', heifPc.trim().replace(/\n/g, ' | '));
           } catch (e) {
             logger.error('libheif not found by pkg-config before vips build:', e.message);
           }
-          try {
-            const { stdout: rawPc } = await execAsync('pkg-config --modversion libraw_r 2>&1 && pkg-config --libs libraw_r 2>&1', { env: buildEnv });
-            logger.info('pkg-config libraw_r before vips build:', rawPc.trim().replace(/\n/g, ' | '));
-          } catch (e) {
-            logger.error('libraw_r not found by pkg-config before vips build:', e.message);
-          }
           // Also remove any previously installed libvips to avoid stale cached .so
           await execAsync(`sudo rm -f /usr/local/lib/libvips*.so* /usr/local/lib/${triplet}/libvips*.so* 2>&1 && sudo ldconfig 2>&1`).catch(() => {});
-
-          // Pre-meson link test: simulate what meson does to detect libraw_r
-          try {
-            const { stdout: linkTest } = await execAsync(
-              `echo '#include <libraw/libraw.h>
-int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
-               g++ /tmp/test_raw.cpp $(pkg-config --cflags --libs libraw_r 2>/dev/null) -o /tmp/test_raw 2>&1 && echo "LINK_OK" || echo "LINK_FAIL"`,
-              { env: buildEnv },
-            );
-            logger.info(`libraw_r pre-meson link test: ${linkTest.trim()}`);
-          } catch (e) {
-            logger.info(`libraw_r pre-meson link test error: ${e.message}`);
-          }
 
           const mesonResult = await execAsync(
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
@@ -371,8 +251,6 @@ int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
             { ...longOpts, env: buildEnv },
           );
           const mesonOut = mesonResult.stdout || '';
-          const rawLines = mesonOut.split('\n').filter(l => /raw/i.test(l)).join('\n');
-          logger.info('Meson RAW-related lines:', rawLines || '(none)');
           logger.info('Meson setup output (last 1500 chars):', mesonOut.slice(-1500));
 
           // Build with -j1 (sequential) to avoid a race condition in the parallel build
@@ -392,26 +270,10 @@ int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
             const { stdout } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"`, { env: buildEnv });
             logger.info(`libvips heif verification: ${stdout.trim()}`);
           } catch {}
-
-          // Verify libvips has libraw (camera RAW support)
-          try {
-            const { stdout: rawLdd } = await execAsync(
-              `ldd /usr/local/lib/libvips.so 2>/dev/null | grep -i "libraw" || echo "libraw_r NOT LINKED"`,
-              { env: buildEnv },
-            );
-            logger.info(`libvips RAW verification (ldd): ${rawLdd.trim()}`);
-          } catch {}
-          try {
-            const { stdout: rawVipsConfig } = await execAsync(
-              `LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips --vips-config 2>&1 | grep -i "libraw\\|raw " || echo "RAW not in vips config"`,
-              { env: buildEnv },
-            );
-            logger.info(`libvips RAW verification (vips-config): ${rawVipsConfig.trim()}`);
-          } catch {}
         }
 
         // Cleanup build dirs
-        await execAsync(`rm -rf ${rawDir} ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
+        await execAsync(`rm -rf ${de265Dir} ${heifDir} ${vipsDir} 2>&1`).catch(() => {});
 
         // Step 6: Patch sharp's bundled libvips with our HEIF-enabled version
         //
@@ -426,7 +288,7 @@ int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
         // Solution: REPLACE the fat library file with our thin HEIF-enabled
         // wrapper RENAMED to the same filename. Transitive deps are resolved
         // via ldconfig cache and LD_LIBRARY_PATH.
-        logger.info('Step 7/7: Patching sharp bundled libvips with HEIF-enabled version...');
+        logger.info('Step 6/6: Patching sharp bundled libvips with HEIF-enabled version...');
 
         // Register custom lib dirs in the system linker cache
         await execAsync(
@@ -505,7 +367,7 @@ int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
             // 5) Verify the patched library resolves its dependencies
             try {
               const { stdout: lddOut } = await execAsync(
-                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|raw_r|libraw|not found" | head -10`,
+                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|not found" | head -10`,
               );
               logger.info(`Dependency check:\n${lddOut.trim()}`);
             } catch {}
