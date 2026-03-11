@@ -350,6 +350,19 @@ export async function POST(req) {
           // Also remove any previously installed libvips to avoid stale cached .so
           await execAsync(`sudo rm -f /usr/local/lib/libvips*.so* /usr/local/lib/${triplet}/libvips*.so* 2>&1 && sudo ldconfig 2>&1`).catch(() => {});
 
+          // Pre-meson link test: simulate what meson does to detect libraw_r
+          try {
+            const { stdout: linkTest } = await execAsync(
+              `echo '#include <libraw/libraw.h>
+int main(){LibRaw r; return 0;}' > /tmp/test_raw.cpp && \
+               g++ /tmp/test_raw.cpp $(pkg-config --cflags --libs libraw_r 2>/dev/null) -o /tmp/test_raw 2>&1 && echo "LINK_OK" || echo "LINK_FAIL"`,
+              { env: buildEnv },
+            );
+            logger.info(`libraw_r pre-meson link test: ${linkTest.trim()}`);
+          } catch (e) {
+            logger.info(`libraw_r pre-meson link test error: ${e.message}`);
+          }
+
           const mesonResult = await execAsync(
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
             PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
@@ -357,7 +370,10 @@ export async function POST(req) {
               -Dintrospection=disabled -Dheif=enabled -Dmodules=disabled 2>&1`,
             { ...longOpts, env: buildEnv },
           );
-          logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
+          const mesonOut = mesonResult.stdout || '';
+          const rawLines = mesonOut.split('\n').filter(l => /raw/i.test(l)).join('\n');
+          logger.info('Meson RAW-related lines:', rawLines || '(none)');
+          logger.info('Meson setup output (last 1500 chars):', mesonOut.slice(-1500));
 
           // Build with -j1 (sequential) to avoid a race condition in the parallel build
           // where GCC tries to write dependency (.d) files to directories that haven't
