@@ -156,8 +156,40 @@ async function checkSharpHevcSupport() {
       vipsHeic = vipsOut.includes('.heic');
     } catch {}
 
+    // Check 3: Does the bundled libvips-cpp have libraw linked?
+    let hasLibraw = false;
+    try {
+      const fatLib = execSync(`find node_modules -path "*/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.*.*.*" -type f 2>/dev/null | head -1`, {
+        encoding: 'utf-8',
+        timeout: 5000,
+        cwd: process.cwd(),
+      }).trim();
+      if (fatLib) {
+        const bundledDir = fatLib.substring(0, fatLib.lastIndexOf('/'));
+        const lddLdPath = `${bundledDir}:${ldPath}`;
+        const lddOut = execSync(`LD_LIBRARY_PATH="${lddLdPath}" ldd "${fatLib}" 2>/dev/null | grep raw || true`, {
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim();
+        hasLibraw = lddOut.includes('libraw');
+      }
+    } catch {}
+
+    // Check 4: Does vips report rawload?
+    let vipsRaw = false;
+    try {
+      const vipsOut = execSync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep "rawload)" || true`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      vipsRaw = vipsOut.length > 0;
+    } catch {}
+
     const installed = hasLibheif && vipsHeic;
-    const version = installed ? 'HEIC/HEIF/AVIF support active' : `libheif linked: ${hasLibheif}, vips .heic: ${vipsHeic}`;
+    const parts = [
+      `libheif: ${hasLibheif ? 'yes' : 'no'}`,
+      `vips .heic: ${vipsHeic ? 'yes' : 'no'}`,
+      `libraw: ${hasLibraw ? 'yes' : 'no'}`,
+      `vips raw: ${vipsRaw ? 'yes' : 'no'}`,
+    ];
+    const version = installed ? `HEIC/HEIF/AVIF support active — RAW: ${hasLibraw && vipsRaw ? 'active' : 'not installed'}` : parts.join(', ');
     return { installed, version };
   } catch {
     return { installed: false, version: null };
