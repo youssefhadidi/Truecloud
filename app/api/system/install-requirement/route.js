@@ -134,7 +134,7 @@ export async function POST(req) {
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             apt-utils build-essential pkg-config cmake meson ninja-build \
             libglib2.0-dev libexpat1-dev libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
-            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev curl xz-utils 2>&1`,
+            libexif-dev liblcms2-dev liborc-0.4-dev libfftw3-dev libraw-dev curl xz-utils 2>&1`,
           longOpts,
         );
 
@@ -249,7 +249,7 @@ export async function POST(req) {
             `cd ${vipsDir}/vips-${VIPS_VERSION} && \
             PKG_CONFIG_PATH="${pkgConfigPath}" LD_LIBRARY_PATH="${ldPath}" \
             meson setup build --prefix=/usr/local --buildtype=release \
-              -Dintrospection=disabled -Dheif=enabled -Dmodules=disabled 2>&1`,
+              -Dintrospection=disabled -Dheif=enabled -Draw=enabled -Dmodules=disabled 2>&1`,
             { ...longOpts, env: buildEnv },
           );
           logger.info('Meson setup output (last 800 chars):', mesonResult.stdout?.slice(-800));
@@ -348,18 +348,19 @@ export async function POST(req) {
             // 3) Copy core libvips.so and its soname links (needed by our thin wrapper)
             await execAsync(`cp -fL ${localLibDir}/libvips.so* "${bundledLibDir}/" 2>/dev/null || true`);
 
-            // 4) Copy HEIF/HEVC runtime libraries
+            // 4) Copy HEIF/HEVC and RAW runtime libraries
             await execAsync(
-              `for dir in "${localLibDir}" "/usr/local/lib"; do \
+              `for dir in "${localLibDir}" "/usr/local/lib" "/usr/lib/${triplet}"; do \
                  cp -fL $dir/libheif.so* "${bundledLibDir}/" 2>/dev/null || true; \
                  cp -fL $dir/libde265.so* "${bundledLibDir}/" 2>/dev/null || true; \
+                 cp -fL $dir/libraw.so* "${bundledLibDir}/" 2>/dev/null || true; \
                done`,
             );
 
             // 5) Verify the patched library resolves its dependencies
             try {
               const { stdout: lddOut } = await execAsync(
-                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|not found" | head -10`,
+                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|raw|not found" | head -10`,
               );
               logger.info(`Dependency check:\n${lddOut.trim()}`);
             } catch {}
