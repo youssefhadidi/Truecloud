@@ -3,9 +3,10 @@
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
 import { stat, mkdir, readFile, writeFile } from 'fs/promises';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
+import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { createHash } from 'crypto';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
@@ -73,15 +74,16 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
     }
 
-    // Only process image files
-    const mimeType = lookup(fileName) || 'application/octet-stream';
-    if (!mimeType.startsWith('image/')) {
+    // Only process image files — match on extension only
+    const fileExt = extname(fileName).toLowerCase();
+    if (!IMAGE_EXTENSIONS.includes(fileExt)) {
       return NextResponse.json({ error: 'Only images can be optimized' }, { status: 400 });
     }
 
-    // Skip optimization for very small files or SVG
-    if (mimeType === 'image/svg+xml' || fileStats.size < 100000) {
+    // Skip optimization for SVG or very small files — serve as-is
+    if (fileExt === '.svg' || fileStats.size < 100000) {
       const fileBuffer = await readFile(filePath);
+      const mimeType = lookup(fileName) || 'application/octet-stream';
       return new NextResponse(fileBuffer, {
         headers: {
           'Content-Type': mimeType,
