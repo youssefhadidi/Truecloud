@@ -172,11 +172,11 @@ async function checkSharpHevcSupport() {
       }
     } catch {}
 
-    // Check 4: Does vips report rawload?
+    // Check 4: Was libvips built with libraw? Check --vips-config (build-time flag, not the built-in rawload op)
     let vipsRaw = false;
     try {
-      const vipsOut = execSync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep "rawload)" || true`, { encoding: 'utf-8', timeout: 5000 }).trim();
-      vipsRaw = vipsOut.length > 0;
+      const vipsOut = execSync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips --vips-config 2>&1 | grep -i "libraw" || true`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      vipsRaw = vipsOut.toLowerCase().includes('libraw');
     } catch {}
 
     const installed = hasLibheif && vipsHeic && hasLibraw && vipsRaw;
@@ -184,9 +184,9 @@ async function checkSharpHevcSupport() {
       `libheif: ${hasLibheif ? 'yes' : 'no'}`,
       `vips .heic: ${vipsHeic ? 'yes' : 'no'}`,
       `libraw: ${hasLibraw ? 'yes' : 'no'}`,
-      `vips raw: ${vipsRaw ? 'yes' : 'no'}`,
+      `vips libraw: ${vipsRaw ? 'yes' : 'no'}`,
     ];
-    const version = installed ? `HEIC/HEIF/AVIF support active — RAW: ${hasLibraw && vipsRaw ? 'active' : 'not installed'}` : parts.join(', ');
+    const version = installed ? `HEIC/HEIF/AVIF + RAW camera support active` : parts.join(', ');
     return { installed, version };
   } catch {
     return { installed: false, version: null };
