@@ -138,30 +138,57 @@ export async function POST(req) {
           longOpts,
         );
 
-        // Step 2: Build libraw from source for broadest camera support
-        // NOTE: libvips looks for 'libraw_r' (thread-safe) via pkg-config, not 'libraw'
+        // Step 2: Build libraw from source for broadest camera raw support
+        // IMPORTANT: Build WITHOUT lcms2 (LCMS2_CFLAGS/LIBS="") so the installed headers
+        // do not include <lcms2_fast_float.h>. If libraw is built with lcms2_fast_float,
+        // that header gets embedded in <libraw/libraw.h> — and since lcms2_fast_float.h
+        // is not a standard system header, meson's compile test for libraw fails silently,
+        // causing libvips to be built without camera RAW support.
         const LIBRAW_VERSION = '0.21.3';
         const rawDir = '/tmp/libraw-build';
         const rawVer = await getPkgVersion('libraw_r', buildEnv);
+
+        // Check if installed libraw headers compile cleanly without extra system deps.
+        // libraw was built with lcms2_fast_float if the header includes it, causing
+        // meson's test to fail. Detect this by attempting a minimal compile.
+        let rawHeadersOk = false;
         if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) {
-          logger.info(`Step 2/7: Skipped — libraw_r ${rawVer} >= ${LIBRAW_VERSION}`);
+          try {
+            const { stdout: headerTest } = await execAsync(
+              `echo '#include <libraw/libraw.h>' | \
+               g++ -x c++ - $(pkg-config --cflags libraw_r 2>/dev/null) -fsyntax-only 2>/dev/null && echo OK || echo FAIL`,
+              { env: buildEnv },
+            );
+            rawHeadersOk = headerTest.trim() === 'OK';
+            logger.info(`libraw header compile check: ${headerTest.trim()}`);
+          } catch {}
+        }
+
+        let rawWasBuilt = false;
+        if (rawVer && versionSatisfies(rawVer, LIBRAW_VERSION) && rawHeadersOk) {
+          logger.info(`Step 2/7: Skipped — libraw_r ${rawVer} >= ${LIBRAW_VERSION} with clean headers`);
         } else {
-          logger.info(`Step 2/7: Building libraw ${LIBRAW_VERSION} from source (current: ${rawVer || 'not found'})...`);
+          const reason = !rawVer || !versionSatisfies(rawVer, LIBRAW_VERSION)
+            ? `version ${rawVer || 'not found'}`
+            : 'headers include optional deps (lcms2_fast_float) that break meson detection';
+          logger.info(`Step 2/7: Building libraw ${LIBRAW_VERSION} from source (${reason})...`);
           await execAsync(
             `rm -rf ${rawDir} && mkdir -p ${rawDir} && cd ${rawDir} && \
             curl -fsSL --retry 3 https://www.libraw.org/data/LibRaw-${LIBRAW_VERSION}.tar.gz -o libraw.tar.gz 2>&1 && \
             tar xzf libraw.tar.gz 2>&1 && cd LibRaw-${LIBRAW_VERSION} && \
-            ./configure --prefix=/usr/local --disable-examples --disable-static --disable-openmp 2>&1 && \
+            ./configure --prefix=/usr/local --disable-examples --disable-static --disable-openmp \
+              LCMS2_CFLAGS="" LCMS2_LIBS="" \
+              ac_cv_lib_lcms2_fast_float_cmsFastFloatExtensionsInit=no \
+              ac_cv_lib_lcms2_threaded_cmsThreadingExtensionsInitMutex=no 2>&1 && \
             make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
             { ...longOpts, env: buildEnv },
           );
-          logger.info('libraw built successfully');
+          rawWasBuilt = true;
+          logger.info('libraw built successfully (without lcms2 optional plugins)');
         }
 
-        // Normalize libraw_r.pc: check the RESOLVED pkg-config output (not just the Libs: line)
-        // because Requires: entries expand recursively and still pull in lcms2_fast_float etc.
-        // If problematic libs appear in the resolved output, rewrite the entire pc file with
-        // a minimal clean version so meson's link test can succeed.
+        // If the pc file still resolves problematic libs (e.g., from old system state),
+        // rewrite it with a minimal clean version as a safety net.
         let pcNormalized = false;
         try {
           const { stdout: resolvedLibs } = await execAsync(
@@ -172,11 +199,7 @@ export async function POST(req) {
             resolvedLibs.includes('lcms2_fast_float') ||
             resolvedLibs.includes('lcms2_threaded') ||
             resolvedLibs.includes('-fopenmp');
-
           if (hasProblematicLibs) {
-            // Rewrite the entire pc file with a minimal clean version.
-            // The Requires: entries are what pull in these optional lcms2 plugins
-            // even after stripping them from Libs:.
             const { writeFileSync } = await import('fs');
             const minimalPc = [
               'prefix=/usr/local',
@@ -194,12 +217,12 @@ export async function POST(req) {
             ].join('\n');
             writeFileSync('/usr/local/lib/pkgconfig/libraw_r.pc', minimalPc);
             pcNormalized = true;
-            logger.info(`libraw_r.pc rewritten (was pulling in lcms2_fast_float via Requires). Resolved libs were: ${resolvedLibs.trim()}`);
+            logger.info(`libraw_r.pc rewritten as safety net. Was: ${resolvedLibs.trim()}`);
           } else {
-            logger.info(`libraw_r.pc resolved libs already clean: ${resolvedLibs.trim()}`);
+            logger.info(`libraw_r.pc resolved libs clean: ${resolvedLibs.trim()}`);
           }
         } catch (e) {
-          logger.warn('Could not normalize libraw_r.pc:', e.message);
+          logger.warn('Could not check libraw_r.pc:', e.message);
         }
 
         // Step 3: Build libde265 if needed (HEVC decoder)
@@ -268,7 +291,7 @@ export async function POST(req) {
 
         // Track whether libheif or libraw was just rebuilt — if so, force libvips rebuild
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
-        const rawWasRebuilt = !(rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) || pcNormalized;
+        const rawWasRebuilt = rawWasBuilt || pcNormalized;
         // rawVer was checked against libraw_r above
 
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF+RAW support
