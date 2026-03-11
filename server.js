@@ -123,6 +123,10 @@ global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
 
+global.broadcastSystemMetrics = (metrics) => {
+  broadcastMessage({ type: 'system-metrics', payload: metrics });
+};
+
 // Load ES modules before starting server
 loadEsModules().then(() => {
   return app.prepare();
@@ -254,6 +258,9 @@ loadEsModules().then(() => {
 
     // Start log stream manager
     startLogStream();
+
+    // Start system metrics collector
+    import('./lib/metricsCollector.js').then(({ startMetricsCollector }) => startMetricsCollector());
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
