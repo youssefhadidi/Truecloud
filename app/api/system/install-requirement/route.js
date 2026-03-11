@@ -382,10 +382,12 @@ export async function POST(req) {
             await execAsync(`cp -fL ${localLibDir}/libvips.so* "${bundledLibDir}/" 2>/dev/null || true`);
 
             // 4) Copy HEIF/HEVC and RAW runtime libraries
+            // NOTE: libvips links against libraw_r (thread-safe), not libraw
             await execAsync(
               `for dir in "${localLibDir}" "/usr/local/lib" "/usr/lib/${triplet}"; do \
                  cp -fL $dir/libheif.so* "${bundledLibDir}/" 2>/dev/null || true; \
                  cp -fL $dir/libde265.so* "${bundledLibDir}/" 2>/dev/null || true; \
+                 cp -fL $dir/libraw_r.so* "${bundledLibDir}/" 2>/dev/null || true; \
                  cp -fL $dir/libraw.so* "${bundledLibDir}/" 2>/dev/null || true; \
                done`,
             );
@@ -393,7 +395,7 @@ export async function POST(req) {
             // 5) Verify the patched library resolves its dependencies
             try {
               const { stdout: lddOut } = await execAsync(
-                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|raw|not found" | head -10`,
+                `LD_LIBRARY_PATH="${localLibDir}:/usr/local/lib" ldd "${bundledLibDir}/${fatLibName}" 2>&1 | grep -E "vips|heif|de265|raw_r|libraw|not found" | head -10`,
               );
               logger.info(`Dependency check:\n${lddOut.trim()}`);
             } catch {}
