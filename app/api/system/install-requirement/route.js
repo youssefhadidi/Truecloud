@@ -151,11 +151,33 @@ export async function POST(req) {
             `rm -rf ${rawDir} && mkdir -p ${rawDir} && cd ${rawDir} && \
             curl -fsSL --retry 3 https://www.libraw.org/data/LibRaw-${LIBRAW_VERSION}.tar.gz -o libraw.tar.gz 2>&1 && \
             tar xzf libraw.tar.gz 2>&1 && cd LibRaw-${LIBRAW_VERSION} && \
-            ./configure --prefix=/usr/local --disable-examples --disable-static 2>&1 && \
+            ./configure --prefix=/usr/local --disable-examples --disable-static --disable-openmp 2>&1 && \
             make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
             { ...longOpts, env: buildEnv },
           );
           logger.info('libraw built successfully');
+        }
+
+        // Normalize libraw_r.pc to remove optional lcms2 plugins (-llcms2_fast_float,
+        // -llcms2_threaded) and -fopenmp from Libs. These are not universally available
+        // and cause meson's link test to fail, making libvips skip RAW support entirely.
+        let pcNormalized = false;
+        try {
+          const { stdout: pcBefore } = await execAsync(
+            `grep "^Libs:" /usr/local/lib/pkgconfig/libraw_r.pc 2>/dev/null || true`,
+          );
+          if (pcBefore.includes('lcms2_fast_float') || pcBefore.includes('lcms2_threaded') || pcBefore.includes('-fopenmp')) {
+            await execAsync(
+              `sed -i 's/ -llcms2_fast_float//g; s/ -llcms2_threaded//g; s/ -fopenmp//g' /usr/local/lib/pkgconfig/libraw_r.pc`,
+            );
+            pcNormalized = true;
+            const { stdout: pcAfter } = await execAsync(`grep "^Libs:" /usr/local/lib/pkgconfig/libraw_r.pc`);
+            logger.info(`libraw_r.pc normalized (removed optional lcms2 plugins). Libs now: ${pcAfter.trim()}`);
+          } else {
+            logger.info(`libraw_r.pc Libs already clean: ${pcBefore.trim()}`);
+          }
+        } catch (e) {
+          logger.warn('Could not normalize libraw_r.pc:', e.message);
         }
 
         // Step 3: Build libde265 if needed (HEVC decoder)
@@ -224,7 +246,7 @@ export async function POST(req) {
 
         // Track whether libheif or libraw was just rebuilt — if so, force libvips rebuild
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
-        const rawWasRebuilt = !(rawVer && versionSatisfies(rawVer, LIBRAW_VERSION));
+        const rawWasRebuilt = !(rawVer && versionSatisfies(rawVer, LIBRAW_VERSION)) || pcNormalized;
         // rawVer was checked against libraw_r above
 
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF+RAW support
@@ -239,9 +261,14 @@ export async function POST(req) {
             vipsHasHeif = heifCheck.trim().length > 0;
           } catch {}
           // Check if existing libvips was built with libraw_r by inspecting its ldd
+          // Use the real .so file (not the symlink) for accurate ldd output
           try {
-            const { stdout: rawCheck } = await execAsync(`ldd /usr/local/lib/libvips.so 2>/dev/null | grep -q libraw_r && echo "YES" || echo "NO"`);
+            const { stdout: rawCheck } = await execAsync(
+              `libvips_so=$(find /usr/local/lib -name "libvips.so.*.*.*" -type f 2>/dev/null | head -1); \
+               [ -n "$libvips_so" ] && ldd "$libvips_so" 2>/dev/null | grep -qi "libraw" && echo "YES" || echo "NO"`,
+            );
             vipsHasRaw = rawCheck.trim() === 'YES';
+            logger.info(`vipsHasRaw pre-check: ${rawCheck.trim()}`);
           } catch {}
         }
 
@@ -297,6 +324,22 @@ export async function POST(req) {
           try {
             const { stdout } = await execAsync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips -l 2>&1 | grep -i heifload || echo "NO HEIF DETECTED"`, { env: buildEnv });
             logger.info(`libvips heif verification: ${stdout.trim()}`);
+          } catch {}
+
+          // Verify libvips has libraw (camera RAW support)
+          try {
+            const { stdout: rawLdd } = await execAsync(
+              `ldd /usr/local/lib/libvips.so 2>/dev/null | grep -i "libraw" || echo "libraw_r NOT LINKED"`,
+              { env: buildEnv },
+            );
+            logger.info(`libvips RAW verification (ldd): ${rawLdd.trim()}`);
+          } catch {}
+          try {
+            const { stdout: rawVipsConfig } = await execAsync(
+              `LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips --vips-config 2>&1 | grep -i "libraw\\|raw " || echo "RAW not in vips config"`,
+              { env: buildEnv },
+            );
+            logger.info(`libvips RAW verification (vips-config): ${rawVipsConfig.trim()}`);
           } catch {}
         }
 
