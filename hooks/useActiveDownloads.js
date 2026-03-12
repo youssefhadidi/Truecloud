@@ -151,8 +151,7 @@ export function useActiveDownloads(initialDownloads = []) {
           downloadsRef.current.delete(gid);
           syncDownloads();
         } else if (payload.type === 'download-complete') {
-          // Download completed - mark as complete instead of removing
-          const { gid, targetPath } = payload;
+          const { gid } = payload;
           const existing = downloadsRef.current.get(gid);
           if (existing) {
             downloadsRef.current.set(gid, {
@@ -161,6 +160,11 @@ export function useActiveDownloads(initialDownloads = []) {
               progress: 100,
             });
             syncDownloads();
+            // Auto-remove after 5 s so user can see completion before it disappears
+            setTimeout(() => {
+              downloadsRef.current.delete(gid);
+              syncDownloads();
+            }, 5000);
           }
         }
       } catch (err) {
