@@ -127,7 +127,7 @@ export async function GET(req, { params }) {
       return new Response(stream, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(fileName))}.zip"`,
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(fileName))}.zip"; filename*=UTF-8''${encodeURIComponent(basename(fileName))}.zip`,
           'Transfer-Encoding': 'chunked',
         },
       });
@@ -154,7 +154,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Content-Disposition': `inline; filename="${basename(fileName)}"`,
+          'Content-Disposition': `inline; filename="${encodeURIComponent(basename(fileName))}"; filename*=UTF-8''${encodeURIComponent(basename(fileName))}`,
           'Cache-Control': cacheControl,
         },
       }
