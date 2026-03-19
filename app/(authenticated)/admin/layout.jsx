@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders, FiServer, FiFilm, FiActivity, FiMonitor } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiFileText, FiArrowLeft, FiHardDrive, FiImage, FiZap, FiShare2, FiDatabase, FiSliders, FiServer, FiFilm, FiActivity, FiMonitor, FiPackage } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -50,6 +50,7 @@ export default function AdminLayout({ children }) {
     { href: '/admin/jobs', icon: FiActivity, label: 'Jobs' },
     { href: '/admin/update-status', icon: FiZap, label: 'Update Status' },
     { href: '/admin/logs', icon: FiFileText, label: 'Logs' },
+    { href: '/admin/modules', icon: FiPackage, label: 'Modules' },
     { href: '/admin/components', icon: FiSliders, label: 'Components' },
   ].filter(Boolean);
 
