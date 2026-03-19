@@ -1,0 +1,10 @@
+{
+  "modules": [
+    {
+      "name": "Example Module",
+      "description": "A sample module to demonstrate the module system",
+      "repository": "https://github.com/user/truecloud-module-example.git",
+      "addedAt": "2026-03-19T00:00:00.000Z"
+    }
+  ]
+}
