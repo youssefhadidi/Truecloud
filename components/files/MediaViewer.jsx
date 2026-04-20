@@ -57,7 +57,8 @@ export default function MediaViewer({
           return `/api/public/${shareToken}/optimize-image?${params.toString()}`;
         }
         params.append('path', filePath);
-        return `/api/public/${shareToken}/download?${params.toString()}`;
+        const endpoint = type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download';
+        return `/api/public/${shareToken}/${endpoint}?${params.toString()}`;
       }
 
       if (type === 'image') {

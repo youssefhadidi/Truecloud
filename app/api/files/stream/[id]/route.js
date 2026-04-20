@@ -95,7 +95,7 @@ export async function GET(req, { params }) {
 
       if (components.transcoding) {
         // Fast path: already confirmed natively streamable on a previous request — skip probing
-        if (isMarkedNative(fullPath)) {
+        if (await isMarkedNative(fullPath)) {
           logger.debug('GET /api/files/stream - Native MP4 (cached), serving directly', { fileId });
         } else {
           // Backward compat: serve existing MP4 cache directly
@@ -172,10 +172,10 @@ export async function GET(req, { params }) {
             // H.264 + browser-compatible audio in a natively playable container → serve
             // directly without HLS transcoding.
             // Note: MKV is supported by Chrome but not Firefox/Safari.
-            if ((fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv') &&
+            if ((fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv' || fileExt === '.mov') &&
                 codecs.videoCodec === 'h264' &&
                 isAudioBrowserCompatible(codecs.audioCodec)) {
-              markNative(fullPath);
+              await markNative(fullPath);
               logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
               // Fall through to byte-range serving
             } else {

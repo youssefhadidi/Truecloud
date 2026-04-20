@@ -19,8 +19,18 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
-// Track in-progress MP4 fixes to deduplicate concurrent public requests
+// Track in-progress MP4 fixes / MKV remuxes to deduplicate concurrent public
+// requests for the same cache path. Without this, N concurrent viewers of the
+// same share link each spawn their own ffmpeg process writing to the same file.
 const inProgressFixes = new Map();
+
+function dedupeFix(cachedPath, fn) {
+  const existing = inProgressFixes.get(cachedPath);
+  if (existing) return existing;
+  const p = Promise.resolve().then(fn).finally(() => inProgressFixes.delete(cachedPath));
+  inProgressFixes.set(cachedPath, p);
+  return p;
+}
 
 export async function GET(req, { params }) {
   try {
@@ -103,7 +113,7 @@ export async function GET(req, { params }) {
           await mkdir(cacheDir, { recursive: true });
 
           try {
-            await fixMp4ForStreaming(filePath, cachedPath);
+            await dedupeFix(cachedPath, () => fixMp4ForStreaming(filePath, cachedPath));
             streamPath = cachedPath;
           } catch (err) {
             // Fall back to original file
@@ -133,9 +143,11 @@ export async function GET(req, { params }) {
         await mkdir(cacheDir, { recursive: true });
 
         try {
-          const tmpPath = cachedPath + '.tmp';
-          await remuxMkvToMp4(filePath, tmpPath);
-          await rename(tmpPath, cachedPath);
+          await dedupeFix(cachedPath, async () => {
+            const tmpPath = cachedPath + '.tmp';
+            await remuxMkvToMp4(filePath, tmpPath);
+            await rename(tmpPath, cachedPath);
+          });
           streamPath = cachedPath;
         } catch (err) {
           // Fall back to original MKV
@@ -163,10 +175,24 @@ export async function GET(req, { params }) {
       );
     }
 
-    // Parse range
+    // Parse range and clamp to valid bounds
     const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const start = parseInt(parts[0], 10) || 0;
+    const end = Math.min(
+      parts[1] ? parseInt(parts[1], 10) : fileSize - 1,
+      fileSize - 1
+    );
+
+    // Reject unsatisfiable ranges (includes 0-byte files with any range request)
+    if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${fileSize}`,
+        },
+      });
+    }
+
     const chunkSize = end - start + 1;
 
     return new NextResponse(

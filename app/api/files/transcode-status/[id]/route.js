@@ -53,7 +53,7 @@ export async function GET(req, { params }) {
       }
 
       // 0. Native streamable MP4 (H.264 + browser-compatible audio) — no HLS needed
-      if (isMarkedNative(fullPath)) {
+      if (await isMarkedNative(fullPath)) {
         return NextResponse.json({ status: 'native' });
       }
 
@@ -103,13 +103,13 @@ export async function GET(req, { params }) {
       }
 
       // 5. Unknown — probe once to detect natively streamable files (H.264 + compatible audio
-      //    in mp4/m4v/mkv). markNative() populates the in-memory Set so subsequent calls
-      //    return 'native' immediately without probing again.
-      if (fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv') {
+      //    in mp4/m4v/mov/mkv). markNative() writes to the persisted registry so subsequent
+      //    calls (including across server restarts) return 'native' without probing again.
+      if (fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv' || fileExt === '.mov') {
         try {
           const codecs = await probeCodecs(fullPath, req.signal);
           if (codecs.videoCodec === 'h264' && isAudioBrowserCompatible(codecs.audioCodec)) {
-            markNative(fullPath);
+            await markNative(fullPath);
             return NextResponse.json({ status: 'native' });
           }
         } catch (err) {

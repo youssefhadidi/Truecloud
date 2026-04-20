@@ -16,6 +16,53 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 // Only allow seg[digits].ts — no path separators, no traversal
 const SEGMENT_FILENAME_RE = /^seg\d+\.ts$/;
 
+// Wait up to `timeoutMs` for `segmentPath` to exist. Uses fs.watch to get a
+// kernel-level wakeup the moment ffmpeg writes the segment (~ms latency)
+// instead of polling every 200 ms. Re-stats after each wakeup in case the
+// event we would have woken on already fired between two awaits.
+async function waitForSegment(hlsDir, segmentPath, timeoutMs, signal) {
+  if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+
+  try {
+    return await stat(segmentPath);
+  } catch {}
+
+  const deadline = Date.now() + timeoutMs;
+  // persistent: false so a leaked watcher can never keep the process alive
+  const watcher = fs.watch(hlsDir, { persistent: false });
+
+  try {
+    while (true) {
+      try {
+        return await stat(segmentPath);
+      } catch {}
+
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error('timeout');
+
+      await new Promise((resolveWait, rejectWait) => {
+        const done = (err) => {
+          watcher.removeListener('change', onChange);
+          watcher.removeListener('error', onError);
+          signal?.removeEventListener('abort', onAbort);
+          clearTimeout(timer);
+          err ? rejectWait(err) : resolveWait();
+        };
+        const onChange = () => done();
+        const onError = (err) => done(err);
+        const onAbort = () => done(new DOMException('aborted', 'AbortError'));
+        const timer = setTimeout(() => done(new Error('timeout')), remaining);
+
+        watcher.on('change', onChange);
+        watcher.on('error', onError);
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+  } finally {
+    watcher.close();
+  }
+}
+
 export async function GET(req, { params }) {
   try {
     const { error } = await requireAuthNoActivity();
@@ -61,19 +108,16 @@ export async function GET(req, { params }) {
       // stall hls.js when using the pre-written VOD manifest.
       const segmentPath = join(hlsDir, segment);
 
-      let segmentStat = null;
-      const waitDeadline = Date.now() + 30_000;
-      while (!segmentStat) {
-        try {
-          segmentStat = await stat(segmentPath);
-        } catch {
-          if (req.signal?.aborted) return new NextResponse(null, { status: 499 });
-          if (Date.now() >= waitDeadline) {
-            logger.warn('GET /api/files/hls - Segment not ready after 30s', { segment });
-            return NextResponse.json({ error: 'Segment not ready' }, { status: 504 });
-          }
-          await new Promise((r) => setTimeout(r, 200));
+      let segmentStat;
+      try {
+        segmentStat = await waitForSegment(hlsDir, segmentPath, 30_000, req.signal);
+      } catch (err) {
+        if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+        if (err.message === 'timeout') {
+          logger.warn('GET /api/files/hls - Segment not ready after 30s', { segment });
+          return NextResponse.json({ error: 'Segment not ready' }, { status: 504 });
         }
+        throw err;
       }
 
       const fileSize = segmentStat.size;
