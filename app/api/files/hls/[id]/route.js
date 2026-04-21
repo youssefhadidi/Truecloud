@@ -56,6 +56,10 @@ async function waitForSegment(hlsDir, segmentPath, timeoutMs, signal) {
         watcher.on('change', onChange);
         watcher.on('error', onError);
         signal?.addEventListener('abort', onAbort, { once: true });
+        // AbortSignal.addEventListener does NOT auto-fire for an already-
+        // aborted signal — re-check after registering to close the race where
+        // an abort lands between the loop's stat and this listener being armed.
+        if (signal?.aborted) done(new DOMException('aborted', 'AbortError'));
       });
     }
   } finally {

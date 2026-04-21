@@ -101,34 +101,36 @@ export function ListDownloadRow({ file, style, gridCols, selectionMode, selected
       <div className="hidden sm:block text-yellow-300 text-sm">{download.downloadSpeed}</div>
 
       {/* Action buttons - pause/resume and cancel */}
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (download.status === 'paused') {
-              handleResume();
-            } else {
-              handlePause();
-            }
-          }}
-          disabled={actionLoading}
-          className="text-yellow-400 p-2 hover:bg-yellow-900/20 rounded disabled:opacity-50 transition-colors"
-          title={download.status === 'paused' ? 'Resume' : 'Pause'}
-        >
-          {download.status === 'paused' ? <FiPlay size={18} /> : <FiPause size={18} />}
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRemove();
-          }}
-          disabled={actionLoading}
-          className="text-red-400 p-2 hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
-          title="Cancel"
-        >
-          <FiX size={18} />
-        </button>
-      </div>
+      {!selectionMode && (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (download.status === 'paused') {
+                handleResume();
+              } else {
+                handlePause();
+              }
+            }}
+            disabled={actionLoading}
+            className="text-yellow-400 p-2 hover:bg-yellow-900/20 rounded disabled:opacity-50 transition-colors"
+            title={download.status === 'paused' ? 'Resume' : 'Pause'}
+          >
+            {download.status === 'paused' ? <FiPlay size={18} /> : <FiPause size={18} />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemove();
+            }}
+            disabled={actionLoading}
+            className="text-red-400 p-2 hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
+            title="Cancel"
+          >
+            <FiX size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

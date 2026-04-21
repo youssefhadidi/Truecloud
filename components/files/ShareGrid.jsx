@@ -267,7 +267,7 @@ export default function ShareGrid({
             </p>
             {!file.isDirectory && <p className="text-xs text-gray-400 px-1 mt-auto">{formatFileSize(file.size)}</p>}
 
-            {(shouldShowActions(file.name) || containerWidth >= BREAKPOINT.sm) && (
+            {!selectionMode && (shouldShowActions(file.name) || containerWidth >= BREAKPOINT.sm) && (
               <div
                 className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
                   containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'

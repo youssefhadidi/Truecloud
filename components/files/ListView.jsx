@@ -312,7 +312,7 @@ const ListView = forwardRef(({
               {!isGlobalSearch && <div className="hidden sm:block text-gray-400">{new Date(file.updatedAt).toLocaleDateString()}</div>}
 
               {/* Action buttons - always show on desktop, show on long press for mobile */}
-              {!isGlobalSearch && (!isMobile || shouldShowActions(file.id)) && (
+              {!isGlobalSearch && !selectionMode && (!isMobile || shouldShowActions(file.id)) && (
                 <div className="flex justify-end gap-2 relative">
                   {isViewableFile(file) && (
                     <button

@@ -329,7 +329,7 @@ const GridItem = memo(
 
             <div className="text-xs text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
 
-            {!isGlobalSearch && (shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
+            {!isGlobalSearch && !selectionMode && (shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
               <div
                 className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
                   containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'

@@ -128,6 +128,7 @@ export default function ShareList({
                   {!file.isDirectory && <p className="text-xs text-gray-400">{formatFileSize(file.size)}</p>}
                 </div>
               </div>
+              {!selectionMode && (
               <div className="flex items-center gap-2">
                 {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name) || isPdf(file.name) || isXlsx(file.name)) && (
                   <button
@@ -192,6 +193,7 @@ export default function ShareList({
                   </button>
                 )}
               </div>
+              )}
             </div>
           );
     },
