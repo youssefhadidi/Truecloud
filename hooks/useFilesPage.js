@@ -41,11 +41,16 @@ export function useFilesPage(status) {
     isPopstateNavigation: false,
   });
 
-  // Preferences state - grouped
-  const [preferences, setPreferences] = useState({
-    viewMode: 'grid',
-    sortBy: 'name-asc',
-    searchQuery: '',
+  // Preferences state - grouped (hydrated from localStorage on mount)
+  const [preferences, setPreferences] = useState(() => {
+    if (typeof window === 'undefined') {
+      return { viewMode: 'grid', sortBy: 'name-asc', searchQuery: '' };
+    }
+    return {
+      viewMode: localStorage.getItem('fileViewMode') || 'grid',
+      sortBy: localStorage.getItem('fileSortBy') || 'name-asc',
+      searchQuery: '',
+    };
   });
 
   // UI state - grouped
