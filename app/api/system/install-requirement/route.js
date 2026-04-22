@@ -82,6 +82,8 @@ export async function POST(req) {
       'java 21': 'openjdk-21-jre-headless',
       unzip: 'unzip',
       samba: 'samba',
+      zfs: 'zfsutils-linux',
+      'vaapi hardware acceleration': 'i965-va-driver libva2 libva-drm2 vainfo',
     };
 
     const packageName = packages[name.toLowerCase()];
