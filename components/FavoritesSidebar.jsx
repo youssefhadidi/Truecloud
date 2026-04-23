@@ -2,16 +2,50 @@
 
 'use client';
 
-import React, { useState, memo } from 'react';
-import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch } from 'react-icons/fi';
+import React, { useState, memo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch, FiHardDrive } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { data: favorites = [], isLoading } = useFavorites();
   const removeFavorite = useRemoveFavorite();
   const { addNotification } = useNotifications();
+  const router = useRouter();
+  const { subscribe } = useWebSocket();
+  const [usbDrives, setUsbDrives] = useState([]);
+
+  // Seed from REST, then receive live updates via WebSocket
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/usb-drives')
+      .then((r) => (r.ok ? r.json() : { drives: [] }))
+      .then((d) => { if (!cancelled) setUsbDrives(d.drives || []); })
+      .catch(() => {});
+    const unsub = subscribe('usb-drives', (msg) => {
+      setUsbDrives(Array.isArray(msg.payload) ? msg.payload : []);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, [subscribe]);
+
+  // Flatten to only partitions that are actually mounted (browsable)
+  const mountedPartitions = usbDrives.flatMap((d) =>
+    d.partitions
+      .filter((p) => p.mountpoint)
+      .map((p) => ({
+        key: `${d.name}-${p.name}`,
+        mountpoint: p.mountpoint,
+        label: p.label || p.uuid || p.name,
+        drive: d.model || d.vendor || d.name,
+      })),
+  );
+
+  const openDrive = (mp) => {
+    router.push(`/usb?mount=${encodeURIComponent(mp)}`);
+  };
 
   const handleRemove = async (e, favorite) => {
     e.stopPropagation();
@@ -46,8 +80,18 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         >
           <FiChevronRight size={20} />
         </button>
-        {favorites.length > 0 && (
+        {(favorites.length > 0 || mountedPartitions.length > 0) && (
           <div className="flex-1 flex flex-col items-center py-2 gap-1 overflow-y-auto">
+            {mountedPartitions.map((part) => (
+              <button
+                key={part.key}
+                onClick={() => openDrive(part.mountpoint)}
+                className="p-2 rounded hover:bg-gray-700 transition-colors text-indigo-300"
+                title={`${part.drive} — ${part.mountpoint}`}
+              >
+                <FiHardDrive size={16} />
+              </button>
+            ))}
             {favorites.slice(0, 10).map((favorite) => (
               <button
                 key={favorite.id}
@@ -114,6 +158,32 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
       </div>
 
       {/* Search Input */}
+
+      {/* USB Drives (only shown when drives are mounted) */}
+      {mountedPartitions.length > 0 && (
+        <div className="border-b border-gray-700">
+          <div className="flex items-center gap-2 px-3 py-2 text-gray-300">
+            <FiHardDrive size={16} className="text-indigo-400" />
+            <span className="text-sm font-medium">USB Drives</span>
+          </div>
+          <div className="pb-1">
+            {mountedPartitions.map((part) => (
+              <div
+                key={part.key}
+                onClick={() => openDrive(part.mountpoint)}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-gray-300 hover:bg-gray-700 transition-colors"
+                title={part.mountpoint}
+              >
+                <FiHardDrive size={14} className="flex-shrink-0 text-indigo-400" />
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm">{part.label}</div>
+                  <div className="truncate text-xs text-gray-500">{part.drive}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Favorites list */}
       <div className="flex-1 overflow-y-auto py-1">

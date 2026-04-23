@@ -126,6 +126,10 @@ global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
 
+global.broadcastUsbDrives = (drives) => {
+  broadcastMessage({ type: 'usb-drives', payload: drives });
+};
+
 global.broadcastSystemMetrics = (metrics) => {
   const message = JSON.stringify({ type: 'system-metrics', payload: metrics });
   metricsSubscribers.forEach((client) => {
@@ -203,6 +207,10 @@ loadEsModules().then(() => {
 
         import('./lib/jobManager.js').then(({ listJobs }) => {
           ws.send(JSON.stringify({ type: 'job-list', payload: listJobs() }));
+        }).catch(() => {});
+
+        import('./lib/usbManager.js').then(({ getUsbDrives }) => {
+          ws.send(JSON.stringify({ type: 'usb-drives', payload: getUsbDrives() }));
         }).catch(() => {});
 
         ws.on('pong', () => {
@@ -294,6 +302,9 @@ loadEsModules().then(() => {
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
+
+    // Start USB drive watcher (Linux only; no-op elsewhere)
+    import('./lib/usbManager.js').then(({ startUsbManager }) => startUsbManager());
 
     // Auto-start Minecraft servers that have autoStart = true
     import('./lib/minecraft.js').then(async ({ spawnServer }) => {
