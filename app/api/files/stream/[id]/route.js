@@ -146,7 +146,7 @@ export async function GET(req, { params }) {
                   if (err.name !== 'AbortError') {
                     logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
                   }
-                  return { videoCodec: null, audioCodec: null };
+                  return { videoCodec: null, audioCodec: null, videoHeight: null, pixFmt: null };
                 }),
                 getFileDuration(fullPath, req.signal),
                 readTranscodingConfig(),
@@ -164,6 +164,8 @@ export async function GET(req, { params }) {
               fullPath,
               videoCodec: codecs?.videoCodec,
               audioCodec: codecs?.audioCodec,
+              videoHeight: codecs?.videoHeight,
+              pixFmt: codecs?.pixFmt,
               hwaccel,
               durationSecs,
               maxHeight: transcodingConfig.maxHeight ?? 'original',
