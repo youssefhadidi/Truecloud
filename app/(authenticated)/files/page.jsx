@@ -662,7 +662,7 @@ function FilesPageContent() {
             </div>
           ) : (
             /* Grid View with Virtual Scrolling */
-            <div className="p-0 flex flex-col flex-grow">
+            <div className="p-0 flex flex-col flex-grow overflow-hidden min-h-0">
               {state.isLoading ? (
                 <div className="flex items-center justify-center flex-grow">
                   <div className="text-center">
