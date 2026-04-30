@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock } from 'react-icons/fi';
 import { signOut } from 'next-auth/react';
+import Spinner from '@/components/ui/Spinner';
 
 export default function SessionLockScreen({ children }) {
   const router = useRouter();
@@ -21,30 +22,19 @@ export default function SessionLockScreen({ children }) {
   const handleKeyDown = useCallback(
     async (e) => {
       if (!isLocked) return;
-
       const key = e.key;
-
-      // Handle backspace
       if (key === 'Backspace') {
         e.preventDefault();
         setPin((p) => p.slice(0, -1));
         setError('');
         return;
       }
-
-      // Handle digits only
-      if (!/^\d$/.test(key)) {
-        return;
-      }
-
+      if (!/^\d$/.test(key)) return;
       e.preventDefault();
-
       if (pin.length < 4) {
         const newPin = pin + key;
         setPin(newPin);
         setError('');
-
-        // Auto-submit on 4th digit
         if (newPin.length === 4) {
           const success = await unlock(newPin);
           if (!success) {
@@ -56,10 +46,9 @@ export default function SessionLockScreen({ children }) {
         }
       }
     },
-    [isLocked, pin, unlock]
+    [isLocked, pin, unlock],
   );
 
-  // Reset PIN when unlocking
   useEffect(() => {
     if (!isLocked) {
       setPin('');
@@ -67,15 +56,10 @@ export default function SessionLockScreen({ children }) {
     }
   }, [isLocked]);
 
-  // Add keyboard listener and focus input when locked
   useEffect(() => {
-    if (!isLocked) return;
-
+    if (!isLocked) return undefined;
     window.addEventListener('keydown', handleKeyDown);
-    // Focus the hidden input on mobile to trigger keyboard
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (inputRef.current) inputRef.current.focus();
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked, handleKeyDown]);
 
@@ -84,8 +68,6 @@ export default function SessionLockScreen({ children }) {
       const value = e.target.value.replace(/\D/g, '').slice(0, 4);
       setPin(value);
       setError('');
-
-      // Auto-submit on 4th digit
       if (value.length === 4) {
         const success = await unlock(value);
         if (!success) {
@@ -99,102 +81,166 @@ export default function SessionLockScreen({ children }) {
         }
       }
     },
-    [unlock]
+    [unlock],
   );
 
-  // While loading the session, show a loading screen to prevent flicker
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'var(--bg)',
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Spinner size={36} color="var(--accent)" borderColor="var(--border)" thickness={3} />
       </div>
     );
   }
 
-  // If locked, show PIN input screen (take priority over children)
   if (isLocked) {
     return (
-    <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
-      {/* Hidden input for mobile keyboard support */}
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="numeric"
-        value={pin}
-        onChange={handleInputChange}
-        className="sr-only"
-        aria-label="PIN input"
-        autoComplete="off"
-        maxLength="4"
-      />
-
       <div
-        className={`bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 ${
-          isShaking ? 'animate-pulse' : ''
-        }`}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'var(--bg)',
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+        }}
       >
-        {/* Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-indigo-900/30 rounded-full p-4">
-            <FiLock className="text-indigo-500" size={48} />
-          </div>
-        </div>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          value={pin}
+          onChange={handleInputChange}
+          aria-label="PIN input"
+          autoComplete="off"
+          maxLength="4"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+        />
 
-        {/* Title */}
-        <h2 className="text-center text-2xl font-bold text-white mb-2">
-          Session Locked
-        </h2>
-
-        {/* Description */}
-        <p className="text-center text-gray-400 mb-6">
-          This session has been locked due to inactivity. Enter your 4-digit PIN to unlock.
-        </p>
-
-        {/* PIN Display */}
         <div
-          className="flex justify-center gap-3 mb-6 cursor-pointer"
-          onClick={() => inputRef.current?.focus()}
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-colors ${
-                i < pin.length
-                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                  : 'bg-gray-700 border-gray-600 text-gray-400'
-              }`}
-            >
-              {i < pin.length ? '●' : ''}
-            </div>
-          ))}
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <p className="text-center text-red-400 text-sm mb-4">{error}</p>
-        )}
-
-        {/* Instructions */}
-        <p className="text-center text-gray-400 text-xs mb-6">
-          Type your 4-digit PIN using your keyboard
-        </p>
-
-        {/* Sign Out Link */}
-        <button
-          onClick={async () => {
-            await signOut({ redirect: false });
-            await queryClient.invalidateQueries({ queryKey: ['session'] });
-            router.push('/auth/login');
+          className={isShaking ? 'tc-anim-fade' : ''}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-xl)',
+            boxShadow: 'var(--shadow-xl)',
+            padding: 32,
+            maxWidth: 420,
+            width: '100%',
+            animation: isShaking ? 'tc-pulse 250ms ease 2' : undefined,
           }}
-          className="w-full text-center text-gray-400 hover:text-gray-300 text-sm py-2 transition-colors"
         >
-          Sign out instead
-        </button>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+            <div
+              style={{
+                background: 'var(--accent-light)',
+                color: 'var(--accent)',
+                borderRadius: 99,
+                padding: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <FiLock size={36} />
+            </div>
+          </div>
+
+          <h2
+            style={{
+              textAlign: 'center',
+              fontSize: 22,
+              fontWeight: 700,
+              color: 'var(--text)',
+              margin: '0 0 6px',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Session Locked
+          </h2>
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-2)', margin: '0 0 24px' }}>
+            This session was locked due to inactivity. Enter your 4-digit PIN to unlock.
+          </p>
+
+          <div
+            style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 20, cursor: 'pointer' }}
+            onClick={() => inputRef.current?.focus()}
+          >
+            {[0, 1, 2, 3].map((i) => {
+              const filled = i < pin.length;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    width: 44,
+                    height: 52,
+                    borderRadius: 'var(--r-md)',
+                    border: `1.5px solid ${filled ? 'var(--accent)' : 'var(--border)'}`,
+                    background: filled ? 'var(--accent)' : 'var(--surface-2)',
+                    color: filled ? '#fff' : 'var(--text-3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 22,
+                    fontWeight: 700,
+                    transition: 'all 150ms',
+                  }}
+                >
+                  {filled ? '●' : ''}
+                </div>
+              );
+            })}
+          </div>
+
+          {error && (
+            <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--danger)', margin: '0 0 16px' }}>
+              {error}
+            </p>
+          )}
+
+          <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-3)', margin: '0 0 20px' }}>
+            Type your 4-digit PIN using your keyboard.
+          </p>
+
+          <button
+            onClick={async () => {
+              await signOut({ redirect: false });
+              await queryClient.invalidateQueries({ queryKey: ['session'] });
+              router.push('/auth/login');
+            }}
+            style={{
+              width: '100%',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--text-2)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '10px',
+              borderRadius: 'var(--r-sm)',
+              fontFamily: 'inherit',
+              transition: 'background 120ms',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            Sign out instead
+          </button>
+        </div>
       </div>
-    </div>
     );
   }
 
-  // If not locked and not loading, render children normally
   return children;
 }

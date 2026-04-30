@@ -1,79 +1,127 @@
 /** @format */
 
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
 
 export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
   const [fullLoaded, setFullLoaded] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [showZoomPill, setShowZoomPill] = useState(false);
   const imgRef = useRef(null);
   const transformRef = useRef(null);
+  const zoomTimer = useRef(null);
   const thumbnailUrl = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
 
-  // Reset when file changes
   useEffect(() => {
     setFullLoaded(false);
   }, [file.id]);
 
-  // Set src after img is mounted to ensure onLoad fires
   useEffect(() => {
     if (imgRef.current) {
       imgRef.current.src = getFileUrl(file, 'image');
     }
-  }, [file, currentPath, shareToken, sharePassword]);
+  }, [file, currentPath, shareToken, sharePassword, getFileUrl]);
+
+  function handleZoomChange({ state }) {
+    setZoomScale(state.scale);
+    if (state.scale > 1.01) {
+      setShowZoomPill(true);
+      clearTimeout(zoomTimer.current);
+      zoomTimer.current = setTimeout(() => setShowZoomPill(false), 1800);
+    } else {
+      setShowZoomPill(false);
+    }
+  }
 
   return (
     <div
-      className="relative w-full h-full flex items-center justify-center bg-gray-900"
+      className="mv-image-stage"
       style={{
         WebkitTouchCallout: 'none',
         WebkitUserSelect: 'none',
         userSelect: 'none',
       }}
       onTouchStart={(e) => {
-        if (e.target.tagName === 'IMG') {
-          e.preventDefault();
-        }
+        if (e.target.tagName === 'IMG') e.preventDefault();
       }}
     >
-      {/* Thumbnail as placeholder */}
-      {thumbnailUrl && !fullLoaded && (
-        <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" draggable={false} />
-      )}
-
-      {/* Loading spinner - visible while full image is loading */}
+      {/* Loading spinner */}
       {!fullLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="w-12 h-12 border-4 border-gray-600 border-t-white rounded-full animate-spin" />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        >
+          <div className="mv-spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
         </div>
       )}
 
-      {/* Full-res image wrapped in transform */}
-      <TransformWrapper ref={transformRef} minScale={0.95} maxScale={4} initialScale={1} centerContent={true} limitToWrapper={true} style={{ width: '100%', height: '100%' }}>
+      {/* Thumbnail placeholder */}
+      {thumbnailUrl && !fullLoaded && (
+        <img
+          src={thumbnailUrl}
+          alt=""
+          className="mv-image-stage__img mv-image-stage__img--loaded"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            margin: 'auto',
+            filter: 'blur(12px)',
+            transform: 'scale(1.05)',
+            pointerEvents: 'none',
+          }}
+          draggable={false}
+        />
+      )}
+
+      <TransformWrapper
+        ref={transformRef}
+        minScale={0.95}
+        maxScale={6}
+        initialScale={1}
+        wheel={{ step: 0.08 }}
+        doubleClick={{ mode: 'reset' }}
+        onTransformed={handleZoomChange}
+        centerOnInit
+      >
         <TransformComponent
-          wrapperStyle={{
+          wrapperStyle={{ width: '100%', height: '100%' }}
+          contentStyle={{
             width: '100%',
             height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-          contentStyle={{ width: '100%', height: '100%' }}
         >
-          <div className="w-full h-full">
-            <img
-              ref={imgRef}
-              alt={file.name}
-              draggable={false}
-              className={`w-full h-full object-contain ${fullLoaded ? 'opacity-100' : 'opacity-0'}`}
-              onLoad={() => {
-                setFullLoaded(true);
-                transformRef.current?.resetTransform();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onContextMenu={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.preventDefault()}
-            />
-          </div>
+          <img
+            ref={imgRef}
+            alt={file.name}
+            draggable={false}
+            className={`mv-image-stage__img ${fullLoaded ? 'mv-image-stage__img--loaded' : 'mv-image-stage__img--loading'}`}
+            onLoad={() => {
+              setFullLoaded(true);
+              transformRef.current?.resetTransform();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+            onTouchStart={(e) => e.preventDefault()}
+          />
         </TransformComponent>
       </TransformWrapper>
+
+      {showZoomPill && zoomScale > 1.01 && (
+        <div className="mv-zoom-pill">{Math.round(zoomScale * 100)}%</div>
+      )}
     </div>
   );
 }

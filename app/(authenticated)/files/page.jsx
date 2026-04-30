@@ -6,7 +6,11 @@ import { useStableSession } from '@/lib/api/session';
 import { useRouter } from 'next/navigation';
 import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList, FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage, FiDownload, FiTrash2 } from 'react-icons/fi';
+import {
+  FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList,
+  FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage,
+  FiDownload, FiTrash2, FiX,
+} from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
@@ -19,27 +23,45 @@ import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 import { useMoveFiles, useDeleteFile, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
+import Btn from '@/components/ui/Btn';
+import IconBtn from '@/components/ui/IconBtn';
+import Divider from '@/components/ui/Divider';
+import Spinner from '@/components/ui/Spinner';
 
-// Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
 const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
+function LoadingPanel({ label = 'Loading…' }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-3)' }}>
+      <Spinner size={28} color="var(--accent)" borderColor="var(--border)" thickness={3} />
+      <p style={{ fontSize: 13 }}>{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({ label }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-3)' }}>
+      <FiFolder size={36} />
+      <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
+    </div>
+  );
+}
+
 function FilesPageContent() {
   const { status } = useStableSession();
   const router = useRouter();
-  // Get all state and helpers from custom hook
   const state = useFilesPage(status);
 
-  // Global search (sidebar)
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(globalSearchQuery, 300);
   const { data: globalSearchResults = [] } = useSearch(debouncedSearchQuery);
   const isGlobalSearch = globalSearchQuery.length >= 2 && globalSearchResults.length > 0;
 
-  // Transform search results into file-like objects for GridView/ListView
   const searchFiles = useMemo(() => {
     if (!isGlobalSearch) return [];
     return globalSearchResults.map((r) => ({
@@ -56,19 +78,15 @@ function FilesPageContent() {
     }));
   }, [isGlobalSearch, globalSearchResults]);
 
-  // Files to display: search results or current folder
   const displayFiles = isGlobalSearch ? searchFiles : state.files;
 
-  // Refs for virtual scrollers
   const gridViewRef = useRef(null);
   const listViewRef = useRef(null);
   const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
 
-  // After files load, scroll to the pending target file
   useEffect(() => {
     if (pendingScrollTarget && !state.isLoading && state.files.length > 0) {
       const ref = state.viewMode === 'list' ? listViewRef : gridViewRef;
-      // Small delay to let virtual scroller render
       const timer = setTimeout(() => {
         ref.current?.scrollToFile(pendingScrollTarget);
         setPendingScrollTarget(null);
@@ -77,7 +95,6 @@ function FilesPageContent() {
     }
   }, [pendingScrollTarget, state.isLoading, state.files, state.viewMode]);
 
-  // Navigation hooks
   const navigation = useNavigation({
     currentPath: state.currentPath,
     pathHistory: state.pathHistory,
@@ -87,36 +104,28 @@ function FilesPageContent() {
     setHistoryIndex: state.setHistoryIndex,
   });
 
-  // Media viewer hooks
   const mediaViewer = useMediaViewer({
     viewerFile: state.viewerFile,
     viewableFiles: state.viewableFiles,
     setViewerFile: state.setViewerFile,
   });
 
-  // Drag and drop hooks
-  const dragDrop = useDragAndDrop({
-    setIsDragging: state.setIsDragging,
-  });
+  const dragDrop = useDragAndDrop({ setIsDragging: state.setIsDragging });
 
-  // Context menu hooks
   const contextMenu = useContextMenu({
     setContextMenu: state.setContextMenu,
     setSelectedContextFile: state.setSelectedContextFile,
   });
 
-  // File utilities
   const fileUtils = useFileUtils({
     currentPath: state.currentPath,
     folderDisplayNames: state.folderDisplayNames,
   });
 
-  // Download handler
   const { handleShareOrDownload } = useShareOrDownload();
 
-  // Favorites
   const { data: favorites = [] } = useFavorites();
-  const { toggleFavorite, isPending: togglingFavorite } = useToggleFavorite();
+  const { toggleFavorite } = useToggleFavorite();
   const moveMutation = useMoveFiles();
   const bulkDeleteMutation = useDeleteFile(state.currentPath);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -125,7 +134,6 @@ function FilesPageContent() {
   const [convertingHeic, setConvertingHeic] = useState(false);
   const [conversionStatus, setConversionStatus] = useState({ completed: 0, total: 0, failed: [] });
 
-  // File operation handlers
   const handlers = useFileHandlers({
     currentPath: state.currentPath,
     setCreatingFolder: state.setCreatingFolder,
@@ -143,7 +151,6 @@ function FilesPageContent() {
     removeDownload: state.removeDownload,
   });
 
-  // Reset bulk-delete confirmation when selection mode is turned off
   useEffect(() => {
     if (!state.selectionMode) setBulkDeleteConfirming(false);
   }, [state.selectionMode]);
@@ -176,16 +183,12 @@ function FilesPageContent() {
     setBulkDeleting(false);
     state.setSelectionMode(false);
     state.setSelectedFiles([]);
-    if (failed === 0) {
-      state.addNotification('success', `Deleted ${succeeded} item(s)`);
-    } else {
-      state.addNotification('warning', `Deleted ${succeeded}, failed to delete ${failed}`);
-    }
+    if (failed === 0) state.addNotification('success', `Deleted ${succeeded} item(s)`);
+    else state.addNotification('warning', `Deleted ${succeeded}, failed to delete ${failed}`);
   }, [bulkDeleting, bulkDeleteMutation, state]);
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
 
-  // Detect HEIC files in current folder
   const heicFiles = useMemo(() => {
     return state.files
       .filter((f) => {
@@ -200,7 +203,9 @@ function FilesPageContent() {
 
   const toggleSelection = useCallback(
     (file) => {
-      const newSelected = state.selectedFiles.includes(file.name) ? state.selectedFiles.filter((name) => name !== file.name) : [...state.selectedFiles, file.name];
+      const newSelected = state.selectedFiles.includes(file.name)
+        ? state.selectedFiles.filter((name) => name !== file.name)
+        : [...state.selectedFiles, file.name];
       state.setSelectedFiles(newSelected);
     },
     [state.selectedFiles, state.setSelectedFiles],
@@ -223,7 +228,6 @@ function FilesPageContent() {
       state.addNotification('error', 'Select a different destination');
       return;
     }
-
     try {
       await moveMutation.mutateAsync({
         items: state.selectedFiles,
@@ -241,17 +245,12 @@ function FilesPageContent() {
 
   const handleConvertHeicToJpeg = async () => {
     if (heicFiles.length === 0) return;
-
     setConvertingHeic(true);
     setConversionStatus({ completed: 0, total: heicFiles.length, failed: [] });
-
     const failed = [];
-
     for (let i = 0; i < heicFiles.length; i++) {
       const fileName = heicFiles[i];
-
       try {
-        // Build URL with format=jpeg parameter and 0x0 to preserve original resolution
         const params = new URLSearchParams({
           path: state.currentPath,
           format: 'jpeg',
@@ -259,42 +258,21 @@ function FilesPageContent() {
           w: '0',
           h: '0',
         });
-
         const downloadUrl = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
         const outputFileName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
-
-        // Use the new share or download handler
         await handleShareOrDownload(downloadUrl, outputFileName);
-
-        // Update progress
-        setConversionStatus((prev) => ({
-          ...prev,
-          completed: prev.completed + 1,
-        }));
-
-        // Small delay between downloads to avoid browser blocking
-        if (i < heicFiles.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
+        setConversionStatus((prev) => ({ ...prev, completed: prev.completed + 1 }));
+        if (i < heicFiles.length - 1) await new Promise((r) => setTimeout(r, 300));
       } catch (error) {
         console.error(`Failed to convert ${fileName}:`, error);
         failed.push(fileName);
-        setConversionStatus((prev) => ({
-          ...prev,
-          completed: prev.completed + 1,
-          failed: [...prev.failed, fileName],
-        }));
+        setConversionStatus((prev) => ({ ...prev, completed: prev.completed + 1, failed: [...prev.failed, fileName] }));
       }
     }
-
-    // Show completion notification
     setTimeout(() => {
       const successCount = heicFiles.length - failed.length;
-      if (failed.length === 0) {
-        state.addNotification('success', `Successfully converted ${successCount} HEIC file(s) to JPEG`);
-      } else {
-        state.addNotification('warning', `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`);
-      }
+      if (failed.length === 0) state.addNotification('success', `Successfully converted ${successCount} HEIC file(s) to JPEG`);
+      else state.addNotification('warning', `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`);
       setConvertingHeic(false);
       setConversionStatus({ completed: 0, total: 0, failed: [] });
     }, 1000);
@@ -302,19 +280,23 @@ function FilesPageContent() {
 
   if (status === 'loading') {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Loading...</p>
-        </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <LoadingPanel label="Loading…" />
       </div>
     );
   }
 
+  const breadcrumbItems = isGlobalSearch
+    ? null
+    : (state.currentPath || '').split('/').filter(Boolean);
+
   return (
-    <div className="w-full h-full bg-gray-900 flex overflow-hidden" onClick={contextMenu.closeContextMenu}>
-      {/* Favorites Sidebar - hidden on mobile */}
-      <div className="hidden sm:block">
+    <div
+      style={{ flex: 1, display: 'flex', overflow: 'hidden', background: 'var(--bg)', minHeight: 0 }}
+      onClick={contextMenu.closeContextMenu}
+    >
+      {/* Sidebar (desktop) */}
+      <div className="tc-sidebar-wrap">
         <FavoritesSidebar
           onNavigate={(path) => {
             setGlobalSearchQuery('');
@@ -326,283 +308,419 @@ function FilesPageContent() {
         />
       </div>
 
-      {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto w-full px-1 sm:px-1 lg:px-4 py-1 sm:py-1 pb-16 sm:pb-1 flex flex-col relative"
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minWidth: 0,
+          position: 'relative',
+        }}
         onDragOver={isGlobalSearch ? undefined : dragDrop.handleDragOver}
         onDragLeave={isGlobalSearch ? undefined : dragDrop.handleDragLeave}
         onDrop={isGlobalSearch ? undefined : (e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
       >
-        {/* Drag and Drop Overlay */}
+        {/* Drag overlay */}
         {!isGlobalSearch && state.isDragging && (
-          <div className="absolute inset-0 z-40 bg-indigo-500 bg-opacity-10 border-4 border-dashed border-indigo-500 rounded-lg flex items-center justify-center pointer-events-none">
-            <div className="bg-gray-800 rounded-lg p-8 shadow-2xl">
-              <div className="text-center">
-                <FiUpload className="mx-auto text-indigo-400 mb-4" size={64} />
-                <p className="text-2xl font-semibold text-white mb-2">Drop files here</p>
-                <p className="text-gray-400">Release to upload to current folder</p>
+          <div className="tc-drag-overlay">
+            <div style={{ textAlign: 'center', color: 'var(--accent)' }}>
+              <FiUpload size={40} style={{ marginBottom: 12 }} />
+              <div style={{ fontSize: 18, fontWeight: 700 }}>Drop files to upload</div>
+              <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
+                Files will be uploaded to current folder
               </div>
             </div>
           </div>
         )}
 
-        {/* Toolbar Navbar */}
-        <div className="sm:mt-2 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 bg-gray-800 p-2 sm:p-4 rounded-lg shadow">
-          {/* Left Group: Actions + Search */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1 bg-gray-700 rounded-lg p-1">
-              {!isGlobalSearch && (
+        {/* Toolbar */}
+        <div
+          style={{
+            minHeight: 52,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface)',
+            flexShrink: 0,
+            flexWrap: 'wrap',
+          }}
+        >
+          {!isGlobalSearch && (
+            <>
+              <label>
+                <Btn variant="primary" size="sm" disabled={state.uploading}>
+                  <FiUpload size={13} />
+                  {state.uploading ? 'Uploading…' : 'Upload'}
+                </Btn>
+                <input
+                  type="file"
+                  style={{ display: 'none' }}
+                  multiple
+                  onChange={handlers.handleUpload}
+                  disabled={state.uploading}
+                />
+              </label>
+              <Btn
+                variant="surface"
+                size="sm"
+                onClick={handlers.initiateCreateFolder}
+                disabled={state.creatingFolder}
+              >
+                <FiPlus size={13} />
+                New Folder
+              </Btn>
+              <Btn
+                variant={state.selectionMode ? 'primary' : 'surface'}
+                size="sm"
+                onClick={() => state.setSelectionMode(!state.selectionMode)}
+              >
+                <FiCheckSquare size={13} />
+                {state.selectionMode ? 'Selecting' : 'Select'}
+              </Btn>
+
+              {state.selectionMode && (
                 <>
-                  {/* Upload Button */}
-                  <label className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 cursor-pointer text-xs sm:text-base transition-colors">
-                    <FiUpload size={16} />
-                    <span className="hidden sm:inline">{state.uploading ? 'Uploading...' : 'Upload'}</span>
-                    <input type="file" className="hidden" multiple onChange={handlers.handleUpload} disabled={state.uploading} />
-                  </label>
-
-                  {/* Selection Mode */}
-                  <button
-                    onClick={() => state.setSelectionMode(!state.selectionMode)}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors ${state.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
-                  >
-                    <FiCheckSquare size={16} />
-                    <span className="hidden sm:inline">{state.selectionMode ? 'Selecting' : 'Select'}</span>
-                  </button>
-
-                  {state.selectionMode && (
+                  <Divider vertical />
+                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
+                    {state.selectedFiles.length} selected
+                  </span>
+                  <IconBtn
+                    icon={FiDownload}
+                    title="Download selected"
+                    disabled={state.selectedFiles.length === 0 || bulkDeleting}
+                    onClick={handleBulkDownload}
+                  />
+                  <IconBtn
+                    icon={FiFolder}
+                    title="Move selected"
+                    disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
+                    onClick={() => setMoveModalOpen(true)}
+                  />
+                  {bulkDeleteConfirming ? (
                     <>
-                      <button
-                        onClick={() => setMoveModalOpen(true)}
-                        disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
-                        className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <FiFolder size={16} />
-                        <span className="hidden sm:inline">Move ({state.selectedFiles.length})</span>
-                      </button>
-
-                      <button
-                        onClick={handleBulkDownload}
-                        disabled={state.selectedFiles.length === 0 || bulkDeleting}
-                        className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <FiDownload size={16} />
-                        <span className="hidden sm:inline">Download ({state.selectedFiles.length})</span>
-                      </button>
-
-                      {bulkDeleteConfirming ? (
-                        <>
-                          <span className="hidden sm:inline text-xs text-red-400 px-1">Delete {state.selectedFiles.length} item(s)?</span>
-                          <button
-                            onClick={handleBulkDelete}
-                            disabled={bulkDeleting}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-red-400 hover:bg-red-500/20 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {bulkDeleting ? 'Deleting…' : 'Confirm'}
-                          </button>
-                          <button
-                            onClick={() => setBulkDeleteConfirming(false)}
-                            disabled={bulkDeleting}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => setBulkDeleteConfirming(true)}
-                          disabled={state.selectedFiles.length === 0 || bulkDeleting}
-                          className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <FiTrash2 size={16} />
-                          <span className="hidden sm:inline">Delete ({state.selectedFiles.length})</span>
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {/* HEIC to JPEG Conversion Button */}
-                  {hasHeicFiles && (
-                    <button
-                      onClick={handleConvertHeicToJpeg}
-                      disabled={convertingHeic}
-                      className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-xs sm:text-base transition-colors text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={`Convert ${heicFiles.length} HEIC file(s) to JPEG`}
-                    >
-                      <FiImage size={16} />
-                      <span className="hidden sm:inline">
-                        {convertingHeic ? `Converting ${conversionStatus.completed}/${conversionStatus.total}...` : `HEIC→JPEG (${heicFiles.length})`}
+                      <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
+                        Delete {state.selectedFiles.length}?
                       </span>
-                      <span className="sm:hidden">{convertingHeic ? `${conversionStatus.completed}/${conversionStatus.total}` : `HEIC→JPEG`}</span>
-                    </button>
+                      <Btn variant="danger" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                        {bulkDeleting ? 'Deleting…' : 'Confirm'}
+                      </Btn>
+                      <Btn variant="ghost" size="sm" onClick={() => setBulkDeleteConfirming(false)} disabled={bulkDeleting}>
+                        Cancel
+                      </Btn>
+                    </>
+                  ) : (
+                    <IconBtn
+                      icon={FiTrash2}
+                      title="Delete selected"
+                      danger
+                      disabled={state.selectedFiles.length === 0 || bulkDeleting}
+                      onClick={() => setBulkDeleteConfirming(true)}
+                    />
                   )}
-
-                  {/* New Folder Button */}
-                  <button
-                    onClick={handlers.initiateCreateFolder}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-2 rounded text-gray-300 hover:bg-gray-600 text-xs sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={state.creatingFolder}
-                  >
-                    <FiPlus size={16} />
-                    <span className="hidden sm:inline">New Folder</span>
-                  </button>
                 </>
               )}
 
-              {isGlobalSearch && (
-                <span className="flex items-center gap-2 px-3 py-1 sm:py-2 text-xs sm:text-base text-indigo-400">
-                  <FiSearch size={16} />
-                  <span className="hidden sm:inline">Search Results ({searchFiles.length})</span>
-                </span>
+              {hasHeicFiles && (
+                <Btn variant="surface" size="sm" onClick={handleConvertHeicToJpeg} disabled={convertingHeic}>
+                  <FiImage size={13} />
+                  {convertingHeic
+                    ? `Converting ${conversionStatus.completed}/${conversionStatus.total}…`
+                    : `HEIC → JPEG (${heicFiles.length})`}
+                </Btn>
               )}
+            </>
+          )}
 
-              <button
-                onClick={navigation.goBack}
-                disabled={!navigation.canGoBack}
-                className={`p-2 rounded ${!navigation.canGoBack ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-600'}`}
-                title="Go Back"
-              >
-                <FiArrowLeft size={20} />
-              </button>
-              <button
-                onClick={navigation.goForward}
-                disabled={!navigation.canGoForward}
-                className={`p-2 rounded ${!navigation.canGoForward ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-600'}`}
-                title="Go Forward"
-              >
-                <FiArrowRight size={20} />
-              </button>
+          {isGlobalSearch && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>
+              <FiSearch size={14} />
+              Search Results ({searchFiles.length})
+            </span>
+          )}
 
-              <button
-                onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
-                className="p-2 text-gray-400 hover:bg-gray-600 rounded"
-                title="Refresh"
-              >
-                <FiRefreshCw size={20} />
-              </button>
-            </div>
+          <Divider vertical />
+          <IconBtn icon={FiArrowLeft} title="Back" onClick={navigation.goBack} disabled={!navigation.canGoBack} />
+          <IconBtn icon={FiArrowRight} title="Forward" onClick={navigation.goForward} disabled={!navigation.canGoForward} />
+          <IconBtn
+            icon={FiRefreshCw}
+            title="Refresh"
+            onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
+          />
 
-            {/* Search Input - hidden on mobile */}
-            <div className="relative hidden sm:flex flex-1 sm:flex-none min-w-0 sm:min-w-48 items-center px-3 bg-gray-700 rounded-lg">
-              <FiSearch className="absolute text-gray-400 flex-shrink-0" size={16} />
-              <input
-                type="text"
-                value={state.searchQuery}
-                onChange={(e) => state.setSearchQuery(e.target.value)}
-                placeholder="Filter..."
-                className="w-full pl-6 pr-2 py-1 sm:py-2 bg-transparent text-white text-xs sm:text-base placeholder-gray-400 focus:outline-none"
-              />
-            </div>
+          {/* Filter input */}
+          <div
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-sm)',
+              padding: '4px 10px',
+              minWidth: 200,
+            }}
+            data-show-filter
+          >
+            <FiSearch size={13} color="var(--text-3)" />
+            <input
+              type="text"
+              value={state.searchQuery}
+              onChange={(e) => state.setSearchQuery(e.target.value)}
+              placeholder="Filter…"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                fontSize: 12,
+                color: 'var(--text)',
+                outline: 'none',
+                fontFamily: 'inherit',
+                minWidth: 0,
+                flex: 1,
+              }}
+            />
+            {state.searchQuery && (
+              <button
+                onClick={() => state.setSearchQuery('')}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', padding: 0 }}
+              >
+                <FiX size={12} />
+              </button>
+            )}
           </div>
 
-          {/* Right Group: Sort, Back, Refresh, View Toggle */}
-          <div className="flex gap-1 sm:gap-2 flex-wrap items-center ml-auto">
-            {/* Sort Dropdown */}
-            <div className="bg-gray-700 rounded-lg p-1">
-              <select
-                value={state.sortBy}
-                onChange={(e) => state.setSortBy(e.target.value)}
-                className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-base bg-transparent text-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-desc">Date (New)</option>
-                <option value="date-asc">Date (Old)</option>
-                <option value="size-desc">Size (Big)</option>
-                <option value="size-asc">Size (Small)</option>
-              </select>
-            </div>
+          <div style={{ flex: 1 }} />
 
-            {/* View Toggle */}
-            <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => state.setViewMode('list')}
-                className={`p-2 rounded ${state.viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-400'}`}
-                title="List View"
-              >
-                <FiList size={20} />
-              </button>
-              <button
-                onClick={() => state.setViewMode('grid')}
-                className={`p-2 rounded ${state.viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-gray-400'}`}
-                title="Grid View"
-              >
-                <FiGrid size={20} />
-              </button>
-            </div>
+          <select
+            value={state.sortBy}
+            onChange={(e) => state.setSortBy(e.target.value)}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 12,
+              padding: '6px 10px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              borderRadius: 'var(--r-sm)',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="name-asc">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+            <option value="date-desc">Date (New)</option>
+            <option value="date-asc">Date (Old)</option>
+            <option value="size-desc">Size (Big)</option>
+            <option value="size-asc">Size (Small)</option>
+          </select>
+
+          <Divider vertical />
+
+          <div
+            style={{
+              display: 'flex',
+              background: 'var(--surface-2)',
+              borderRadius: 'var(--r-sm)',
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            <IconBtn icon={FiGrid} title="Grid view" onClick={() => state.setViewMode('grid')} active={state.viewMode === 'grid'} width={26} height={26} size={14} />
+            <IconBtn icon={FiList} title="List view" onClick={() => state.setViewMode('list')} active={state.viewMode === 'list'} width={26} height={26} size={14} />
           </div>
         </div>
 
-        {/* Breadcrumb Navigation */}
-        <div className="mb-1 mt-1 sm:mb-2 flex items-center gap-2 sm:gap-3  text-gray-400">
+        {/* Breadcrumb */}
+        <div
+          style={{
+            padding: '0 16px',
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            flexShrink: 0,
+            background: 'var(--surface)',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
           <button
             onClick={() => {
               setGlobalSearchQuery('');
               navigation.navigateToBreadcrumb(0);
             }}
-            className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 13,
+              fontWeight: 500,
+              color: !breadcrumbItems?.length && !isGlobalSearch ? 'var(--text)' : 'var(--text-3)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 6px',
+              borderRadius: 'var(--r-xs)',
+              fontFamily: 'inherit',
+            }}
           >
-            <FiHome size={16} />
-            <span className="hidden sm:inline">Home</span>
+            <FiHome size={13} />
+            Home
           </button>
           {isGlobalSearch ? (
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
-              <span className="font-medium text-white">Search: &quot;{globalSearchQuery}&quot;</span>
-            </div>
+            <>
+              <FiChevronRight size={13} color="var(--text-3)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                Search: &quot;{globalSearchQuery}&quot;
+              </span>
+            </>
           ) : (
-            state.currentPath &&
-            state.currentPath.split('/').map((folder, index, arr) => {
-              const displayName = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
+            breadcrumbItems?.map((folder, i) => {
+              const isLast = i === breadcrumbItems.length - 1;
+              const display = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
               return (
-                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
-                  <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <FiChevronRight size={13} color="var(--text-3)" />
                   <button
-                    onClick={() => navigation.navigateToBreadcrumb(index + 1)}
-                    className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
+                    onClick={() => navigation.navigateToBreadcrumb(i + 1)}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: isLast ? 600 : 500,
+                      color: isLast ? 'var(--text)' : 'var(--text-3)',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      borderRadius: 'var(--r-xs)',
+                      fontFamily: 'inherit',
+                    }}
                   >
-                    {displayName}
+                    {display}
                   </button>
-                </div>
+                </span>
               );
             })
           )}
         </div>
-        {/* File Grid */}
-        <div className="bg-gray-800 rounded-lg shadow overflow-y-auto flex-grow-1 flex flex-col">
-          {state.viewMode === 'list' ? (
-            /* List View with Virtual Scrolling */
-            <div className="overflow-hidden flex-grow flex flex-col">
-              {!isGlobalSearch && state.isLoading ? (
-                <div className="flex items-center justify-center flex-grow">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2  text-gray-400">Loading files...</p>
-                  </div>
-                </div>
-              ) : displayFiles.length === 0 && !state.creatingFolder ? (
-                <div className="flex items-center justify-center flex-grow text-gray-400">{isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'}</div>
-              ) : (
-                <div className="flex flex-col flex-grow overflow-hidden">
-                  <div className="flex-shrink-0 bg-gray-700 border-b border-gray-700">
-                    <div className={`grid ${isGlobalSearch ? 'grid-cols-[1fr_1fr_150px]' : 'grid-cols-[1fr_150px_150px_200px]'} gap-4 px-6 py-3`}>
-                      <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</div>
-                      {isGlobalSearch && <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Path</div>}
-                      <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Size</div>
-                      {!isGlobalSearch && <div className="text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modified</div>}
-                      {!isGlobalSearch && <div className="text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</div>}
-                    </div>
-                  </div>
-                  <Suspense
-                    fallback={
-                      <div className="flex items-center justify-center flex-grow">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+
+        {/* Files area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, padding: '12px 16px 16px' }}>
+          <div
+            style={{
+              flex: 1,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-lg)',
+              boxShadow: 'var(--shadow-sm)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+            }}
+          >
+            {state.viewMode === 'list' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                {!isGlobalSearch && state.isLoading ? (
+                  <LoadingPanel label="Loading files…" />
+                ) : displayFiles.length === 0 && !state.creatingFolder ? (
+                  <EmptyState label={isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'} />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        background: 'var(--surface-2)',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: isGlobalSearch ? '1fr 1fr 150px' : '1fr 150px 150px 200px',
+                          gap: 16,
+                          padding: '10px 24px',
+                        }}
+                      >
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Name</div>
+                        {isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Path</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Size</div>
+                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Modified</div>}
+                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</div>}
                       </div>
-                    }
-                  >
-                    <ListView
-                      ref={listViewRef}
+                    </div>
+                    <Suspense fallback={<LoadingPanel />}>
+                      <ListView
+                        ref={listViewRef}
+                        files={displayFiles}
+                        creatingFolder={state.creatingFolder}
+                        newFolderName={state.newFolderName}
+                        onNewFolderNameChange={state.setNewFolderName}
+                        onCancelCreateFolder={handlers.cancelCreateFolder}
+                        onConfirmCreateFolder={handlers.confirmCreateFolder}
+                        deletingFile={state.deletingFile}
+                        renamingFile={state.renamingFile}
+                        newFileName={state.newFileName}
+                        setNewFileName={state.setNewFileName}
+                        cancelDelete={handlers.cancelDelete}
+                        confirmDelete={() => handlers.confirmDelete(state.deletingFile)}
+                        cancelRename={handlers.cancelRename}
+                        confirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
+                        processingFile={state.processingFile}
+                        handleContextMenu={contextMenu.handleContextMenu}
+                        getFileIcon={fileUtils.getFileIcon}
+                        navigateToFolder={
+                          isGlobalSearch
+                            ? (name, file) => {
+                                const path = file?._fullPath || file?._parentPath || name;
+                                setGlobalSearchQuery('');
+                                if (file?.isDirectory) state.setCurrentPath(path);
+                                else {
+                                  state.setCurrentPath(file?._parentPath || '');
+                                  setPendingScrollTarget(name);
+                                }
+                              }
+                            : navigation.navigateToFolder
+                        }
+                        formatFileSize={fileUtils.formatFileSize}
+                        openMediaViewer={
+                          isGlobalSearch
+                            ? (file) => {
+                                setGlobalSearchQuery('');
+                                state.setCurrentPath(file._parentPath || '');
+                                setPendingScrollTarget(file.name);
+                              }
+                            : mediaViewer.openMediaViewer
+                        }
+                        initiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
+                        handleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
+                        initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
+                        initiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
+                        sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
+                        currentPath={state.currentPath}
+                        isGlobalSearch={isGlobalSearch}
+                        selectionMode={isGlobalSearch ? false : state.selectionMode}
+                        selectedFiles={selectedFileSet}
+                        onToggleSelect={toggleSelection}
+                        onPauseDownload={state.pauseDownload}
+                        onResumeDownload={state.resumeDownload}
+                        onRemoveDownload={state.removeDownload}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                {state.isLoading ? (
+                  <LoadingPanel label="Loading files…" />
+                ) : displayFiles.length === 0 && !state.creatingFolder ? (
+                  <EmptyState label={isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'} />
+                ) : (
+                  <Suspense fallback={<LoadingPanel />}>
+                    <GridView
+                      ref={gridViewRef}
                       files={displayFiles}
-                      creatingFolder={state.creatingFolder}
+                      creatingFolder={isGlobalSearch ? false : state.creatingFolder}
                       newFolderName={state.newFolderName}
                       onNewFolderNameChange={state.setNewFolderName}
                       onCancelCreateFolder={handlers.cancelCreateFolder}
@@ -610,30 +728,25 @@ function FilesPageContent() {
                       deletingFile={state.deletingFile}
                       renamingFile={state.renamingFile}
                       newFileName={state.newFileName}
-                      setNewFileName={state.setNewFileName}
-                      cancelDelete={handlers.cancelDelete}
-                      confirmDelete={() => handlers.confirmDelete(state.deletingFile)}
-                      cancelRename={handlers.cancelRename}
-                      confirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
+                      onNewFileNameChange={state.setNewFileName}
+                      onCancelRename={handlers.cancelRename}
+                      onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
                       processingFile={state.processingFile}
-                      handleContextMenu={contextMenu.handleContextMenu}
-                      getFileIcon={fileUtils.getFileIcon}
-                      navigateToFolder={
+                      currentPath={state.currentPath}
+                      onNavigateToFolder={
                         isGlobalSearch
                           ? (name, file) => {
-                              const path = file?._fullPath || file?._parentPath || name;
+                              const item = displayFiles.find((f) => f.name === name) || file;
                               setGlobalSearchQuery('');
-                              if (file?.isDirectory) {
-                                state.setCurrentPath(path);
-                              } else {
-                                state.setCurrentPath(file?._parentPath || '');
+                              if (item?.isDirectory) state.setCurrentPath(item._fullPath || item._parentPath || name);
+                              else {
+                                state.setCurrentPath(item?._parentPath || '');
                                 setPendingScrollTarget(name);
                               }
                             }
                           : navigation.navigateToFolder
                       }
-                      formatFileSize={fileUtils.formatFileSize}
-                      openMediaViewer={
+                      onOpenMediaViewer={
                         isGlobalSearch
                           ? (file) => {
                               setGlobalSearchQuery('');
@@ -642,108 +755,64 @@ function FilesPageContent() {
                             }
                           : mediaViewer.openMediaViewer
                       }
-                      initiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
-                      handleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
-                      initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
-                      initiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
+                      onInitiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
+                      onHandleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
+                      onInitiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
+                      onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
+                      onCancelDelete={handlers.cancelDelete}
+                      formatFileSize={fileUtils.formatFileSize}
+                      onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
+                      onInitiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
                       sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
-                      currentPath={state.currentPath}
-                      isGlobalSearch={isGlobalSearch}
                       selectionMode={isGlobalSearch ? false : state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
                       onPauseDownload={state.pauseDownload}
                       onResumeDownload={state.resumeDownload}
                       onRemoveDownload={state.removeDownload}
+                      isGlobalSearch={isGlobalSearch}
                     />
                   </Suspense>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Grid View with Virtual Scrolling */
-            <div className="p-0 flex flex-col flex-grow overflow-hidden min-h-0">
-              {state.isLoading ? (
-                <div className="flex items-center justify-center flex-grow">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2  text-gray-400">Loading files...</p>
-                  </div>
-                </div>
-              ) : displayFiles.length === 0 && !state.creatingFolder ? (
-                <div className="text-center py-12 text-gray-400">{isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'}</div>
-              ) : (
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center flex-grow">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                    </div>
-                  }
-                >
-                  <GridView
-                    ref={gridViewRef}
-                    files={displayFiles}
-                    creatingFolder={isGlobalSearch ? false : state.creatingFolder}
-                    newFolderName={state.newFolderName}
-                    onNewFolderNameChange={state.setNewFolderName}
-                    onCancelCreateFolder={handlers.cancelCreateFolder}
-                    onConfirmCreateFolder={handlers.confirmCreateFolder}
-                    deletingFile={state.deletingFile}
-                    renamingFile={state.renamingFile}
-                    newFileName={state.newFileName}
-                    onNewFileNameChange={state.setNewFileName}
-                    onCancelRename={handlers.cancelRename}
-                    onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
-                    processingFile={state.processingFile}
-                    currentPath={state.currentPath}
-                    onNavigateToFolder={
-                      isGlobalSearch
-                        ? (name, file) => {
-                            const item = displayFiles.find((f) => f.name === name) || file;
-                            setGlobalSearchQuery('');
-                            if (item?.isDirectory) {
-                              state.setCurrentPath(item._fullPath || item._parentPath || name);
-                            } else {
-                              state.setCurrentPath(item?._parentPath || '');
-                              setPendingScrollTarget(name);
-                            }
-                          }
-                        : navigation.navigateToFolder
-                    }
-                    onOpenMediaViewer={
-                      isGlobalSearch
-                        ? (file) => {
-                            setGlobalSearchQuery('');
-                            state.setCurrentPath(file._parentPath || '');
-                            setPendingScrollTarget(file.name);
-                          }
-                        : mediaViewer.openMediaViewer
-                    }
-                    onInitiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
-                    onHandleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
-                    onInitiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
-                    onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
-                    onCancelDelete={handlers.cancelDelete}
-                    formatFileSize={fileUtils.formatFileSize}
-                    onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
-                    onInitiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
-                    sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
-                    selectionMode={isGlobalSearch ? false : state.selectionMode}
-                    selectedFiles={selectedFileSet}
-                    onToggleSelect={toggleSelection}
-                    onPauseDownload={state.pauseDownload}
-                    onResumeDownload={state.resumeDownload}
-                    onRemoveDownload={state.removeDownload}
-                    isGlobalSearch={isGlobalSearch}
-                  />
-                </Suspense>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
-      {/* Context Menu */}
+      {/* Mobile search bar */}
+      <div className="tc-mobile-search">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-md)',
+            padding: '8px 12px',
+            gap: 8,
+          }}
+        >
+          <FiSearch size={14} color="var(--text-3)" />
+          <input
+            type="text"
+            value={state.searchQuery}
+            onChange={(e) => state.setSearchQuery(e.target.value)}
+            placeholder="Search files…"
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              color: 'var(--text)',
+              outline: 'none',
+              fontFamily: 'inherit',
+              minWidth: 0,
+            }}
+          />
+        </div>
+      </div>
+
       <ContextMenu
         contextMenu={state.contextMenu}
         file={state.selectedContextFile}
@@ -752,9 +821,7 @@ function FilesPageContent() {
           navigation.navigateToFolder(state.selectedContextFile.name);
           contextMenu.closeContextMenu();
         }}
-        onRename={() => {
-          handlers.initiateRename(state.selectedContextFile);
-        }}
+        onRename={() => handlers.initiateRename(state.selectedContextFile)}
         onDownload={() => {
           fileUtils.handleDownload(state.selectedContextFile.id, state.selectedContextFile.name);
           contextMenu.closeContextMenu();
@@ -777,15 +844,20 @@ function FilesPageContent() {
         }}
         onToggleFavorite={async () => {
           if (state.selectedContextFile) {
-            const fullPath = state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name;
+            const fullPath = state.currentPath
+              ? `${state.currentPath}/${state.selectedContextFile.name}`
+              : state.selectedContextFile.name;
             try {
               await toggleFavorite({
                 path: fullPath,
                 name: state.selectedContextFile.name,
                 isDirectory: state.selectedContextFile.isDirectory,
               });
-              state.addNotification('success', favorites.some((f) => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites');
-            } catch (error) {
+              state.addNotification(
+                'success',
+                favorites.some((f) => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites',
+              );
+            } catch {
               state.addNotification('error', 'Failed to update favorites');
             }
           }
@@ -793,13 +865,15 @@ function FilesPageContent() {
         }}
         isFavorite={
           state.selectedContextFile
-            ? favorites.some((f) => f.path === (state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name))
+            ? favorites.some(
+                (f) =>
+                  f.path === (state.currentPath ? `${state.currentPath}/${state.selectedContextFile.name}` : state.selectedContextFile.name),
+              )
             : false
         }
         onClose={contextMenu.closeContextMenu}
       />
 
-      {/* Media Viewer Modal */}
       <Suspense fallback={null}>
         <MediaViewer
           viewerFile={state.viewerFile}
@@ -811,31 +885,14 @@ function FilesPageContent() {
         />
       </Suspense>
 
-      {/* Mobile Search Bar - fixed at bottom, semi-transparent */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-2 bg-gray-800/80 backdrop-blur-sm border-t border-gray-700 z-30">
-        <div className="relative flex items-center bg-gray-700 rounded-lg px-3 py-2">
-          <FiSearch className="text-gray-400 flex-shrink-0 mr-2" size={16} />
-          <input
-            type="text"
-            value={state.searchQuery}
-            onChange={(e) => state.setSearchQuery(e.target.value)}
-            placeholder="Search files..."
-            className="w-full bg-transparent text-white text-sm placeholder-gray-400 focus:outline-none"
-          />
-        </div>
-      </div>
-
-      {/* Upload/Download Status */}
       <UploadStatus transfers={state.transfers} uploads={state.uploads} />
 
-      {/* Share Modal */}
       {state.sharingFile && (
         <Suspense fallback={null}>
           <ShareModal file={state.sharingFile} currentPath={state.currentPath} onClose={handlers.cancelShare} />
         </Suspense>
       )}
 
-      {/* Move Modal */}
       {moveModalOpen && (
         <Suspense fallback={null}>
           <MoveModal
@@ -848,20 +905,36 @@ function FilesPageContent() {
           />
         </Suspense>
       )}
+
+      <style jsx>{`
+        .tc-sidebar-wrap { display: none; }
+        .tc-mobile-search {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+          background: color-mix(in oklab, var(--surface) 90%, transparent);
+          backdrop-filter: blur(6px);
+          border-top: 1px solid var(--border);
+          z-index: 30;
+        }
+        @media (min-width: 640px) {
+          .tc-sidebar-wrap { display: block; }
+          .tc-mobile-search { display: none; }
+          [data-show-filter] { display: flex !important; }
+        }
+      `}</style>
     </div>
   );
 }
 
-// Wrap with Suspense for useSearchParams
 export default function FilesPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex items-center justify-center bg-gray-900">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-400">Loading...</p>
-          </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+          <LoadingPanel />
         </div>
       }
     >

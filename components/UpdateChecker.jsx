@@ -2,22 +2,24 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { FiX, FiRefreshCw } from 'react-icons/fi';
 import Confirm from '@/components/Confirm';
+import Btn from '@/components/ui/Btn';
+import IconBtn from '@/components/ui/IconBtn';
 import { useCheckUpdates, useRunUpdate } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { FiWifi, FiWifiOff } from 'react-icons/fi';
 
 const DISMISSED_VERSION_KEY = 'update_dismissed_version';
 
 export default function UpdateChecker() {
-  const { data: updateInfo, isLoading } = useCheckUpdates(true); // Auto-check on first load
+  const { data: updateInfo } = useCheckUpdates(true);
   const runUpdateMutation = useRunUpdate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
-  const { connected, subscribe } = useWebSocket();
+  const { subscribe } = useWebSocket();
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -27,16 +29,10 @@ export default function UpdateChecker() {
     }
   }, [updateInfo]);
 
-  // Subscribe to update status messages from unified WebSocket
   useEffect(() => {
     const unsubscribe = subscribe('update-status', (message) => {
-      try {
-        setUpdateStatus(message.payload);
-      } catch (err) {
-        console.error('Error processing update status message:', err);
-      }
+      try { setUpdateStatus(message.payload); } catch {}
     });
-
     return unsubscribe;
   }, [subscribe]);
 
@@ -49,7 +45,7 @@ export default function UpdateChecker() {
     try {
       const result = await runUpdateMutation.mutateAsync();
       if (result.success) {
-        addNotification('success', 'Update started. The server will restart shortly...');
+        addNotification('success', 'Update started. The server will restart shortly…');
         setShowConfirm(false);
       }
     } catch (error) {
@@ -58,67 +54,126 @@ export default function UpdateChecker() {
     }
   };
 
-  if (!updateInfo?.hasUpdate || dismissed) {
-    return null;
-  }
+  if (!updateInfo?.hasUpdate || dismissed) return null;
 
   return (
-    <>
-      <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 rounded-lg shadow-lg p-4 max-w-sm z-50">
-        <button
-          onClick={handleDismiss}
-          className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 transition-colors"
-          aria-label="Dismiss"
+    <div
+      className="tc-anim-slide"
+      style={{
+        position: 'fixed',
+        bottom: 16,
+        right: 16,
+        zIndex: 5500,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderLeft: '3px solid var(--accent)',
+        borderRadius: 'var(--r-md)',
+        boxShadow: 'var(--shadow-xl)',
+        padding: 14,
+        maxWidth: 360,
+        width: 'calc(100vw - 32px)',
+      }}
+    >
+      <div style={{ position: 'absolute', top: 6, right: 6 }}>
+        <IconBtn icon={FiX} title="Dismiss" onClick={handleDismiss} width={26} height={26} size={13} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingRight: 24 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 'var(--r-sm)',
+            background: 'var(--accent-light)',
+            color: 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <h3 className="font-semibold text-blue-900">Update Available</h3>
-            <p className="text-sm text-blue-700 mt-1">
-              {updateInfo.currentVersion} → {updateInfo.latestVersion}
-            </p>
+          <FiRefreshCw size={14} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Update available</div>
+          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {updateInfo.currentVersion} → {updateInfo.latestVersion}
+          </div>
 
-            {/* Update Status from WebSocket */}
-            {updateStatus && updateStatus.isRunning && (
-              <div className="mt-2 p-2 bg-blue-100 rounded border border-blue-300">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="animate-pulse w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <p className="text-xs font-medium text-blue-800">Update in progress...</p>
-                </div>
-                <p className="text-xs text-blue-700">
-                  Step {updateStatus.steps.filter(s => s.status === 'completed').length + (updateStatus.steps.findIndex(s => s.status === 'running') >= 0 ? 1 : 0)}/{updateStatus.steps.length}
-                </p>
+          {updateStatus?.isRunning && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                background: 'var(--accent-light)',
+                border: '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
+                borderRadius: 'var(--r-sm)',
+                fontSize: 11,
+                color: 'var(--accent)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 99,
+                    background: 'var(--accent)',
+                    animation: 'tc-pulse 1.2s ease infinite',
+                  }}
+                />
+                <span style={{ fontWeight: 600 }}>Update in progress…</span>
               </div>
-            )}
+              <div>
+                Step {updateStatus.steps.filter((s) => s.status === 'completed').length +
+                  (updateStatus.steps.findIndex((s) => s.status === 'running') >= 0 ? 1 : 0)}
+                /{updateStatus.steps.length}
+              </div>
+            </div>
+          )}
 
-            {updateInfo.releaseNotes && (
-              <details className="mt-2 text-xs text-blue-600">
-                <summary className="cursor-pointer hover:text-blue-700">Release notes</summary>
-                <div className="mt-2 p-2 bg-white rounded border border-blue-100 max-h-40 overflow-y-auto whitespace-pre-wrap break-words">{updateInfo.releaseNotes}</div>
-              </details>
+          {updateInfo.releaseNotes && (
+            <details style={{ marginTop: 8, fontSize: 11, color: 'var(--text-2)' }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--accent)' }}>Release notes</summary>
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: 8,
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  maxHeight: 160,
+                  overflowY: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {updateInfo.releaseNotes}
+              </div>
+            </details>
+          )}
+
+          <div style={{ marginTop: 10 }}>
+            {!showConfirm ? (
+              <Btn
+                variant="primary"
+                size="sm"
+                disabled={runUpdateMutation.isPending}
+                onClick={() => setShowConfirm(true)}
+              >
+                {runUpdateMutation.isPending ? 'Updating…' : 'Update now'}
+              </Btn>
+            ) : (
+              <Confirm
+                message="Update? The server will restart automatically."
+                onCancel={() => setShowConfirm(false)}
+                onConfirm={handleUpdate}
+                isLoading={runUpdateMutation.isPending}
+              />
             )}
           </div>
-          {!showConfirm ? (
-            <button
-              onClick={() => setShowConfirm(true)}
-              disabled={runUpdateMutation.isPending}
-              className="flex-shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors"
-            >
-              {runUpdateMutation.isPending ? 'Updating...' : 'Update Now'}
-            </button>
-          ) : (
-            <Confirm
-              message="Are you sure you want to update? The server will restart automatically."
-              onCancel={() => setShowConfirm(false)}
-              onConfirm={handleUpdate}
-              isLoading={runUpdateMutation.isPending}
-            />
-          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

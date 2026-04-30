@@ -4,14 +4,202 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { FiClock, FiAlertTriangle, FiDownload } from 'react-icons/fi';
 
 function getExt(filename) {
   const dot = filename.lastIndexOf('.');
   return dot >= 0 ? filename.slice(dot).toLowerCase() : '';
 }
 
+/* ─── Visual atoms (token-aware) ────────────────────────── */
+
+function StateInitial() {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="mv-video-state-card" style={{ padding: '24px 32px', display: 'flex', alignItems: 'center', gap: 16, minWidth: 320 }}>
+        <div className="mv-spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Initialising player…</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>Checking format compatibility</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatePending() {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        className="mv-video-state-card"
+        style={{ padding: '28px 36px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 320 }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            background: 'var(--accent-light)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <FiClock size={24} color="var(--accent)" />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Queued for transcoding</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>Your video will be processed shortly</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="mv-video-pending-dot" />
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--warning)', letterSpacing: '0.04em' }}>PENDING</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StateDisabled({ onDownload }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        className="mv-video-state-card"
+        style={{
+          padding: '28px 36px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          maxWidth: 380,
+          background: 'var(--warning-light)',
+          borderColor: 'var(--warning)',
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            background: 'rgba(245,158,11,0.18)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <FiAlertTriangle size={24} color="var(--warning)" />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Playback disabled</div>
+          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4, lineHeight: 1.5 }}>
+            Video transcoding is disabled on this server. Download the file to play locally.
+          </div>
+        </div>
+        <button
+          onClick={onDownload}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--warning)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            padding: '8px 18px',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          <FiDownload size={14} /> Download file
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StateFailed({ onDownload, onRetry }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        className="mv-video-state-card"
+        style={{
+          padding: '28px 36px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          maxWidth: 380,
+          background: 'var(--danger-light)',
+          borderColor: 'var(--danger)',
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            background: 'rgba(239,68,68,0.18)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <FiAlertTriangle size={24} color="var(--danger)" />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Transcoding failed</div>
+          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4, lineHeight: 1.5 }}>
+            An error occurred while processing this video. Please try re-uploading or check server logs.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onRetry}
+            style={{
+              background: 'var(--surface)',
+              color: 'var(--danger)',
+              border: '1px solid var(--danger)',
+              borderRadius: 8,
+              padding: '7px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Retry
+          </button>
+          <button
+            onClick={onDownload}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--danger)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '7px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <FiDownload size={13} /> Download
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Player ─────────────────────────────────────────────── */
+
 export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
-  const [status, setStatus] = useState(null); // null = initial load
+  const [status, setStatus] = useState(null); // null | 'pending' | 'transcoding' | 'ready' | 'native' | 'disabled' | 'failed'
   const [progress, setProgress] = useState(0);
   const [hlsUrl, setHlsUrl] = useState(null);
   const pollRef = useRef(null);
@@ -19,47 +207,36 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const mountedRef = useRef(true);
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  // Abort controller for the fire-and-forget transcode trigger fetch.
-  // Stored in a ref so we can abort it when the component unmounts (e.g. rapid scroll).
   const triggerAbortRef = useRef(null);
 
   const fileExt = getExt(file.name);
   const streamUrl = getFileUrl(file, 'video');
 
-  // Reset state synchronously before paint when the file changes so stale
-  // 'native'/'ready' status never briefly renders with the new file's stream URL
-  // (which would fire a premature GET /stream request before the first status poll).
   useLayoutEffect(() => {
     setStatus(null);
     setProgress(0);
     setHlsUrl(null);
   }, [file.id]);
 
-  // ─── hls.js lifecycle ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!hlsUrl || !videoRef.current) return;
+    if (!hlsUrl || !videoRef.current) return undefined;
 
-    // Safari / iOS have native HLS support — use it directly
     if (!Hls.isSupported()) {
       videoRef.current.src = hlsUrl;
-      return;
+      return undefined;
     }
 
-    // Destroy any existing instance before creating a new one
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
     const hls = new Hls({
-      // Allow hls.js to start loading the manifest even during live transcode
       liveSyncDurationCount: 3,
-      // Tolerate manifest parse errors gracefully (playlist still growing)
       manifestLoadingTimeOut: 10000,
       manifestLoadingMaxRetry: 6,
       manifestLoadingRetryDelay: 1000,
     });
-
     hls.loadSource(hlsUrl);
     hls.attachMedia(videoRef.current);
     hlsRef.current = hls;
@@ -70,30 +247,26 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     };
   }, [hlsUrl]);
 
-  // ─── Status polling ───────────────────────────────────────────────────────
-  const checkStatus = useCallback(async (signal) => {
-    try {
-      const params = new URLSearchParams({ path: currentPath || '' });
-      const res = await fetch(
-        `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`,
-        { signal }
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (!mountedRef.current) return null;
-      setStatus(data.status);
-      if (data.progress !== undefined) setProgress(data.progress);
-      if (data.hlsUrl) setHlsUrl(data.hlsUrl);
-      return data.status;
-    } catch (err) {
-      if (err.name === 'AbortError') return null;
-      return null;
-    }
-  }, [file.id, currentPath]);
+  const checkStatus = useCallback(
+    async (signal) => {
+      try {
+        const params = new URLSearchParams({ path: currentPath || '' });
+        const res = await fetch(`/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`, { signal });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!mountedRef.current) return null;
+        setStatus(data.status);
+        if (data.progress !== undefined) setProgress(data.progress);
+        if (data.hlsUrl) setHlsUrl(data.hlsUrl);
+        return data.status;
+      } catch (err) {
+        if (err.name === 'AbortError') return null;
+        return null;
+      }
+    },
+    [file.id, currentPath],
+  );
 
-  // Fire-and-forget the stream route to kick off the HLS transcode job.
-  // Uses an AbortController stored in triggerAbortRef so it can be cancelled
-  // on unmount — preventing orphaned ffprobe/ffmpeg processes on the server.
   const triggerTranscode = useCallback(() => {
     if (triggeredRef.current) return;
     triggeredRef.current = true;
@@ -106,55 +279,37 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     mountedRef.current = true;
     triggeredRef.current = false;
 
-    // Share links bypass auth — serve directly without status check
     if (shareToken) {
       setStatus('native');
-      return;
+      return undefined;
     }
 
-    // Single AbortController covers both status-check fetches and the poll loop.
     const ac = new AbortController();
     let debounceTimer = null;
 
     const poll = async () => {
       const s = await checkStatus(ac.signal);
       if (ac.signal.aborted) return;
-
       if (s === 'pending') {
         triggerTranscode();
         pollRef.current = setTimeout(poll, 3000);
       } else if (s === 'transcoding') {
-        // Kick off on-demand full transcode if not already running.
-        // This covers the pre-cached case: the worker only generated the first
-        // N segments, so when the user opens the video we start the full job.
         triggerTranscode();
-        // Continue polling to update progress and catch the transition to 'ready'
         pollRef.current = setTimeout(poll, 3000);
       } else if (s === null) {
-        // Network failure (e.g. server temporarily overloaded) — retry after a
-        // longer delay rather than leaving the user stuck on a spinner forever.
         pollRef.current = setTimeout(poll, 5000);
       }
-      // ready / native / disabled → stop polling
     };
 
-    // Debounce: wait 400ms before starting work on this file.
-    // When the user scrolls rapidly, they navigate away before the timer fires,
-    // so no status check or transcode trigger is ever sent to the server.
-    // This prevents a flood of ffprobe/ffmpeg subprocess spawns that exhaust
-    // the OS file-descriptor limit and produce ECONNREFUSED errors.
     debounceTimer = setTimeout(() => {
-      if (!ac.signal.aborted) {
-        poll();
-      }
+      if (!ac.signal.aborted) poll();
     }, 400);
 
     return () => {
-      ac.abort(); // cancels in-flight status-check fetches
+      ac.abort();
       mountedRef.current = false;
       clearTimeout(pollRef.current);
       clearTimeout(debounceTimer);
-      // Cancel the trigger fetch so the server can stop the expensive probing
       if (triggerAbortRef.current) {
         triggerAbortRef.current.abort();
         triggerAbortRef.current = null;
@@ -162,103 +317,109 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     };
   }, [file.id, fileExt, shareToken, checkStatus, triggerTranscode]);
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  const onDownload = () => {
+    const url = getFileUrl(file, 'download');
+    window.open(url, '_blank');
+  };
+  const onRetry = () => {
+    setStatus(null);
+    setProgress(0);
+    setHlsUrl(null);
+    triggeredRef.current = false;
+    checkStatus();
+  };
 
-  // Initial loading state
-  if (status === null) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 text-gray-400">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
-        <p className="text-sm">Checking video…</p>
-      </div>
-    );
-  }
+  if (status === null) return <StateInitial />;
 
-  // HLS early playback or complete — show video with optional progress overlay
   if (hlsUrl) {
     return (
-      <div className="relative w-full h-full">
+      <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
         <video
           key={file.id}
           ref={videoRef}
           controls
-          className="w-full h-full"
+          playsInline
+          style={{ width: '100%', flex: 1, objectFit: 'contain' }}
           onClick={(e) => e.stopPropagation()}
         />
-        {status === 'transcoding' && (
-          <div className="absolute bottom-12 left-0 right-0 px-4 pointer-events-none">
-            <div className="bg-black/70 rounded-lg px-3 py-2 flex flex-col gap-1">
-              <p className="text-xs text-gray-300">
-                Transcoding… {progress}% — more of the video will become available shortly
-              </p>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div
-                  className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
+        {status === 'transcoding' && progress < 99 && (
+          <div className="mv-video-transcoding-pill">
+            <div className="mv-spinner mv-spinner--glass" style={{ width: 14, height: 14, borderWidth: 2 }} />
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap' }}>
+              Transcoding… {progress}%
+            </span>
+            <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${progress}%`,
+                  background: 'var(--accent)',
+                  borderRadius: 999,
+                  transition: 'width 400ms ease',
+                }}
+              />
             </div>
           </div>
         )}
+        <div style={{ position: 'absolute', top: 12, right: 12 }}>
+          <div className="mv-video-badge mv-video-badge--hls">HLS</div>
+        </div>
       </div>
     );
   }
 
-  // Ready to play (MP4 cache path — no HLS)
   if (status === 'native' || status === 'ready') {
     return (
-      <video
-        key={file.id}
-        src={streamUrl}
-        controls
-        className="w-full h-full"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
+        <video
+          key={file.id}
+          src={streamUrl}
+          controls
+          playsInline
+          style={{ width: '100%', flex: 1, objectFit: 'contain' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <div style={{ position: 'absolute', top: 12, right: 12 }}>
+          <div className="mv-video-badge mv-video-badge--mp4">MP4</div>
+        </div>
+      </div>
     );
   }
 
-  // Transcoding in progress, waiting for first 2 segments
   if (status === 'transcoding') {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 text-gray-300 max-w-sm w-full">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500" />
-        <p className="text-sm font-medium">Transcoding video for playback…</p>
-        <div className="w-full bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-indigo-500 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          className="mv-video-state-card"
+          style={{ padding: '28px 36px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 340 }}
+        >
+          <div className="mv-spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Transcoding video for playback…</div>
+          <div style={{ width: '100%' }}>
+            <div className="mv-progress">
+              <div className="mv-progress__fill" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{progress}% — playback will start soon</div>
         </div>
-        <p className="text-xs text-gray-500">{progress}% — playback will start soon</p>
       </div>
     );
   }
 
-  // Queued, not yet started
-  if (status === 'pending') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 text-gray-400">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
-        <p className="text-sm">Preparing video for playback…</p>
-      </div>
-    );
-  }
+  if (status === 'pending') return <StatePending />;
+  if (status === 'disabled') return <StateDisabled onDownload={onDownload} />;
+  if (status === 'failed') return <StateFailed onDownload={onDownload} onRetry={onRetry} />;
 
-  // Transcoding disabled or failed — attempt native play with a notice
   return (
-    <div className="relative w-full h-full flex items-center justify-center">
+    <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
       <video
         key={file.id}
         src={streamUrl}
         controls
-        className="w-full h-full"
+        playsInline
+        style={{ width: '100%', flex: 1, objectFit: 'contain' }}
         onClick={(e) => e.stopPropagation()}
       />
-      <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-yellow-400 bg-black/60 px-3 py-1 rounded-full pointer-events-none">
-        {status === 'disabled'
-          ? 'Transcoding disabled — playback may fail. Enable it in Admin → Components.'
-          : 'Transcode failed — attempting native playback.'}
-      </p>
     </div>
   );
 }

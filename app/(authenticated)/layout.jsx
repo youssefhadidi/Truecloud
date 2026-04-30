@@ -4,10 +4,11 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiArrowLeft } from 'react-icons/fi';
+import { FiArrowLeft, FiCloud } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
 import JobsBadge from '@/components/JobsBadge';
+import IconBtn from '@/components/ui/IconBtn';
 import { useStableSession } from '@/lib/api/session';
 import AuthProvider from '@/components/AuthProvider';
 import { SessionLockProvider } from '@/contexts/SessionLockContext';
@@ -26,33 +27,90 @@ function AuthenticatedLayoutContent({ children }) {
     }
   }, [status, router]);
 
-  // Show layout even while loading, instead of full-screen loading
   return (
-    <div className="h-dvh bg-gray-900 flex flex-col overflow-hidden">
-      {/* Persistent Header */}
-      <header className="bg-gray-800 shadow flex-shrink-0">
-        <div className="mx-auto px-2 sm:px-4 lg:px-8 py-2 sm:py-4">
-          <div className="flex justify-between items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <h1
-                className="text-lg sm:text-2xl font-bold text-white truncate cursor-pointer hover:text-gray-300 transition-colors flex flex-row"
-                onClick={() => router.push('/files')}
-              >
-                {!isFilesPage && <FiArrowLeft className="text-gray-400 hover:text-white p-1" size={24} />} Truecloud
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <JobsBadge />
-              <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
-            </div>
+    <div
+      style={{
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg)',
+        color: 'var(--text)',
+        overflow: 'hidden',
+      }}
+    >
+      <header
+        style={{
+          height: 'var(--header-h)',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          gap: 12,
+          flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        {!isFilesPage && (
+          <IconBtn
+            icon={FiArrowLeft}
+            title="Back to files"
+            onClick={() => router.push('/files')}
+            style={{ marginRight: 4 }}
+          />
+        )}
+
+        <button
+          onClick={() => router.push('/files')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--r-sm)',
+              background: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <FiCloud size={14} color="#fff" />
           </div>
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: 15,
+              letterSpacing: '-0.02em',
+              color: 'var(--text)',
+            }}
+          >
+            Truecloud
+          </span>
+        </button>
+
+        <div style={{ flex: 1 }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <JobsBadge />
+          <UserMenu email={session?.user?.email} isAdmin={session?.user?.role === 'admin'} />
         </div>
       </header>
 
-      {/* Page Content */}
-      <main className="flex-1 flex overflow-y-auto w-full">{children}</main>
+      <main style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>{children}</main>
 
-      {/* Update notification - auto-checks on first load */}
       <UpdateChecker />
     </div>
   );

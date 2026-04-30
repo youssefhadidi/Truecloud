@@ -2,40 +2,58 @@
 
 'use client';
 
-/**
- * Custom confirm component for delete actions with warning details
- */
+import Btn from '@/components/ui/Btn';
+
 export default function DeleteConfirm({ username, onCancel, onConfirm, isLoading = false }) {
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg max-w-md w-full">
-      <div className="px-6 py-4 border-b border-gray-700">
-        <h3 className="text-lg font-semibold text-white">Delete User</h3>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--r-xl)',
+        boxShadow: 'var(--shadow-xl)',
+        maxWidth: 460,
+        width: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Delete User</h3>
       </div>
-      <div className="px-6 py-4 space-y-3">
-        <p className="text-gray-300">
-          Are you sure you want to delete <strong>{username}</strong>?
+      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
+          Are you sure you want to delete <strong style={{ color: 'var(--text)' }}>{username}</strong>?
         </p>
-        <div className="bg-red-900/30 border border-red-700 rounded p-3 text-sm text-red-300">
-          <p className="font-semibold mb-1">This action will:</p>
-          <ul className="list-disc list-inside space-y-1">
+        <div
+          style={{
+            background: 'var(--danger-light)',
+            border: '1px solid color-mix(in oklab, var(--danger) 35%, transparent)',
+            borderRadius: 'var(--r-md)',
+            padding: 12,
+            fontSize: 12,
+            color: 'var(--danger)',
+          }}
+        >
+          <p style={{ fontWeight: 700, margin: '0 0 4px' }}>This action will:</p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
             <li>Permanently delete this user account</li>
             <li>Delete all files in their personal folder</li>
             <li>Remove all associated permissions and sessions</li>
           </ul>
         </div>
-        <p className="text-xs text-gray-400">This action cannot be undone.</p>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>This action cannot be undone.</p>
       </div>
-      <div className="px-6 py-4 border-t border-gray-700 flex gap-2">
-        <button
-          onClick={onCancel}
+      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+        <Btn variant="outline" size="md" onClick={onCancel} disabled={isLoading} style={{ flex: 1, justifyContent: 'center' }}>Cancel</Btn>
+        <Btn
+          variant="danger"
+          size="md"
+          onClick={onConfirm}
           disabled={isLoading}
-          className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
         >
-          Cancel
-        </button>
-        <button onClick={onConfirm} disabled={isLoading} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-600 transition-colors">
-          {isLoading ? 'Deleting...' : 'Delete User'}
-        </button>
+          {isLoading ? 'Deleting…' : 'Delete User'}
+        </Btn>
       </div>
     </div>
   );

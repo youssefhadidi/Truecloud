@@ -4,10 +4,92 @@
 
 import React, { useState, memo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight, FiTrash2, FiSearch, FiHardDrive } from 'react-icons/fi';
+import {
+  FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight,
+  FiTrash2, FiSearch, FiHardDrive, FiDownload, FiShare2,
+} from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import IconBtn from '@/components/ui/IconBtn';
+import Divider from '@/components/ui/Divider';
+
+function StorageBar() {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/system-info')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d) setInfo(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const disk = info?.disk;
+  if (!disk || !disk.total) return null;
+  const used = disk.used ?? (disk.total - (disk.free || 0));
+  const total = disk.total;
+  const pct = Math.min(100, Math.max(0, Math.round((used / total) * 100)));
+  const fmt = (b) => {
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let v = b;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return `${v.toFixed(v >= 100 ? 0 : 1)} ${u[i]}`;
+  };
+
+  return (
+    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Storage</span>
+        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{fmt(used)} / {fmt(total)}</span>
+      </div>
+      <div style={{ height: 5, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
+        <div
+          style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: 'linear-gradient(90deg, var(--accent), #8b5cf6)',
+            borderRadius: 99,
+          }}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{pct}% used</div>
+    </div>
+  );
+}
+
+function NavRow({ icon: Icon, label, active, onClick, right, danger }) {
+  const color = active ? 'var(--accent)' : danger ? 'var(--danger)' : 'var(--text-2)';
+  const bg = active ? 'var(--accent-light)' : 'transparent';
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        padding: '7px 10px',
+        borderRadius: 'var(--r-sm)',
+        border: 'none',
+        cursor: 'pointer',
+        background: bg,
+        color,
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        transition: 'all 150ms',
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-2)'; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+    >
+      <Icon size={14} />
+      <span className="tc-truncate" style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+      {right}
+    </button>
+  );
+}
 
 function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -18,7 +100,6 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
   const { subscribe } = useWebSocket();
   const [usbDrives, setUsbDrives] = useState([]);
 
-  // Seed from REST, then receive live updates via WebSocket
   useEffect(() => {
     let cancelled = false;
     fetch('/api/usb-drives')
@@ -31,7 +112,6 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
     return () => { cancelled = true; unsub(); };
   }, [subscribe]);
 
-  // Flatten to only partitions that are actually mounted (browsable)
   const mountedPartitions = usbDrives.flatMap((d) =>
     d.partitions
       .filter((p) => p.mountpoint)
@@ -43,210 +123,249 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
       })),
   );
 
-  const openDrive = (mp) => {
-    router.push(`/usb?mount=${encodeURIComponent(mp)}`);
-  };
+  const isInTrash = currentPath === 'trash' || currentPath?.startsWith('trash/') || currentPath?.startsWith('trash\\');
 
   const handleRemove = async (e, favorite) => {
     e.stopPropagation();
     try {
       await removeFavorite.mutateAsync({ id: favorite.id });
       addNotification('success', 'Removed from favorites');
-    } catch (error) {
+    } catch {
       addNotification('error', 'Failed to remove favorite');
     }
   };
 
   const handleNavigate = (favorite) => {
-    if (favorite.isDirectory) {
-      onNavigate(favorite.path);
-    } else {
-      // Navigate to parent folder of file
-      const parentPath = favorite.path.split('/').slice(0, -1).join('/');
-      onNavigate(parentPath);
-    }
+    if (favorite.isDirectory) onNavigate(favorite.path);
+    else onNavigate(favorite.path.split('/').slice(0, -1).join('/'));
   };
 
-  const isInTrash = currentPath === 'trash' || currentPath.startsWith('trash/') || currentPath.startsWith('trash\\');
-
-  // Collapsed state - just show toggle button
   if (isCollapsed) {
     return (
-      <div className="flex-shrink-0 w-10 h-full bg-gray-800 border-r border-gray-700 flex flex-col">
-        <button
-          onClick={() => setIsCollapsed(false)}
-          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+      <aside
+        style={{
+          width: 44,
+          background: 'var(--surface)',
+          borderRight: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+        }}
+      >
+        <IconBtn
+          icon={FiChevronRight}
           title="Expand favorites"
-        >
-          <FiChevronRight size={20} />
-        </button>
-        {(favorites.length > 0 || mountedPartitions.length > 0) && (
-          <div className="flex-1 flex flex-col items-center py-2 gap-1 overflow-y-auto">
-            {mountedPartitions.map((part) => (
-              <button
-                key={part.key}
-                onClick={() => openDrive(part.mountpoint)}
-                className="p-2 rounded hover:bg-gray-700 transition-colors text-indigo-300"
-                title={`${part.drive} — ${part.mountpoint}`}
-              >
-                <FiHardDrive size={16} />
-              </button>
-            ))}
-            {favorites.slice(0, 10).map((favorite) => (
-              <button
-                key={favorite.id}
-                onClick={() => handleNavigate(favorite)}
-                className={`p-2 rounded hover:bg-gray-700 transition-colors ${
-                  currentPath === favorite.path ? 'bg-indigo-600 text-white' : 'text-gray-400'
-                }`}
-                title={favorite.name}
-              >
-                {favorite.isDirectory ? <FiFolder size={16} /> : <FiFile size={16} />}
-              </button>
-            ))}
-          </div>
-        )}
-        {/* Trash button at bottom */}
-        <button
-          onClick={() => onNavigate('trash')}
-          className={`p-2 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors mt-auto ${
-            isInTrash ? 'bg-red-600/20 text-red-400' : ''
-          }`}
+          onClick={() => setIsCollapsed(false)}
+          style={{ margin: 6 }}
+        />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 0', overflowY: 'auto' }}>
+          {mountedPartitions.map((part) => (
+            <IconBtn
+              key={part.key}
+              icon={FiHardDrive}
+              title={`${part.drive} — ${part.mountpoint}`}
+              onClick={() => router.push(`/usb?mount=${encodeURIComponent(part.mountpoint)}`)}
+            />
+          ))}
+          {favorites.slice(0, 10).map((fav) => (
+            <IconBtn
+              key={fav.id}
+              icon={fav.isDirectory ? FiFolder : FiFile}
+              title={fav.name}
+              active={currentPath === fav.path}
+              onClick={() => handleNavigate(fav)}
+            />
+          ))}
+        </div>
+        <IconBtn
+          icon={FiTrash2}
           title="Trash"
-        >
-          <FiTrash2 size={20} />
-        </button>
-      </div>
+          danger={isInTrash}
+          active={isInTrash}
+          onClick={() => onNavigate('trash')}
+          style={{ margin: 6 }}
+        />
+      </aside>
     );
   }
 
   return (
-    <div className="flex-shrink-0 w-56 h-full bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
-      <div className="px-2 py-2 border-b border-gray-700">
-        <div className="relative flex items-center">
-          <FiSearch size={14} className="absolute left-2 text-gray-500" />
+    <aside
+      style={{
+        width: 'var(--sidebar-w)',
+        background: 'var(--surface)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Search */}
+      <div style={{ padding: '14px 12px 10px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-md)',
+            padding: '8px 12px',
+            transition: 'border 150ms',
+          }}
+        >
+          <FiSearch size={14} color="var(--text-3)" style={{ flexShrink: 0 }} />
           <input
             type="text"
             value={searchQuery || ''}
             onChange={(e) => onSearchQueryChange?.(e.target.value)}
-            placeholder="Search all files..."
-            className="w-full pl-7 pr-7 py-1.5 text-xs bg-gray-700 text-white placeholder-gray-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            placeholder="Search files…"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              color: 'var(--text)',
+              outline: 'none',
+              flex: 1,
+              fontFamily: 'inherit',
+              minWidth: 0,
+            }}
           />
           {searchQuery && (
             <button
               onClick={() => onSearchQueryChange?.('')}
-              className="absolute right-1.5 p-0.5 text-gray-500 hover:text-gray-300 transition-colors"
+              style={{
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-3)',
+                display: 'flex',
+                padding: 0,
+              }}
             >
               <FiX size={12} />
             </button>
           )}
         </div>
       </div>
+
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-        <div className="flex items-center gap-2 text-gray-300">
-          <FiStar size={16} className="text-yellow-500" />
-          <span className="text-sm font-medium">Favorites</span>
+      <div style={{ padding: '4px 12px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.08em', padding: '0 4px' }}>
+          FAVORITES
         </div>
         <button
           onClick={() => setIsCollapsed(true)}
-          className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
           title="Collapse"
+          style={{
+            width: 22,
+            height: 22,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--text-3)',
+            borderRadius: 'var(--r-xs)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          <FiChevronLeft size={16} />
+          <FiChevronLeft size={14} />
         </button>
       </div>
 
-      {/* Search Input */}
-
-      {/* USB Drives (only shown when drives are mounted) */}
-      {mountedPartitions.length > 0 && (
-        <div className="border-b border-gray-700">
-          <div className="flex items-center gap-2 px-3 py-2 text-gray-300">
-            <FiHardDrive size={16} className="text-indigo-400" />
-            <span className="text-sm font-medium">USB Drives</span>
-          </div>
-          <div className="pb-1">
-            {mountedPartitions.map((part) => (
-              <div
-                key={part.key}
-                onClick={() => openDrive(part.mountpoint)}
-                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-gray-300 hover:bg-gray-700 transition-colors"
-                title={part.mountpoint}
-              >
-                <FiHardDrive size={14} className="flex-shrink-0 text-indigo-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="truncate text-sm">{part.label}</div>
-                  <div className="truncate text-xs text-gray-500">{part.drive}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Favorites list */}
-      <div className="flex-1 overflow-y-auto py-1">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
         {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : favorites.length === 0 ? (
-            <div className="px-3 py-4 text-center text-gray-500 text-sm">
-              <FiStar size={24} className="mx-auto mb-2 opacity-50" />
-              <p>No favorites yet</p>
-              <p className="text-xs mt-1">Right-click files to add</p>
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {favorites.map((favorite) => (
-                <div
-                  key={favorite.id}
-                  onClick={() => handleNavigate(favorite)}
-                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                    currentPath === favorite.path
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {favorite.isDirectory ? (
-                    <FiFolder size={16} className="flex-shrink-0 text-indigo-400" />
-                  ) : (
-                    <FiFile size={16} className="flex-shrink-0 text-gray-400" />
-                  )}
-                  <span className="flex-1 truncate text-sm">{favorite.name}</span>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                border: '2px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderRadius: 99,
+                animation: 'tc-spin 700ms linear infinite',
+              }}
+            />
+          </div>
+        ) : favorites.length === 0 ? (
+          <div style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--text-3)' }}>
+            <FiStar size={20} style={{ opacity: 0.5, marginBottom: 6 }} />
+            <div style={{ fontSize: 12, fontWeight: 600 }}>No favorites yet</div>
+            <div style={{ fontSize: 11, marginTop: 2 }}>Right-click files to add</div>
+          </div>
+        ) : (
+          favorites.map((fav) => {
+            const active = currentPath === fav.path;
+            return (
+              <NavRow
+                key={fav.id}
+                icon={fav.isDirectory ? FiFolder : FiFile}
+                label={fav.name}
+                active={active}
+                onClick={() => handleNavigate(fav)}
+                right={
                   <button
-                    onClick={(e) => handleRemove(e, favorite)}
-                    className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                      currentPath === favorite.path
-                        ? 'hover:bg-indigo-500 text-white'
-                        : 'hover:bg-gray-600 text-gray-400'
-                    }`}
-                    title="Remove from favorites"
+                    onClick={(e) => handleRemove(e, fav)}
+                    title="Remove favorite"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: active ? 'var(--accent)' : 'var(--text-3)',
+                      padding: 2,
+                      display: 'flex',
+                      borderRadius: 'var(--r-xs)',
+                    }}
                   >
-                    <FiX size={14} />
+                    <FiX size={12} />
                   </button>
-                </div>
-              ))}
+                }
+              />
+            );
+          })
+        )}
+
+        {mountedPartitions.length > 0 && (
+          <>
+            <Divider />
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--text-3)',
+                letterSpacing: '.08em',
+                padding: '6px 4px 4px',
+              }}
+            >
+              USB DRIVES
             </div>
-          )}
+            {mountedPartitions.map((part) => (
+              <NavRow
+                key={part.key}
+                icon={FiHardDrive}
+                label={part.label}
+                onClick={() => router.push(`/usb?mount=${encodeURIComponent(part.mountpoint)}`)}
+              />
+            ))}
+          </>
+        )}
+
+        <Divider />
+        <NavRow icon={FiDownload} label="Downloads" onClick={() => router.push('/downloads')} />
+        <NavRow icon={FiShare2}   label="Shares"    onClick={() => router.push('/shares')} />
+        <NavRow icon={FiHardDrive} label="USB Drives" onClick={() => router.push('/usb')} />
+        <NavRow
+          icon={FiTrash2}
+          label="Trash"
+          active={isInTrash}
+          onClick={() => onNavigate('trash')}
+        />
       </div>
 
-      {/* Trash link at bottom */}
-      <div className="border-t border-gray-700">
-        <button
-          onClick={() => onNavigate('trash')}
-          className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
-            isInTrash
-              ? 'bg-red-600/20 text-red-400'
-              : 'text-gray-400 hover:bg-gray-700 hover:text-gray-300'
-          }`}
-        >
-          <FiTrash2 size={16} />
-          <span>Trash</span>
-        </button>
-      </div>
-    </div>
+      <StorageBar />
+    </aside>
   );
 }
 

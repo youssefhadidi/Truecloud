@@ -1,32 +1,111 @@
 @import "tailwindcss";
 @import "./custom.css";
 
-/* Always use dark theme */
-:root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+/* ── Design Tokens ───────────────────────────────────────── */
+/* Defaults match dark theme so the app renders correctly even before
+   the ThemeProvider client effect runs. */
+:root,
+[data-theme="dark"] {
+  --accent:        #818cf8;
+  --accent-h:      #a5b4fc;
+  --accent-light:  #1e1b4b;
+  --accent-mid:    #312e81;
+  --bg:            #0f172a;
+  --surface:       #1e293b;
+  --surface-2:     #0f172a;
+  --border:        #334155;
+  --border-strong: #475569;
+  --text:          #f1f5f9;
+  --text-2:        #94a3b8;
+  --text-3:        #64748b;
+  --danger:        #f87171;
+  --danger-light:  #1f0808;
+  --success:       #4ade80;
+  --success-light: #071a0e;
+  --warning:       #fbbf24;
+  --warning-light: #1c1005;
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.2);
+  --shadow-lg: 0 8px 28px rgba(0,0,0,.4), 0 4px 8px rgba(0,0,0,.25);
+  --shadow-xl: 0 20px 48px rgba(0,0,0,.5), 0 8px 16px rgba(0,0,0,.3);
+  --header-h: 56px;
+  --sidebar-w: 240px;
 }
 
+[data-theme="light"] {
+  --accent:        #6366f1;
+  --accent-h:      #4f46e5;
+  --accent-light:  #eef2ff;
+  --accent-mid:    #c7d2fe;
+  --bg:            #f8fafc;
+  --surface:       #ffffff;
+  --surface-2:     #f1f5f9;
+  --border:        #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text:          #0f172a;
+  --text-2:        #475569;
+  --text-3:        #94a3b8;
+  --danger:        #ef4444;
+  --danger-light:  #fef2f2;
+  --success:       #22c55e;
+  --success-light: #f0fdf4;
+  --warning:       #f59e0b;
+  --warning-light: #fffbeb;
+  --shadow-sm: 0 1px 3px rgba(15,23,42,.07), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-md: 0 4px 12px rgba(15,23,42,.09), 0 2px 4px rgba(15,23,42,.05);
+  --shadow-lg: 0 8px 28px rgba(15,23,42,.11), 0 4px 8px rgba(15,23,42,.06);
+  --shadow-xl: 0 20px 48px rgba(15,23,42,.14), 0 8px 16px rgba(15,23,42,.07);
+}
+
+/* Map Tailwind theme tokens onto our design tokens so utilities
+   like bg-background / text-foreground keep working but resolve
+   to themed values. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-h: var(--accent-h);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-jakarta), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── Base ───────────────────────────────────────────────── */
 html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   height: 100%;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
+
+button { font-family: inherit; }
+input  { font-family: inherit; }
 
 /* Optimize scrolling performance on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* Enable smooth scrolling with hardware acceleration */
 .overflow-auto,
@@ -42,3 +121,152 @@ body {
     scroll-behavior: smooth;
   }
 }
+
+/* ── Utilities ──────────────────────────────────────────── */
+.tc-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Animations ─────────────────────────────────────────── */
+@keyframes tc-fadeIn   { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+@keyframes tc-slideUp  { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+@keyframes tc-scaleIn  { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+@keyframes tc-spin     { to { transform: rotate(360deg); } }
+@keyframes tc-toastIn  { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:translateX(0); } }
+@keyframes tc-toastOut { to { opacity:0; transform:translateX(32px); } }
+@keyframes tc-pulse    { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+.tc-anim-fade  { animation: tc-fadeIn  200ms ease both; }
+.tc-anim-scale { animation: tc-scaleIn 180ms cubic-bezier(.32,.72,0,1) both; }
+.tc-anim-slide { animation: tc-slideUp 220ms ease both; }
+
+/* ── Drag overlay ───────────────────────────────────────── */
+.tc-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99,102,241,.08);
+  border: 2.5px dashed var(--accent);
+  border-radius: var(--r-xl);
+  margin: 12px;
+  pointer-events: none;
+}
+
+/* ── File-type thumbnail color classes ──────────────────── */
+.ft-folder  { background: linear-gradient(135deg,#fef3c7,#fde68a); color:#92400e; }
+.ft-image   { background: linear-gradient(135deg,#cffafe,#a5f3fc); color:#0e7490; }
+.ft-video   { background: linear-gradient(135deg,#ede9fe,#ddd6fe); color:#5b21b6; }
+.ft-audio   { background: linear-gradient(135deg,#fce7f3,#fbcfe8); color:#9d174d; }
+.ft-pdf     { background: linear-gradient(135deg,#fee2e2,#fecaca); color:#991b1b; }
+.ft-doc     { background: linear-gradient(135deg,#dbeafe,#bfdbfe); color:#1e40af; }
+.ft-sheet   { background: linear-gradient(135deg,#d1fae5,#a7f3d0); color:#065f46; }
+.ft-archive { background: linear-gradient(135deg,#f1f5f9,#e2e8f0); color:#475569; }
+.ft-3d      { background: linear-gradient(135deg,#f3e8ff,#e9d5ff); color:#6b21a8; }
+.ft-text    { background: linear-gradient(135deg,#f8fafc,#f1f5f9); color:#475569; }
+
+[data-theme="dark"] .ft-folder  { background: linear-gradient(135deg,#451a03,#78350f); color:#fde68a; }
+[data-theme="dark"] .ft-image   { background: linear-gradient(135deg,#083344,#164e63); color:#a5f3fc; }
+[data-theme="dark"] .ft-video   { background: linear-gradient(135deg,#2e1065,#3b0764); color:#ddd6fe; }
+[data-theme="dark"] .ft-audio   { background: linear-gradient(135deg,#500724,#831843); color:#fbcfe8; }
+[data-theme="dark"] .ft-pdf     { background: linear-gradient(135deg,#450a0a,#7f1d1d); color:#fecaca; }
+[data-theme="dark"] .ft-doc     { background: linear-gradient(135deg,#1e3a8a,#1e40af); color:#bfdbfe; }
+[data-theme="dark"] .ft-sheet   { background: linear-gradient(135deg,#064e3b,#065f46); color:#a7f3d0; }
+[data-theme="dark"] .ft-archive { background: linear-gradient(135deg,#1e293b,#334155); color:#94a3b8; }
+[data-theme="dark"] .ft-3d      { background: linear-gradient(135deg,#3b0764,#4a044e); color:#e9d5ff; }
+[data-theme="dark"] .ft-text    { background: linear-gradient(135deg,#1e293b,#0f172a); color:#64748b; }
+
+/* ── Legacy Tailwind utility shim ────────────────────────── */
+/* Many existing pages still use raw Tailwind dark-mode utilities like
+   bg-gray-800 / text-gray-300. To make them inherit the active theme
+   without rewriting every page, we map those classes onto our tokens. */
+
+.bg-gray-900 { background-color: var(--bg) !important; }
+.bg-gray-800 { background-color: var(--surface) !important; }
+.bg-gray-700 { background-color: var(--surface-2) !important; }
+.bg-gray-600 { background-color: var(--surface-2) !important; }
+
+.bg-gray-800\/50 { background-color: color-mix(in oklab, var(--surface) 50%, transparent) !important; }
+.bg-gray-800\/80 { background-color: color-mix(in oklab, var(--surface) 80%, transparent) !important; }
+.bg-gray-900\/50 { background-color: color-mix(in oklab, var(--bg) 50%, transparent) !important; }
+.bg-gray-900\/90 { background-color: color-mix(in oklab, var(--bg) 90%, transparent) !important; }
+.bg-gray-700\/50 { background-color: color-mix(in oklab, var(--surface-2) 50%, transparent) !important; }
+
+.bg-blue-900\/20  { background-color: var(--accent-light) !important; }
+.bg-blue-900\/30  { background-color: color-mix(in oklab, var(--accent) 25%, transparent) !important; }
+.bg-blue-900\/90  { background-color: color-mix(in oklab, var(--accent) 80%, var(--surface)) !important; }
+.bg-red-900\/20   { background-color: var(--danger-light) !important; }
+.bg-red-900\/90   { background-color: color-mix(in oklab, var(--danger) 80%, var(--surface)) !important; }
+.bg-green-900\/20 { background-color: var(--success-light) !important; }
+.bg-green-900\/30 { background-color: color-mix(in oklab, var(--success) 25%, transparent) !important; }
+.bg-yellow-900\/20{ background-color: var(--warning-light) !important; }
+.bg-indigo-900\/20{ background-color: var(--accent-light) !important; }
+.bg-purple-900\/20{ background-color: color-mix(in oklab, #8b5cf6 18%, transparent) !important; }
+
+.text-white    { color: var(--text) !important; }
+.text-gray-100 { color: var(--text) !important; }
+.text-gray-200 { color: var(--text) !important; }
+.text-gray-300 { color: var(--text-2) !important; }
+.text-gray-400 { color: var(--text-2) !important; }
+.text-gray-500 { color: var(--text-3) !important; }
+.text-gray-600 { color: var(--text-3) !important; }
+
+.text-blue-300   { color: var(--accent) !important; }
+.text-blue-400   { color: var(--accent) !important; }
+.text-blue-500   { color: var(--accent) !important; }
+.text-indigo-300 { color: var(--accent) !important; }
+.text-indigo-400 { color: var(--accent) !important; }
+.text-indigo-500 { color: var(--accent) !important; }
+.text-indigo-600 { color: var(--accent) !important; }
+.text-red-300    { color: var(--danger) !important; }
+.text-red-400    { color: var(--danger) !important; }
+.text-red-500    { color: var(--danger) !important; }
+.text-red-600    { color: var(--danger) !important; }
+.text-green-300  { color: var(--success) !important; }
+.text-green-400  { color: var(--success) !important; }
+.text-green-500  { color: var(--success) !important; }
+.text-green-600  { color: var(--success) !important; }
+.text-yellow-400 { color: var(--warning) !important; }
+.text-yellow-500 { color: var(--warning) !important; }
+.text-orange-400 { color: var(--warning) !important; }
+.text-orange-500 { color: var(--warning) !important; }
+.text-purple-400 { color: #a78bfa !important; }
+.text-blue-200   { color: var(--accent) !important; }
+
+.border-gray-600 { border-color: var(--border) !important; }
+.border-gray-700 { border-color: var(--border) !important; }
+.border-gray-800 { border-color: var(--border) !important; }
+.border-blue-700 { border-color: var(--accent) !important; }
+.border-blue-800 { border-color: color-mix(in oklab, var(--accent) 50%, var(--border)) !important; }
+.border-red-800  { border-color: color-mix(in oklab, var(--danger) 50%, var(--border)) !important; }
+.border-green-800 { border-color: color-mix(in oklab, var(--success) 50%, var(--border)) !important; }
+
+.divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border) !important; }
+
+.bg-indigo-600 { background-color: var(--accent) !important; color: #fff !important; }
+.bg-indigo-700 { background-color: var(--accent-h) !important; color: #fff !important; }
+.bg-blue-600   { background-color: var(--accent) !important; color: #fff !important; }
+.bg-blue-700   { background-color: var(--accent-h) !important; color: #fff !important; }
+.bg-red-600    { background-color: var(--danger) !important; color: #fff !important; }
+.bg-red-700    { background-color: color-mix(in oklab, var(--danger) 80%, #000) !important; color: #fff !important; }
+.bg-green-600  { background-color: var(--success) !important; color: #fff !important; }
+.bg-yellow-500 { background-color: var(--warning) !important; color: #fff !important; }
+
+.hover\:bg-gray-700:hover { background-color: var(--surface-2) !important; }
+.hover\:bg-gray-600:hover { background-color: color-mix(in oklab, var(--surface-2) 70%, var(--surface)) !important; }
+.hover\:bg-indigo-700:hover { background-color: var(--accent-h) !important; }
+.hover\:bg-blue-700:hover  { background-color: var(--accent-h) !important; }
+.hover\:bg-red-700:hover   { background-color: color-mix(in oklab, var(--danger) 80%, #000) !important; }
+
+.focus\:ring-indigo-500:focus { --tw-ring-color: var(--accent) !important; }
+.focus\:border-indigo-500:focus { border-color: var(--accent) !important; }
+
+.placeholder-gray-400::placeholder { color: var(--text-3) !important; }
+.placeholder-gray-500::placeholder { color: var(--text-3) !important; }
+
+/* Prevent the legacy login-page gradient from clashing with light theme */
+.from-gray-900 { --tw-gradient-from: var(--bg) var(--tw-gradient-from-position) !important; }
+.to-gray-800   { --tw-gradient-to:   var(--surface) var(--tw-gradient-to-position) !important; }
+
+/* Tailwind animate-spin: route through our token-aware spin animation */
+.animate-spin { animation: tc-spin 1s linear infinite !important; }

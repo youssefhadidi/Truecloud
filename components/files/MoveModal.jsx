@@ -3,7 +3,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { FiChevronRight, FiFolder, FiHome, FiX } from 'react-icons/fi';
+import { FiChevronRight, FiFolder, FiHome, FiX, FiArrowUp } from 'react-icons/fi';
+import Overlay from '@/components/ui/Overlay';
+import IconBtn from '@/components/ui/IconBtn';
+import Btn from '@/components/ui/Btn';
+import Spinner from '@/components/ui/Spinner';
 
 export default function MoveModal({
   open,
@@ -26,7 +30,6 @@ export default function MoveModal({
   useEffect(() => {
     if (!open) return;
     let isActive = true;
-
     const loadFolders = async () => {
       setLoading(true);
       setError('');
@@ -42,18 +45,11 @@ export default function MoveModal({
         if (isActive) setLoading(false);
       }
     };
-
     loadFolders();
-
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [open, currentPath, fetchFolders]);
 
-  const breadcrumbParts = useMemo(() => {
-    if (!currentPath) return [];
-    return currentPath.split('/');
-  }, [currentPath]);
+  const breadcrumbParts = useMemo(() => (currentPath ? currentPath.split('/') : []), [currentPath]);
 
   const goUp = () => {
     if (!currentPath) return;
@@ -65,75 +61,145 @@ export default function MoveModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-lg bg-gray-800 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-gray-700 px-5 py-4">
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-gray-700" aria-label="Close">
-            <FiX className="text-gray-300" size={18} />
-          </button>
+    <Overlay onClose={onClose}>
+      <div
+        className="tc-anim-scale"
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 'var(--r-xl)',
+          boxShadow: 'var(--shadow-xl)',
+          width: 540,
+          maxWidth: '95vw',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{title}</h3>
+          <IconBtn icon={FiX} onClick={onClose} title="Close" />
         </div>
 
-        <div className="px-5 py-4">
-          <div className="mb-3 flex items-center gap-2 text-sm text-gray-400">
+        <div style={{ padding: '16px 20px' }}>
+          {/* Breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
             <button
               onClick={() => setCurrentPath('')}
-              className="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-gray-700"
-              aria-label="Go to root"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                borderRadius: 'var(--r-xs)',
+                border: 'none',
+                background: 'transparent',
+                color: !currentPath ? 'var(--text)' : 'var(--text-3)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 13,
+                fontWeight: !currentPath ? 600 : 500,
+              }}
             >
-              <FiHome size={14} />
-              <span>Root</span>
+              <FiHome size={13} />
+              Root
             </button>
-            {breadcrumbParts.map((part, index) => (
-              <div key={`${part}-${index}`} className="flex items-center gap-1.5">
-                <FiChevronRight size={12} className="text-gray-600" />
-                <button
-                  onClick={() => setCurrentPath(breadcrumbParts.slice(0, index + 1).join('/'))}
-                  className="rounded px-2 py-1 hover:bg-gray-700"
-                >
-                  {part}
-                </button>
-              </div>
-            ))}
+            {breadcrumbParts.map((part, index) => {
+              const isLast = index === breadcrumbParts.length - 1;
+              return (
+                <span key={`${part}-${index}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <FiChevronRight size={12} color="var(--text-3)" />
+                  <button
+                    onClick={() => setCurrentPath(breadcrumbParts.slice(0, index + 1).join('/'))}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 'var(--r-xs)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: isLast ? 'var(--text)' : 'var(--text-3)',
+                      fontWeight: isLast ? 600 : 500,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontSize: 13,
+                    }}
+                  >
+                    {part}
+                  </button>
+                </span>
+              );
+            })}
           </div>
 
-          <div className="mb-4 flex items-center justify-between">
-            <button
-              onClick={goUp}
-              disabled={!currentPath}
-              className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+          {/* Action row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <Btn variant="surface" size="sm" onClick={goUp} disabled={!currentPath}>
+              <FiArrowUp size={13} />
               Up one level
-            </button>
-            <button
-              onClick={() => onConfirm(currentPath)}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
-            >
+            </Btn>
+            <Btn variant="primary" size="sm" onClick={() => onConfirm(currentPath)}>
               Move here
-            </button>
+            </Btn>
           </div>
 
-          {loading && <p className="text-sm text-gray-400">Loading folders...</p>}
-          {error && <p className="text-sm text-red-400">{error}</p>}
-
-          {!loading && folders.length === 0 && !error && <p className="text-sm text-gray-400">No folders found.</p>}
-
-          {!loading && folders.length > 0 && (
-            <div className="max-h-80 overflow-auto rounded border border-gray-700">
-              {folders.map((folder) => (
+          {/* Folder list */}
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+              <Spinner size={22} color="var(--accent)" borderColor="var(--border)" thickness={3} />
+            </div>
+          ) : error ? (
+            <p style={{ fontSize: 13, color: 'var(--danger)', margin: 0 }}>{error}</p>
+          ) : folders.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>No folders here.</p>
+          ) : (
+            <div
+              style={{
+                maxHeight: 320,
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-md)',
+                background: 'var(--surface-2)',
+              }}
+            >
+              {folders.map((folder, i) => (
                 <button
                   key={folder.name}
-                  onClick={() => setCurrentPath(currentPath ? `${currentPath}/${folder.name}` : folder.name)}
-                  className="flex w-full items-center gap-2 border-b border-gray-700 px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 last:border-b-0"
+                  onClick={() =>
+                    setCurrentPath(currentPath ? `${currentPath}/${folder.name}` : folder.name)
+                  }
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    borderBottom: i < folders.length - 1 ? '1px solid var(--border)' : 'none',
+                    textAlign: 'left',
+                    transition: 'background 120ms',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <FiFolder className="text-blue-400" size={16} />
-                  <span className="truncate">{folder.name}</span>
+                  <FiFolder size={15} color="var(--accent)" />
+                  <span className="tc-truncate" style={{ flex: 1 }}>{folder.name}</span>
+                  <FiChevronRight size={13} color="var(--text-3)" />
                 </button>
               ))}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

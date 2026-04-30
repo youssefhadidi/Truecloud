@@ -4,21 +4,18 @@
 
 import { useRef, useMemo, useCallback, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
-import { FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiPlay, FiShare2 } from 'react-icons/fi';
+import {
+  FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
+  FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck,
+} from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
 import DownloadCard from '@/components/files/DownloadCard';
+import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 
-// Breakpoints
-const BREAKPOINT = {
-  sm: 640,
-  md: 768,
-  lg: 1024,
-  xl: 1280,
-  '2xl': 1536,
-};
+const BREAKPOINT = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 
 const getColumnsCount = (width) => {
   if (width < BREAKPOINT.sm) return 3;
@@ -29,7 +26,24 @@ const getColumnsCount = (width) => {
   return 8;
 };
 
-// Memoized GridItem with shallow comparison
+const KIND_ICON = {
+  folder: FiFolder,
+  image:  FiImage,
+  video:  FiVideo,
+  audio:  FiMusic,
+  pdf:    FiFileText,
+  doc:    FiFileText,
+  sheet:  FiFileText,
+  archive: FiPackage,
+  '3d':   FiBox,
+  text:   FiFile,
+};
+
+function KindIcon({ kind, size = 36 }) {
+  const Icon = KIND_ICON[kind] || FiFile;
+  return <Icon size={size} />;
+}
+
 const GridItem = memo(
   ({
     item,
@@ -74,15 +88,48 @@ const GridItem = memo(
     onRemoveDownload,
     isGlobalSearch,
   }) => {
+    const kind = fileKind(item);
+    const isFolder = item.isDirectory;
+    const showThumbnail = !isFolder && (isImage(item.name) || isVideo(item.name) || isPdf(item.name));
+    const iconSize = cellWidth > 100 ? 40 : 28;
+
+    const wrapStyle = {
+      ...style,
+      padding: gap / 2,
+    };
+
+    const cardBase = {
+      background: 'var(--surface)',
+      borderRadius: 'var(--r-lg)',
+      border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+      boxShadow: isSelected ? '0 0 0 3px var(--accent-mid)' : 'var(--shadow-sm)',
+      cursor: 'pointer',
+      overflow: 'hidden',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      WebkitTouchCallout: 'none',
+      WebkitTapHighlightColor: 'transparent',
+      transition: 'all 150ms ease',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      position: 'relative',
+    };
+
     return (
-      <div
-        style={{
-          ...style,
-          padding: gap / 2,
-        }}
-      >
+      <div style={wrapStyle}>
         {isCreating ? (
-          <div className="bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 h-full">
+          <div
+            style={{
+              ...cardBase,
+              border: '1.5px dashed var(--accent)',
+              boxShadow: 'none',
+              padding: 12,
+              alignItems: 'stretch',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
             <input
               type="text"
               value={newFolderName}
@@ -91,26 +138,49 @@ const GridItem = memo(
                 if (e.key === 'Enter') onConfirmCreateFolder();
                 if (e.key === 'Escape') onCancelCreateFolder();
               }}
-              className="w-full px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white"
               autoFocus
               onFocus={(e) => e.target.select()}
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-sm)',
+                background: 'var(--surface-2)',
+                color: 'var(--text)',
+                fontSize: 13,
+                fontFamily: 'inherit',
+                outline: 'none',
+              }}
             />
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancelCreateFolder();
+                onClick={(e) => { e.stopPropagation(); onCancelCreateFolder(); }}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  background: 'var(--surface-2)',
+                  color: 'var(--text-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
                 }}
-                className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
               >
                 Cancel
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onConfirmCreateFolder();
+                onClick={(e) => { e.stopPropagation(); onConfirmCreateFolder(); }}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 'var(--r-sm)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 600,
                 }}
-                className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Create
               </button>
@@ -139,13 +209,10 @@ const GridItem = memo(
           </div>
         ) : (
           <div
-            className="group relative bg-gray-700 rounded-lg p-0 active:shadow-lg transition-shadow cursor-pointer flex flex-col h-full select-none"
-            style={{ WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', overflow: 'clip' }}
+            className="tc-grid-card"
+            style={cardBase}
             onClick={() => {
-              if (selectionMode) {
-                onToggleSelect?.(item);
-                return;
-              }
+              if (selectionMode) { onToggleSelect?.(item); return; }
               if (item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
                 onNavigateToFolder(item.name, item);
               } else if (isGlobalSearch && !item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
@@ -153,50 +220,123 @@ const GridItem = memo(
               }
             }}
             onContextMenu={(e) => onContextMenu?.(e, item)}
-            onTouchStart={() => {
-              if (!selectionMode) onTouchStart(item);
-            }}
+            onTouchStart={() => { if (!selectionMode) onTouchStart(item); }}
             onTouchEnd={onTouchEnd}
             onTouchMove={onTouchMove}
           >
+            {/* Selection check badge */}
             {selectionMode && (
-              <div className="absolute left-2 top-2 z-20">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => onToggleSelect?.(item)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-4 w-4 rounded border-gray-500 bg-gray-800"
-                />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  zIndex: 4,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 99,
+                  background: isSelected ? 'var(--accent)' : 'var(--surface)',
+                  border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-strong)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+                onClick={(e) => { e.stopPropagation(); onToggleSelect?.(item); }}
+              >
+                {isSelected && <FiCheck size={12} color="#fff" />}
               </div>
             )}
 
+            {sharedPath && (
+              <div
+                title="Shared"
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  zIndex: 4,
+                  background: 'var(--success)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiShare2 size={9} />
+              </div>
+            )}
+
+            {/* Delete / rename inline overlays */}
             {isDeletingFile ? (
-              <div className="absolute inset-0 bg-red-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
-                <p className="text-red-200 font-medium text-center">Delete {item.isDirectory ? 'folder' : 'file'}?</p>
-                <div className="flex gap-2">
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'color-mix(in oklab, var(--danger) 18%, var(--surface))',
+                  borderRadius: 'inherit',
+                  zIndex: 5,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--danger)', textAlign: 'center' }}>
+                  Delete {item.isDirectory ? 'folder' : 'file'}?
+                </p>
+                <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCancelDelete();
+                    onClick={(e) => { e.stopPropagation(); onCancelDelete(); }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: 'var(--surface-2)',
+                      color: 'var(--text-2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--r-sm)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
                     }}
-                    className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
+                  >Cancel</button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onConfirmDelete();
+                    onClick={(e) => { e.stopPropagation(); onConfirmDelete(); }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: 'var(--danger)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 'var(--r-sm)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontWeight: 600,
                     }}
-                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
+                  >Delete</button>
                 </div>
               </div>
             ) : isRenamingFile ? (
-              <div className="absolute inset-0 bg-blue-900/90 rounded-lg p-3 flex flex-col items-center justify-center gap-2 z-10">
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'color-mix(in oklab, var(--accent) 14%, var(--surface))',
+                  borderRadius: 'inherit',
+                  zIndex: 5,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
                 <input
                   type="text"
                   value={newFileName}
@@ -205,37 +345,65 @@ const GridItem = memo(
                     if (e.key === 'Enter') onConfirmRename();
                     if (e.key === 'Escape') onCancelRename();
                   }}
-                  className="w-full px-2 py-1 border border-blue-700 rounded bg-gray-700 text-white"
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--r-sm)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                  }}
                 />
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCancelRename();
+                    onClick={(e) => { e.stopPropagation(); onCancelRename(); }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: 'var(--surface-2)',
+                      color: 'var(--text-2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--r-sm)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
                     }}
-                    className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
+                  >Cancel</button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onConfirmRename();
+                    onClick={(e) => { e.stopPropagation(); onConfirmRename(); }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: 'var(--accent)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 'var(--r-sm)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontWeight: 600,
                     }}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Rename
-                  </button>
+                  >Rename</button>
                 </div>
               </div>
             ) : null}
 
+            {/* Thumbnail */}
             <div
-              className={`w-full aspect-square flex items-center justify-center mb-2 bg-gray-600 relative overflow-hidden ${
-                isViewableFile(item) ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''
-              }`}
+              className={ftClass(item)}
+              style={{
+                width: '100%',
+                aspectRatio: '1 / 1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: isViewableFile(item) ? 'pointer' : 'default',
+              }}
               onClick={(e) => {
                 if (isViewableFile(item)) {
                   e.stopPropagation();
@@ -244,172 +412,161 @@ const GridItem = memo(
               }}
             >
               {processingFile === item.id && (
-                <div className="absolute inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-10">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0,0,0,.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 3,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      border: '3px solid rgba(255,255,255,.3)',
+                      borderTopColor: '#fff',
+                      borderRadius: 99,
+                      animation: 'tc-spin 700ms linear infinite',
+                    }}
+                  />
                 </div>
               )}
 
-              {isImage(item.name) && (
-                <LazyImage
-                  src=""
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                  isThumbnail={true}
-                  fileId={item.id}
-                  filePath={item._parentPath != null ? item._parentPath : currentPath}
-                  onError={(e) => {
-                    if (e?.target) {
-                      e.target.style.display = 'none';
-                    }
-                  }}
-                />
-              )}
-
-              {isVideo(item.name) && (
-                <div className="relative w-full h-full">
+              {showThumbnail ? (
+                <>
                   <LazyImage
                     src=""
                     alt={item.name}
-                    className="w-full h-full object-cover"
+                    className=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     isThumbnail={true}
                     fileId={item.id}
                     filePath={item._parentPath != null ? item._parentPath : currentPath}
-                    onError={(e) => {
-                      if (e?.target) {
-                        e.target.style.display = 'none';
-                      }
-                    }}
+                    onError={(e) => { if (e?.target) e.target.style.display = 'none'; }}
                   />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="bg-gray-800 bg-opacity-50 rounded-full p-3">
-                      <FiPlay className="text-white" size={24} />
+                  {isVideo(item.name) && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: 'rgba(15,23,42,.55)',
+                          borderRadius: 99,
+                          padding: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <FiPlay color="#fff" size={20} />
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {isPdf(item.name) && (
-                <LazyImage
-                  src=""
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                  isThumbnail={true}
-                  fileId={item.id}
-                  filePath={item._parentPath != null ? item._parentPath : currentPath}
-                  onError={(e) => {
-                    if (e?.target) {
-                      e.target.style.display = 'none';
-                    }
-                  }}
-                />
-              )}
-
-              {item.isDirectory && <FiFolder className="text-blue-500" size={cellWidth > 100 ? 48 : 32} />}
-              {!item.isDirectory && is3dFile(item.name) && <FiBox className="text-orange-500" size={cellWidth > 100 ? 48 : 32} />}
-              {!item.isDirectory && !isImage(item.name) && !isVideo(item.name) && !isPdf(item.name) && !is3dFile(item.name) && (
-                <FiFile className="text-gray-500" size={cellWidth > 100 ? 48 : 32} />
-              )}
-
-              {sharedPath && (
-                <div className="absolute top-1 left-1 bg-green-500 rounded-full p-1 shadow-sm" title="Shared">
-                  <FiShare2 size={10} className="text-white" />
-                </div>
+                  )}
+                </>
+              ) : (
+                <KindIcon kind={kind} size={iconSize} />
               )}
             </div>
 
-            <div className="font-medium text-white truncate px-1" title={item.displayName || item.name}>
-              {item.displayName || item.name}
-            </div>
-
-            {isGlobalSearch && item._parentPath != null && (
-              <div className="text-[10px] text-gray-500 truncate px-1" title={item._parentPath || '/'}>
-                {item._parentPath || '/'}
+            {/* Footer */}
+            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 2, minHeight: 56 }}>
+              <div
+                title={item.displayName || item.name}
+                className="tc-truncate"
+                style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}
+              >
+                {item.displayName || item.name}
               </div>
-            )}
+              {isGlobalSearch && item._parentPath != null && (
+                <div className="tc-truncate" style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                  {item._parentPath || '/'}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 'auto' }}>
+                {item.isDirectory ? 'Folder' : formatFileSize(item.size)}
+              </div>
+            </div>
 
-            <div className="text-xs text-gray-400 px-1 mt-auto">{item.isDirectory ? '' : formatFileSize(item.size)}</div>
-
+            {/* Hover/long-press actions */}
             {!isGlobalSearch && !selectionMode && (shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
               <div
-                className={`absolute top-2 right-2 flex gap-1 bg-gray-800 rounded-lg shadow-lg p-1 transition-opacity z-10 ${
-                  containerWidth >= BREAKPOINT.sm ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
-                }`}
+                className="tc-grid-actions"
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  display: 'flex',
+                  gap: 4,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  boxShadow: 'var(--shadow-md)',
+                  padding: 3,
+                  zIndex: 6,
+                  opacity: containerWidth >= BREAKPOINT.sm && !shouldShowActions(item.id) ? 0 : 1,
+                  transition: 'opacity 120ms',
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {isViewableFile(item) && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowingActionsFor(null);
-                      onOpenMediaViewer(item);
-                    }}
-                    className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onOpenMediaViewer(item); }}
                     title="View"
                     disabled={processingFile === item.id}
+                    style={iconBtnStyle('var(--accent)')}
                   >
-                    {is3dFile(item.name) ? (
-                      <FiBox size={16} className="text-orange-400" />
-                    ) : isVideo(item.name) ? (
-                      <FiVideo size={16} className="text-purple-400" />
-                    ) : isImage(item.name) ? (
-                      <FiImage size={16} className="text-green-400" />
-                    ) : isAudio(item.name) ? (
-                      <FiVideo size={16} className="text-blue-400" />
-                    ) : isPdf(item.name) ? (
-                      <FiFile size={16} className="text-red-400" />
-                    ) : isXlsx(item.name) ? (
-                      <FiFile size={16} className="text-green-400" />
-                    ) : null}
+                    {is3dFile(item.name) ? <FiBox size={14} />
+                    : isVideo(item.name) ? <FiVideo size={14} />
+                    : isImage(item.name) ? <FiImage size={14} />
+                    : isAudio(item.name) ? <FiMusic size={14} />
+                    : isPdf(item.name) ? <FiFileText size={14} />
+                    : isXlsx(item.name) ? <FiFileText size={14} />
+                    : <FiFile size={14} />}
                   </button>
                 )}
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowingActionsFor(null);
-                    onInitiateRename(item);
-                  }}
-                  className="p-1.5 text-blue-400 hover:bg-blue-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(item); }}
                   title="Rename"
                   disabled={processingFile === item.id}
+                  style={iconBtnStyle('var(--accent)')}
                 >
-                  <FiEdit size={16} />
+                  <FiEdit size={14} />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowingActionsFor(null);
-                    onHandleDownload(item.id, item.name);
-                  }}
-                  className="p-1.5 text-indigo-400 hover:bg-indigo-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onHandleDownload(item.id, item.name); }}
                   title="Download"
                   disabled={processingFile === item.id}
+                  style={iconBtnStyle('var(--accent)')}
                 >
-                  <FiDownload size={16} />
+                  <FiDownload size={14} />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowingActionsFor(null);
-                    onInitiateDelete(item);
-                  }}
-                  className="p-1.5 text-red-400 hover:bg-red-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(item); }}
                   title="Delete"
                   disabled={processingFile === item.id}
+                  style={iconBtnStyle('var(--danger)')}
                 >
-                  <FiTrash2 size={16} />
+                  <FiTrash2 size={14} />
                 </button>
                 {onInitiateShare && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowingActionsFor(null);
-                      onInitiateShare(item);
-                    }}
-                    className="p-1.5 text-green-400 hover:bg-green-900/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateShare(item); }}
                     title="Share"
                     disabled={processingFile === item.id}
+                    style={iconBtnStyle('var(--success)')}
                   >
-                    <FiShare2 size={16} />
+                    <FiShare2 size={14} />
                   </button>
                 )}
               </div>
@@ -417,15 +574,9 @@ const GridItem = memo(
 
             {shouldShowActions(item.id) && containerWidth < BREAKPOINT.sm && (
               <div
-                className="fixed inset-0 z-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowingActionsFor(null);
-                }}
-                onTouchEnd={(e) => {
-                  e.stopPropagation();
-                  setShowingActionsFor(null);
-                }}
+                style={{ position: 'fixed', inset: 0, zIndex: 0 }}
+                onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
+                onTouchEnd={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
               />
             )}
           </div>
@@ -434,6 +585,24 @@ const GridItem = memo(
     );
   },
 );
+
+function iconBtnStyle(activeColor) {
+  return {
+    width: 26,
+    height: 26,
+    borderRadius: 'var(--r-xs)',
+    border: 'none',
+    cursor: 'pointer',
+    background: 'transparent',
+    color: 'var(--text-2)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 120ms',
+    flexShrink: 0,
+    fontFamily: 'inherit',
+  };
+}
 
 GridItem.displayName = 'GridItem';
 
@@ -482,9 +651,7 @@ const GridView = forwardRef(
 
     const allItems = useMemo(() => {
       const items = [...files];
-      if (creatingFolder) {
-        items.unshift({ id: 'new-folder', isCreating: true });
-      }
+      if (creatingFolder) items.unshift({ id: 'new-folder', isCreating: true });
       return items;
     }, [files, creatingFolder]);
 
@@ -505,30 +672,18 @@ const GridView = forwardRef(
     );
 
     const handleTouchStart = useCallback((item) => {
-      longPressTimerRef.current = setTimeout(() => {
-        setShowingActionsFor(item.id);
-      }, 500);
+      longPressTimerRef.current = setTimeout(() => setShowingActionsFor(item.id), 500);
     }, []);
-
     const handleTouchEnd = useCallback(() => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     }, []);
-
     const handleTouchMove = useCallback(() => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     }, []);
 
     const shouldShowActions = useCallback(
       (itemId) => {
-        if (deletingFile?.id || renamingFile?.id) {
-          return false;
-        }
+        if (deletingFile?.id || renamingFile?.id) return false;
         return showingActionsFor === itemId;
       },
       [deletingFile, renamingFile, showingActionsFor],
@@ -538,15 +693,12 @@ const GridView = forwardRef(
       ({ columnIndex, key, rowIndex, style, parent }) => {
         const containerWidth = parent.props.width;
         const columns = getColumnsCount(containerWidth);
-        const gap = 8;
+        const gap = 12;
         const itemIndex = rowIndex * columns + columnIndex;
         const item = allItems[itemIndex];
-
         if (!item) return <div key={key} style={style} />;
-
         const cellWidth = style.width - gap;
         const isShared = sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
-
         return (
           <GridItem
             key={key}
@@ -595,53 +747,26 @@ const GridView = forwardRef(
         );
       },
       [
-        allItems,
-        newFolderName,
-        onNewFolderNameChange,
-        onConfirmCreateFolder,
-        onCancelCreateFolder,
-        deletingFile,
-        onCancelDelete,
-        onConfirmDelete,
-        renamingFile,
-        newFileName,
-        onNewFileNameChange,
-        onConfirmRename,
-        onCancelRename,
-        onNavigateToFolder,
-        processingFile,
-        currentPath,
-        onOpenMediaViewer,
-        onInitiateRename,
-        onHandleDownload,
-        onInitiateDelete,
-        onInitiateShare,
-        formatFileSize,
-        showingActionsFor,
-        handleTouchStart,
-        handleTouchEnd,
-        handleTouchMove,
-        shouldShowActions,
-        sharedPaths,
-        onContextMenu,
-        selectionMode,
-        selectedFiles,
-        onToggleSelect,
-        isGlobalSearch,
+        allItems, newFolderName, onNewFolderNameChange, onConfirmCreateFolder, onCancelCreateFolder,
+        deletingFile, onCancelDelete, onConfirmDelete, renamingFile, newFileName, onNewFileNameChange,
+        onConfirmRename, onCancelRename, onNavigateToFolder, processingFile, currentPath,
+        onOpenMediaViewer, onInitiateRename, onHandleDownload, onInitiateDelete, onInitiateShare,
+        formatFileSize, showingActionsFor, handleTouchStart, handleTouchEnd, handleTouchMove,
+        shouldShowActions, sharedPaths, onContextMenu, selectionMode, selectedFiles, onToggleSelect,
+        isGlobalSearch, onPauseDownload, onResumeDownload, onRemoveDownload,
       ],
     );
 
     return (
-      <div className="w-full h-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ width: '100%', height: '100%', WebkitOverflowScrolling: 'touch', padding: 4 }}>
         <AutoSizer>
           {({ height, width }) => {
             containerWidthRef.current = width;
             const columns = getColumnsCount(width);
             const cellSize = Math.floor(width / columns);
-            const textHeight = 36;
+            const textHeight = 64;
             const rowHeight = cellSize + textHeight;
             const rowCount = Math.ceil(allItems.length / columns);
-
             return (
               <Grid
                 ref={gridRef}
@@ -653,10 +778,7 @@ const GridView = forwardRef(
                 rowHeight={rowHeight}
                 width={width}
                 overscanRowCount={5}
-                style={{
-                  outline: 'none',
-                  overflowX: 'hidden',
-                }}
+                style={{ outline: 'none', overflowX: 'hidden' }}
               />
             );
           }}

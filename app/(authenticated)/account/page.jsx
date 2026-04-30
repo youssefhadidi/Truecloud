@@ -4,22 +4,51 @@
 
 import { useState, useEffect } from 'react';
 import { useSessionLock } from '@/contexts/SessionLockContext';
-import { FiLock, FiCheckCircle, FiAlertCircle, FiKey } from 'react-icons/fi';
+import { FiLock, FiCheckCircle, FiAlertCircle, FiKey, FiSun, FiMoon } from 'react-icons/fi';
 import axios from '@/lib/axiosConfig';
+import Card, { PageHeader } from '@/components/ui/Card';
+import Field from '@/components/ui/Field';
+import Btn from '@/components/ui/Btn';
+import Toggle from '@/components/ui/Toggle';
+import Spinner from '@/components/ui/Spinner';
+import { useTheme } from '@/components/ThemeProvider';
 
-const TIMEOUT_OPTIONS = [60, 120, 240, 480, 720]; // 1h, 2h, 4h, 8h, 12h in minutes
+const TIMEOUT_OPTIONS = [60, 120, 240, 480, 720];
+
+function StatusMessage({ kind, children }) {
+  const isError = kind === 'error';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '10px 12px',
+        borderRadius: 'var(--r-sm)',
+        background: isError ? 'var(--danger-light)' : 'var(--success-light)',
+        color: isError ? 'var(--danger)' : 'var(--success)',
+        fontSize: 13,
+        fontWeight: 500,
+        border: `1px solid color-mix(in oklab, ${isError ? 'var(--danger)' : 'var(--success)'} 25%, transparent)`,
+      }}
+    >
+      {isError ? <FiAlertCircle size={14} /> : <FiCheckCircle size={14} />}
+      {children}
+    </div>
+  );
+}
 
 export default function AccountPage() {
   const { settings, updateSettings, lockNow } = useSessionLock();
+  const { theme, setTheme } = useTheme();
   const [isEnabled, setIsEnabled] = useState(false);
-  const [timeout, setTimeout] = useState(60); // 1 hour default
+  const [timeoutMins, setTimeoutMins] = useState(60);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,11 +56,10 @@ export default function AccountPage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Initialize from settings
   useEffect(() => {
     if (settings) {
       setIsEnabled(settings.sessionLockEnabled);
-      setTimeout(settings.sessionLockTimeout);
+      setTimeoutMins(settings.sessionLockTimeout);
     }
   }, [settings]);
 
@@ -40,13 +68,8 @@ export default function AccountPage() {
     setPinError('');
     setSuccessMessage('');
 
-    // Validate PIN if provided
     if (newPin || confirmPin) {
-      if (newPin !== confirmPin) {
-        setPinError('PINs do not match');
-        return;
-      }
-
+      if (newPin !== confirmPin) { setPinError('PINs do not match'); return; }
       if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
         setPinError('PIN must be exactly 4 digits');
         return;
@@ -54,25 +77,16 @@ export default function AccountPage() {
     }
 
     setIsSaving(true);
-
-    const updateData = {
-      sessionLockEnabled: isEnabled,
-      sessionLockTimeout: timeout,
-    };
-
-    if (newPin) {
-      updateData.sessionLockPin = newPin;
-    }
-
+    const updateData = { sessionLockEnabled: isEnabled, sessionLockTimeout: timeoutMins };
+    if (newPin) updateData.sessionLockPin = newPin;
     const success = await updateSettings(updateData);
-
     setIsSaving(false);
 
     if (success) {
       setSuccessMessage('Settings saved successfully');
       setNewPin('');
       setConfirmPin('');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      window.setTimeout(() => setSuccessMessage(''), 3000);
     } else {
       setPinError('Failed to save settings');
     }
@@ -82,25 +96,14 @@ export default function AccountPage() {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters');
-      return;
-    }
-
+    if (newPassword !== confirmPassword) { setPasswordError('New passwords do not match'); return; }
+    if (newPassword.length < 6) { setPasswordError('New password must be at least 6 characters'); return; }
     setIsChangingPassword(true);
     try {
       await axios.put('/api/account/password', { currentPassword, newPassword });
       setPasswordSuccess('Password changed successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => setPasswordSuccess(''), 4000);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      window.setTimeout(() => setPasswordSuccess(''), 4000);
     } catch (err) {
       setPasswordError(err.response?.data?.error || 'Failed to change password');
     } finally {
@@ -109,230 +112,152 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-gray-900">
-      <div className="max-w-2xl mx-auto p-6 sm:p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Account Settings</h1>
-          <p className="text-gray-400">Manage your account and security preferences</p>
-        </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: '24px 16px 48px' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+        <PageHeader title="Account Settings" subtitle="Manage your profile, security, and preferences" />
 
-        {/* Session Lock Section */}
-        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-8">
-          <div className="border-b border-gray-700 px-6 py-4 bg-gray-800/50">
-            <div className="flex items-center gap-3">
-              <FiLock className="text-indigo-500" size={24} />
-              <h2 className="text-xl font-semibold text-white">Session Lock</h2>
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveSessionLock} className="p-6 space-y-6">
-            {/* Enable Toggle */}
-            <div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isEnabled}
-                  onChange={(e) => setIsEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-600 text-indigo-600 focus:ring-indigo-500"
-                />
+        {/* Security card */}
+        <Card
+          title="Security"
+          subtitle="Session lock and PIN protection"
+          style={{ marginBottom: 16 }}
+          padding={0}
+        >
+          <form onSubmit={handleSaveSessionLock} style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <FiLock size={18} color="var(--accent)" />
                 <div>
-                  <p className="text-white font-medium">Enable Session Lock</p>
-                  <p className="text-sm text-gray-400">
-                    Lock your session after a period of inactivity
-                  </p>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Enable Session Lock</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Lock your session after a period of inactivity</div>
                 </div>
-              </label>
+              </div>
+              <Toggle value={isEnabled} onChange={setIsEnabled} />
             </div>
 
             {isEnabled && (
               <>
-                {/* Timeout Select */}
                 <div>
-                  <label className="block text-white font-medium mb-2">
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
                     Inactivity Timeout
                   </label>
                   <select
-                    value={timeout}
-                    onChange={(e) => setTimeout(Number(e.target.value))}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={timeoutMins}
+                    onChange={(e) => setTimeoutMins(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                      borderRadius: 'var(--r-md)',
+                      fontFamily: 'inherit',
+                      fontSize: 13,
+                    }}
                   >
                     {TIMEOUT_OPTIONS.map((mins) => {
                       const hours = mins / 60;
-                      return (
-                        <option key={mins} value={mins}>
-                          {hours} hour{hours !== 1 ? 's' : ''}
-                        </option>
-                      );
+                      return <option key={mins} value={mins}>{hours} hour{hours !== 1 ? 's' : ''}</option>;
                     })}
                   </select>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Your session will be locked if there's no activity for this long
-                  </p>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
+                    Your session will be locked after this much inactivity.
+                  </div>
                 </div>
 
-                {/* PIN Section */}
-                <div className="border-t border-gray-700 pt-6">
-                  <h3 className="text-white font-medium mb-4">Set or Change PIN</h3>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-gray-300 text-sm font-medium mb-2">
-                        New PIN (4 digits)
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength="4"
-                        value={newPin}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          setNewPin(val);
-                        }}
-                        placeholder="0000"
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-2xl letter-spacing-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
+                    Set or change PIN
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <Field
+                      label="New PIN (4 digits)"
+                      type="text"
+                      value={newPin}
+                      onChange={(v) => setNewPin(v.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="0000"
+                    />
+                    <Field
+                      label="Confirm PIN"
+                      type="text"
+                      value={confirmPin}
+                      onChange={(v) => setConfirmPin(v.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="0000"
+                    />
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      Enter the same 4-digit PIN twice. This unlocks your session.
                     </div>
-
-                    <div>
-                      <label className="block text-gray-300 text-sm font-medium mb-2">
-                        Confirm PIN
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength="4"
-                        value={confirmPin}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          setConfirmPin(val);
-                        }}
-                        placeholder="0000"
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-2xl letter-spacing-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    <p className="text-xs text-gray-400">
-                      Enter the same 4-digit PIN twice. This PIN will unlock your session after inactivity.
-                    </p>
                   </div>
                 </div>
               </>
             )}
 
-            {/* Error Message */}
-            {pinError && (
-              <div className="flex items-center gap-3 p-4 bg-red-900/20 border border-red-800 rounded-lg">
-                <FiAlertCircle className="text-red-400" size={20} />
-                <p className="text-red-300 text-sm">{pinError}</p>
-              </div>
-            )}
+            {pinError && <StatusMessage kind="error">{pinError}</StatusMessage>}
+            {successMessage && <StatusMessage kind="success">{successMessage}</StatusMessage>}
 
-            {/* Success Message */}
-            {successMessage && (
-              <div className="flex items-center gap-3 p-4 bg-green-900/20 border border-green-800 rounded-lg">
-                <FiCheckCircle className="text-green-400" size={20} />
-                <p className="text-green-300 text-sm">{successMessage}</p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-4 pt-4 border-t border-gray-700">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {isSaving ? 'Saving...' : 'Save Settings'}
-              </button>
-
+            <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <Btn variant="primary" size="md" type="submit" disabled={isSaving}>
+                {isSaving ? <><Spinner /> Saving…</> : 'Save Settings'}
+              </Btn>
               {isEnabled && (
-                <button
-                  type="button"
-                  onClick={lockNow}
-                  className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium"
-                >
-                  Lock Now
-                </button>
+                <Btn variant="outline" size="md" onClick={lockNow}>
+                  <FiLock size={13} /> Lock now
+                </Btn>
               )}
             </div>
           </form>
-        </div>
+        </Card>
 
-        {/* Change Password Section */}
-        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-8">
-          <div className="border-b border-gray-700 px-6 py-4 bg-gray-800/50">
-            <div className="flex items-center gap-3">
-              <FiKey className="text-indigo-500" size={24} />
-              <h2 className="text-xl font-semibold text-white">Change Password</h2>
-            </div>
-          </div>
-
-          <form onSubmit={handleChangePassword} className="p-6 space-y-4">
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">Current Password</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            {passwordError && (
-              <div className="flex items-center gap-3 p-4 bg-red-900/20 border border-red-800 rounded-lg">
-                <FiAlertCircle className="text-red-400 flex-shrink-0" size={20} />
-                <p className="text-red-300 text-sm">{passwordError}</p>
-              </div>
-            )}
-
-            {passwordSuccess && (
-              <div className="flex items-center gap-3 p-4 bg-green-900/20 border border-green-800 rounded-lg">
-                <FiCheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                <p className="text-green-300 text-sm">{passwordSuccess}</p>
-              </div>
-            )}
-
-            <div className="pt-2 border-t border-gray-700">
-              <button
-                type="submit"
-                disabled={isChangingPassword}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {isChangingPassword ? 'Changing...' : 'Change Password'}
-              </button>
+        {/* Password card */}
+        <Card
+          title="Change Password"
+          subtitle="Use a strong password and don't reuse it elsewhere"
+          style={{ marginBottom: 16 }}
+          padding={0}
+        >
+          <form onSubmit={handleChangePassword} style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Current Password" type="password" value={currentPassword} onChange={setCurrentPassword} required autoComplete="current-password" />
+            <Field label="New Password"     type="password" value={newPassword}     onChange={setNewPassword}     required autoComplete="new-password" />
+            <Field label="Confirm New Password" type="password" value={confirmPassword} onChange={setConfirmPassword} required autoComplete="new-password" />
+            {passwordError && <StatusMessage kind="error">{passwordError}</StatusMessage>}
+            {passwordSuccess && <StatusMessage kind="success">{passwordSuccess}</StatusMessage>}
+            <div style={{ paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Btn variant="primary" size="md" type="submit" disabled={isChangingPassword}>
+                <FiKey size={13} />
+                {isChangingPassword ? <><Spinner /> Changing…</> : 'Change Password'}
+              </Btn>
             </div>
           </form>
-        </div>
+        </Card>
 
-        {/* Info Box */}
-        <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
-          <p className="text-blue-200 text-sm">
-            <strong>Note:</strong> Your session is automatically unlocked after entering the correct PIN. Make sure you remember your PIN!
-          </p>
+        {/* Preferences card */}
+        <Card title="Preferences" subtitle="UI and display options" padding={0}>
+          <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {theme === 'dark' ? <FiMoon size={16} color="var(--text-2)" /> : <FiSun size={16} color="var(--text-2)" />}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Dark mode</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Use dark theme by default</div>
+                </div>
+              </div>
+              <Toggle value={theme === 'dark'} onChange={(v) => setTheme(v ? 'dark' : 'light')} />
+            </div>
+          </div>
+        </Card>
+
+        <div
+          style={{
+            marginTop: 16,
+            padding: '12px 14px',
+            background: 'var(--accent-light)',
+            border: '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
+            borderRadius: 'var(--r-md)',
+            color: 'var(--accent)',
+            fontSize: 12,
+          }}
+        >
+          <strong>Note:</strong> Your session is automatically unlocked after entering the correct PIN. Make sure you remember your PIN!
         </div>
       </div>
     </div>

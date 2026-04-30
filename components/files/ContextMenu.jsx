@@ -2,106 +2,161 @@
 
 'use client';
 
-import { FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2, FiRotateCcw, FiStar } from 'react-icons/fi';
-import { isImage, isVideo, isAudio } from '@/lib/clientFileUtils';
+import { useEffect, useRef } from 'react';
+import {
+  FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2,
+  FiRotateCcw, FiStar, FiMusic, FiFileText,
+} from 'react-icons/fi';
+import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
 import { is3dFile } from './Viewer3D';
 
-// Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
 
-export default function ContextMenu({ contextMenu, file, currentPath = '', onNavigateToFolder, onRename, onDownload, onView, onDelete, onRestore, onShare, onToggleFavorite, isFavorite = false, onClose }) {
+function MenuItem({ icon: Icon, label, onClick, danger, accent }) {
+  const color = danger ? 'var(--danger)' : accent ? 'var(--accent)' : 'var(--text)';
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        padding: '8px 10px',
+        fontSize: 13,
+        fontWeight: 500,
+        borderRadius: 'var(--r-xs)',
+        border: 'none',
+        cursor: 'pointer',
+        background: 'transparent',
+        color,
+        transition: 'background 120ms',
+        fontFamily: 'inherit',
+        textAlign: 'left',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      {Icon && <Icon size={14} color={danger ? 'var(--danger)' : 'var(--text-2)'} />}
+      <span style={{ flex: 1 }}>{label}</span>
+    </button>
+  );
+}
+
+function MenuDivider() {
+  return <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />;
+}
+
+export default function ContextMenu({
+  contextMenu,
+  file,
+  currentPath = '',
+  onNavigateToFolder,
+  onRename,
+  onDownload,
+  onView,
+  onDelete,
+  onRestore,
+  onShare,
+  onToggleFavorite,
+  isFavorite = false,
+  onClose,
+}) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose?.();
+    }
+    function escHandler(e) {
+      if (e.key === 'Escape') onClose?.();
+    }
+    const t = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+      document.addEventListener('keydown', escHandler);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', escHandler);
+    };
+  }, [contextMenu, onClose]);
+
   if (!contextMenu || !file) return null;
 
   const inTrash = isInTrash(currentPath);
+  const adjX = Math.min(contextMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 220);
+  const adjY = Math.min(contextMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 800) - 320);
+
+  let viewIcon = null;
+  if (file && !file.isDirectory) {
+    if (is3dFile(file.name)) viewIcon = FiBox;
+    else if (isVideo(file.name)) viewIcon = FiVideo;
+    else if (isImage(file.name)) viewIcon = FiImage;
+    else if (isAudio(file.name)) viewIcon = FiMusic;
+    else if (isPdf(file.name) || isXlsx(file.name)) viewIcon = FiFileText;
+  }
 
   return (
     <div
-      className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-[200px]"
-      style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+      ref={ref}
+      className="tc-anim-scale"
+      style={{
+        position: 'fixed',
+        left: adjX,
+        top: adjY,
+        zIndex: 9000,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--r-md)',
+        boxShadow: 'var(--shadow-xl)',
+        padding: 4,
+        minWidth: 200,
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {file.isDirectory ? (
         <>
-          <button
-            onClick={onNavigateToFolder}
-            className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300"
-          >
-            <FiFolder size={16} />
-            Open Folder
-          </button>
+          <MenuItem icon={FiFolder} label="Open Folder" onClick={onNavigateToFolder} />
           {!inTrash && (
             <>
-              {onRename && (
-                <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <FiEdit size={16} />
-                  Rename
-                </button>
-              )}
-              <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <FiDownload size={16} />
-                Download as ZIP
-              </button>
+              {onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
+              <MenuItem icon={FiDownload} label="Download as ZIP" onClick={onDownload} />
             </>
           )}
         </>
       ) : (
         <>
-          <button onClick={onDownload} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <FiDownload size={16} />
-            Download
-          </button>
-          {!inTrash && onRename && (
-            <button onClick={onRename} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-              <FiEdit size={16} />
-              Rename
-            </button>
-          )}
-          {(isVideo(file.name) || isImage(file.name) || isAudio(file.name) || is3dFile(file.name)) && (
-            <button onClick={onView} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300">
-              {is3dFile(file.name) && <FiBox size={16} />}
-              {isVideo(file.name) && <FiVideo size={16} />}
-              {isImage(file.name) && <FiImage size={16} />}
-              {isAudio(file.name) && <FiVideo size={16} />}
-              View
-            </button>
-          )}
+          <MenuItem icon={FiDownload} label="Download" onClick={onDownload} />
+          {!inTrash && onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
+          {viewIcon && <MenuItem icon={viewIcon} label="View" onClick={onView} accent />}
         </>
       )}
+
       {!inTrash && (
         <>
           {onToggleFavorite && (
-            <button onClick={onToggleFavorite} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
-              <FiStar size={16} className={isFavorite ? 'fill-current' : ''} />
-              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-            </button>
+            <MenuItem
+              icon={FiStar}
+              label={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+              onClick={onToggleFavorite}
+            />
           )}
-          {onShare && (
-            <button onClick={onShare} className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-green-600 dark:text-green-400">
-              <FiShare2 size={16} />
-              Share
-            </button>
-          )}
+          {onShare && <MenuItem icon={FiShare2} label="Share" onClick={onShare} />}
         </>
       )}
+
       {(inTrash || onDelete) && (
         <>
-          <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+          <MenuDivider />
           {inTrash ? (
             <>
-              <button onClick={onRestore} className="w-full px-4 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                <FiRotateCcw size={16} />
-                Restore
-              </button>
-              <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
-                <FiTrash2 size={16} />
-                Delete Permanently
-              </button>
+              <MenuItem icon={FiRotateCcw} label="Restore" onClick={onRestore} accent />
+              <MenuItem icon={FiTrash2} label="Delete Permanently" onClick={onDelete} danger />
             </>
           ) : (
-            <button onClick={onDelete} className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
-              <FiTrash2 size={16} />
-              Delete
-            </button>
+            <MenuItem icon={FiTrash2} label="Delete" onClick={onDelete} danger />
           )}
         </>
       )}

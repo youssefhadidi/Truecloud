@@ -3,9 +3,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiCopy, FiLock, FiCalendar, FiCheck, FiTrash2, FiX, FiLink, FiShare2, FiUpload } from 'react-icons/fi';
+import {
+  FiCopy, FiLock, FiCheck, FiTrash2, FiX, FiLink, FiShare2, FiUpload,
+} from 'react-icons/fi';
 import { useCreateShare, useDeleteShare, useFileShare } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import Overlay from '@/components/ui/Overlay';
+import Btn from '@/components/ui/Btn';
+import IconBtn from '@/components/ui/IconBtn';
+import Field from '@/components/ui/Field';
+import Toggle from '@/components/ui/Toggle';
+import Spinner from '@/components/ui/Spinner';
+import Badge from '@/components/ui/Badge';
+
+const EXPIRY_OPTIONS = [
+  { value: 'never', label: 'Never' },
+  { value: '1h',    label: '1h' },
+  { value: '24h',   label: '24h' },
+  { value: '7d',    label: '7d' },
+  { value: '30d',   label: '30d' },
+];
+
+function calculateExpiry(option) {
+  if (option === 'never') return null;
+  const now = new Date();
+  switch (option) {
+    case '1h':  return new Date(now.getTime() + 60 * 60 * 1000);
+    case '24h': return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    case '7d':  return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    case '30d': return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    default:    return null;
+  }
+}
 
 export default function ShareModal({ file, currentPath, onClose }) {
   const [password, setPassword] = useState('');
@@ -21,26 +50,6 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const deleteShareMutation = useDeleteShare();
   const { data: existingShare, isLoading: checkingShare } = useFileShare(currentPath, file?.name);
 
-  // Calculate expiration date
-  const calculateExpiry = (option) => {
-    if (option === 'never') return null;
-
-    const now = new Date();
-    switch (option) {
-      case '1h':
-        return new Date(now.getTime() + 60 * 60 * 1000);
-      case '24h':
-        return new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      case '7d':
-        return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      case '30d':
-        return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      default:
-        return null;
-    }
-  };
-
-  // Set share URL if existing share
   useEffect(() => {
     if (existingShare) {
       const baseUrl = window.location.origin;
@@ -59,10 +68,9 @@ export default function ShareModal({ file, currentPath, onClose }) {
         expiresAt: calculateExpiry(expiresIn),
         allowUploads: file.isDirectory ? allowUploads : false,
       });
-
       setShareUrl(result.shareUrl);
       addNotification('success', 'Share created successfully');
-    } catch (error) {
+    } catch {
       addNotification('error', 'Failed to create share');
     } finally {
       setLoading(false);
@@ -71,28 +79,25 @@ export default function ShareModal({ file, currentPath, onClose }) {
 
   const deleteShare = async () => {
     if (!existingShare) return;
-
     if (!confirm('Are you sure you want to delete this share?')) return;
-
     try {
       await deleteShareMutation.mutateAsync(existingShare.id);
       setShareUrl(null);
       addNotification('success', 'Share deleted');
       onClose();
-    } catch (error) {
+    } catch {
       addNotification('error', 'Failed to delete share');
     }
   };
 
   const copyLink = async () => {
     if (!shareUrl) return;
-
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       addNotification('success', 'Link copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
+    } catch {
       addNotification('error', 'Failed to copy link');
     }
   };
@@ -100,77 +105,117 @@ export default function ShareModal({ file, currentPath, onClose }) {
   if (!file) return null;
 
   return (
-    <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+    <Overlay onClose={onClose}>
+      <div
+        className="tc-anim-scale"
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 'var(--r-xl)',
+          boxShadow: 'var(--shadow-xl)',
+          width: 460,
+          maxWidth: '95vw',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-              <FiShare2 className="text-green-600 dark:text-green-400" size={20} />
+        <div
+          style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 'var(--r-md)',
+                background: 'var(--success-light)',
+                color: 'var(--success)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <FiShare2 size={16} />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Share {file.isDirectory ? 'Folder' : 'File'}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[250px]">{file.name}</p>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>
+                Share {file.isDirectory ? 'Folder' : 'File'}
+              </div>
+              <div className="tc-truncate" style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                {file.name}
+              </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            <FiX size={20} className="text-gray-500" />
-          </button>
+          <IconBtn icon={FiX} onClick={onClose} title="Close" />
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4 space-y-4">
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {checkingShare ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+              <Spinner size={24} color="var(--accent)" borderColor="var(--border)" thickness={3} />
             </div>
           ) : shareUrl || existingShare ? (
-            // Share exists - show link
             <>
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Share Link</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={shareUrl}
-                    readOnly
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                  />
-                  <button
-                    onClick={copyLink}
-                    className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                      copied
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
+                  SHARE LINK
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--r-sm)',
+                      padding: '8px 12px',
+                      fontSize: 12,
+                      color: 'var(--text-2)',
+                      fontFamily: 'monospace',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                    }}
                   >
-                    {copied ? <FiCheck size={18} /> : <FiCopy size={18} />}
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
+                    {shareUrl}
+                  </div>
+                  <Btn variant={copied ? 'surface' : 'primary'} size="sm" onClick={copyLink}>
+                    {copied ? <FiCheck size={13} /> : <FiCopy size={13} />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </Btn>
                 </div>
               </div>
 
               {existingShare && (
-                <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center justify-between">
-                    <span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       {existingShare.passwordHash ? (
-                        <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                          <FiLock size={14} />
+                        <>
+                          <FiLock size={13} color="var(--success)" />
                           Password protected
-                        </span>
+                        </>
                       ) : (
-                        <span className="flex items-center gap-1">
-                          <FiLink size={14} />
-                          Anyone with the link can access
-                        </span>
+                        <>
+                          <FiLink size={13} />
+                          Anyone with the link
+                        </>
                       )}
                     </span>
-                    <span>{existingShare.accessCount} views</span>
+                    <Badge color="accent">{existingShare.accessCount} views</Badge>
                   </div>
                   {existingShare.allowUploads && (
-                    <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                      <FiUpload size={14} />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}>
+                      <FiUpload size={13} />
                       Uploads enabled
                     </div>
                   )}
@@ -178,72 +223,72 @@ export default function ShareModal({ file, currentPath, onClose }) {
               )}
             </>
           ) : (
-            // No share exists - show create form
             <>
               {/* Password protection */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={usePassword}
-                    onChange={(e) => setUsePassword(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <div className="flex items-center gap-2">
-                    <FiLock size={16} className="text-gray-500" />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Password protection</span>
-                  </div>
-                </label>
-
-                {usePassword && (
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    autoComplete="new-password"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FiLock size={14} color="var(--text-2)" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Password protection</span>
+                </div>
+                <Toggle value={usePassword} onChange={setUsePassword} />
               </div>
+              {usePassword && (
+                <Field
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Enter password"
+                  autoComplete="new-password"
+                />
+              )}
 
               {/* Expiration */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  <FiCalendar size={16} className="text-gray-500" />
-                  Link expiration
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
+                  EXPIRES
                 </label>
-                <select
-                  value={expiresIn}
-                  onChange={(e) => setExpiresIn(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="never">Never expires</option>
-                  <option value="1h">1 hour</option>
-                  <option value="24h">24 hours</option>
-                  <option value="7d">7 days</option>
-                  <option value="30d">30 days</option>
-                </select>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {EXPIRY_OPTIONS.map((o) => {
+                    const active = expiresIn === o.value;
+                    return (
+                      <button
+                        key={o.value}
+                        onClick={() => setExpiresIn(o.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 0',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          borderRadius: 'var(--r-xs)',
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          background: active ? 'var(--accent-light)' : 'transparent',
+                          color: active ? 'var(--accent)' : 'var(--text-2)',
+                          cursor: 'pointer',
+                          transition: 'all 150ms',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Allow uploads (only for directories) */}
+              {/* Allow uploads (folders only) */}
               {file.isDirectory && (
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={allowUploads}
-                      onChange={(e) => setAllowUploads(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="flex items-center gap-2">
-                      <FiUpload size={16} className="text-gray-500" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Allow uploads</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <FiUpload size={14} color="var(--text-2)" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Allow uploads</span>
                     </div>
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 ml-7">
-                    Anyone with the link can upload files to this folder
-                  </p>
+                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                      Anyone with the link can upload to this folder.
+                    </div>
+                  </div>
+                  <Toggle value={allowUploads} onChange={setAllowUploads} />
                 </div>
               )}
             </>
@@ -251,46 +296,48 @@ export default function ShareModal({ file, currentPath, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+        <div
+          style={{
+            padding: '14px 24px',
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
           {existingShare ? (
             <>
-              <button
-                onClick={deleteShare}
-                className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <FiTrash2 size={16} />
+              <Btn variant="danger" size="sm" onClick={deleteShare}>
+                <FiTrash2 size={13} />
                 Delete Share
-              </button>
-              <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                Close
-              </button>
+              </Btn>
+              <Btn variant="outline" size="sm" onClick={onClose}>Close</Btn>
             </>
           ) : (
             <>
-              <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button
+              <Btn variant="outline" size="sm" onClick={onClose}>Cancel</Btn>
+              <Btn
+                variant="primary"
+                size="sm"
                 onClick={createShare}
                 disabled={loading || (usePassword && !password)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Creating...
+                    <Spinner size={12} />
+                    Creating…
                   </>
                 ) : (
                   <>
-                    <FiShare2 size={16} />
+                    <FiShare2 size={13} />
                     Create Share
                   </>
                 )}
-              </button>
+              </Btn>
             </>
           )}
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

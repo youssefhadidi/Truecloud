@@ -377,79 +377,95 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
     };
   }, [fileId, currentPath, fileName, shareToken, sharePassword]);
 
+  const cubeBtn = (active) => ({
+    fontSize: 11,
+    fontWeight: 700,
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    background: active ? 'var(--accent)' : 'rgba(255,255,255,.10)',
+    color: active ? '#fff' : 'rgba(255,255,255,.85)',
+    transition: 'background 120ms',
+  });
+
   return (
-    <div className="w-full h-full flex flex-col gap-2 relative">
+    <div style={{ width: '100%', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded z-50">
-          <div className="text-white">Loading 3D model...</div>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,.55)',
+            zIndex: 50,
+          }}
+        >
+          <div className="mv-loader-card">
+            <div className="mv-spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
+            <span className="mv-loader-card__text">Loading 3D model…</span>
+          </div>
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded z-50">
-          <div className="text-red-400">{error}</div>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,.55)',
+            zIndex: 50,
+          }}
+        >
+          <div
+            className="mv-video-state-card"
+            style={{
+              padding: '20px 28px',
+              background: 'var(--danger-light)',
+              borderColor: 'var(--danger)',
+              color: 'var(--danger)',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
         </div>
       )}
-      <div ref={mountRef} className="flex-1 w-full rounded bg-gray-900 relative">
-        {/* Cube Camera Control */}
-        <div className="absolute top-4 right-4 w-24 h-24 bg-gray-800 bg-opacity-80 rounded-lg p-1 z-40">
-          <div className="relative w-full h-full grid grid-cols-3 gap-0.5">
-            {/* Top face */}
-            <button
-              onClick={() => jumpToView('top')}
-              className={`col-span-1 text-xs font-bold rounded ${currentView === 'top' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Top"
-            >
-              T
-            </button>
-            <div className="col-span-1" />
-            <button
-              onClick={() => jumpToView('isometric')}
-              className={`col-span-1 text-xs font-bold rounded ${currentView === 'isometric' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Isometric"
-            >
-              ISO
-            </button>
-
-            {/* Left, Front, Right */}
-            <button
-              onClick={() => jumpToView('left')}
-              className={`text-xs font-bold rounded ${currentView === 'left' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Left"
-            >
-              L
-            </button>
-            <button
-              onClick={() => jumpToView('front')}
-              className={`text-xs font-bold rounded ${currentView === 'front' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Front"
-            >
-              F
-            </button>
-            <button
-              onClick={() => jumpToView('right')}
-              className={`text-xs font-bold rounded ${currentView === 'right' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Right"
-            >
-              R
-            </button>
-
-            {/* Bottom face */}
-            <div className="col-span-1" />
-            <button
-              onClick={() => jumpToView('bottom')}
-              className={`col-span-1 text-xs font-bold rounded ${currentView === 'bottom' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Bottom"
-            >
-              B
-            </button>
-            <button
-              onClick={() => jumpToView('back')}
-              className={`col-span-1 text-xs font-bold rounded ${currentView === 'back' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title="Back"
-            >
-              BK
-            </button>
-          </div>
+      <div ref={mountRef} style={{ flex: 1, width: '100%', position: 'relative', background: '#0f172a', borderRadius: 0 }}>
+        {/* Cube camera control */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 14,
+            right: 14,
+            width: 96,
+            height: 96,
+            background: 'rgba(15,23,42,.72)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,.10)',
+            borderRadius: 10,
+            padding: 4,
+            zIndex: 40,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateRows: 'repeat(3, 1fr)',
+            gap: 3,
+          }}
+        >
+          <button onClick={() => jumpToView('top')} style={cubeBtn(currentView === 'top')} title="Top">T</button>
+          <div />
+          <button onClick={() => jumpToView('isometric')} style={cubeBtn(currentView === 'isometric')} title="Isometric">ISO</button>
+          <button onClick={() => jumpToView('left')} style={cubeBtn(currentView === 'left')} title="Left">L</button>
+          <button onClick={() => jumpToView('front')} style={cubeBtn(currentView === 'front')} title="Front">F</button>
+          <button onClick={() => jumpToView('right')} style={cubeBtn(currentView === 'right')} title="Right">R</button>
+          <div />
+          <button onClick={() => jumpToView('bottom')} style={cubeBtn(currentView === 'bottom')} title="Bottom">B</button>
+          <button onClick={() => jumpToView('back')} style={cubeBtn(currentView === 'back')} title="Back">BK</button>
         </div>
       </div>
     </div>

@@ -2,28 +2,28 @@
 
 'use client';
 
-/**
- * Reusable confirm dialog component that replaces the button/action it was triggered from
- * @param {string} message - The confirmation message to display
- * @param {function} onCancel - Callback when Cancel is clicked
- * @param {function} onConfirm - Callback when Confirm is clicked
- * @param {boolean} isLoading - Optional loading state for the confirm button
- */
+import Btn from '@/components/ui/Btn';
+
 export default function Confirm({ message, onCancel, onConfirm, isLoading = false }) {
   return (
-    <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-sm space-y-2 border border-gray-200 dark:border-gray-600">
-      <p className="text-gray-900 dark:text-white">{message}</p>
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={onCancel}
-          disabled={isLoading}
-          className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Cancel
-        </button>
-        <button onClick={onConfirm} disabled={isLoading} className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition-colors">
-          {isLoading ? 'Loading...' : 'Confirm'}
-        </button>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--r-md)',
+        padding: 12,
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <p style={{ fontSize: 13, color: 'var(--text)', margin: 0 }}>{message}</p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+        <Btn variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>Cancel</Btn>
+        <Btn variant="primary" size="sm" onClick={onConfirm} disabled={isLoading}>
+          {isLoading ? 'Loading…' : 'Confirm'}
+        </Btn>
       </div>
     </div>
   );

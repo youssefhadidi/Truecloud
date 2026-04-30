@@ -1,30 +1,59 @@
 /** @format */
 
+import { FiCloud } from 'react-icons/fi';
+
 export const metadata = {
-  title: 'Shared File - TrueCloud',
+  title: 'Shared File · Truecloud',
   description: 'View shared file',
 };
 
 export default function ShareLayout({ children }) {
   return (
-    <div className="h-dvh bg-gray-50 dark:bg-gray-900 flex flex-col flex-grow">
-        {/* Minimal header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                </svg>
-                <span className="text-xl font-semibold text-gray-900 dark:text-white">TrueCloud</span>
-              </div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Shared with you</span>
-            </div>
+    <div
+      style={{
+        height: '100dvh',
+        background: 'var(--bg)',
+        color: 'var(--text)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexGrow: 1,
+      }}
+    >
+      <header
+        style={{
+          height: 'var(--header-h)',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          gap: 12,
+          flexShrink: 0,
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--r-sm)',
+              background: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <FiCloud size={14} color="#fff" />
           </div>
-        </header>
-
-        {/* Main content */}
-        <main className="flex-1 w-full min-h-0 flex flex-col">{children}</main>
-      </div>
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>Truecloud</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Shared with you</span>
+      </header>
+      <main style={{ flex: 1, width: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {children}
+      </main>
+    </div>
   );
 }
