@@ -6,7 +6,7 @@ import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHand
 import { List, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
-  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck,
+  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
 import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
@@ -362,7 +362,7 @@ const ListView = forwardRef(({
                       position: 'absolute',
                       top: -4,
                       right: -4,
-                      background: 'var(--success)',
+                      background: file.isDirectory ? 'var(--warning)' : 'var(--success)',
                       color: '#fff',
                       borderRadius: 99,
                       width: 14,
@@ -373,7 +373,7 @@ const ListView = forwardRef(({
                       boxShadow: 'var(--shadow-sm)',
                     }}
                   >
-                    <FiShare2 size={7} />
+                    {file.isDirectory ? <FiStar size={8} fill="currentColor" /> : <FiShare2 size={7} />}
                   </div>
                 )}
               </div>

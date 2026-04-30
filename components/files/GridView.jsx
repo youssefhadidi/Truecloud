@@ -6,7 +6,7 @@ import { useRef, useMemo, useCallback, useState, memo, forwardRef, useImperative
 import { Grid, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
-  FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck,
+  FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { is3dFile } from '@/components/files/Viewer3D';
@@ -268,6 +268,29 @@ const GridItem = memo(
                 }}
               >
                 <FiShare2 size={9} />
+              </div>
+            )}
+
+            {item.isDirectory && isFavorite && (
+              <div
+                title="Favorite"
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: sharedPath ? 32 : 8,
+                  zIndex: 4,
+                  background: 'var(--warning)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiStar size={10} fill="currentColor" />
               </div>
             )}
 
