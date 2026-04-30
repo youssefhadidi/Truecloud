@@ -4,10 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import {
-  FiX, FiDownload, FiMaximize2, FiMinimize2,
-  FiChevronLeft, FiChevronRight,
-} from 'react-icons/fi';
+import { FiX, FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { VideoPlayer } from './viewers/VideoPlayer';
@@ -41,17 +38,10 @@ const XlsxViewer = dynamic(() => import('./XlsxViewer'), {
   ),
 });
 
-const CHROME_HIDE_MS = 2500;
-
 function PDFViewer({ file, getFileUrl, onClick }) {
   return (
     <div className="mv-pdf-wrapper">
-      <iframe
-        className="mv-pdf-frame"
-        src={getFileUrl(file, 'pdf')}
-        title={file.name}
-        onClick={onClick}
-      />
+      <iframe className="mv-pdf-frame" src={getFileUrl(file, 'pdf')} title={file.name} onClick={onClick} />
     </div>
   );
 }
@@ -60,7 +50,9 @@ function UnsupportedViewer({ file, getFileUrl }) {
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="mv-loader-card" style={{ flexDirection: 'column', gap: 12, padding: '28px 36px', textAlign: 'center' }}>
-        <span className="mv-loader-card__text" style={{ fontWeight: 600, color: 'var(--text)' }}>Preview unavailable</span>
+        <span className="mv-loader-card__text" style={{ fontWeight: 600, color: 'var(--text)' }}>
+          Preview unavailable
+        </span>
         <span className="mv-loader-card__text" style={{ fontSize: 12 }}>
           This file type can&apos;t be previewed in the browser.
         </span>
@@ -87,31 +79,16 @@ function UnsupportedViewer({ file, getFileUrl }) {
   );
 }
 
-export default function MediaViewer({
-  viewerFile,
-  viewableFiles,
-  currentPath,
-  onClose,
-  onNavigate,
-  onSelectFile,
-  shareToken,
-  sharePassword,
-}) {
+export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [chromeVisible, setChromeVisible] = useState(true);
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
-  const hideTimerRef = useRef(null);
 
-  const {
-    isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen,
-    stripRef, scrollTimeoutRef, programmaticScrollRef,
-    currentIndex, canGoPrev, canGoNext,
-  } = useMediaViewerState(viewerFile, viewableFiles);
+  const { isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen, stripRef, scrollTimeoutRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
+    useMediaViewerState(viewerFile, viewableFiles);
 
-  const { handleStripScroll } = useMediaViewerScroll(
-    stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile,
-  );
+  const { handleStripScroll } = useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile);
   const { handleShareOrDownload } = useShareOrDownload();
 
   const getFileUrl = useCallback(
@@ -141,14 +118,10 @@ export default function MediaViewer({
 
       // Authenticated branch
       if (type === 'image' || type === 'full') {
-        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(
-          currentPath,
-        )}&quality=85&w=2000&h=2000`;
+        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
       }
       if (type === 'thumbnail') {
-        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(
-          currentPath,
-        )}&quality=60&w=400&h=400`;
+        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=60&w=400&h=400`;
       }
       const stage = type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download';
       return `/api/files/${stage}/${file.id}?path=${encodeURIComponent(currentPath)}`;
@@ -156,24 +129,14 @@ export default function MediaViewer({
     [shareToken, sharePassword, currentPath],
   );
 
-  // Auto-hide chrome in fullscreen
+  // Chrome (header / strip / nav buttons) is always visible — no auto-hide.
   const showChrome = useCallback(() => {
     setChromeVisible(true);
-    clearTimeout(hideTimerRef.current);
-    if (effectiveFullscreen) {
-      hideTimerRef.current = setTimeout(() => setChromeVisible(false), CHROME_HIDE_MS);
-    }
-  }, [effectiveFullscreen]);
+  }, []);
 
   useEffect(() => {
-    if (effectiveFullscreen) {
-      showChrome();
-    } else {
-      clearTimeout(hideTimerRef.current);
-      setChromeVisible(true);
-    }
-    return () => clearTimeout(hideTimerRef.current);
-  }, [effectiveFullscreen, showChrome]);
+    setChromeVisible(true);
+  }, [effectiveFullscreen]);
 
   // Keyboard nav
   useEffect(() => {
@@ -293,13 +256,7 @@ export default function MediaViewer({
           </div>
 
           {/* Stage */}
-          <div
-            className="mv-stage"
-            onContextMenu={handleContextMenu}
-            onClick={() => setContextMenu(null)}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
+          <div className="mv-stage" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             <div className="mv-stage__content">{renderMedia()}</div>
 
             {multi && (
@@ -309,7 +266,10 @@ export default function MediaViewer({
                   className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
                   aria-label="Previous"
                   disabled={!canGoPrev}
-                  onClick={(e) => { e.stopPropagation(); onNavigate?.('prev'); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNavigate?.('prev');
+                  }}
                 >
                   <FiChevronLeft size={22} />
                 </button>
@@ -318,7 +278,10 @@ export default function MediaViewer({
                   className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
                   aria-label="Next"
                   disabled={!canGoNext}
-                  onClick={(e) => { e.stopPropagation(); onNavigate?.('next'); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNavigate?.('next');
+                  }}
                 >
                   <FiChevronRight size={22} />
                 </button>
@@ -340,12 +303,7 @@ export default function MediaViewer({
             />
           )}
 
-          <ContextMenu
-            contextMenu={contextMenu}
-            file={viewerFile}
-            onDownload={handleDownload}
-            onClose={() => setContextMenu(null)}
-          />
+          <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
         </div>
       </div>
     );
@@ -353,21 +311,21 @@ export default function MediaViewer({
 
   // Fullscreen mode (auto-hide chrome)
   return (
-    <div className="mv-fullscreen" onMouseMove={showChrome} onTouchStart={(e) => { showChrome(); handleTouchStart(e); }}>
+    <div
+      className="mv-fullscreen"
+      onMouseMove={showChrome}
+      onTouchStart={(e) => {
+        showChrome();
+        handleTouchStart(e);
+      }}
+    >
       {/* Glass header */}
       <div className={`mv-header mv-header--glass mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}>
-        <button
-          type="button"
-          className="mv-icon-btn mv-icon-btn--glass mv-icon-btn--close-glass"
-          title="Close"
-          onClick={onClose}
-        >
+        <button type="button" className="mv-icon-btn mv-icon-btn--glass mv-icon-btn--close-glass" title="Close" onClick={onClose}>
           <FiX size={15} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {viewerFile.name}
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{viewerFile.name}</div>
           {multi && (
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
               {currentIndex + 1} / {total}
@@ -404,7 +362,10 @@ export default function MediaViewer({
               className={`mv-nav-btn mv-nav-btn--glass mv-stage__nav mv-stage__nav--prev mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}
               aria-label="Previous"
               disabled={!canGoPrev}
-              onClick={(e) => { e.stopPropagation(); onNavigate?.('prev'); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate?.('prev');
+              }}
             >
               <FiChevronLeft size={22} />
             </button>
@@ -413,7 +374,10 @@ export default function MediaViewer({
               className={`mv-nav-btn mv-nav-btn--glass mv-stage__nav mv-stage__nav--next mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}
               aria-label="Next"
               disabled={!canGoNext}
-              onClick={(e) => { e.stopPropagation(); onNavigate?.('next'); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate?.('next');
+              }}
             >
               <FiChevronRight size={22} />
             </button>
@@ -438,12 +402,7 @@ export default function MediaViewer({
         </div>
       )}
 
-      <ContextMenu
-        contextMenu={contextMenu}
-        file={viewerFile}
-        onDownload={handleDownload}
-        onClose={() => setContextMenu(null)}
-      />
+      <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
     </div>
   );
 }

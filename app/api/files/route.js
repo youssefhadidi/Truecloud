@@ -177,6 +177,12 @@ export async function GET(req) {
     // Filter out trash folder at root (system folder, not for direct browsing)
     files = files.filter((file) => file.name !== 'trash');
 
+    // Filter out Windows-generated system files that aren't useful to surface.
+    // Reason: Windows creates these as side effects of folder browsing and
+    // they clutter the listing without ever being user content.
+    const HIDDEN_NAMES = new Set(['Thumbs..db', 'Thumbs.db:encryptable']);
+    files = files.filter((file) => !HIDDEN_NAMES.has(file.name));
+
     // Normalize paths for frontend (hide uploads/ prefix only, preserve user folder structure)
     files = files.map((file) => {
       let normalizedPath = file.path.replace(/\\/g, '/');

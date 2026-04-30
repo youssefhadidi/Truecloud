@@ -920,7 +920,7 @@ function FilesPageContent() {
           z-index: 30;
         }
         @media (min-width: 640px) {
-          .tc-sidebar-wrap { display: block; }
+          .tc-sidebar-wrap { display: flex; align-self: stretch; min-height: 0; }
           .tc-mobile-search { display: none; }
           [data-show-filter] { display: flex !important; }
         }
