@@ -87,6 +87,7 @@ const GridItem = memo(
     onResumeDownload,
     onRemoveDownload,
     isGlobalSearch,
+    isFavorite,
   }) => {
     const kind = fileKind(item);
     const isFolder = item.isDirectory;
@@ -271,7 +272,7 @@ const GridItem = memo(
               </div>
             )}
 
-            {item.isDirectory && isFavorite && (
+            {isFavorite && (
               <div
                 title="Favorite"
                 style={{
@@ -656,6 +657,7 @@ const GridView = forwardRef(
       formatFileSize,
       onInitiateShare,
       sharedPaths,
+      favoritePaths,
       onContextMenu,
       selectionMode,
       selectedFiles,
@@ -722,6 +724,7 @@ const GridView = forwardRef(
         if (!item) return <div key={key} style={style} />;
         const cellWidth = style.width - gap;
         const isShared = sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
+        const isFavorite = favoritePaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
         return (
           <GridItem
             key={key}
@@ -753,6 +756,7 @@ const GridView = forwardRef(
             formatFileSize={formatFileSize}
             onInitiateShare={onInitiateShare}
             sharedPath={isShared}
+            isFavorite={isFavorite}
             onContextMenu={onContextMenu}
             selectionMode={selectionMode}
             isSelected={!!selectedFiles?.has(item.name)}
@@ -775,7 +779,7 @@ const GridView = forwardRef(
         onConfirmRename, onCancelRename, onNavigateToFolder, processingFile, currentPath,
         onOpenMediaViewer, onInitiateRename, onHandleDownload, onInitiateDelete, onInitiateShare,
         formatFileSize, showingActionsFor, handleTouchStart, handleTouchEnd, handleTouchMove,
-        shouldShowActions, sharedPaths, onContextMenu, selectionMode, selectedFiles, onToggleSelect,
+        shouldShowActions, sharedPaths, favoritePaths, onContextMenu, selectionMode, selectedFiles, onToggleSelect,
         isGlobalSearch, onPauseDownload, onResumeDownload, onRemoveDownload,
       ],
     );

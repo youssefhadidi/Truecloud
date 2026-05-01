@@ -91,6 +91,7 @@ const ListView = forwardRef(({
   initiateDelete,
   initiateShare,
   sharedPaths,
+  favoritePaths,
   currentPath,
   selectionMode,
   selectedFiles,
@@ -286,6 +287,7 @@ const ListView = forwardRef(({
 
       const isSelected = !!selectedFiles?.has(file.name);
       const isShared = sharedPaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
+      const isFavorite = favoritePaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
 
       return (
         <div
@@ -362,7 +364,7 @@ const ListView = forwardRef(({
                       position: 'absolute',
                       top: -4,
                       right: -4,
-                      background: file.isDirectory ? 'var(--warning)' : 'var(--success)',
+                      background: 'var(--success)',
                       color: '#fff',
                       borderRadius: 99,
                       width: 14,
@@ -373,7 +375,28 @@ const ListView = forwardRef(({
                       boxShadow: 'var(--shadow-sm)',
                     }}
                   >
-                    {file.isDirectory ? <FiStar size={8} fill="currentColor" /> : <FiShare2 size={7} />}
+                    <FiShare2 size={7} />
+                  </div>
+                )}
+                {isFavorite && (
+                  <div
+                    title="Favorite"
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      left: -4,
+                      background: 'var(--warning)',
+                      color: '#fff',
+                      borderRadius: 99,
+                      width: 14,
+                      height: 14,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: 'var(--shadow-sm)',
+                    }}
+                  >
+                    <FiStar size={8} fill="currentColor" />
                   </div>
                 )}
               </div>
@@ -467,7 +490,7 @@ const ListView = forwardRef(({
     },
     [
       allItems, deletingFile, renamingFile, newFolderName, newFileName, isMobile, gridColsDesktop, gridColsMobile,
-      currentPath, sharedPaths, selectionMode, selectedFiles, processingFile, shouldShowActions,
+      currentPath, sharedPaths, favoritePaths, selectionMode, selectedFiles, processingFile, shouldShowActions,
       navigateToFolder, openMediaViewer, initiateRename, setNewFileName, cancelRename, confirmRename,
       handleDownload, initiateDelete, cancelDelete, confirmDelete, initiateShare, onToggleSelect,
       onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize, isGlobalSearch,

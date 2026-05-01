@@ -126,6 +126,7 @@ function FilesPageContent() {
 
   const { data: favorites = [] } = useFavorites();
   const { toggleFavorite } = useToggleFavorite();
+  const favoritePaths = useMemo(() => new Set(favorites.map((f) => f.path)), [favorites]);
   const moveMutation = useMoveFiles();
   const bulkDeleteMutation = useDeleteFile(state.currentPath);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -696,6 +697,7 @@ function FilesPageContent() {
                         initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
                         initiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
                         sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
+                        favoritePaths={isGlobalSearch ? undefined : favoritePaths}
                         currentPath={state.currentPath}
                         isGlobalSearch={isGlobalSearch}
                         selectionMode={isGlobalSearch ? false : state.selectionMode}
@@ -764,6 +766,7 @@ function FilesPageContent() {
                       onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
                       onInitiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
                       sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
+                      favoritePaths={isGlobalSearch ? undefined : favoritePaths}
                       selectionMode={isGlobalSearch ? false : state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
