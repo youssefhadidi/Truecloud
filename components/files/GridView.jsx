@@ -817,4 +817,4 @@ const GridView = forwardRef(
 
 GridView.displayName = 'GridView';
 
-export default GridView;
+export default memo(GridView);

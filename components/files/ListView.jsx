@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo, memo } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
@@ -537,4 +537,4 @@ function miniBtn(variant) {
 
 ListView.displayName = 'ListView';
 
-export default ListView;
+export default memo(ListView);

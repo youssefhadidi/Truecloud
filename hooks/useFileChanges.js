@@ -17,6 +17,8 @@ export function useFileChanges() {
   const queryClient = useQueryClient();
   const { subscribe } = useWebSocket();
   const sessionRef = useRef(session);
+  const pendingPathsRef = useRef(new Set());
+  const flushTimerRef = useRef(null);
 
   // Keep sessionRef in sync with session
   useEffect(() => {
@@ -24,34 +26,39 @@ export function useFileChanges() {
   }, [session]);
 
   useEffect(() => {
-    // Subscribe to file-change messages
+    const flushInvalidations = () => {
+      for (const p of pendingPathsRef.current) {
+        queryClient.invalidateQueries({ queryKey: ['files', p] });
+      }
+      pendingPathsRef.current.clear();
+    };
+
     const unsubscribe = subscribe('file-change', (message) => {
       try {
         const { path, userId } = message.payload;
 
-        // Skip invalidation for changes made by current user (avoid double invalidation)
         const currentUserId = sessionRef.current?.user?.id;
         if (currentUserId && userId === currentUserId) {
           return;
         }
 
-        // Invalidate the cache for the affected path
-        // This will trigger a refetch of the files list
-        queryClient.invalidateQueries({ queryKey: ['files', path] });
-
-        // Also invalidate parent directories for better UX
-        // For example, if a file changes in 'folder/subfolder', also invalidate 'folder'
+        pendingPathsRef.current.add(path);
         if (path && path.includes('/')) {
           const parentPath = path.substring(0, path.lastIndexOf('/'));
-          if (parentPath) {
-            queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
-          }
+          if (parentPath) pendingPathsRef.current.add(parentPath);
         }
+
+        // Batch invalidations — flush once after 300 ms of quiet
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = setTimeout(flushInvalidations, 300);
       } catch (err) {
         console.error('[FILE CHANGES] Error processing message:', err);
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      clearTimeout(flushTimerRef.current);
+    };
   }, [subscribe, queryClient]);
 }

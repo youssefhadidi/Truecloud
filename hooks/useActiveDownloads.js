@@ -33,6 +33,7 @@ export function useActiveDownloads(initialDownloads = []) {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
   const initializedRef = useRef(false); // Track if we've initialized to prevent reinitializing on every apiDownloads change
+  const rafPendingRef = useRef(false); // RAF flush is scheduled
   const { subscribe } = useWebSocket(); // Call hook at top level
   const pauseMutation = usePauseDownload();
   const resumeMutation = useResumeDownload();
@@ -46,6 +47,17 @@ export function useActiveDownloads(initialDownloads = []) {
     }
     setDownloads(obj);
   }, []);
+
+  // Batches high-frequency progress updates — flushes once per animation frame
+  const scheduleSync = useCallback(() => {
+    if (!rafPendingRef.current) {
+      rafPendingRef.current = true;
+      requestAnimationFrame(() => {
+        rafPendingRef.current = false;
+        syncDownloads();
+      });
+    }
+  }, [syncDownloads]);
 
   // Initialize with provided downloads (from API or caller) - only once on mount
   // Do NOT reinitialize when initialDownloads changes, as that clears WebSocket updates
@@ -85,7 +97,7 @@ export function useActiveDownloads(initialDownloads = []) {
               ...existing,
               ...payload,
             });
-            syncDownloads();
+            scheduleSync(); // batched — avoids a setState per-second per-download
           }
         } else if (payload.type === 'download-added') {
           const existing = downloadsRef.current.get(payload.gid);
@@ -173,7 +185,7 @@ export function useActiveDownloads(initialDownloads = []) {
     });
 
     return unsubscribe;
-  }, [syncDownloads]);
+  }, [syncDownloads, scheduleSync]);
 
   // Add a download to the tracked map (called when user starts a download from UI)
   const addDownload = useCallback(
