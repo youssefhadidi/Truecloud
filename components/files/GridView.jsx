@@ -610,7 +610,7 @@ const GridItem = memo(
   },
 );
 
-function iconBtnStyle(activeColor) {
+function iconBtnStyle() {
   return {
     width: 26,
     height: 26,
@@ -718,7 +718,7 @@ const GridView = forwardRef(
       ({ columnIndex, key, rowIndex, style, parent }) => {
         const containerWidth = parent.props.width;
         const columns = getColumnsCount(containerWidth);
-        const gap = 12;
+        const gap = containerWidth < BREAKPOINT.sm ? 4 : 12;
         const itemIndex = rowIndex * columns + columnIndex;
         const item = allItems[itemIndex];
         if (!item) return <div key={key} style={style} />;

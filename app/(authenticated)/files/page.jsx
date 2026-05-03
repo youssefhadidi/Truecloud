@@ -605,7 +605,7 @@ function FilesPageContent() {
         </div>
 
         {/* Files area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, padding: '12px 16px 16px' }}>
+        <div className="files-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div
             style={{
               flex: 1,
