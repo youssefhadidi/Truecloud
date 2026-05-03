@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useRef, useMemo, useCallback, useState, memo, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useMemo, useCallback, useState, useEffect, memo, forwardRef, useImperativeHandle } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
@@ -742,6 +742,13 @@ const GridView = forwardRef(
     const containerWidthRef = useRef(0);
     const [showingActionsFor, setShowingActionsFor] = useState(null);
     const longPressTimerRef = useRef(null);
+
+    useEffect(() => {
+      if (!showingActionsFor) return;
+      const prevent = (e) => e.preventDefault();
+      document.addEventListener('touchmove', prevent, { passive: false });
+      return () => document.removeEventListener('touchmove', prevent);
+    }, [showingActionsFor]);
 
     const allItems = useMemo(() => {
       const items = [...files];
