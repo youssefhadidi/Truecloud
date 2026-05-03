@@ -79,7 +79,7 @@ export async function POST(req) {
     if (user.role !== 'admin') {
       const userDir = join(UPLOAD_DIR, `user_${user.id}`);
       if (!existsSync(userDir)) {
-        await mkdir(userDir, { recursive: true });
+        await mkdir(userDir, { recursive: true, mode: 0o775 });
       }
     }
 
