@@ -133,10 +133,15 @@ input  { font-family: inherit; }
 @keyframes tc-toastIn  { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:translateX(0); } }
 @keyframes tc-toastOut { to { opacity:0; transform:translateX(32px); } }
 @keyframes tc-pulse    { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes tc-sheetUp  { from { transform:translateY(100%); } to { transform:translateY(0); } }
 
 .tc-anim-fade  { animation: tc-fadeIn  200ms ease both; }
 .tc-anim-scale { animation: tc-scaleIn 180ms cubic-bezier(.32,.72,0,1) both; }
 .tc-anim-slide { animation: tc-slideUp 220ms ease both; }
+.tc-anim-sheet { animation: tc-sheetUp 260ms cubic-bezier(.32,.72,0,1) both; }
+
+/* Show grid card action buttons on hover (desktop only) */
+.tc-grid-wrap:hover .tc-grid-actions { opacity: 1 !important; }
 
 /* ── Drag overlay ───────────────────────────────────────── */
 .tc-drag-overlay {

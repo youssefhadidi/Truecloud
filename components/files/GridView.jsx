@@ -96,6 +96,7 @@ const GridItem = memo(
     const wrapStyle = {
       ...style,
       padding: gap / 2,
+      position: 'relative',
     };
 
     const cardBase = {
@@ -117,7 +118,7 @@ const GridItem = memo(
     };
 
     return (
-      <div style={wrapStyle}>
+      <div className="tc-grid-wrap" style={wrapStyle}>
         {isCreating ? (
           <div
             style={{
@@ -521,14 +522,17 @@ const GridItem = memo(
               </div>
             </div>
 
-            {/* Hover/long-press actions */}
-            {!isGlobalSearch && !selectionMode && (shouldShowActions(item.id) || containerWidth >= BREAKPOINT.sm) && (
+          </div>
+        )}
+
+            {/* Desktop hover icon bar */}
+            {!isGlobalSearch && !selectionMode && containerWidth >= BREAKPOINT.sm && !item.isDownloading && !isCreating && (
               <div
                 className="tc-grid-actions"
                 style={{
                   position: 'absolute',
-                  top: 8,
-                  right: 8,
+                  top: gap / 2 + 8,
+                  right: gap / 2 + 8,
                   display: 'flex',
                   gap: 4,
                   background: 'var(--surface)',
@@ -537,14 +541,14 @@ const GridItem = memo(
                   boxShadow: 'var(--shadow-md)',
                   padding: 3,
                   zIndex: 6,
-                  opacity: containerWidth >= BREAKPOINT.sm && !shouldShowActions(item.id) ? 0 : 1,
+                  opacity: 0,
                   transition: 'opacity 120ms',
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {isViewableFile(item) && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onOpenMediaViewer(item); }}
+                    onClick={(e) => { e.stopPropagation(); onOpenMediaViewer(item); }}
                     title="View"
                     disabled={processingFile === item.id}
                     style={iconBtnStyle('var(--accent)')}
@@ -559,7 +563,7 @@ const GridItem = memo(
                   </button>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(item); }}
+                  onClick={(e) => { e.stopPropagation(); onInitiateRename(item); }}
                   title="Rename"
                   disabled={processingFile === item.id}
                   style={iconBtnStyle('var(--accent)')}
@@ -567,7 +571,7 @@ const GridItem = memo(
                   <FiEdit size={14} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onHandleDownload(item.id, item.name); }}
+                  onClick={(e) => { e.stopPropagation(); onHandleDownload(item.id, item.name); }}
                   title="Download"
                   disabled={processingFile === item.id}
                   style={iconBtnStyle('var(--accent)')}
@@ -575,7 +579,7 @@ const GridItem = memo(
                   <FiDownload size={14} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(item); }}
+                  onClick={(e) => { e.stopPropagation(); onInitiateDelete(item); }}
                   title="Delete"
                   disabled={processingFile === item.id}
                   style={iconBtnStyle('var(--danger)')}
@@ -584,7 +588,7 @@ const GridItem = memo(
                 </button>
                 {onInitiateShare && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateShare(item); }}
+                    onClick={(e) => { e.stopPropagation(); onInitiateShare(item); }}
                     title="Share"
                     disabled={processingFile === item.id}
                     style={iconBtnStyle('var(--success)')}
@@ -595,15 +599,62 @@ const GridItem = memo(
               </div>
             )}
 
-            {shouldShowActions(item.id) && containerWidth < BREAKPOINT.sm && (
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 0 }}
-                onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-                onTouchEnd={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-              />
+            {/* Mobile long-press action sheet */}
+            {!isGlobalSearch && !selectionMode && shouldShowActions(item.id) && containerWidth < BREAKPOINT.sm && !item.isDownloading && !isCreating && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
+                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
+                  onTouchEnd={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
+                />
+                <div
+                  className="tc-anim-sheet"
+                  style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1001,
+                    background: 'var(--surface)',
+                    borderRadius: '18px 18px 0 0',
+                    boxShadow: '0 -4px 32px rgba(0,0,0,0.3)',
+                    overflow: 'hidden',
+                    paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
+                    <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--border-strong)' }} />
+                  </div>
+                  <div style={{ padding: '6px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <KindIcon kind={kind} size={20} />
+                    <span className="tc-truncate" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', flex: 1 }}>
+                      {item.displayName || item.name}
+                    </span>
+                  </div>
+                  {isViewableFile(item) && (
+                    <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onOpenMediaViewer(item); }} style={sheetRowStyle()}>
+                      {is3dFile(item.name) ? <FiBox size={18} /> : isVideo(item.name) ? <FiVideo size={18} /> : isImage(item.name) ? <FiImage size={18} /> : isAudio(item.name) ? <FiMusic size={18} /> : <FiFileText size={18} />}
+                      <span>View</span>
+                    </button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(item); }} style={sheetRowStyle()}>
+                    <FiEdit size={18} /><span>Rename</span>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onHandleDownload(item.id, item.name); }} style={sheetRowStyle()}>
+                    <FiDownload size={18} /><span>Download</span>
+                  </button>
+                  {onInitiateShare && (
+                    <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateShare(item); }} style={sheetRowStyle()}>
+                      <FiShare2 size={18} /><span>Share</span>
+                    </button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(item); }} style={sheetRowStyle('var(--danger)')}>
+                    <FiTrash2 size={18} /><span>Delete</span>
+                  </button>
+                </div>
+              </>
             )}
-          </div>
-        )}
       </div>
     );
   },
@@ -624,6 +675,24 @@ function iconBtnStyle() {
     transition: 'all 120ms',
     flexShrink: 0,
     fontFamily: 'inherit',
+  };
+}
+
+function sheetRowStyle(color = 'var(--text-2)') {
+  return {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '15px 20px',
+    border: 'none',
+    borderBottom: '1px solid var(--border)',
+    background: 'transparent',
+    color,
+    cursor: 'pointer',
+    fontSize: 15,
+    fontFamily: 'inherit',
+    textAlign: 'left',
   };
 }
 
