@@ -605,7 +605,8 @@ const GridItem = memo(
                 <div
                   style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-                  onTouchEnd={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); setShowingActionsFor(null); }}
                 />
                 <div
                   className="tc-anim-sheet"
