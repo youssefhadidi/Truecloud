@@ -18,15 +18,30 @@ function question(query) {
   return new Promise((resolve) => rl.question(query, resolve));
 }
 
+const SMB_GROUP = process.env.SMB_GROUP || 'truecloud';
+
+async function ensureSmbGroup() {
+  try {
+    await execFileAsync('groupadd', ['--system', SMB_GROUP]);
+  } catch (error) {
+    if (!error.message.includes('already exists') && error.code !== 9) {
+      throw error;
+    }
+  }
+}
+
 async function ensureSystemUser(username) {
+  await ensureSmbGroup();
   try {
     await execFileAsync('id', [username]);
-    console.log(`  (Linux user '${username}' already exists)`);
+    await execFileAsync('usermod', ['--gid', SMB_GROUP, username]);
+    console.log(`  (Linux user '${username}' already exists, group updated)`);
   } catch {
     await execFileAsync('useradd', [
       '--no-create-home',
       '--shell', '/usr/sbin/nologin',
       '--system',
+      '--gid', SMB_GROUP,
       username,
     ]);
     console.log(`  ✓ Linux system user '${username}' created`);
