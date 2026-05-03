@@ -376,7 +376,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           src={streamUrl}
           controls
           playsInline
-          style={{ width: '100%', flex: 1, objectFit: 'contain' }}
+          style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
           onClick={(e) => e.stopPropagation()}
         />
         <div style={{ position: 'absolute', top: 12, right: 12 }}>
@@ -417,7 +417,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         src={streamUrl}
         controls
         playsInline
-        style={{ width: '100%', flex: 1, objectFit: 'contain' }}
+        style={{ width: '100%', height: '100%', flex: 1, objectFit: 'contain' }}
         onClick={(e) => e.stopPropagation()}
       />
     </div>
