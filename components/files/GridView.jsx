@@ -81,7 +81,6 @@ const GridItem = memo(
     onTouchStart,
     onTouchEnd,
     onTouchMove,
-    setShowingActionsFor,
     onPauseDownload,
     onResumeDownload,
     onRemoveDownload,
@@ -599,63 +598,6 @@ const GridItem = memo(
               </div>
             )}
 
-            {/* Mobile long-press action sheet */}
-            {!isGlobalSearch && !selectionMode && shouldShowActions(item.id) && containerWidth < BREAKPOINT.sm && !item.isDownloading && !isCreating && (
-              <>
-                <div
-                  style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); setShowingActionsFor(null); }}
-                />
-                <div
-                  className="tc-anim-sheet"
-                  style={{
-                    position: 'fixed',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1001,
-                    background: 'var(--surface)',
-                    borderRadius: '18px 18px 0 0',
-                    boxShadow: '0 -4px 32px rgba(0,0,0,0.3)',
-                    overflow: 'hidden',
-                    paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
-                    <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--border-strong)' }} />
-                  </div>
-                  <div style={{ padding: '6px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <KindIcon kind={kind} size={20} />
-                    <span className="tc-truncate" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', flex: 1 }}>
-                      {item.displayName || item.name}
-                    </span>
-                  </div>
-                  {isViewableFile(item) && (
-                    <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onOpenMediaViewer(item); }} style={sheetRowStyle()}>
-                      {is3dFile(item.name) ? <FiBox size={18} /> : isVideo(item.name) ? <FiVideo size={18} /> : isImage(item.name) ? <FiImage size={18} /> : isAudio(item.name) ? <FiMusic size={18} /> : <FiFileText size={18} />}
-                      <span>View</span>
-                    </button>
-                  )}
-                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(item); }} style={sheetRowStyle()}>
-                    <FiEdit size={18} /><span>Rename</span>
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onHandleDownload(item.id, item.name); }} style={sheetRowStyle()}>
-                    <FiDownload size={18} /><span>Download</span>
-                  </button>
-                  {onInitiateShare && (
-                    <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateShare(item); }} style={sheetRowStyle()}>
-                      <FiShare2 size={18} /><span>Share</span>
-                    </button>
-                  )}
-                  <button onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(item); }} style={sheetRowStyle('var(--danger)')}>
-                    <FiTrash2 size={18} /><span>Delete</span>
-                  </button>
-                </div>
-              </>
-            )}
         </div>
       </div>
     );
@@ -842,7 +784,6 @@ const GridView = forwardRef(
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
-            setShowingActionsFor={setShowingActionsFor}
             onPauseDownload={onPauseDownload}
             onResumeDownload={onResumeDownload}
             onRemoveDownload={onRemoveDownload}
@@ -860,6 +801,9 @@ const GridView = forwardRef(
         isGlobalSearch, onPauseDownload, onResumeDownload, onRemoveDownload,
       ],
     );
+
+    const activeItem = showingActionsFor ? allItems.find((i) => i.id === showingActionsFor) : null;
+    const activeKind = activeItem ? fileKind(activeItem) : null;
 
     return (
       <div style={{ width: '100%', height: '100%', WebkitOverflowScrolling: 'touch', padding: 4 }}>
@@ -887,6 +831,63 @@ const GridView = forwardRef(
             );
           }}
         </AutoSizer>
+
+        {activeItem && !isGlobalSearch && !selectionMode && (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
+              onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); setShowingActionsFor(null); }}
+            />
+            <div
+              className="tc-anim-sheet"
+              style={{
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1001,
+                background: 'var(--surface)',
+                borderRadius: '18px 18px 0 0',
+                boxShadow: '0 -4px 32px rgba(0,0,0,0.3)',
+                overflow: 'hidden',
+                paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
+                <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--border-strong)' }} />
+              </div>
+              <div style={{ padding: '6px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <KindIcon kind={activeKind} size={20} />
+                <span className="tc-truncate" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', flex: 1 }}>
+                  {activeItem.displayName || activeItem.name}
+                </span>
+              </div>
+              {isViewableFile(activeItem) && (
+                <button onClick={() => { setShowingActionsFor(null); onOpenMediaViewer(activeItem); }} style={sheetRowStyle()}>
+                  {is3dFile(activeItem.name) ? <FiBox size={18} /> : isVideo(activeItem.name) ? <FiVideo size={18} /> : isImage(activeItem.name) ? <FiImage size={18} /> : isAudio(activeItem.name) ? <FiMusic size={18} /> : <FiFileText size={18} />}
+                  <span>View</span>
+                </button>
+              )}
+              <button onClick={() => { setShowingActionsFor(null); onInitiateRename(activeItem); }} style={sheetRowStyle()}>
+                <FiEdit size={18} /><span>Rename</span>
+              </button>
+              <button onClick={() => { setShowingActionsFor(null); onHandleDownload(activeItem.id, activeItem.name); }} style={sheetRowStyle()}>
+                <FiDownload size={18} /><span>Download</span>
+              </button>
+              {onInitiateShare && (
+                <button onClick={() => { setShowingActionsFor(null); onInitiateShare(activeItem); }} style={sheetRowStyle()}>
+                  <FiShare2 size={18} /><span>Share</span>
+                </button>
+              )}
+              <button onClick={() => { setShowingActionsFor(null); onInitiateDelete(activeItem); }} style={sheetRowStyle('var(--danger)')}>
+                <FiTrash2 size={18} /><span>Delete</span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   },
