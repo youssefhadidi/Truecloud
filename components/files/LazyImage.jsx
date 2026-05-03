@@ -36,13 +36,12 @@ async function fetchBlobUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('thumbnail fetch failed');
   const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
-
-function revokeBlobUrl(data) {
-  if (data && typeof data === 'string' && data.startsWith('blob:')) {
-    URL.revokeObjectURL(data);
-  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 export default function LazyImage({ src, alt, style, onError, isThumbnail = false, fileId = null, filePath = '' }) {
@@ -74,10 +73,6 @@ export default function LazyImage({ src, alt, style, onError, isThumbnail = fals
     retry: false,
     structuralSharing: false,
   });
-
-  useEffect(() => {
-    return () => revokeBlobUrl(blobUrl);
-  }, [blobUrl]);
 
   const imageSrc = isThumbnail ? blobUrl : src;
   const showImage = isThumbnail ? !!blobUrl : true;
