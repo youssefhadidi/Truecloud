@@ -781,40 +781,40 @@ function FilesPageContent() {
             )}
           </div>
         </div>
-      </main>
 
-      {/* Mobile search bar */}
-      <div className="tc-mobile-search">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--r-md)',
-            padding: '8px 12px',
-            gap: 8,
-          }}
-        >
-          <FiSearch size={14} color="var(--text-3)" />
-          <input
-            type="text"
-            value={state.searchQuery}
-            onChange={(e) => state.setSearchQuery(e.target.value)}
-            placeholder="Search files…"
+        {/* Mobile search bar */}
+        <div className="tc-mobile-search">
+          <div
             style={{
-              flex: 1,
-              border: 'none',
-              background: 'transparent',
-              fontSize: 13,
-              color: 'var(--text)',
-              outline: 'none',
-              fontFamily: 'inherit',
-              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-md)',
+              padding: '8px 12px',
+              gap: 8,
             }}
-          />
+          >
+            <FiSearch size={14} color="var(--text-3)" />
+            <input
+              type="text"
+              value={state.searchQuery}
+              onChange={(e) => state.setSearchQuery(e.target.value)}
+              placeholder="Search files…"
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                fontSize: 13,
+                color: 'var(--text)',
+                outline: 'none',
+                fontFamily: 'inherit',
+                minWidth: 0,
+              }}
+            />
+          </div>
         </div>
-      </div>
+      </main>
 
       <ContextMenu
         contextMenu={state.contextMenu}
@@ -912,15 +912,10 @@ function FilesPageContent() {
       <style jsx>{`
         .tc-sidebar-wrap { display: none; }
         .tc-mobile-search {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
           padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-          background: color-mix(in oklab, var(--surface) 90%, transparent);
-          backdrop-filter: blur(6px);
+          background: var(--surface);
           border-top: 1px solid var(--border);
-          z-index: 30;
+          flex-shrink: 0;
         }
         @media (min-width: 640px) {
           .tc-sidebar-wrap { display: flex; align-self: stretch; min-height: 0; }
