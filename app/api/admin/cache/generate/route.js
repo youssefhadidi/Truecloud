@@ -68,7 +68,7 @@ export async function POST(req) {
     // Spawn child process for generation (spawn avoids Turbopack resolving the worker path)
     const { spawn } = await import('child_process');
     const workerPath = join(process.cwd(), 'lib', 'workers', 'generateCacheWorker.mjs');
-    const child = spawn(process.execPath, [workerPath], {
+    const child = spawn('node', [workerPath], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
 
