@@ -339,7 +339,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           ref={videoRef}
           controls
           playsInline
-          style={{ width: '100%', flex: 1, objectFit: 'contain' }}
+          style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
           onClick={(e) => e.stopPropagation()}
         />
         {status === 'transcoding' && progress < 99 && (
