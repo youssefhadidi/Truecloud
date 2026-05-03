@@ -14,7 +14,7 @@ async function fetchBlobUrl(url) {
   return URL.createObjectURL(blob);
 }
 
-export default function LazyImage({ src, alt, className, onError, isThumbnail = false, fileId = null, filePath = '' }) {
+export default function LazyImage({ src, alt, className, style, onError, isThumbnail = false, fileId = null, filePath = '' }) {
   const [isInView, setIsInView] = useState(false);
   const imgRef = useRef(null);
 
@@ -47,7 +47,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
   const showImage = isThumbnail ? !!blobUrl : true;
 
   return (
-    <div ref={imgRef} className={`relative ${className}`}>
+    <div ref={imgRef} className={`relative ${className}`} style={style}>
       {isInView ? (
         <>
           {!isError && showImage && (
@@ -55,6 +55,7 @@ export default function LazyImage({ src, alt, className, onError, isThumbnail = 
               src={imageSrc}
               alt={alt}
               className={`${className} transition-opacity duration-200`}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={onError}
               loading="lazy"
               decoding="async"
