@@ -80,6 +80,7 @@ function FilesPageContent() {
 
   const displayFiles = isGlobalSearch ? searchFiles : state.files;
 
+  const uploadInputRef = useRef(null);
   const gridViewRef = useRef(null);
   const listViewRef = useRef(null);
   const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
@@ -351,19 +352,18 @@ function FilesPageContent() {
         >
           {!isGlobalSearch && (
             <>
-              <label>
-                <Btn variant="primary" size="sm" disabled={state.uploading}>
-                  <FiUpload size={13} />
-                  {state.uploading ? 'Uploading…' : 'Upload'}
-                </Btn>
-                <input
-                  type="file"
-                  style={{ display: 'none' }}
-                  multiple
-                  onChange={handlers.handleUpload}
-                  disabled={state.uploading}
-                />
-              </label>
+              <Btn variant="primary" size="sm" disabled={state.uploading} onClick={() => uploadInputRef.current?.click()}>
+                <FiUpload size={13} />
+                {state.uploading ? 'Uploading…' : 'Upload'}
+              </Btn>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                style={{ display: 'none' }}
+                multiple
+                onChange={handlers.handleUpload}
+                disabled={state.uploading}
+              />
               <Btn
                 variant="surface"
                 size="sm"
