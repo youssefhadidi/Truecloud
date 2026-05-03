@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2 } from 'react-icons/fi';
+import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { VideoPlayer } from './viewers/VideoPlayer';
