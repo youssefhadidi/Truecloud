@@ -195,10 +195,10 @@
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: background 200ms ease, transform 200ms ease;
+  transition: background 200ms ease;
   font-family: inherit;
 }
-.mv-nav-btn:hover:not(:disabled) { background: var(--surface-2); transform: scale(1.07); }
+.mv-nav-btn:hover:not(:disabled) { background: var(--surface-2); }
 .mv-nav-btn:disabled { opacity: 0.30; cursor: default; }
 .mv-nav-btn--glass {
   background: var(--mv-glass-bg);
