@@ -81,7 +81,6 @@ function UnsupportedViewer({ file, getFileUrl }) {
 
 export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
   const [contextMenu, setContextMenu] = useState(null);
-  const [chromeVisible, setChromeVisible] = useState(true);
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
 
@@ -128,15 +127,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     },
     [shareToken, sharePassword, currentPath],
   );
-
-  // Chrome (header / strip / nav buttons) is always visible — no auto-hide.
-  const showChrome = useCallback(() => {
-    setChromeVisible(true);
-  }, []);
-
-  useEffect(() => {
-    setChromeVisible(true);
-  }, [effectiveFullscreen]);
 
   // Keyboard nav
   useEffect(() => {
@@ -309,57 +299,44 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     );
   }
 
-  // Fullscreen mode (auto-hide chrome)
+  // Fullscreen mode — same modal layout, full viewport
   return (
-    <div
-      className="mv-fullscreen"
-      onMouseMove={showChrome}
-      onTouchStart={(e) => {
-        showChrome();
-        handleTouchStart(e);
-      }}
-    >
-      {/* Glass header */}
-      <div className={`mv-header mv-header--glass mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}>
-        <button type="button" className="mv-icon-btn mv-icon-btn--glass mv-icon-btn--close-glass" title="Close" onClick={onClose}>
-          <FiX size={15} />
-        </button>
+    <div className="mv-fullscreen" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      {/* Header */}
+      <div className="mv-header">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{viewerFile.name}</div>
+          <div className="mv-header__title">{viewerFile.name}</div>
           {multi && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
+            <div className="mv-header__counter">
               {currentIndex + 1} / {total}
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button type="button" className="mv-icon-btn mv-icon-btn--glass" title="Download" onClick={handleDownload}>
-            <FiDownload size={15} />
+        <div className="mv-header__actions">
+          <button type="button" className="mv-icon-btn" title="Download" onClick={handleDownload}>
+            <FiDownload size={16} />
           </button>
           {!isMobile && (
-            <button type="button" className="mv-icon-btn mv-icon-btn--glass" title="Exit fullscreen" onClick={toggleFullscreen}>
-              <FiMinimize2 size={15} />
+            <button type="button" className="mv-icon-btn" title="Exit fullscreen" onClick={toggleFullscreen}>
+              <FiMinimize2 size={16} />
             </button>
           )}
         </div>
+        <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
+        <button type="button" className="mv-icon-btn" title="Close" onClick={onClose}>
+          <FiX size={16} />
+        </button>
       </div>
 
       {/* Stage */}
-      <div
-        className="mv-stage"
-        onContextMenu={handleContextMenu}
-        onClick={() => setContextMenu(null)}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        style={{ background: '#000' }}
-      >
+      <div className="mv-stage" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)}>
         <div className="mv-stage__content">{renderMedia()}</div>
 
         {multi && (
           <>
             <button
               type="button"
-              className={`mv-nav-btn mv-nav-btn--glass mv-stage__nav mv-stage__nav--prev mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}
+              className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
               aria-label="Previous"
               disabled={!canGoPrev}
               onClick={(e) => {
@@ -371,7 +348,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             </button>
             <button
               type="button"
-              className={`mv-nav-btn mv-nav-btn--glass mv-stage__nav mv-stage__nav--next mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}
+              className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
               aria-label="Next"
               disabled={!canGoNext}
               onClick={(e) => {
@@ -385,21 +362,18 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         )}
       </div>
 
-      {/* Strip (auto-hide) */}
+      {/* Strip */}
       {multi && (
-        <div className={`mv-chrome${chromeVisible ? '' : ' mv-chrome--hidden'}`}>
-          <ThumbnailStrip
-            files={viewableFiles}
-            activeId={viewerFile.id}
-            currentPath={currentPath}
-            shareToken={shareToken}
-            sharePassword={sharePassword}
-            onSelect={onSelectFile}
-            onScroll={handleStripScroll}
-            stripRef={stripRef}
-            glass
-          />
-        </div>
+        <ThumbnailStrip
+          files={viewableFiles}
+          activeId={viewerFile.id}
+          currentPath={currentPath}
+          shareToken={shareToken}
+          sharePassword={sharePassword}
+          onSelect={onSelectFile}
+          onScroll={handleStripScroll}
+          stripRef={stripRef}
+        />
       )}
 
       <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
