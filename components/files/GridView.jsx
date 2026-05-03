@@ -96,7 +96,6 @@ const GridItem = memo(
     const wrapStyle = {
       ...style,
       padding: gap / 2,
-      position: 'relative',
     };
 
     const cardBase = {
@@ -118,7 +117,8 @@ const GridItem = memo(
     };
 
     return (
-      <div className="tc-grid-wrap" style={wrapStyle}>
+      <div style={wrapStyle}>
+        <div className="tc-grid-wrap" style={{ position: 'relative', height: '100%' }}>
         {isCreating ? (
           <div
             style={{
@@ -655,6 +655,7 @@ const GridItem = memo(
                 </div>
               </>
             )}
+        </div>
       </div>
     );
   },
