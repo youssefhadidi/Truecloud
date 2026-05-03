@@ -7,8 +7,7 @@ import {
   FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2,
   FiRotateCcw, FiStar, FiMusic, FiFileText,
 } from 'react-icons/fi';
-import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
-import { is3dFile } from './Viewer3D';
+import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
 

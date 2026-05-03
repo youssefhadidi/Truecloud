@@ -7,7 +7,7 @@ import { FiActivity, FiCheckCircle, FiXCircle, FiLoader, FiClock, FiAlertCircle,
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useJobs, useCancelJob } from '@/lib/api/jobs';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from '@/lib/timeAgo';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

@@ -8,9 +8,8 @@ import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
   FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
-import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { ListDownloadRow } from '@/components/files/ListDownloadRow';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 
@@ -176,7 +175,7 @@ const ListView = forwardRef(({
               type="text"
               value={newFolderName}
               onChange={(e) => onNewFolderNameChange(e.target.value)}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') onConfirmCreateFolder();
                 if (e.key === 'Escape') onCancelCreateFolder();
               }}
@@ -245,7 +244,7 @@ const ListView = forwardRef(({
               type="text"
               value={newFileName}
               onChange={(e) => setNewFileName(e.target.value)}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') confirmRename();
                 if (e.key === 'Escape') cancelRename();
               }}

@@ -5,8 +5,7 @@
 import { useRef, useCallback } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2 } from 'react-icons/fi';
-import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
-import { is3dFile } from '@/components/files/Viewer3D';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 
 export default function ShareList({
   files = [],

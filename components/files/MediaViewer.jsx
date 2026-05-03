@@ -7,9 +7,17 @@ import dynamic from 'next/dynamic';
 import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
-import { VideoPlayer } from './viewers/VideoPlayer';
 import { AudioPlayer } from './viewers/AudioPlayer';
-import { ImageViewer } from './viewers/ImageViewer';
+
+const VideoPlayer = dynamic(
+  () => import('./viewers/VideoPlayer').then((m) => ({ default: m.VideoPlayer })),
+  { ssr: false },
+);
+
+const ImageViewer = dynamic(
+  () => import('./viewers/ImageViewer').then((m) => ({ default: m.ImageViewer })),
+  { ssr: false },
+);
 import ThumbnailStrip from './ThumbnailStrip';
 import { useMediaViewerState, useMediaViewerScroll } from './hooks/useMediaViewerState';
 import ContextMenu from './ContextMenu';

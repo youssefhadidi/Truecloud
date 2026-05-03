@@ -3,7 +3,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from '@/lib/timeAgo';
 import { FiChevronDown, FiChevronUp, FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';

@@ -7,6 +7,31 @@ import { useQuery } from '@tanstack/react-query';
 import { FiImage } from 'react-icons/fi';
 import { getThumbnailUrl } from '@/lib/api/files';
 
+const centerAbsolute = {
+  position: 'absolute',
+  inset: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+function ThumbnailSpinner() {
+  return (
+    <div style={centerAbsolute}>
+      <div
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          border: '2.5px solid var(--border)',
+          borderTopColor: 'var(--accent)',
+          animation: 'tc-spin 700ms linear infinite',
+        }}
+      />
+    </div>
+  );
+}
+
 async function fetchBlobUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('thumbnail fetch failed');
@@ -14,7 +39,13 @@ async function fetchBlobUrl(url) {
   return URL.createObjectURL(blob);
 }
 
-export default function LazyImage({ src, alt, className, style, onError, isThumbnail = false, fileId = null, filePath = '' }) {
+function revokeBlobUrl(data) {
+  if (data && typeof data === 'string' && data.startsWith('blob:')) {
+    URL.revokeObjectURL(data);
+  }
+}
+
+export default function LazyImage({ src, alt, style, onError, isThumbnail = false, fileId = null, filePath = '' }) {
   const [isInView, setIsInView] = useState(false);
   const imgRef = useRef(null);
 
@@ -26,7 +57,7 @@ export default function LazyImage({ src, alt, className, style, onError, isThumb
           observer.disconnect();
         }
       },
-      { rootMargin: '400px', threshold: 0.01 },
+      { rootMargin: '100px', threshold: 0.01 },
     );
     if (imgRef.current) observer.observe(imgRef.current);
     return () => { if (imgRef.current) observer.unobserve(imgRef.current); };
@@ -41,41 +72,39 @@ export default function LazyImage({ src, alt, className, style, onError, isThumb
     staleTime: Infinity,
     gcTime: 10 * 60 * 1000,
     retry: false,
+    structuralSharing: false,
   });
+
+  useEffect(() => {
+    return () => revokeBlobUrl(blobUrl);
+  }, [blobUrl]);
 
   const imageSrc = isThumbnail ? blobUrl : src;
   const showImage = isThumbnail ? !!blobUrl : true;
 
   return (
-    <div ref={imgRef} className={`relative ${className}`} style={style}>
+    <div ref={imgRef} style={{ position: 'relative', ...style }}>
       {isInView ? (
         <>
           {!isError && showImage && (
             <img
               src={imageSrc}
               alt={alt}
-              className={`${className} transition-opacity duration-200`}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1, transition: 'opacity 200ms' }}
               onError={onError}
               loading="lazy"
               decoding="async"
             />
           )}
-          {!showImage && !isError && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <FiImage className="text-gray-400 animate-spin" size={24} />
-            </div>
-          )}
+          {!showImage && !isError && <ThumbnailSpinner />}
           {isError && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <FiImage className="text-gray-400" size={24} />
+            <div style={{ ...centerAbsolute, color: 'var(--text-3)' }}>
+              <FiImage size={22} />
             </div>
           )}
         </>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <FiImage className="text-gray-400 animate-spin" size={20} />
-        </div>
+        <ThumbnailSpinner />
       )}
     </div>
   );

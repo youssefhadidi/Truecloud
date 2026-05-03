@@ -5,8 +5,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiFile, FiVideo, FiBox, FiImage, FiEdit, FiDownload, FiTrash2, FiPlay } from 'react-icons/fi';
-import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
-import { is3dFile } from '@/components/files/Viewer3D';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { getShareThumbnailUrl } from '@/lib/api/files';
 
 // Breakpoints

@@ -9,9 +9,8 @@ import {
   FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
-import { is3dFile } from '@/components/files/Viewer3D';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import DownloadCard from '@/components/files/DownloadCard';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 

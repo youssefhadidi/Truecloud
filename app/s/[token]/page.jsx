@@ -7,8 +7,7 @@ import dynamic from 'next/dynamic';
 import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
-import { isImage, isVideo, isAudio, isPdf, isXlsx } from '@/lib/clientFileUtils';
-import { is3dFile } from '@/components/files/Viewer3D';
+import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicShares';
 
 // Lazy load heavy components
