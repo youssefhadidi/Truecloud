@@ -21,7 +21,7 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
 export const maxDuration = 60;
 
 // Semaphore to limit concurrent thumbnail generation
-const thumbnailSemaphore = new Semaphore(30); // Limited parallelization to prevent resource exhaustion
+const thumbnailSemaphore = new Semaphore(20); // Limited parallelization to prevent resource exhaustion
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
@@ -159,9 +159,9 @@ export async function GET(req, { params }) {
       await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
       // HEIC/HEIF decoding via libheif is much heavier than other formats and
-      // can segfault under Bun when many run in parallel. Give it weight 4 so
-      // ~7 concurrent HEIC decodes can be in flight (same pattern as cache worker).
-      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 4 : 1;
+      // can segfault under Bun when many run in parallel. Give it weight 10 so
+      // ~2 concurrent HEIC decodes can be in flight on the 20-slot semaphore.
+      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 10 : 1;
       await thumbnailSemaphore.acquire(weight);
       try {
         if (isPdf) {

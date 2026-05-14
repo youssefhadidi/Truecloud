@@ -136,9 +136,9 @@ export async function GET(req, { params }) {
 
     if (!thumbnailExists) {
       // HEIC/HEIF decoding via libheif is much heavier than other formats and
-      // can segfault under Bun when many run in parallel. Give it weight 4 so
-      // ~5 concurrent HEIC decodes can be in flight (same as cache worker).
-      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 4 : 1;
+      // can segfault under Bun when many run in parallel. Give it weight 10 so
+      // ~2 concurrent HEIC decodes can be in flight on the 20-slot semaphore.
+      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 10 : 1;
       await thumbnailSemaphore.acquire(weight);
       try {
         if (isPdf) {
