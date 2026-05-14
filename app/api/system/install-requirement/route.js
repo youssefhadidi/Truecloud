@@ -13,9 +13,9 @@ const isLinux = process.platform === 'linux';
 
 // Minimum required versions for HEVC support
 const MIN_VERSIONS = {
-  libde265: '1.0.16',
-  libheif: '1.20.2',
-  vips: '8.17.3',
+  libde265: '1.0.18',
+  libheif: '1.21.2',
+  vips: '8.18.2',
 };
 
 /**
@@ -150,8 +150,8 @@ export async function POST(req) {
           logger.info(`Step 2/6: Building libde265 from source (current: ${de265Ver || 'not found'}, need >= ${MIN_VERSIONS.libde265})...`);
           await execAsync(
             `rm -rf ${de265Dir} && mkdir -p ${de265Dir} && cd ${de265Dir} && \
-            curl -fsSL --retry 3 https://github.com/strukturag/libde265/releases/download/v1.0.16/libde265-1.0.16.tar.gz -o libde265.tar.gz 2>&1 && \
-            tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.16 && \
+            curl -fsSL --retry 3 https://github.com/strukturag/libde265/releases/download/v1.0.18/libde265-1.0.18.tar.gz -o libde265.tar.gz 2>&1 && \
+            tar xzf libde265.tar.gz 2>&1 && cd libde265-1.0.18 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. 2>&1 && \
             make -j$(nproc) 2>&1 && sudo make install 2>&1 && sudo ldconfig 2>&1`,
@@ -187,8 +187,8 @@ export async function POST(req) {
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
-            curl -fsSL --retry 3 https://github.com/strukturag/libheif/releases/download/v1.20.2/libheif-1.20.2.tar.gz -o libheif.tar.gz 2>&1 && \
-            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.20.2 && \
+            curl -fsSL --retry 3 https://github.com/strukturag/libheif/releases/download/v1.21.2/libheif-1.21.2.tar.gz -o libheif.tar.gz 2>&1 && \
+            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.21.2 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
               -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
@@ -209,7 +209,7 @@ export async function POST(req) {
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
 
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
-        const VIPS_VERSION = '8.17.3';
+        const VIPS_VERSION = '8.18.2';
         const vipsDir = '/tmp/libvips-build';
         const vipsVer = await getPkgVersion('vips', buildEnv);
         let vipsHasHeif = false;
