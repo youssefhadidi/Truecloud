@@ -296,9 +296,9 @@ export function useFilesPage(status) {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'date-desc':
-          return new Date(b.mediaDate || b.updatedAt || 0) - new Date(a.mediaDate || a.updatedAt || 0);
+          return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
         case 'date-asc':
-          return new Date(a.mediaDate || a.updatedAt || 0) - new Date(b.mediaDate || b.updatedAt || 0);
+          return new Date(a.updatedAt || 0) - new Date(b.updatedAt || 0);
         case 'size-desc':
           return (b.size || 0) - (a.size || 0);
         case 'size-asc':

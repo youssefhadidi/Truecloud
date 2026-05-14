@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { getMediaDate } from '@/lib/exifCache';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -64,7 +63,6 @@ export async function GET(req, { params }) {
         const filePath = join(targetDir, name);
         const stats = await stat(filePath);
 
-        const mediaDate = await getMediaDate(filePath, stats.mtime);
         return {
           id: name,
           name: name,
@@ -72,7 +70,6 @@ export async function GET(req, { params }) {
           isDirectory: stats.isDirectory(),
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
-          mediaDate,
         };
       })
     );

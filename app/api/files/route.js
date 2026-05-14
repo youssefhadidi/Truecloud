@@ -11,7 +11,6 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentClient';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
-import { getMediaDate } from '@/lib/exifCache';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -150,7 +149,6 @@ export async function GET(req) {
             }
           }
 
-          const mediaDate = await getMediaDate(filePath, stats.mtime);
           return {
             id: name, // Use filename as ID
             name: name,
@@ -160,7 +158,6 @@ export async function GET(req) {
             isDirectory: stats.isDirectory(),
             createdAt: stats.birthtime,
             updatedAt: stats.mtime,
-            mediaDate,
           };
         } finally {
           statSemaphore.release();
