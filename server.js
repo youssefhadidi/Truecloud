@@ -1,3 +1,11 @@
+// Cap native thread pools BEFORE sharp/libvips/libheif load. Under Bun, the
+// combination of multiple concurrent HEIC decodes and libde265's internal
+// OpenMP thread pool produces a deterministic native segfault (0x80000008).
+// libvips reads VIPS_CONCURRENCY at load time; libde265/libheif honour
+// OMP_NUM_THREADS. Both must be set before the sharp module is first required.
+process.env.VIPS_CONCURRENCY = process.env.VIPS_CONCURRENCY || '1';
+process.env.OMP_NUM_THREADS = process.env.OMP_NUM_THREADS || '1';
+
 const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
