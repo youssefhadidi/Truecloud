@@ -14,8 +14,8 @@ const isLinux = process.platform === 'linux';
 // Minimum required versions for HEVC support
 const MIN_VERSIONS = {
   libde265: '1.0.18',
-  libheif: '1.21.2',
-  vips: '8.18.2',
+  libheif: '1.20.2',
+  vips: '8.17.3',
 };
 
 /**
@@ -187,8 +187,8 @@ export async function POST(req) {
           );
           await execAsync(
             `rm -rf ${heifDir} && mkdir -p ${heifDir} && cd ${heifDir} && \
-            curl -fsSL --retry 3 https://github.com/strukturag/libheif/releases/download/v1.21.2/libheif-1.21.2.tar.gz -o libheif.tar.gz 2>&1 && \
-            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.21.2 && \
+            curl -fsSL --retry 3 https://github.com/strukturag/libheif/releases/download/v1.20.2/libheif-1.20.2.tar.gz -o libheif.tar.gz 2>&1 && \
+            tar xzf libheif.tar.gz 2>&1 && cd libheif-1.20.2 && \
             mkdir build && cd build && \
             cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
               -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
@@ -209,7 +209,7 @@ export async function POST(req) {
         const heifWasRebuilt = !(heifVer && versionSatisfies(heifVer, MIN_VERSIONS.libheif) && heifHasBuiltinDe265);
 
         // Step 4-5: Build libvips to match sharp's bundled version, with HEIF support
-        const VIPS_VERSION = '8.18.2';
+        const VIPS_VERSION = '8.17.3';
         const vipsDir = '/tmp/libvips-build';
         const vipsVer = await getPkgVersion('vips', buildEnv);
         let vipsHasHeif = false;
