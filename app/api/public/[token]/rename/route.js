@@ -29,8 +29,9 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'Invalid names' }, { status: 400 });
     }
 
-    // Validate new name - no path traversal
-    if (newName.includes('/') || newName.includes('\\') || newName === '.' || newName === '..') {
+    // Validate both names - no path traversal
+    const isInvalidName = (n) => n.includes('/') || n.includes('\\') || n === '.' || n === '..';
+    if (isInvalidName(oldName) || isInvalidName(newName)) {
       return NextResponse.json({ error: 'Invalid folder/file name' }, { status: 400 });
     }
 

@@ -26,6 +26,11 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
     }
 
+    // Validate file name - no path traversal
+    if (fileName.includes('/') || fileName.includes('\\') || fileName === '.' || fileName === '..') {
+      return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
+    }
+
     // Verify share and password
     const verification = await verifyShare(token, password);
     if (!verification.valid) {
@@ -67,8 +72,8 @@ export async function DELETE(req, { params }) {
     }
 
     // Prevent deleting the root shared folder itself
-    const rootSharePath = join(UPLOAD_DIR, share.path, share.fileName) + sep;
-    if (resolve(filePath) + sep === rootSharePath) {
+    const rootSharePath = resolve(join(UPLOAD_DIR, share.path, share.fileName));
+    if (resolve(filePath) === rootSharePath) {
       return NextResponse.json({ error: 'Cannot delete the shared folder' }, { status: 403 });
     }
 

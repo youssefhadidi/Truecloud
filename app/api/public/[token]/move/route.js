@@ -13,7 +13,9 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 const sanitizeName = (name) => {
   if (typeof name !== 'string') return '';
-  return name.split(/[/\\]/).pop() || '';
+  const base = name.split(/[/\\]/).pop() || '';
+  if (base === '.' || base === '..') return '';
+  return base;
 };
 
 export async function POST(req, { params }) {
@@ -41,10 +43,10 @@ export async function POST(req, { params }) {
 
     const share = verification.share;
     if (!share.allowUploads) {
-      return NextResponse.json({ error: 'Uploads not allowed for this share' }, { status: 403 });
+      return NextResponse.json({ error: 'Moves not allowed for this share' }, { status: 403 });
     }
     if (!share.isDirectory) {
-      return NextResponse.json({ error: 'Uploads only allowed for directory shares' }, { status: 400 });
+      return NextResponse.json({ error: 'Moves only allowed for directory shares' }, { status: 400 });
     }
 
     const safeNames = items.map(sanitizeName).filter(Boolean);

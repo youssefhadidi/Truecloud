@@ -4,11 +4,18 @@
 
 import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList, FiHome, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
+import {
+  FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList,
+  FiHome, FiChevronRight, FiCheckSquare,
+} from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicShares';
+import Btn from '@/components/ui/Btn';
+import IconBtn from '@/components/ui/IconBtn';
+import Divider from '@/components/ui/Divider';
+import Spinner from '@/components/ui/Spinner';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
@@ -19,6 +26,23 @@ const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
+function LoadingPanel({ label = 'Loading…' }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-3)' }}>
+      <Spinner size={28} color="var(--accent)" borderColor="var(--border)" thickness={3} />
+      <p style={{ fontSize: 13 }}>{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({ label }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-3)' }}>
+      <FiFolder size={36} />
+      <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
+    </div>
+  );
+}
 
 export default function SharePage({ params }) {
   const { token } = use(params);
@@ -122,8 +146,8 @@ export default function SharePage({ params }) {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <LoadingPanel />
       </div>
     );
   }
@@ -131,13 +155,32 @@ export default function SharePage({ params }) {
   // Error state
   if (shareError) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-gray-900">
-        <div className="bg-gray-800 rounded-lg shadow-lg p-8 text-center max-w-md">
-          <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FiFile className="text-red-500" size={32} />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16 }}>
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--shadow-md)',
+            padding: 32,
+            textAlign: 'center',
+            maxWidth: 420,
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              width: 64, height: 64,
+              background: 'var(--danger-light)',
+              borderRadius: 999,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}
+          >
+            <FiFile color="var(--danger)" size={32} />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Share Not Found</h2>
-          <p className="text-gray-400">{shareError.message}</p>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Share Not Found</h2>
+          <p style={{ color: 'var(--text-2)', fontSize: 13 }}>{shareError.message}</p>
         </div>
       </div>
     );
@@ -146,20 +189,45 @@ export default function SharePage({ params }) {
   // Password entry form
   if (shareResponse?.requiresPassword) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-gray-900">
-        <div className="bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FiLock className="text-indigo-500" size={32} />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16 }}>
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--shadow-md)',
+            padding: 32,
+            maxWidth: 420,
+            width: '100%',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div
+              style={{
+                width: 64, height: 64,
+                background: 'var(--accent-light)',
+                borderRadius: 999,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <FiLock color="var(--accent)" size={32} />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Password Protected</h2>
-            <p className="text-gray-400">This {shareResponse?.isDirectory ? 'folder' : 'file'} is password protected.</p>
-            {shareResponse?.fileName && <p className="text-sm text-gray-300 mt-2 font-medium">{shareResponse.fileName}</p>}
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Password Protected</h2>
+            <p style={{ color: 'var(--text-2)', fontSize: 13 }}>
+              This {shareResponse?.isDirectory ? 'folder' : 'file'} is password protected.
+            </p>
+            {shareResponse?.fileName && (
+              <p style={{ fontSize: 13, color: 'var(--text)', marginTop: 8, fontWeight: 500 }}>{shareResponse.fileName}</p>
+            )}
           </div>
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+              <label
+                htmlFor="password"
+                style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 6 }}
+              >
                 Password
               </label>
               <input
@@ -167,14 +235,24 @@ export default function SharePage({ params }) {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-700 text-white"
                 placeholder="Enter password"
                 autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                }}
               />
             </div>
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+            <Btn type="submit" variant="primary" size="lg" style={{ width: '100%' }}>
               Unlock
-            </button>
+            </Btn>
           </form>
         </div>
       </div>
@@ -184,36 +262,48 @@ export default function SharePage({ params }) {
   // Single file view
   if (shareResponse && !shareResponse.isDirectory) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-gray-900 p-4">
-        <div className="bg-gray-800 rounded-lg shadow-lg p-8 max-w-2xl w-full max-h-dvh overflow-auto">
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold text-white mb-4">{shareResponse.fileName}</h2>
-            <p className="text-gray-400 mb-6">{shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : 'Unknown size'}</p>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16, overflow: 'auto' }}>
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--shadow-md)',
+            padding: 32,
+            maxWidth: 720,
+            width: '100%',
+          }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{shareResponse.fileName}</h2>
+            <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 20 }}>
+              {shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : 'Unknown size'}
+            </p>
 
             {isImage(shareResponse.fileName) && (
               <img
                 src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
                 alt={shareResponse.fileName}
-                className="max-w-full max-h-[500px] mx-auto object-contain mb-6 rounded"
+                style={{ maxWidth: '100%', maxHeight: 500, margin: '0 auto 20px', objectFit: 'contain', borderRadius: 'var(--r-sm)' }}
               />
             )}
 
             {(isVideo(shareResponse.fileName) || isAudio(shareResponse.fileName) || isPdf(shareResponse.fileName)) && (
-              <div className="mb-6 rounded overflow-hidden">
+              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
                 {isVideo(shareResponse.fileName) && (
-                  <video controls className="w-full max-h-[500px]" src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
+                  <video controls style={{ width: '100%', maxHeight: 500 }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
                     Your browser does not support video playback.
                   </video>
                 )}
                 {isAudio(shareResponse.fileName) && (
-                  <audio controls className="w-full" src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
+                  <audio controls style={{ width: '100%' }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
                     Your browser does not support audio playback.
                   </audio>
                 )}
                 {isPdf(shareResponse.fileName) && (
                   <iframe
                     src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                    className="w-full h-[500px]"
+                    style={{ width: '100%', height: 500, border: 'none' }}
                     title={shareResponse.fileName}
                   />
                 )}
@@ -221,24 +311,26 @@ export default function SharePage({ params }) {
             )}
 
             {is3dFile(shareResponse.fileName) && (
-              <div className="mb-6 rounded overflow-hidden h-[500px]">
+              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden', height: 500 }}>
                 <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
               </div>
             )}
 
             {isXlsx(shareResponse.fileName) && (
-              <div className="mb-6 rounded overflow-hidden h-[500px]">
+              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden', height: 500 }}>
                 <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
               </div>
             )}
 
-            <button
+            <Btn
+              variant="primary"
+              size="lg"
               onClick={() => operations.handleDownload({ name: shareResponse.fileName })}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
+              style={{ width: '100%' }}
             >
-              <FiDownload size={20} />
+              <FiDownload size={16} />
               Download
-            </button>
+            </Btn>
           </div>
         </div>
       </div>
@@ -247,9 +339,11 @@ export default function SharePage({ params }) {
 
   // Directory view
   if (shareResponse?.isDirectory && directoryFiles) {
+    const breadcrumbItems = (shareState.currentSubPath || '').split('/').filter(Boolean);
+
     return (
       <div
-        className="flex flex-col flex-1 flex-grow bg-gray-900 text-white min-h-0"
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0, position: 'relative', overflow: 'hidden' }}
         onClick={operations.closeContextMenu}
         onDragOver={operations.handleDragOver}
         onDragLeave={operations.handleDragLeave}
@@ -257,192 +351,318 @@ export default function SharePage({ params }) {
       >
         {/* Drag overlay */}
         {shareState.isDragging && shareResponse.allowUploads && (
-          <div className="absolute inset-0 bg-indigo-600/20 border-2 border-dashed border-indigo-500 z-50 flex items-center justify-center">
-            <div className="bg-gray-800 rounded-lg p-8 shadow-lg text-center">
-              <FiUpload className="text-indigo-500 mx-auto mb-3" size={48} />
-              <p className="text-lg font-medium">Drop files to upload</p>
+          <div className="tc-drag-overlay">
+            <div style={{ textAlign: 'center', color: 'var(--accent)' }}>
+              <FiUpload size={40} style={{ marginBottom: 12 }} />
+              <div style={{ fontSize: 18, fontWeight: 700 }}>Drop files to upload</div>
+              <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
+                Files will be uploaded to current folder
+              </div>
             </div>
           </div>
         )}
 
-        {/* Header */}
-        <div className="border-b border-gray-700 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <FiFolder className="text-blue-400" size={32} />
-              <div className="min-w-0">
-                <h1 className="text-2xl font-bold truncate" title={shareResponse.fileName}>
-                  {shareResponse.fileName}
-                </h1>
-                <p className="text-sm text-gray-400 truncate">Shared by {shareResponse.ownerUsername}</p>
-              </div>
-            </div>
+        {/* Toolbar */}
+        <div
+          style={{
+            minHeight: 52,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface)',
+            flexShrink: 0,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              maxWidth: 280,
+            }}
+            title={shareResponse.fileName}
+          >
+            <FiFolder size={14} color="var(--accent)" />
+            <span className="tc-truncate" style={{ maxWidth: 220 }}>{shareResponse.fileName}</span>
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }} className="tc-share-owner">
+            · Shared by {shareResponse.ownerUsername}
+          </span>
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-1">
-                {shareResponse.allowUploads && (
-                  <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors">
-                    <FiUpload size={18} />
-                    <span className="hidden sm:inline">Upload</span>
-                  </button>
-                )}
+          <Divider vertical />
 
-                {shareResponse.allowUploads && (
-                  <button
-                    onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${shareState.selectionMode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
-                  >
-                    <FiCheckSquare size={18} />
-                    <span className="hidden sm:inline">{shareState.selectionMode ? 'Selecting' : 'Select'}</span>
-                  </button>
-                )}
-
-                {shareResponse.allowUploads && shareState.selectionMode && (
-                  <button
-                    onClick={() => setMoveModalOpen(true)}
+          {shareResponse.allowUploads && (
+            <>
+              <Btn variant="primary" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <FiUpload size={13} />
+                Upload
+              </Btn>
+              <input
+                ref={fileInputRef}
+                type="file"
+                style={{ display: 'none' }}
+                multiple
+                onChange={operations.handleUploadFromInput}
+              />
+              <Btn
+                variant={shareState.selectionMode ? 'primary' : 'surface'}
+                size="sm"
+                onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+              >
+                <FiCheckSquare size={13} />
+                {shareState.selectionMode ? 'Selecting' : 'Select'}
+              </Btn>
+              {shareState.selectionMode && (
+                <>
+                  <Divider vertical />
+                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
+                    {shareState.selectedFiles.length} selected
+                  </span>
+                  <IconBtn
+                    icon={FiFolder}
+                    title="Move selected"
                     disabled={shareState.selectedFiles.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 rounded text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FiFolder size={18} />
-                    <span className="hidden sm:inline">Move ({shareState.selectedFiles.length})</span>
-                  </button>
-                )}
-              </div>
+                    onClick={() => setMoveModalOpen(true)}
+                  />
+                </>
+              )}
+            </>
+          )}
 
-              <div className="bg-gray-700 rounded-lg p-1">
-                <select
-                  value={shareState.sortBy}
-                  onChange={(e) => shareState.setSortBy(e.target.value)}
-                  className="px-3 py-2 text-sm bg-transparent text-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="name-asc">Name (A-Z)</option>
-                  <option value="name-desc">Name (Z-A)</option>
-                  <option value="date-desc">Date (New)</option>
-                  <option value="date-asc">Date (Old)</option>
-                  <option value="size-desc">Size (Big)</option>
-                  <option value="size-asc">Size (Small)</option>
-                </select>
-              </div>
+          <div style={{ flex: 1 }} />
 
-              <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => shareState.setViewMode('grid')}
-                  className={`p-2 rounded ${shareState.viewMode === 'grid' ? 'bg-indigo-600' : 'text-gray-400 hover:text-white'}`}
-                >
-                  <FiGrid size={18} />
-                </button>
-                <button
-                  onClick={() => shareState.setViewMode('list')}
-                  className={`p-2 rounded ${shareState.viewMode === 'list' ? 'bg-indigo-600' : 'text-gray-400 hover:text-white'}`}
-                >
-                  <FiList size={18} />
-                </button>
-              </div>
-            </div>
+          <select
+            value={shareState.sortBy}
+            onChange={(e) => shareState.setSortBy(e.target.value)}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 12,
+              padding: '6px 10px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              borderRadius: 'var(--r-sm)',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="name-asc">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+            <option value="date-desc">Date (New)</option>
+            <option value="date-asc">Date (Old)</option>
+            <option value="size-desc">Size (Big)</option>
+            <option value="size-asc">Size (Small)</option>
+          </select>
+
+          <Divider vertical />
+
+          <div
+            style={{
+              display: 'flex',
+              background: 'var(--surface-2)',
+              borderRadius: 'var(--r-sm)',
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            <IconBtn
+              icon={FiGrid}
+              title="Grid view"
+              onClick={() => shareState.setViewMode('grid')}
+              active={shareState.viewMode === 'grid'}
+              width={26}
+              height={26}
+              size={14}
+            />
+            <IconBtn
+              icon={FiList}
+              title="List view"
+              onClick={() => shareState.setViewMode('list')}
+              active={shareState.viewMode === 'list'}
+              width={26}
+              height={26}
+              size={14}
+            />
           </div>
         </div>
 
         {/* Breadcrumb */}
-        <div className="px-6 py-2 border-b border-gray-800">
-          <div className="flex items-center gap-2 text-gray-400">
-            <button onClick={() => operations.navigateToBreadcrumb(0)} className="flex items-center gap-1.5 hover:text-indigo-400 whitespace-nowrap">
-              <FiHome size={16} />
-              <span className="hidden sm:inline">{shareResponse.fileName}</span>
-            </button>
-            {shareState.currentSubPath &&
-              shareState.currentSubPath.split('/').map((folder, index, arr) => (
-                <div key={`${folder}-${index}`} className="flex items-center gap-1.5">
-                  <FiChevronRight size={14} className="text-gray-600 flex-shrink-0" />
-                  <button
-                    onClick={() => operations.navigateToBreadcrumb(index + 1)}
-                    className={`hover:text-indigo-400 truncate ${index === arr.length - 1 ? 'font-medium text-white' : ''}`}
-                  >
-                    {folder}
-                  </button>
-                </div>
-              ))}
-          </div>
+        <div
+          style={{
+            padding: '0 16px',
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            flexShrink: 0,
+            background: 'var(--surface)',
+            borderBottom: '1px solid var(--border)',
+            overflow: 'hidden',
+          }}
+        >
+          <button
+            onClick={() => operations.navigateToBreadcrumb(0)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 13,
+              fontWeight: breadcrumbItems.length === 0 ? 600 : 500,
+              color: breadcrumbItems.length === 0 ? 'var(--text)' : 'var(--text-3)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 6px',
+              borderRadius: 'var(--r-xs)',
+              fontFamily: 'inherit',
+            }}
+          >
+            <FiHome size={13} />
+            {shareResponse.fileName}
+          </button>
+          {breadcrumbItems.map((folder, i) => {
+            const isLast = i === breadcrumbItems.length - 1;
+            return (
+              <span key={`${folder}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <FiChevronRight size={13} color="var(--text-3)" />
+                <button
+                  onClick={() => operations.navigateToBreadcrumb(i + 1)}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isLast ? 600 : 500,
+                    color: isLast ? 'var(--text)' : 'var(--text-3)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 6px',
+                    borderRadius: 'var(--r-xs)',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {folder}
+                </button>
+              </span>
+            );
+          })}
         </div>
 
-        {/* File input */}
-        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={operations.handleUploadFromInput} />
-
-        {/* Main content area */}
-        <div className="flex-1 p-1 min-h-0">
-          {(shareState.sortedFilteredFiles || []).length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              <p>This folder is empty</p>
-            </div>
-          ) : (
-            <Suspense fallback={<div className="text-center text-gray-400">Loading...</div>}>
-              <div className="h-full min-h-0">
-                {shareState.viewMode === 'grid' ? (
-                  <ShareGrid
-                    files={shareState.sortedFilteredFiles || []}
-                    token={token}
-                    submittedPassword={submittedPassword}
-                    currentSubPath={shareState.currentSubPath}
-                    allowUploads={shareResponse.allowUploads}
-                    deletingFile={shareState.deletingFile}
-                    renamingFile={shareState.renamingFile}
-                    newFileName={shareState.newFileName}
-                    onNewFileNameChange={shareState.setNewFileName}
-                    onCancelRename={operations.cancelRename}
-                    onConfirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
-                    onCancelDelete={operations.cancelDelete}
-                    onConfirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
-                    processingFile={shareState.processingFile}
-                    onFileClick={(file) => {
-                      if (file.isDirectory) {
-                        operations.navigateToSubFolder(file.name);
-                      } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
-                        operations.openMediaViewer(file);
-                      }
-                    }}
-                    onContextMenu={operations.handleContextMenu}
-                    onDownload={operations.handleDownload}
-                    onInitiateRename={operations.initiateRename}
-                    onInitiateDelete={operations.initiateDelete}
-                    onOpenMediaViewer={operations.openMediaViewer}
-                    formatFileSize={operations.formatFileSize}
-                    selectionMode={shareState.selectionMode}
-                    selectedFiles={selectedFileSet}
-                    onToggleSelect={toggleSelection}
-                  />
-                ) : (
-                  <ShareList
-                    files={shareState.sortedFilteredFiles || []}
-                    allowUploads={shareResponse.allowUploads}
-                    deletingFile={shareState.deletingFile}
-                    renamingFile={shareState.renamingFile}
-                    newFileName={shareState.newFileName}
-                    setNewFileName={shareState.setNewFileName}
-                    cancelDelete={operations.cancelDelete}
-                    confirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
-                    cancelRename={operations.cancelRename}
-                    confirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
-                    processingFile={shareState.processingFile}
-                    onFileClick={(file) => {
-                      if (file.isDirectory) {
-                        operations.navigateToSubFolder(file.name);
-                      } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
-                        operations.openMediaViewer(file);
-                      }
-                    }}
-                    onDownload={operations.handleDownload}
-                    onContextMenu={operations.handleContextMenu}
-                    onInitiateRename={operations.initiateRename}
-                    onInitiateDelete={operations.initiateDelete}
-                    onOpenMediaViewer={operations.openMediaViewer}
-                    formatFileSize={operations.formatFileSize}
-                    selectionMode={shareState.selectionMode}
-                    selectedFiles={selectedFileSet}
-                    onToggleSelect={toggleSelection}
-                  />
-                )}
-              </div>
-            </Suspense>
-          )}
+        {/* Files area */}
+        <div className="files-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+          <div
+            style={{
+              flex: 1,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-lg)',
+              boxShadow: 'var(--shadow-sm)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+            }}
+          >
+            {(shareState.sortedFilteredFiles || []).length === 0 ? (
+              <EmptyState label="This folder is empty" />
+            ) : (
+              <Suspense fallback={<LoadingPanel />}>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  {shareState.viewMode === 'list' && (
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        background: 'var(--surface-2)',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                      className="tc-share-list-header"
+                    >
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 150px 150px 200px',
+                          gap: 16,
+                          padding: '10px 24px',
+                        }}
+                      >
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Name</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Size</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Modified</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</div>
+                      </div>
+                    </div>
+                  )}
+                  {shareState.viewMode === 'grid' ? (
+                    <ShareGrid
+                      files={shareState.sortedFilteredFiles || []}
+                      token={token}
+                      submittedPassword={submittedPassword}
+                      currentSubPath={shareState.currentSubPath}
+                      allowUploads={shareResponse.allowUploads}
+                      deletingFile={shareState.deletingFile}
+                      renamingFile={shareState.renamingFile}
+                      newFileName={shareState.newFileName}
+                      onNewFileNameChange={shareState.setNewFileName}
+                      onCancelRename={operations.cancelRename}
+                      onConfirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
+                      onCancelDelete={operations.cancelDelete}
+                      onConfirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
+                      processingFile={shareState.processingFile}
+                      onFileClick={(file) => {
+                        if (file.isDirectory) {
+                          operations.navigateToSubFolder(file.name);
+                        } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                          operations.openMediaViewer(file);
+                        }
+                      }}
+                      onContextMenu={operations.handleContextMenu}
+                      onDownload={operations.handleDownload}
+                      onInitiateRename={operations.initiateRename}
+                      onInitiateDelete={operations.initiateDelete}
+                      onOpenMediaViewer={operations.openMediaViewer}
+                      formatFileSize={operations.formatFileSize}
+                      selectionMode={shareState.selectionMode}
+                      selectedFiles={selectedFileSet}
+                      onToggleSelect={toggleSelection}
+                    />
+                  ) : (
+                    <ShareList
+                      files={shareState.sortedFilteredFiles || []}
+                      allowUploads={shareResponse.allowUploads}
+                      deletingFile={shareState.deletingFile}
+                      renamingFile={shareState.renamingFile}
+                      newFileName={shareState.newFileName}
+                      setNewFileName={shareState.setNewFileName}
+                      cancelDelete={operations.cancelDelete}
+                      confirmDelete={() => operations.confirmDelete(shareState.deletingFile)}
+                      cancelRename={operations.cancelRename}
+                      confirmRename={() => operations.confirmRename(shareState.renamingFile, shareState.newFileName)}
+                      processingFile={shareState.processingFile}
+                      onFileClick={(file) => {
+                        if (file.isDirectory) {
+                          operations.navigateToSubFolder(file.name);
+                        } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                          operations.openMediaViewer(file);
+                        }
+                      }}
+                      onDownload={operations.handleDownload}
+                      onContextMenu={operations.handleContextMenu}
+                      onInitiateRename={operations.initiateRename}
+                      onInitiateDelete={operations.initiateDelete}
+                      onOpenMediaViewer={operations.openMediaViewer}
+                      formatFileSize={operations.formatFileSize}
+                      selectionMode={shareState.selectionMode}
+                      selectedFiles={selectedFileSet}
+                      onToggleSelect={toggleSelection}
+                    />
+                  )}
+                </div>
+              </Suspense>
+            )}
+          </div>
         </div>
 
         {/* Media Viewer Modal */}
@@ -526,20 +746,42 @@ export default function SharePage({ params }) {
 
         {/* Upload Progress */}
         {shareState.uploadingFiles.length > 0 && (
-          <div className="absolute bottom-6 right-6 bg-gray-800 rounded-lg shadow-lg p-6 w-80 border border-gray-700 z-40">
-            <h3 className="font-semibold mb-4">Uploading ({shareState.uploadingFiles.length})</h3>
-            <div className="space-y-2 max-h-48 overflow-auto">
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 24,
+              right: 24,
+              background: 'var(--surface)',
+              borderRadius: 'var(--r-md)',
+              boxShadow: 'var(--shadow-lg)',
+              padding: 20,
+              width: 320,
+              border: '1px solid var(--border)',
+              zIndex: 40,
+            }}
+          >
+            <h3 style={{ fontWeight: 600, marginBottom: 12, color: 'var(--text)', fontSize: 14 }}>
+              Uploading ({shareState.uploadingFiles.length})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 192, overflow: 'auto' }}>
               {shareState.uploadingFiles.map((file) => (
-                <div key={file.id} className="flex items-center gap-2 text-sm">
-                  {file.status === 'uploading' && <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>}
-                  {file.status === 'success' && <div className="text-green-400">✓</div>}
-                  {file.status === 'error' && <div className="text-red-400">✗</div>}
-                  <span className="truncate text-gray-300">{file.fileName}</span>
+                <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  {file.status === 'uploading' && <Spinner size={14} color="var(--accent)" borderColor="var(--border)" thickness={2} />}
+                  {file.status === 'success' && <span style={{ color: 'var(--success)' }}>✓</span>}
+                  {file.status === 'error' && <span style={{ color: 'var(--danger)' }}>✗</span>}
+                  <span className="tc-truncate" style={{ color: 'var(--text-2)' }}>{file.fileName}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        <style jsx>{`
+          .tc-share-owner { display: none; }
+          @media (min-width: 640px) {
+            .tc-share-owner { display: inline; }
+          }
+        `}</style>
       </div>
     );
   }

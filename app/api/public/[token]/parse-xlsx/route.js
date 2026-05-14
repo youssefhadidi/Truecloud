@@ -29,12 +29,15 @@ export async function GET(req, { params }) {
     const subPath = url.searchParams.get('path') || '';
     const fileName = url.searchParams.get('file') || share.fileName;
 
-    // Build the path
+    // Build the path. For directory shares, combine the in-share subPath with
+    // the target fileName so we resolve to the actual file rather than its
+    // parent directory.
     let pathCheck;
-    if (share.isDirectory && subPath) {
-      pathCheck = validateSharePath(share, subPath);
-    } else if (share.isDirectory && fileName !== share.fileName) {
-      pathCheck = validateSharePath(share, fileName);
+    if (share.isDirectory) {
+      const innerPath = subPath
+        ? (fileName && fileName !== share.fileName ? `${subPath}/${fileName}` : subPath)
+        : (fileName && fileName !== share.fileName ? fileName : '');
+      pathCheck = validateSharePath(share, innerPath);
     } else {
       pathCheck = validateSharePath(share, '');
     }

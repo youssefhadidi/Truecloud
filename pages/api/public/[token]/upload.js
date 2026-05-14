@@ -105,7 +105,10 @@ export default async function handler(req, res) {
 
       filesReceived += 1;
       const originalName = info?.filename || `upload_${Date.now()}`;
-      const safeName = originalName.split(/[/\\]/).pop() || `upload_${Date.now()}`;
+      const baseName = originalName.split(/[/\\]/).pop() || '';
+      const safeName = (baseName === '.' || baseName === '..' || baseName === '')
+        ? `upload_${Date.now()}`
+        : baseName;
       const fileMimeType = info?.mimeType || 'application/octet-stream';
       const filePath = join(targetDir, safeName);
       writtenFilePaths.push(filePath);
