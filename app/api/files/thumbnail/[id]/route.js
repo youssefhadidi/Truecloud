@@ -158,10 +158,10 @@ export async function GET(req, { params }) {
       // Ensure thumbnails directory exists (only when needed)
       await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
-      // HEIC/HEIF decoding via libheif is much heavier than other formats and
-      // can segfault under Bun when many run in parallel. Give it weight 10 so
-      // ~2 concurrent HEIC decodes can be in flight on the 20-slot semaphore.
-      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 10 : 1;
+      // HEIC/HEIF decoding via libheif segfaults under Bun even when serialized
+      // through libvips, so the only reliable mitigation is to allow exactly one
+      // HEIC decode at a time. Weight equals the semaphore capacity (20).
+      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 20 : 1;
       await thumbnailSemaphore.acquire(weight);
       try {
         if (isPdf) {
