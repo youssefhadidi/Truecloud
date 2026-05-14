@@ -357,8 +357,12 @@ export async function POST(req) {
 
             // 4) Copy HEIF/HEVC and RAW runtime libraries
             // NOTE: libvips links against libraw_r (thread-safe), not libraw
+            // Loop order matters: each iteration's `cp -fL` overwrites the previous,
+            // so directories with our custom-built libs MUST come last (otherwise an
+            // OS-package libheif/libde265 in /usr/lib/${triplet} silently replaces
+            // our 1.21.2/1.0.18 with whatever the distro ships, e.g. 1.19.x on Debian 13).
             await execAsync(
-              `for dir in "${localLibDir}" "/usr/local/lib" "/usr/lib/${triplet}"; do \
+              `for dir in "/usr/lib/${triplet}" "${localLibDir}" "/usr/local/lib"; do \
                  cp -fL $dir/libheif.so* "${bundledLibDir}/" 2>/dev/null || true; \
                  cp -fL $dir/libde265.so* "${bundledLibDir}/" 2>/dev/null || true; \
                  cp -fL $dir/libraw_r.so* "${bundledLibDir}/" 2>/dev/null || true; \
