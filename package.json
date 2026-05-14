@@ -1,11 +1,11 @@
 {
   "name": "truecloud",
-  "version": "1.261.0",
+  "version": "1.262.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "bun server.js",
     "build": "next build",
-    "start": "node server.js",
+    "start": "bun server.js",
     "lint": "eslint",
     "restart": "systemctl restart truecloud",
     "db:generate": "prisma generate",

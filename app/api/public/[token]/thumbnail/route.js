@@ -135,11 +135,7 @@ export async function GET(req, { params }) {
     }
 
     if (!thumbnailExists) {
-      // HEIC/HEIF decoding via libheif segfaults under Bun even when serialized
-      // through libvips, so the only reliable mitigation is to allow exactly one
-      // HEIC decode at a time. Weight equals the semaphore capacity (20).
-      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 20 : 1;
-      await thumbnailSemaphore.acquire(weight);
+      await thumbnailSemaphore.acquire();
       try {
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
@@ -152,7 +148,7 @@ export async function GET(req, { params }) {
       } catch (error) {
         return NextResponse.json({ error: 'Thumbnail generation failed', details: error.message }, { status: 500 });
       } finally {
-        thumbnailSemaphore.release(weight);
+        thumbnailSemaphore.release();
       }
     }
 
