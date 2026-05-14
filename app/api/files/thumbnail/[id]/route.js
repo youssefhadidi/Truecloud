@@ -158,7 +158,11 @@ export async function GET(req, { params }) {
       // Ensure thumbnails directory exists (only when needed)
       await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
-      await thumbnailSemaphore.acquire();
+      // HEIC/HEIF decoding via libheif is much heavier than other formats and
+      // can segfault under Bun when many run in parallel. Give it weight 4 so
+      // ~7 concurrent HEIC decodes can be in flight (same pattern as cache worker).
+      const weight = (fileExt === '.heic' || fileExt === '.heif') ? 4 : 1;
+      await thumbnailSemaphore.acquire(weight);
       try {
         if (isPdf) {
           await generatePdfThumbnail(filePath, thumbnailPath);
@@ -187,7 +191,7 @@ export async function GET(req, { params }) {
           { status: 500 },
         );
       } finally {
-        thumbnailSemaphore.release();
+        thumbnailSemaphore.release(weight);
       }
     }
 
