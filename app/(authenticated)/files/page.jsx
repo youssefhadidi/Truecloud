@@ -203,22 +203,60 @@ function FilesPageContent() {
 
   const hasHeicFiles = heicFiles.length > 0;
 
-  const toggleSelection = useCallback(
-    (file) => {
-      const newSelected = state.selectedFiles.includes(file.name)
-        ? state.selectedFiles.filter((name) => name !== file.name)
-        : [...state.selectedFiles, file.name];
-      state.setSelectedFiles(newSelected);
-    },
-    [state.selectedFiles, state.setSelectedFiles],
-  );
-
   const selectableFiles = useMemo(
     () => state.files.filter((f) => !f.isDownloading),
     [state.files],
   );
   const allSelected =
     selectableFiles.length > 0 && state.selectedFiles.length >= selectableFiles.length;
+
+  const lastSelectedRef = useRef(null);
+
+  useEffect(() => {
+    if (!state.selectionMode) lastSelectedRef.current = null;
+  }, [state.selectionMode]);
+
+  useEffect(() => {
+    if (!state.selectionMode) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      state.setSelectionMode(false);
+      state.setSelectedFiles([]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [state.selectionMode, state.setSelectionMode, state.setSelectedFiles]);
+
+  const toggleSelection = useCallback(
+    (file, mods = {}) => {
+      const { ctrl = false, shift = false } = mods;
+      const names = state.selectedFiles;
+
+      if (shift && lastSelectedRef.current && lastSelectedRef.current !== file.name) {
+        const fromIdx = selectableFiles.findIndex((f) => f.name === lastSelectedRef.current);
+        const toIdx = selectableFiles.findIndex((f) => f.name === file.name);
+        if (fromIdx >= 0 && toIdx >= 0) {
+          const [a, b] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+          const rangeNames = selectableFiles.slice(a, b + 1).map((f) => f.name);
+          const merged = Array.from(new Set([...names, ...rangeNames]));
+          state.setSelectedFiles(merged);
+          lastSelectedRef.current = file.name;
+          if (merged.length > 0 && !state.selectionMode) state.setSelectionMode(true);
+          return;
+        }
+      }
+
+      const next = names.includes(file.name)
+        ? names.filter((n) => n !== file.name)
+        : [...names, file.name];
+      state.setSelectedFiles(next);
+      lastSelectedRef.current = next.includes(file.name) ? file.name : null;
+
+      if (next.length > 0 && !state.selectionMode) state.setSelectionMode(true);
+      else if (next.length === 0 && state.selectionMode && ctrl) state.setSelectionMode(false);
+    },
+    [state.selectedFiles, state.setSelectedFiles, state.selectionMode, state.setSelectionMode, selectableFiles],
+  );
 
   const handleToggleSelectAll = useCallback(() => {
     if (allSelected) {

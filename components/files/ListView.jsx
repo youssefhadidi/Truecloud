@@ -308,7 +308,10 @@ const ListView = forwardRef(({
             WebkitTapHighlightColor: 'transparent',
             transition: 'background 120ms',
           }}
-          onClick={() => {
+          onClick={(e) => {
+            const ctrl = e.ctrlKey || e.metaKey;
+            const shift = e.shiftKey;
+            if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
             if (selectionMode) { onToggleSelect?.(file); return; }
             if (shouldShowActions(file.id)) return;
             if (file.isDirectory) navigateToFolder(file.name, file);
