@@ -8,7 +8,7 @@ import { Suspense, lazy, useMemo, useState, useCallback, useRef, useEffect } fro
 import { useQueryClient } from '@tanstack/react-query';
 import {
   FiUpload, FiFolder, FiPlus, FiHome, FiChevronRight, FiGrid, FiList,
-  FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiImage,
+  FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiSquare, FiImage,
   FiDownload, FiTrash2, FiX,
 } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
@@ -213,6 +213,21 @@ function FilesPageContent() {
     [state.selectedFiles, state.setSelectedFiles],
   );
 
+  const selectableFiles = useMemo(
+    () => state.files.filter((f) => !f.isDownloading),
+    [state.files],
+  );
+  const allSelected =
+    selectableFiles.length > 0 && state.selectedFiles.length >= selectableFiles.length;
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      state.setSelectedFiles([]);
+    } else {
+      state.setSelectedFiles(selectableFiles.map((f) => f.name));
+    }
+  }, [allSelected, selectableFiles, state.setSelectedFiles]);
+
   const queryClient = useQueryClient();
 
   const fetchMoveFolders = useCallback(
@@ -388,6 +403,15 @@ function FilesPageContent() {
                   <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
                     {state.selectedFiles.length} selected
                   </span>
+                  <Btn
+                    variant="surface"
+                    size="sm"
+                    onClick={handleToggleSelectAll}
+                    disabled={selectableFiles.length === 0 || bulkDeleting}
+                  >
+                    {allSelected ? <FiSquare size={13} /> : <FiCheckSquare size={13} />}
+                    {allSelected ? 'Deselect all' : 'Select all'}
+                  </Btn>
                   <IconBtn
                     icon={FiDownload}
                     title="Download selected"

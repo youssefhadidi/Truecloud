@@ -425,9 +425,14 @@ const GridItem = memo(
                 justifyContent: 'center',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: isViewableFile(item) ? 'pointer' : 'default',
+                cursor: selectionMode || isViewableFile(item) ? 'pointer' : 'default',
               }}
               onClick={(e) => {
+                if (selectionMode) {
+                  e.stopPropagation();
+                  onToggleSelect?.(item);
+                  return;
+                }
                 if (isViewableFile(item)) {
                   e.stopPropagation();
                   onOpenMediaViewer(item);
