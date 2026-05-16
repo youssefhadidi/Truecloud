@@ -466,15 +466,6 @@ function FilesPageContent() {
             </span>
           )}
 
-          <Divider vertical />
-          <IconBtn icon={FiArrowLeft} title="Back" onClick={navigation.goBack} disabled={!navigation.canGoBack} />
-          <IconBtn icon={FiArrowRight} title="Forward" onClick={navigation.goForward} disabled={!navigation.canGoForward} />
-          <IconBtn
-            icon={FiRefreshCw}
-            title="Refresh"
-            onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
-          />
-
           {/* Filter input */}
           <div
             style={{
@@ -563,69 +554,94 @@ function FilesPageContent() {
             height: 40,
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 8,
             flexShrink: 0,
             background: 'var(--surface)',
             borderBottom: '1px solid var(--border)',
           }}
         >
-          <button
-            onClick={() => {
-              setGlobalSearchQuery('');
-              navigation.navigateToBreadcrumb(0);
-            }}
+          <div
+            className="tc-breadcrumb-scroll"
             style={{
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
               gap: 4,
-              fontSize: 13,
-              fontWeight: 500,
-              color: !breadcrumbItems?.length && !isGlobalSearch ? 'var(--text)' : 'var(--text-3)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px 6px',
-              borderRadius: 'var(--r-xs)',
-              fontFamily: 'inherit',
+              flex: 1,
+              minWidth: 0,
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              whiteSpace: 'nowrap',
+              scrollbarWidth: 'thin',
             }}
           >
-            <FiHome size={13} />
-            Home
-          </button>
-          {isGlobalSearch ? (
-            <>
-              <FiChevronRight size={13} color="var(--text-3)" />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-                Search: &quot;{globalSearchQuery}&quot;
-              </span>
-            </>
-          ) : (
-            breadcrumbItems?.map((folder, i) => {
-              const isLast = i === breadcrumbItems.length - 1;
-              const display = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
-              return (
-                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <FiChevronRight size={13} color="var(--text-3)" />
-                  <button
-                    onClick={() => navigation.navigateToBreadcrumb(i + 1)}
-                    style={{
-                      fontSize: 13,
-                      fontWeight: isLast ? 600 : 500,
-                      color: isLast ? 'var(--text)' : 'var(--text-3)',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '4px 6px',
-                      borderRadius: 'var(--r-xs)',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {display}
-                  </button>
+            <button
+              onClick={() => {
+                setGlobalSearchQuery('');
+                navigation.navigateToBreadcrumb(0);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 13,
+                fontWeight: 500,
+                color: !breadcrumbItems?.length && !isGlobalSearch ? 'var(--text)' : 'var(--text-3)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 6px',
+                borderRadius: 'var(--r-xs)',
+                fontFamily: 'inherit',
+                flexShrink: 0,
+              }}
+            >
+              <FiHome size={13} />
+              Home
+            </button>
+            {isGlobalSearch ? (
+              <>
+                <FiChevronRight size={13} color="var(--text-3)" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', flexShrink: 0 }}>
+                  Search: &quot;{globalSearchQuery}&quot;
                 </span>
-              );
-            })
-          )}
+              </>
+            ) : (
+              breadcrumbItems?.map((folder, i) => {
+                const isLast = i === breadcrumbItems.length - 1;
+                const display = folder.startsWith('user_') ? fileUtils.getFolderDisplayName(folder) : folder;
+                return (
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <FiChevronRight size={13} color="var(--text-3)" />
+                    <button
+                      onClick={() => navigation.navigateToBreadcrumb(i + 1)}
+                      style={{
+                        fontSize: 13,
+                        fontWeight: isLast ? 600 : 500,
+                        color: isLast ? 'var(--text)' : 'var(--text-3)',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px 6px',
+                        borderRadius: 'var(--r-xs)',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {display}
+                    </button>
+                  </span>
+                );
+              })
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            <IconBtn icon={FiArrowLeft} title="Back" onClick={navigation.goBack} disabled={!navigation.canGoBack} />
+            <IconBtn icon={FiArrowRight} title="Forward" onClick={navigation.goForward} disabled={!navigation.canGoForward} />
+            <IconBtn
+              icon={FiRefreshCw}
+              title="Refresh"
+              onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
+            />
+          </div>
         </div>
 
         {/* Files area */}
