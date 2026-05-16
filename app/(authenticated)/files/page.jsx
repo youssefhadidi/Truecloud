@@ -334,6 +334,7 @@ function FilesPageContent() {
           minWidth: 0,
           position: 'relative',
         }}
+        onDragEnter={isGlobalSearch ? undefined : dragDrop.handleDragEnter}
         onDragOver={isGlobalSearch ? undefined : dragDrop.handleDragOver}
         onDragLeave={isGlobalSearch ? undefined : dragDrop.handleDragLeave}
         onDrop={isGlobalSearch ? undefined : (e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}

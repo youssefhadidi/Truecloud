@@ -1,6 +1,6 @@
 /** @format */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
@@ -116,23 +116,31 @@ export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
 }
 
 export function useDragAndDrop({ setIsDragging }) {
+  const counter = useRef(0);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    counter.current += 1;
+    if (counter.current === 1) setIsDragging(true);
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.currentTarget === e.target) {
-      setIsDragging(false);
-    }
+    counter.current = Math.max(0, counter.current - 1);
+    if (counter.current === 0) setIsDragging(false);
   };
 
   const handleDropEvent = (e, onDrop) => {
     e.preventDefault();
     e.stopPropagation();
+    counter.current = 0;
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
@@ -141,7 +149,21 @@ export function useDragAndDrop({ setIsDragging }) {
     onDrop(files);
   };
 
+  useEffect(() => {
+    const reset = () => { counter.current = 0; setIsDragging(false); };
+    const onKey = (e) => { if (e.key === 'Escape') reset(); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('blur', reset);
+    window.addEventListener('dragend', reset);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('blur', reset);
+      window.removeEventListener('dragend', reset);
+    };
+  }, [setIsDragging]);
+
   return {
+    handleDragEnter,
     handleDragOver,
     handleDragLeave,
     handleDropEvent,

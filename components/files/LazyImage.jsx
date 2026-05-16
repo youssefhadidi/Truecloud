@@ -85,6 +85,8 @@ export default function LazyImage({ src, alt, style, onError, isThumbnail = fals
             <img
               src={imageSrc}
               alt={alt}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1, transition: 'opacity 200ms' }}
               onError={onError}
               loading="lazy"
