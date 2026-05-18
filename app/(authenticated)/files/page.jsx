@@ -134,7 +134,6 @@ function FilesPageContent() {
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [convertingHeic, setConvertingHeic] = useState(false);
-  const [conversionStatus, setConversionStatus] = useState({ completed: 0, total: 0, failed: [] });
 
   const handlers = useFileHandlers({
     currentPath: state.currentPath,
@@ -301,36 +300,21 @@ function FilesPageContent() {
   const handleConvertHeicToJpeg = async () => {
     if (heicFiles.length === 0) return;
     setConvertingHeic(true);
-    setConversionStatus({ completed: 0, total: heicFiles.length, failed: [] });
-    const failed = [];
-    for (let i = 0; i < heicFiles.length; i++) {
-      const fileName = heicFiles[i];
-      try {
-        const params = new URLSearchParams({
-          path: state.currentPath,
-          format: 'jpeg',
-          quality: '100',
-          w: '0',
-          h: '0',
-        });
-        const downloadUrl = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
-        const outputFileName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
-        await handleShareOrDownload(downloadUrl, outputFileName);
-        setConversionStatus((prev) => ({ ...prev, completed: prev.completed + 1 }));
-        if (i < heicFiles.length - 1) await new Promise((r) => setTimeout(r, 300));
-      } catch (error) {
-        console.error(`Failed to convert ${fileName}:`, error);
-        failed.push(fileName);
-        setConversionStatus((prev) => ({ ...prev, completed: prev.completed + 1, failed: [...prev.failed, fileName] }));
-      }
+    try {
+      const params = new URLSearchParams({
+        path: state.currentPath,
+        files: JSON.stringify(heicFiles),
+      });
+      const zipUrl = `/api/files/heic-to-jpeg-zip?${params}`;
+      const folderName = (state.currentPath || '').split('/').filter(Boolean).pop() || 'heic-to-jpeg';
+      await handleShareOrDownload(zipUrl, `${folderName}-jpeg.zip`);
+      state.addNotification('success', `Preparing ZIP of ${heicFiles.length} HEIC file(s) — download will start shortly`);
+    } catch (error) {
+      console.error('HEIC to JPEG zip failed:', error);
+      state.addNotification('error', 'Failed to start HEIC to JPEG conversion');
+    } finally {
+      setTimeout(() => setConvertingHeic(false), 1500);
     }
-    setTimeout(() => {
-      const successCount = heicFiles.length - failed.length;
-      if (failed.length === 0) state.addNotification('success', `Successfully converted ${successCount} HEIC file(s) to JPEG`);
-      else state.addNotification('warning', `Converted ${successCount}/${heicFiles.length} files. ${failed.length} failed: ${failed.join(', ')}`);
-      setConvertingHeic(false);
-      setConversionStatus({ completed: 0, total: 0, failed: [] });
-    }, 1000);
   };
 
   if (status === 'loading') {
@@ -491,8 +475,8 @@ function FilesPageContent() {
                 <Btn variant="surface" size="sm" onClick={handleConvertHeicToJpeg} disabled={convertingHeic}>
                   <FiImage size={13} />
                   {convertingHeic
-                    ? `Converting ${conversionStatus.completed}/${conversionStatus.total}…`
-                    : `HEIC → JPEG (${heicFiles.length})`}
+                    ? `Preparing ZIP…`
+                    : `HEIC → JPEG ZIP (${heicFiles.length})`}
                 </Btn>
               )}
             </>
