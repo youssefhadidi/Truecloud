@@ -202,6 +202,49 @@ function FilesPageContent() {
 
   const hasHeicFiles = heicFiles.length > 0;
 
+  const selectedAreAllHeic = useMemo(() => {
+    if (!state.selectionMode || state.selectedFiles.length === 0) return false;
+    return state.selectedFiles.every((n) => {
+      const ext = getFileExtension(n);
+      return ext === 'heic' || ext === 'heif';
+    });
+  }, [state.selectionMode, state.selectedFiles]);
+
+  const [downloadingHeicAsJpeg, setDownloadingHeicAsJpeg] = useState(false);
+
+  const handleDownloadSelectedAsJpeg = useCallback(async () => {
+    if (state.selectedFiles.length === 0) return;
+    setDownloadingHeicAsJpeg(true);
+    const failed = [];
+    for (let i = 0; i < state.selectedFiles.length; i++) {
+      const fileName = state.selectedFiles[i];
+      try {
+        const params = new URLSearchParams({
+          path: state.currentPath,
+          format: 'jpeg',
+          quality: '100',
+          w: '0',
+          h: '0',
+        });
+        const url = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
+        const outName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
+        await handleShareOrDownload(url, outName);
+        if (i < state.selectedFiles.length - 1) await new Promise((r) => setTimeout(r, 300));
+      } catch (err) {
+        console.error('JPEG download failed:', fileName, err);
+        failed.push(fileName);
+      }
+    }
+    setDownloadingHeicAsJpeg(false);
+    state.setSelectionMode(false);
+    state.setSelectedFiles([]);
+    if (failed.length === 0) {
+      state.addNotification('success', `Downloaded ${state.selectedFiles.length} file(s) as JPEG`);
+    } else {
+      state.addNotification('warning', `Failed ${failed.length} file(s): ${failed.join(', ')}`);
+    }
+  }, [state, handleShareOrDownload]);
+
   const selectableFiles = useMemo(
     () => state.files.filter((f) => !f.isDownloading),
     [state.files],
@@ -440,6 +483,19 @@ function FilesPageContent() {
                     disabled={state.selectedFiles.length === 0 || bulkDeleting}
                     onClick={handleBulkDownload}
                   />
+                  {selectedAreAllHeic && (
+                    <Btn
+                      variant="surface"
+                      size="sm"
+                      onClick={handleDownloadSelectedAsJpeg}
+                      disabled={downloadingHeicAsJpeg || bulkDeleting}
+                    >
+                      <FiImage size={13} />
+                      {downloadingHeicAsJpeg
+                        ? 'Downloading…'
+                        : `Download as JPEG (${state.selectedFiles.length})`}
+                    </Btn>
+                  )}
                   <IconBtn
                     icon={FiFolder}
                     title="Move selected"
