@@ -7,12 +7,9 @@ import { join, basename } from 'node:path';
 import archiver from 'archiver';
 import sharp from 'sharp';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { Semaphore } from '@/lib/semaphore';
+import { nodeToWebStream } from '@/lib/streamUtils';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-
-// Limit concurrent sharp HEIC decodes globally across requests
-const convertSemaphore = new Semaphore(2);
 
 // HEIC decoding + JPEG re-encoding can take a while for large batches
 export const maxDuration = 600;
@@ -45,7 +42,7 @@ export async function GET(req) {
     let entries;
     try {
       entries = await readdir(folderPath, { withFileTypes: true });
-    } catch (err) {
+    } catch {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
     }
 
@@ -63,85 +60,39 @@ export async function GET(req) {
 
     const archive = archiver('zip', { zlib: { level: 1 } });
 
-    const stream = new ReadableStream({
-      cancel() {
-        archive.abort();
-      },
-      start(controller) {
-        let isErrored = false;
-
-        archive.on('data', (chunk) => {
-          if (isErrored) return;
-          try {
-            controller.enqueue(chunk);
-          } catch (err) {
-            isErrored = true;
-            controller.error(err);
-            archive.abort();
-          }
-        });
-        archive.on('end', () => {
-          if (!isErrored) controller.close();
-        });
-        archive.on('error', (err) => {
-          if (!isErrored) {
-            isErrored = true;
-            controller.error(err);
-          }
-        });
-        archive.on('warning', (err) => {
-          if (err.code === 'ENOENT') {
-            console.warn('Archive warning:', err.message);
-          } else if (!isErrored) {
-            isErrored = true;
-            controller.error(err);
-            archive.abort();
-          }
-        });
-
-        (async () => {
-          for (const fileName of files) {
-            if (isErrored) break;
-            const srcPath = join(folderPath, fileName);
-            await convertSemaphore.acquire();
-            try {
-              const buffer = await sharp(srcPath, {
-                failOn: 'none',
-                failOnError: false,
-                limitInputPixels: false,
-              })
-                .rotate()
-                .jpeg({ quality: 100 })
-                .toBuffer();
-
-              const outName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
-              archive.append(buffer, { name: outName });
-            } catch (err) {
-              console.error('HEIC convert failed:', fileName, err);
-            } finally {
-              convertSemaphore.release();
-            }
-          }
-          if (!isErrored) archive.finalize();
-        })().catch((err) => {
-          console.error('HEIC zip pipeline error:', err);
-          if (!isErrored) {
-            isErrored = true;
-            controller.error(err);
-            archive.abort();
-          }
-        });
-      },
+    archive.on('warning', (err) => {
+      if (err.code !== 'ENOENT') console.error('HEIC zip warning:', err);
     });
+    archive.on('error', (err) => {
+      console.error('HEIC zip archive error:', err);
+    });
+
+    for (const fileName of files) {
+      const srcPath = join(folderPath, fileName);
+      const sharpStream = sharp(srcPath, {
+        failOn: 'none',
+        failOnError: false,
+        limitInputPixels: false,
+      })
+        .rotate()
+        .jpeg({ quality: 100 });
+
+      sharpStream.on('error', (err) => {
+        console.error('HEIC convert failed:', fileName, err);
+      });
+
+      const outName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
+      archive.append(sharpStream, { name: outName });
+    }
+    archive.finalize();
 
     const folderName = basename(relativePath || '') || 'heic-to-jpeg';
     const zipName = `${folderName}-jpeg.zip`;
 
-    return new Response(stream, {
+    return new Response(nodeToWebStream(archive), {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(zipName)}"; filename*=UTF-8''${encodeURIComponent(zipName)}`,
-        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error) {
