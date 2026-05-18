@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
-import { stat } from 'fs/promises';
+import { readdir } from 'fs/promises';
 import { join, basename } from 'node:path';
 import archiver from 'archiver';
 import sharp from 'sharp';
@@ -24,29 +24,9 @@ export async function GET(req) {
 
     const url = new URL(req.url);
     let relativePath = url.searchParams.get('path') || '';
-    const filesParam = url.searchParams.get('files');
-
-    if (!filesParam) {
-      return NextResponse.json({ error: 'Missing files parameter' }, { status: 400 });
-    }
-
-    let files;
-    try {
-      files = JSON.parse(filesParam);
-    } catch {
-      return NextResponse.json({ error: 'Invalid files parameter' }, { status: 400 });
-    }
-    if (!Array.isArray(files) || files.length === 0) {
-      return NextResponse.json({ error: 'No files provided' }, { status: 400 });
-    }
 
     if (relativePath.includes('..')) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-    }
-    for (const f of files) {
-      if (typeof f !== 'string' || f.includes('..') || f.includes('/') || f.includes('\\')) {
-        return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
-      }
     }
 
     const isRoot = await hasRootAccess(session.user.id);
@@ -60,6 +40,26 @@ export async function GET(req) {
       return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
     relativePath = accessCheck.normalizedPath;
+
+    const folderPath = join(UPLOAD_DIR, relativePath);
+    let entries;
+    try {
+      entries = await readdir(folderPath, { withFileTypes: true });
+    } catch (err) {
+      return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
+    }
+
+    const files = entries
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .filter((n) => {
+        const lower = n.toLowerCase();
+        return lower.endsWith('.heic') || lower.endsWith('.heif');
+      });
+
+    if (files.length === 0) {
+      return NextResponse.json({ error: 'No HEIC files in folder' }, { status: 404 });
+    }
 
     const archive = archiver('zip', { zlib: { level: 1 } });
 
@@ -102,17 +102,7 @@ export async function GET(req) {
         (async () => {
           for (const fileName of files) {
             if (isErrored) break;
-
-            const lower = fileName.toLowerCase();
-            if (!lower.endsWith('.heic') && !lower.endsWith('.heif')) continue;
-
-            const srcPath = join(UPLOAD_DIR, relativePath, fileName);
-            try {
-              await stat(srcPath);
-            } catch {
-              continue;
-            }
-
+            const srcPath = join(folderPath, fileName);
             await convertSemaphore.acquire();
             try {
               const buffer = await sharp(srcPath, {

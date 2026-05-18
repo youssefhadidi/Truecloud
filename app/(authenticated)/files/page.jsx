@@ -303,7 +303,6 @@ function FilesPageContent() {
     try {
       const params = new URLSearchParams({
         path: state.currentPath,
-        files: JSON.stringify(heicFiles),
       });
       const zipUrl = `/api/files/heic-to-jpeg-zip?${params}`;
       const folderName = (state.currentPath || '').split('/').filter(Boolean).pop() || 'heic-to-jpeg';
