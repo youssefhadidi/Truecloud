@@ -97,19 +97,11 @@ export default function SharesPage() {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
+      {/* Page Header */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Shares</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">Manage your shared files and folders</p>
@@ -119,14 +111,23 @@ export default function SharesPage() {
             <span className="text-lg font-semibold text-gray-900 dark:text-white">{shares.length}</span>
           </div>
         </div>
+      </div>
 
-        {error && (
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          </div>
+        )}
+        {!isLoading && error && (
           <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
             <p className="text-red-600 dark:text-red-400">{error}</p>
           </div>
         )}
 
-        {shares.length === 0 ? (
+        {!isLoading && shares.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
             <FiShare2 className="mx-auto text-gray-400" size={48} />
             <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No shares yet</h3>
@@ -135,7 +136,7 @@ export default function SharesPage() {
               Go to Files
             </button>
           </div>
-        ) : (
+        ) : !isLoading && shares.length > 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             {/* Table Header */}
             <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -223,7 +224,8 @@ export default function SharesPage() {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
+        </div>
       </div>
 
       {/* Edit Modal */}

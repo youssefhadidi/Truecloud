@@ -63,18 +63,24 @@ export default function DownloadsPage() {
   };
 
   return (
-    <div className="w-full h-full bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Page Header */}
-      <div className="bg-white dark:bg-gray-800 shadow flex-shrink-0">
-        <div className="mx-auto px-4 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Downloads</h1>
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Downloads</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Active and recent transfers</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">{downloads.length}</span>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-4 lg:px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Download Form */}
             <div className="lg:col-span-1">
               <TorrentDownloadComponent onDownloadStart={handleDownloadStart} />
@@ -83,8 +89,8 @@ export default function DownloadsPage() {
             {/* Downloads List */}
             <div className="lg:col-span-2">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 p-6">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Active Downloads</h2>
+                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Active Downloads</h2>
                 </div>
 
                 {downloads.length === 0 ? (
@@ -204,7 +210,7 @@ export default function DownloadsPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
