@@ -4,7 +4,7 @@
 
 export default function Tabs({ tabs, active, onChange }) {
   return (
-    <div className="border-b border-gray-700 mb-6 flex gap-1 overflow-x-auto">
+    <div className="border-b border-gray-700 mb-6 flex gap-1 overflow-x-auto overflow-y-hidden">
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         const Icon = tab.icon;

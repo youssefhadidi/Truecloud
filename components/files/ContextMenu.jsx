@@ -121,15 +121,15 @@ export default function ContextMenu({
           {!inTrash && (
             <>
               {onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
-              <MenuItem icon={FiDownload} label="Download as ZIP" onClick={onDownload} />
+              {onDownload && <MenuItem icon={FiDownload} label="Download as ZIP" onClick={onDownload} />}
             </>
           )}
         </>
       ) : (
         <>
-          <MenuItem icon={FiDownload} label="Download" onClick={onDownload} />
+          {onDownload && <MenuItem icon={FiDownload} label="Download" onClick={onDownload} />}
           {!inTrash && onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
-          {viewIcon && <MenuItem icon={viewIcon} label="View" onClick={onView} accent />}
+          {viewIcon && onView && <MenuItem icon={viewIcon} label="View" onClick={onView} accent />}
         </>
       )}
 

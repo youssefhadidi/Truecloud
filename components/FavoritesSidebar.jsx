@@ -11,6 +11,7 @@ import {
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { makeUsbPath } from '@/lib/usbPath';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 
@@ -164,7 +165,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
               key={part.key}
               icon={FiHardDrive}
               title={`${part.drive} — ${part.mountpoint}`}
-              onClick={() => router.push(`/usb?mount=${encodeURIComponent(part.mountpoint)}`)}
+              onClick={() => onNavigate(makeUsbPath(part.mountpoint))}
             />
           ))}
           {favorites.slice(0, 10).map((fav) => (
@@ -346,7 +347,8 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
                 key={part.key}
                 icon={FiHardDrive}
                 label={part.label}
-                onClick={() => router.push(`/usb?mount=${encodeURIComponent(part.mountpoint)}`)}
+                active={currentPath === makeUsbPath(part.mountpoint) || currentPath?.startsWith(`${makeUsbPath(part.mountpoint)}/`)}
+                onClick={() => onNavigate(makeUsbPath(part.mountpoint))}
               />
             ))}
           </>
@@ -355,7 +357,6 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         <Divider />
         <NavRow icon={FiDownload} label="Downloads" onClick={() => router.push('/downloads')} />
         <NavRow icon={FiShare2}   label="Shares"    onClick={() => router.push('/shares')} />
-        <NavRow icon={FiHardDrive} label="USB Drives" onClick={() => router.push('/usb')} />
         <NavRow
           icon={FiTrash2}
           label="Trash"

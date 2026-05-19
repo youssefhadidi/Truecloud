@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
+import { useUsbFiles } from '@/hooks/useUsbFiles';
+import { isUsbPath } from '@/lib/usbPath';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useFileChanges } from '@/hooks/useFileChanges';
@@ -186,8 +188,22 @@ export function useFilesPage(status) {
     }
   }, [selection.selectionMode]);
 
-  // Fetch files and initial downloads from API
-  const { files: filesData, downloads: apiDownloads, isLoading } = useFiles(navigation.currentPath, status === 'authenticated');
+  // USB mode: virtual path that targets a mounted USB drive
+  const usbMode = isUsbPath(navigation.currentPath);
+
+  // Fetch files and initial downloads from API (skipped in USB mode)
+  const { files: filesData, downloads: apiDownloads, isLoading: isLoadingFiles } = useFiles(
+    navigation.currentPath,
+    status === 'authenticated' && !usbMode,
+  );
+
+  // Fetch USB drive contents when in USB mode
+  const { files: usbFilesData, isLoading: isLoadingUsb } = useUsbFiles(
+    navigation.currentPath,
+    status === 'authenticated' && usbMode,
+  );
+
+  const isLoading = usbMode ? isLoadingUsb : isLoadingFiles;
 
   // Get real-time download progress via WebSocket (has priority over API downloads)
   // Pass apiDownloads to initialize state without making a separate API call
@@ -215,6 +231,28 @@ export function useFilesPage(status) {
   }, [navigation.currentPath, queryClient]);
 
   const files = useMemo(() => {
+    if (usbMode) {
+      const list = usbFilesData || [];
+      const sorted = [...list].sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        switch (preferences.sortBy) {
+          case 'name-asc': return a.name.localeCompare(b.name);
+          case 'name-desc': return b.name.localeCompare(a.name);
+          case 'date-desc': return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+          case 'date-asc': return new Date(a.updatedAt || 0) - new Date(b.updatedAt || 0);
+          case 'size-desc': return (b.size || 0) - (a.size || 0);
+          case 'size-asc': return (a.size || 0) - (b.size || 0);
+          default: return 0;
+        }
+      });
+      if (preferences.searchQuery.trim()) {
+        const q = preferences.searchQuery.trim().toLowerCase();
+        return sorted.filter((f) => f.name.toLowerCase().includes(q));
+      }
+      return sorted;
+    }
+
     // Merge downloads from both WebSocket (real-time) and API (initial state)
     // WebSocket takes priority for real-time updates
     const mergedDownloads = new Map();
@@ -309,7 +347,7 @@ export function useFilesPage(status) {
     });
 
     return sorted;
-  }, [filesData, apiDownloads, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath]);
+  }, [filesData, apiDownloads, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath, usbMode, usbFilesData]);
 
   // Store folder display names
   useEffect(() => {
@@ -377,6 +415,7 @@ export function useFilesPage(status) {
     isLoading,
     viewableFiles,
     sharedPaths,
+    usbMode,
 
     // Setters (backward compatible)
     setCurrentPath,

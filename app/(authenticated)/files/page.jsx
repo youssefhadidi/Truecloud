@@ -23,6 +23,7 @@ import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 import { useMoveFiles, useDeleteFile, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
+import { parseUsbPath, USB_PREFIX } from '@/lib/usbPath';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
@@ -367,8 +368,14 @@ function FilesPageContent() {
     );
   }
 
+  const usbMode = state.usbMode;
+  const usbParsed = usbMode ? parseUsbPath(state.currentPath) : null;
+  const readOnly = usbMode;
+
   const breadcrumbItems = isGlobalSearch
     ? null
+    : usbMode
+    ? (usbParsed?.subPath || '').split('/').filter(Boolean)
     : (state.currentPath || '').split('/').filter(Boolean);
 
   return (
@@ -398,10 +405,10 @@ function FilesPageContent() {
           minWidth: 0,
           position: 'relative',
         }}
-        onDragEnter={isGlobalSearch ? undefined : dragDrop.handleDragEnter}
-        onDragOver={isGlobalSearch ? undefined : dragDrop.handleDragOver}
-        onDragLeave={isGlobalSearch ? undefined : dragDrop.handleDragLeave}
-        onDrop={isGlobalSearch ? undefined : (e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
+        onDragEnter={isGlobalSearch || readOnly ? undefined : dragDrop.handleDragEnter}
+        onDragOver={isGlobalSearch || readOnly ? undefined : dragDrop.handleDragOver}
+        onDragLeave={isGlobalSearch || readOnly ? undefined : dragDrop.handleDragLeave}
+        onDrop={isGlobalSearch || readOnly ? undefined : (e) => dragDrop.handleDropEvent(e, handlers.handleDrop)}
       >
         {/* Drag overlay */}
         {!isGlobalSearch && state.isDragging && (
@@ -430,7 +437,7 @@ function FilesPageContent() {
             flexWrap: 'wrap',
           }}
         >
-          {!isGlobalSearch && (
+          {!isGlobalSearch && !readOnly && (
             <>
               <Btn variant="primary" size="sm" disabled={state.uploading} onClick={() => uploadInputRef.current?.click()}>
                 <FiUpload size={13} />
@@ -541,6 +548,12 @@ function FilesPageContent() {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>
               <FiSearch size={14} />
               Search Results ({searchFiles.length})
+            </span>
+          )}
+
+          {readOnly && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+              USB Drive (read-only)
             </span>
           )}
 
@@ -663,7 +676,7 @@ function FilesPageContent() {
                 gap: 4,
                 fontSize: 13,
                 fontWeight: 500,
-                color: !breadcrumbItems?.length && !isGlobalSearch ? 'var(--text)' : 'var(--text-3)',
+                color: !breadcrumbItems?.length && !isGlobalSearch && !usbMode ? 'var(--text)' : 'var(--text-3)',
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -682,6 +695,53 @@ function FilesPageContent() {
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', flexShrink: 0 }}>
                   Search: &quot;{globalSearchQuery}&quot;
                 </span>
+              </>
+            ) : usbMode ? (
+              <>
+                <FiChevronRight size={13} color="var(--text-3)" style={{ flexShrink: 0 }} />
+                <button
+                  onClick={() => state.setCurrentPath(`${USB_PREFIX}/${encodeURIComponent(usbParsed.mountpoint)}`)}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: breadcrumbItems.length === 0 ? 600 : 500,
+                    color: breadcrumbItems.length === 0 ? 'var(--text)' : 'var(--text-3)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 6px',
+                    borderRadius: 'var(--r-xs)',
+                    fontFamily: 'inherit',
+                    flexShrink: 0,
+                  }}
+                  title={usbParsed.mountpoint}
+                >
+                  {(usbParsed.mountpoint || '').split('/').filter(Boolean).pop() || usbParsed.mountpoint}
+                </button>
+                {breadcrumbItems.map((folder, i) => {
+                  const isLast = i === breadcrumbItems.length - 1;
+                  const subTarget = breadcrumbItems.slice(0, i + 1).join('/');
+                  return (
+                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <FiChevronRight size={13} color="var(--text-3)" />
+                      <button
+                        onClick={() => state.setCurrentPath(`${USB_PREFIX}/${encodeURIComponent(usbParsed.mountpoint)}/${subTarget}`)}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: isLast ? 600 : 500,
+                          color: isLast ? 'var(--text)' : 'var(--text-3)',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px 6px',
+                          borderRadius: 'var(--r-xs)',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {folder}
+                      </button>
+                    </span>
+                  );
+                })}
               </>
             ) : (
               breadcrumbItems?.map((folder, i) => {
@@ -808,17 +868,19 @@ function FilesPageContent() {
                                 state.setCurrentPath(file._parentPath || '');
                                 setPendingScrollTarget(file.name);
                               }
+                            : readOnly
+                            ? () => {}
                             : mediaViewer.openMediaViewer
                         }
-                        initiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
-                        handleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
-                        initiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
-                        initiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
-                        sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
-                        favoritePaths={isGlobalSearch ? undefined : favoritePaths}
+                        initiateRename={isGlobalSearch || readOnly ? () => {} : handlers.initiateRename}
+                        handleDownload={isGlobalSearch || readOnly ? () => {} : fileUtils.handleDownload}
+                        initiateDelete={isGlobalSearch || readOnly ? () => {} : handlers.initiateDelete}
+                        initiateShare={isGlobalSearch || readOnly ? undefined : handlers.initiateShare}
+                        sharedPaths={isGlobalSearch || readOnly ? undefined : state.sharedPaths}
+                        favoritePaths={isGlobalSearch || readOnly ? undefined : favoritePaths}
                         currentPath={state.currentPath}
                         isGlobalSearch={isGlobalSearch}
-                        selectionMode={isGlobalSearch ? false : state.selectionMode}
+                        selectionMode={isGlobalSearch || readOnly ? false : state.selectionMode}
                         selectedFiles={selectedFileSet}
                         onToggleSelect={toggleSelection}
                         onPauseDownload={state.pauseDownload}
@@ -873,19 +935,21 @@ function FilesPageContent() {
                               state.setCurrentPath(file._parentPath || '');
                               setPendingScrollTarget(file.name);
                             }
+                          : readOnly
+                          ? () => {}
                           : mediaViewer.openMediaViewer
                       }
-                      onInitiateRename={isGlobalSearch ? () => {} : handlers.initiateRename}
-                      onHandleDownload={isGlobalSearch ? () => {} : fileUtils.handleDownload}
-                      onInitiateDelete={isGlobalSearch ? () => {} : handlers.initiateDelete}
+                      onInitiateRename={isGlobalSearch || readOnly ? () => {} : handlers.initiateRename}
+                      onHandleDownload={isGlobalSearch || readOnly ? () => {} : fileUtils.handleDownload}
+                      onInitiateDelete={isGlobalSearch || readOnly ? () => {} : handlers.initiateDelete}
                       onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
                       onCancelDelete={handlers.cancelDelete}
                       formatFileSize={fileUtils.formatFileSize}
                       onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
-                      onInitiateShare={isGlobalSearch ? undefined : handlers.initiateShare}
-                      sharedPaths={isGlobalSearch ? undefined : state.sharedPaths}
-                      favoritePaths={isGlobalSearch ? undefined : favoritePaths}
-                      selectionMode={isGlobalSearch ? false : state.selectionMode}
+                      onInitiateShare={isGlobalSearch || readOnly ? undefined : handlers.initiateShare}
+                      sharedPaths={isGlobalSearch || readOnly ? undefined : state.sharedPaths}
+                      favoritePaths={isGlobalSearch || readOnly ? undefined : favoritePaths}
+                      selectionMode={isGlobalSearch || readOnly ? false : state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
                       onPauseDownload={state.pauseDownload}
@@ -942,16 +1006,16 @@ function FilesPageContent() {
           navigation.navigateToFolder(state.selectedContextFile.name);
           contextMenu.closeContextMenu();
         }}
-        onRename={() => handlers.initiateRename(state.selectedContextFile)}
-        onDownload={() => {
+        onRename={readOnly ? undefined : () => handlers.initiateRename(state.selectedContextFile)}
+        onDownload={readOnly ? undefined : () => {
           fileUtils.handleDownload(state.selectedContextFile.id, state.selectedContextFile.name);
           contextMenu.closeContextMenu();
         }}
-        onView={() => {
+        onView={readOnly ? undefined : () => {
           mediaViewer.openMediaViewer(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
-        onDelete={() => {
+        onDelete={readOnly ? undefined : () => {
           handlers.initiateDelete(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
@@ -959,11 +1023,11 @@ function FilesPageContent() {
           handlers.confirmRestore(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
-        onShare={() => {
+        onShare={readOnly ? undefined : () => {
           handlers.initiateShare(state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
-        onToggleFavorite={async () => {
+        onToggleFavorite={readOnly ? undefined : async () => {
           if (state.selectedContextFile) {
             const fullPath = state.currentPath
               ? `${state.currentPath}/${state.selectedContextFile.name}`
