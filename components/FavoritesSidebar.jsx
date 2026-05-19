@@ -16,16 +16,9 @@ import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 
 function StorageBar() {
+  return undefined;
+  // eslint-disable-next-line no-unreachable
   const [info, setInfo] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/admin/system-info')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (!cancelled && d) setInfo(d); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
   const disk = info?.disk;
   if (!disk || !disk.total) return null;
   const used = disk.used ?? (disk.total - (disk.free || 0));
