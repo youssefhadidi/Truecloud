@@ -19,12 +19,9 @@ export default function AdminLayout({ children }) {
   const components = componentsData?.config ?? { zfs: true, smb: true };
 
   useEffect(() => {
-    console.log('[NAV-DBG] AdminLayout auth-effect. status=', status, 'role=', session?.user?.role);
     if (status === 'unauthenticated') {
-      console.log('[NAV-DBG] AdminLayout -> /auth/login (unauthenticated)');
       router.push('/auth/login');
     } else if (status === 'authenticated' && session?.user?.role !== 'admin') {
-      console.log('[NAV-DBG] AdminLayout -> /files (not admin)');
       router.push('/files');
     }
   }, [status, session, router]);
@@ -43,10 +40,8 @@ export default function AdminLayout({ children }) {
   }
 
   if (session?.user?.role !== 'admin') {
-    console.log('[NAV-DBG] AdminLayout rendering NULL (role check). role=', session?.user?.role);
     return null;
   }
-  if (typeof window !== 'undefined') console.log('[NAV-DBG] AdminLayout rendering CONTENT');
 
   const navSections = [
     {

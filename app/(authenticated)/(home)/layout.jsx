@@ -26,9 +26,17 @@ function HomeLayoutContent({ children }) {
   const handleNavigate = useCallback(
     (path) => {
       const target = path ? `/files?path=${encodeURIComponent(path)}` : '/files';
-      router.push(target);
+      if (pathname === '/files') {
+        // Already on /files: dispatch a state-only event and update URL
+        // directly via history. Avoids spawning a router transition that
+        // could collide with whatever else the router is doing.
+        window.history.pushState({ path }, '', target);
+        window.dispatchEvent(new CustomEvent('tc-files-set-path', { detail: { path } }));
+      } else {
+        router.push(target);
+      }
     },
-    [router],
+    [router, pathname],
   );
 
   const handleSearchChange = useCallback(

@@ -77,18 +77,7 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   const close = () => setIsOpen(false);
   const go = (path) => {
-    console.log('[NAV-DBG] UserMenu.go ->', path);
-    // Do NOT close the menu synchronously — closing triggers a re-render of
-    // the parent tree which (under heavy WS/Redux/RQ churn on /files)
-    // appears to starve the router.push() transition so it never commits.
-    // Let the route change drive the unmount instead.
     router.push(path);
-    setTimeout(() => {
-      console.log('[NAV-DBG] +100ms, location is', window.location.pathname);
-    }, 100);
-    setTimeout(() => {
-      console.log('[NAV-DBG] +500ms, location is', window.location.pathname);
-    }, 500);
   };
 
   return (

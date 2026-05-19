@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useUsbFiles } from '@/hooks/useUsbFiles';
@@ -24,7 +24,6 @@ import {
 
 export function useFilesPage(status) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
@@ -144,28 +143,24 @@ export function useFilesPage(status) {
     }
   }, [preferences.sortBy]);
 
-  // Sync URL with currentPath (but not during browser back/forward or
-  // external sidebar navigation that already updated the URL).
-  // Skip when the active route isn't /files — otherwise we'd hijack
-  // navigation away from /files and force the user back here.
+  // Sync URL with currentPath via direct history.replaceState — never go
+  // through router.replace, which could start a transition that interferes
+  // with an outgoing router.push() to a different route.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    console.log('[NAV-DBG] useFilesPage sync-effect fired. pathname=', pathname, 'currentPath=', navigation.currentPath, 'isPopstate=', navigation.isPopstateNavigation, 'window=', window.location.pathname + window.location.search);
     if (pathname !== '/files') return;
     if (navigation.isPopstateNavigation) {
       setNavigation((prev) => ({ ...prev, isPopstateNavigation: false }));
       return;
     }
-
     const currentUrlPath = new URL(window.location.href).searchParams.get('path') || '';
     if (currentUrlPath !== navigation.currentPath) {
       const target = navigation.currentPath
         ? `/files?path=${encodeURIComponent(navigation.currentPath)}`
         : '/files';
-      console.log('[NAV-DBG] useFilesPage WILL router.replace ->', target);
-      router.replace(target);
+      window.history.replaceState({ path: navigation.currentPath }, '', target);
     }
-  }, [navigation.currentPath, navigation.isPopstateNavigation, router, pathname]);
+  }, [navigation.currentPath, navigation.isPopstateNavigation, pathname]);
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -180,17 +175,21 @@ export function useFilesPage(status) {
     return () => window.removeEventListener('popstate', handlePopstate);
   }, []);
 
-  // Sync state from URL when it changes externally (e.g., sidebar navigation
-  // through the shared layout via router.push). Only apply while we're
-  // actually on /files — when navigating away, useSearchParams reports
-  // an empty path and would otherwise wipe our state mid-transition.
-  const urlPath = searchParams?.get('path') ?? '';
+  // External in-page navigation (e.g. sidebar favorite click while on /files)
+  // dispatches a `tc-files-set-path` event instead of calling router.push,
+  // so we never start a router transition that has to abort itself.
   useEffect(() => {
-    if (pathname !== '/files') return;
-    if (urlPath !== navigation.currentPath) {
-      setNavigation((prev) => ({ ...prev, isPopstateNavigation: true, currentPath: urlPath }));
-    }
-  }, [urlPath, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (typeof window === 'undefined') return;
+    const handler = (event) => {
+      const newPath = event.detail?.path ?? '';
+      setNavigation((prev) => {
+        if (prev.currentPath === newPath) return prev;
+        return { ...prev, isPopstateNavigation: true, currentPath: newPath };
+      });
+    };
+    window.addEventListener('tc-files-set-path', handler);
+    return () => window.removeEventListener('tc-files-set-path', handler);
+  }, []);
 
   // Reset selection on path change
   useEffect(() => {
