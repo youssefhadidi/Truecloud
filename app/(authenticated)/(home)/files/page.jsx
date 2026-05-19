@@ -13,8 +13,8 @@ import {
 } from 'react-icons/fi';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
-import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { useSearch } from '@/lib/api/search';
+import { useHomeContext } from '../HomeContext';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -58,7 +58,7 @@ function FilesPageContent() {
   const router = useRouter();
   const state = useFilesPage(status);
 
-  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const { searchQuery: globalSearchQuery, setSearchQuery: setGlobalSearchQuery } = useHomeContext();
   const debouncedSearchQuery = useDebounce(globalSearchQuery, 300);
   const { data: globalSearchResults = [] } = useSearch(debouncedSearchQuery);
   const isGlobalSearch = globalSearchQuery.length >= 2 && globalSearchResults.length > 0;
@@ -383,19 +383,6 @@ function FilesPageContent() {
       style={{ flex: 1, display: 'flex', overflow: 'hidden', background: 'var(--bg)', minHeight: 0 }}
       onClick={contextMenu.closeContextMenu}
     >
-      {/* Sidebar (desktop) */}
-      <div className="tc-sidebar-wrap">
-        <FavoritesSidebar
-          onNavigate={(path) => {
-            setGlobalSearchQuery('');
-            state.setCurrentPath(path);
-          }}
-          currentPath={state.currentPath}
-          searchQuery={globalSearchQuery}
-          onSearchQueryChange={setGlobalSearchQuery}
-        />
-      </div>
-
       <main
         style={{
           flex: 1,
@@ -1092,7 +1079,6 @@ function FilesPageContent() {
       )}
 
       <style jsx>{`
-        .tc-sidebar-wrap { display: none; }
         .tc-mobile-search {
           padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
           background: var(--surface);
@@ -1100,7 +1086,6 @@ function FilesPageContent() {
           flex-shrink: 0;
         }
         @media (min-width: 640px) {
-          .tc-sidebar-wrap { display: flex; align-self: stretch; min-height: 0; }
           .tc-mobile-search { display: none; }
           [data-show-filter] { display: flex !important; }
         }

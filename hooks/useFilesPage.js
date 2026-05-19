@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useUsbFiles } from '@/hooks/useUsbFiles';
@@ -24,6 +24,7 @@ import {
 
 export function useFilesPage(status) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
 
@@ -142,7 +143,8 @@ export function useFilesPage(status) {
     }
   }, [preferences.sortBy]);
 
-  // Sync URL with currentPath (but not during browser back/forward)
+  // Sync URL with currentPath (but not during browser back/forward or
+  // external sidebar navigation that already updated the URL)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (navigation.isPopstateNavigation) {
@@ -150,18 +152,14 @@ export function useFilesPage(status) {
       return;
     }
 
-    const url = new URL(window.location.href);
-    const currentUrlPath = url.searchParams.get('path') || '';
-
+    const currentUrlPath = new URL(window.location.href).searchParams.get('path') || '';
     if (currentUrlPath !== navigation.currentPath) {
-      if (navigation.currentPath) {
-        url.searchParams.set('path', navigation.currentPath);
-      } else {
-        url.searchParams.delete('path');
-      }
-      window.history.pushState({ path: navigation.currentPath }, '', url.toString());
+      const target = navigation.currentPath
+        ? `/files?path=${encodeURIComponent(navigation.currentPath)}`
+        : '/files';
+      router.replace(target);
     }
-  }, [navigation.currentPath, navigation.isPopstateNavigation]);
+  }, [navigation.currentPath, navigation.isPopstateNavigation, router]);
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -175,6 +173,15 @@ export function useFilesPage(status) {
     window.addEventListener('popstate', handlePopstate);
     return () => window.removeEventListener('popstate', handlePopstate);
   }, []);
+
+  // Sync state from URL when it changes externally (e.g., sidebar navigation
+  // through the shared layout via router.push)
+  const urlPath = searchParams?.get('path') ?? '';
+  useEffect(() => {
+    if (urlPath !== navigation.currentPath) {
+      setNavigation((prev) => ({ ...prev, isPopstateNavigation: true, currentPath: urlPath }));
+    }
+  }, [urlPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset selection on path change
   useEffect(() => {

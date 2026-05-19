@@ -355,8 +355,18 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         )}
 
         <Divider />
-        <NavRow icon={FiDownload} label="Downloads" onClick={() => router.push('/downloads')} />
-        <NavRow icon={FiShare2}   label="Shares"    onClick={() => router.push('/shares')} />
+        <NavRow
+          icon={FiDownload}
+          label="Downloads"
+          active={currentPath === '__downloads__'}
+          onClick={() => router.push('/downloads')}
+        />
+        <NavRow
+          icon={FiShare2}
+          label="Shares"
+          active={currentPath === '__shares__'}
+          onClick={() => router.push('/shares')}
+        />
         <NavRow
           icon={FiTrash2}
           label="Trash"
