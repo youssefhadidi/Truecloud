@@ -5,22 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import {
-  FiUsers,
-  FiCheckSquare,
-  FiArrowLeft,
-  FiHardDrive,
-  FiImage,
-  FiShare2,
-  FiDatabase,
-  FiServer,
-  FiActivity,
-  FiMonitor,
-  FiPackage,
-  FiSearch,
-  FiMenu,
-  FiX,
-} from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -104,9 +89,7 @@ export default function AdminLayout({ children }) {
         <Link
           href={item.href}
           prefetch={false}
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-            isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-          }`}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
         >
           <Icon size={18} />
           <span className="text-sm">{item.label}</span>
@@ -129,16 +112,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="bg-gray-900 flex flex-grow flex-col lg:flex-row">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex w-64 bg-gray-800 border-r border-gray-700 flex-col">
-        <div className="p-4 border-b border-gray-700">
-          <Link href="/files" className="flex items-center gap-2 text-gray-300 hover:text-white mb-4 transition-colors">
-            <FiArrowLeft />
-            <span>Back to Files</span>
-          </Link>
-          <h1 className="text-xl font-bold text-white">Admin Panel</h1>
-        </div>
-        {renderNav()}
-      </div>
+      <div className="hidden lg:flex w-64 bg-gray-800 border-r border-gray-700 flex-col">{renderNav()}</div>
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -149,12 +123,7 @@ export default function AdminLayout({ children }) {
             <span className="text-sm">Back</span>
           </Link>
           <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-            className="text-gray-300 hover:text-white transition-colors p-1 -m-1"
-            aria-label="Open admin menu"
-          >
+          <button type="button" onClick={() => setMobileNavOpen(true)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label="Open admin menu">
             <FiMenu size={22} />
           </button>
         </div>
@@ -171,12 +140,7 @@ export default function AdminLayout({ children }) {
           <div className="relative w-72 max-w-[85%] bg-gray-800 border-r border-gray-700 flex flex-col shadow-xl">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
               <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(false)}
-                className="text-gray-300 hover:text-white transition-colors p-1 -m-1"
-                aria-label="Close admin menu"
-              >
+              <button type="button" onClick={() => setMobileNavOpen(false)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label="Close admin menu">
                 <FiX size={22} />
               </button>
             </div>

@@ -2,13 +2,12 @@
 
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiArrowLeft, FiCloud } from 'react-icons/fi';
+import { FiCloud } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
 import JobsBadge from '@/components/JobsBadge';
-import IconBtn from '@/components/ui/IconBtn';
 import { useStableSession } from '@/lib/api/session';
 import AuthProvider from '@/components/AuthProvider';
 import { SessionLockProvider } from '@/contexts/SessionLockContext';
@@ -18,8 +17,6 @@ import { WebSocketProvider } from '@/contexts/WebSocketContext';
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useStableSession();
   const router = useRouter();
-  const pathname = usePathname();
-  const isFilesPage = pathname === '/files';
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -54,15 +51,6 @@ function AuthenticatedLayoutContent({ children }) {
           boxShadow: 'var(--shadow-sm)',
         }}
       >
-        {!isFilesPage && (
-          <IconBtn
-            icon={FiArrowLeft}
-            title="Back to files"
-            onClick={() => router.push('/files')}
-            style={{ marginRight: 4 }}
-          />
-        )}
-
         <button
           onClick={() => router.push('/files')}
           style={{
