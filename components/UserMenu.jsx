@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import {
   FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2, FiTrash2,
-  FiSettings, FiLock, FiSun, FiMoon, FiHardDrive,
+  FiSettings, FiLock, FiSun, FiMoon,
 } from 'react-icons/fi';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { useTheme } from '@/components/ThemeProvider';
@@ -155,12 +155,11 @@ export default function UserMenu({ email, isAdmin = false }) {
           <div style={{ padding: '4px 0' }}>
             {isAdmin && (
               <>
-                <MenuItem icon={FiSettings} label="Admin Panel" onClick={() => go('/admin')} />
+                <MenuItem icon={FiSettings} label="Admin Panel" onClick={() => go('/admin/monitoring')} />
                 <Divider />
               </>
             )}
             <MenuItem icon={FiShare2}    label="My Shares"     onClick={() => go('/shares')} />
-            <MenuItem icon={FiHardDrive} label="USB Drives"    onClick={() => go('/usb')} />
             <MenuItem icon={FiDownload}  label="Downloads"     onClick={() => go('/downloads')} />
             <MenuItem icon={FiTrash2}    label="Trash"         onClick={() => go('/files?path=trash')} />
             <Divider />
