@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import {
   FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2, FiTrash2,
@@ -56,8 +56,13 @@ export default function UserMenu({ email, isAdmin = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const router = useRouter();
+  const pathname = usePathname();
   const { settings, lockNow } = useSessionLock();
   const { theme, toggle } = useTheme();
+
+  useEffect(() => {
+    if (isOpen) setIsOpen(false);
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -72,27 +77,18 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   const close = () => setIsOpen(false);
   const go = (path) => {
-    console.log('[NAV-DBG] UserMenu.go ->', path, 'at', window.location.pathname + window.location.search);
-    close();
-    try {
-      const ret = router.push(path);
-      console.log('[NAV-DBG] router.push returned:', ret);
-    } catch (e) {
-      console.error('[NAV-DBG] router.push THREW:', e);
-    }
+    console.log('[NAV-DBG] UserMenu.go ->', path);
+    // Do NOT close the menu synchronously — closing triggers a re-render of
+    // the parent tree which (under heavy WS/Redux/RQ churn on /files)
+    // appears to starve the router.push() transition so it never commits.
+    // Let the route change drive the unmount instead.
+    router.push(path);
     setTimeout(() => {
-      console.log('[NAV-DBG] +100ms, location is', window.location.pathname + window.location.search);
+      console.log('[NAV-DBG] +100ms, location is', window.location.pathname);
     }, 100);
     setTimeout(() => {
-      console.log('[NAV-DBG] +500ms, location is', window.location.pathname + window.location.search);
+      console.log('[NAV-DBG] +500ms, location is', window.location.pathname);
     }, 500);
-    setTimeout(() => {
-      console.log('[NAV-DBG] +2000ms, location is', window.location.pathname + window.location.search, '— trying window.location.assign now');
-      if (window.location.pathname === '/files') {
-        console.log('[NAV-DBG] still stuck — calling window.location.assign(', path, ')');
-        window.location.assign(path);
-      }
-    }, 2000);
   };
 
   return (
