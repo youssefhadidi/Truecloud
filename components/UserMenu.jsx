@@ -72,7 +72,17 @@ export default function UserMenu({ email, isAdmin = false }) {
 
   const close = () => setIsOpen(false);
   const go = (path) => {
+    console.log('[NAV-DBG] UserMenu.go ->', path, 'at', window.location.pathname + window.location.search);
     router.push(path);
+    queueMicrotask(() => {
+      console.log('[NAV-DBG] after push, location is', window.location.pathname + window.location.search);
+    });
+    setTimeout(() => {
+      console.log('[NAV-DBG] +100ms, location is', window.location.pathname + window.location.search);
+    }, 100);
+    setTimeout(() => {
+      console.log('[NAV-DBG] +500ms, location is', window.location.pathname + window.location.search);
+    }, 500);
     close();
   };
 

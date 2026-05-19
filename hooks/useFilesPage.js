@@ -150,6 +150,7 @@ export function useFilesPage(status) {
   // navigation away from /files and force the user back here.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    console.log('[NAV-DBG] useFilesPage sync-effect fired. pathname=', pathname, 'currentPath=', navigation.currentPath, 'isPopstate=', navigation.isPopstateNavigation, 'window=', window.location.pathname + window.location.search);
     if (pathname !== '/files') return;
     if (navigation.isPopstateNavigation) {
       setNavigation((prev) => ({ ...prev, isPopstateNavigation: false }));
@@ -161,6 +162,7 @@ export function useFilesPage(status) {
       const target = navigation.currentPath
         ? `/files?path=${encodeURIComponent(navigation.currentPath)}`
         : '/files';
+      console.log('[NAV-DBG] useFilesPage WILL router.replace ->', target);
       router.replace(target);
     }
   }, [navigation.currentPath, navigation.isPopstateNavigation, router, pathname]);
