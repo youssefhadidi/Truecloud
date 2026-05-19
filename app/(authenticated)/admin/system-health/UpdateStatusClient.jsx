@@ -16,7 +16,9 @@ export default function UpdateStatusClient() {
   const [expandedStep, setExpandedStep] = useState(null);
   const [error, setError] = useState(null);
   const [reloadActive, setReloadActive] = useState(false);
+  const [stickLogsToBottom, setStickLogsToBottom] = useState(true);
   const prevRunningRef = useRef(false);
+  const logsContainerRef = useRef(null);
   const { connected, subscribe } = useWebSocket();
 
   const { data: initialStatus, isLoading } = useUpdateStatus();
@@ -94,6 +96,25 @@ export default function UpdateStatusClient() {
   const visibleStep = expandedStep
     ? allSteps.find((s) => s.name === expandedStep)
     : focusStep;
+
+  // Re-stick to bottom whenever the user changes which step they're viewing
+  useEffect(() => {
+    setStickLogsToBottom(true);
+  }, [visibleStep?.name]);
+
+  // Auto-scroll the logs panel to the bottom on new entries (if user is sticking to bottom)
+  useEffect(() => {
+    if (!stickLogsToBottom) return;
+    const el = logsContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [visibleStep?.name, visibleStep?.logs?.length, stickLogsToBottom]);
+
+  const handleLogsScroll = () => {
+    const el = logsContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+    setStickLogsToBottom(nearBottom);
+  };
 
   return (
     <div className="space-y-6">
@@ -207,7 +228,11 @@ export default function UpdateStatusClient() {
             <p className="text-sm text-white font-medium">{visibleStep.label} — Logs</p>
             <StatusBadge status={visibleStep.status} />
           </div>
-          <div className="max-h-72 overflow-y-auto p-3 space-y-1 font-mono text-xs bg-black/20">
+          <div
+            ref={logsContainerRef}
+            onScroll={handleLogsScroll}
+            className="max-h-72 overflow-y-auto p-3 space-y-1 font-mono text-xs bg-black/20"
+          >
             {visibleStep.logs.map((log, idx) => (
               <div
                 key={idx}
