@@ -7,7 +7,6 @@ import { FiTrash2, FiRefreshCw, FiHardDrive } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useGetCacheStats, useClearCache } from '@/lib/api/cache';
 import CacheGenerationClient from './CacheGenerationClient';
-import FileIndexClient from './FileIndexClient';
 
 export default function CachePage() {
   const { addNotification } = useNotifications();
@@ -105,9 +104,6 @@ export default function CachePage() {
 
       {/* Generate Section */}
       <CacheGenerationClient />
-
-      {/* File Index Section */}
-      <FileIndexClient />
 
       {/* Confirm Clear Modal */}
       {confirmClear && (

@@ -186,7 +186,7 @@ export default function JobsBadge() {
           )}
 
           <button
-            onClick={() => { setOpen(false); router.push('/admin/jobs'); }}
+            onClick={() => { setOpen(false); router.push('/admin/activity'); }}
             style={{
               display: 'block',
               width: '100%',

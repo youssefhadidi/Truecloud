@@ -8,19 +8,16 @@ import { useEffect, useState } from 'react';
 import {
   FiUsers,
   FiCheckSquare,
-  FiFileText,
   FiArrowLeft,
   FiHardDrive,
   FiImage,
-  FiZap,
   FiShare2,
   FiDatabase,
-  FiSliders,
   FiServer,
-  FiFilm,
   FiActivity,
   FiMonitor,
   FiPackage,
+  FiSearch,
   FiMenu,
   FiX,
 } from 'react-icons/fi';
@@ -80,10 +77,9 @@ export default function AdminLayout({ children }) {
     {
       label: 'Media',
       items: [
-        { href: '/admin/thumbnail-settings', icon: FiImage, label: 'Thumbnails' },
-        components.transcoding && { href: '/admin/transcoding-settings', icon: FiFilm, label: 'Transcoding' },
+        { href: '/admin/media-processing', icon: FiImage, label: 'Media Processing' },
         { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
-      ].filter(Boolean),
+      ],
     },
     components.minecraft && {
       label: 'Services',
@@ -92,12 +88,10 @@ export default function AdminLayout({ children }) {
     {
       label: 'System',
       items: [
-        { href: '/admin/jobs', icon: FiActivity, label: 'Jobs' },
-        { href: '/admin/logs', icon: FiFileText, label: 'Logs' },
-        { href: '/admin/requirements', icon: FiCheckSquare, label: 'Requirements' },
-        { href: '/admin/update-status', icon: FiZap, label: 'Server Updates' },
-        { href: '/admin/modules', icon: FiPackage, label: 'Modules' },
-        { href: '/admin/components', icon: FiSliders, label: 'Features' },
+        { href: '/admin/activity', icon: FiActivity, label: 'Activity' },
+        { href: '/admin/indexation', icon: FiSearch, label: 'Indexation' },
+        { href: '/admin/system-health', icon: FiCheckSquare, label: 'System Health' },
+        { href: '/admin/extensions', icon: FiPackage, label: 'Extensions' },
       ],
     },
   ].filter((s) => s && s.items.length > 0);

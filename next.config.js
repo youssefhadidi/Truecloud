@@ -29,6 +29,19 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   productionBrowserSourceMaps: false,
+  async redirects() {
+    return [
+      { source: '/admin', destination: '/admin/monitoring', permanent: false },
+      { source: '/admin/thumbnail-settings', destination: '/admin/media-processing', permanent: false },
+      { source: '/admin/transcoding-settings', destination: '/admin/media-processing', permanent: false },
+      { source: '/admin/requirements', destination: '/admin/system-health', permanent: false },
+      { source: '/admin/update-status', destination: '/admin/system-health', permanent: false },
+      { source: '/admin/modules', destination: '/admin/extensions', permanent: false },
+      { source: '/admin/components', destination: '/admin/extensions', permanent: false },
+      { source: '/admin/jobs', destination: '/admin/activity', permanent: false },
+      { source: '/admin/logs', destination: '/admin/activity', permanent: false },
+    ];
+  },
   // Add headers for cache busting and security
   async headers() {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
