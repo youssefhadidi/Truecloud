@@ -3,8 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FiArrowLeft, FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
+import { FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -16,7 +15,6 @@ import { useNotifications } from '@/contexts/NotificationsContext';
  * so all download status updates are real-time (no polling needed).
  */
 export default function DownloadsPage() {
-  const router = useRouter();
   const { downloads: downloadsMap, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
   const { addNotification } = useNotifications();
   const [actionLoading, setActionLoading] = useState(null); // gid of item currently being acted on
@@ -69,12 +67,7 @@ export default function DownloadsPage() {
       {/* Page Header */}
       <div className="bg-white dark:bg-gray-800 shadow flex-shrink-0">
         <div className="mx-auto px-4 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-              <FiArrowLeft size={24} className="text-gray-700 dark:text-gray-300" />
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Downloads</h1>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Downloads</h1>
         </div>
       </div>
 

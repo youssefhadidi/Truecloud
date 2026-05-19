@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FiShare2, FiCopy, FiTrash2, FiLock, FiUnlock, FiFolder, FiFile, FiArrowLeft, FiCheck, FiEdit2 } from 'react-icons/fi';
+import { FiShare2, FiCopy, FiTrash2, FiLock, FiUnlock, FiFolder, FiFile, FiCheck, FiEdit2 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useShares, useUpdateShare, useDeleteShare } from '@/lib/api/files';
@@ -110,14 +110,9 @@ export default function SharesPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/files')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-              <FiArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Shares</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Manage your shared files and folders</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Shares</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage your shared files and folders</p>
           </div>
           <div className="flex items-center gap-2">
             <FiShare2 className="text-indigo-500" size={24} />
