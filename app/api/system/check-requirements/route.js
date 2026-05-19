@@ -153,53 +153,12 @@ async function checkSharpHevcSupport() {
       vipsHeic = vipsOut.includes('.heic');
     } catch {}
 
-    // Check 3: Does the bundled libvips.so have libraw_r linked?
-    // libraw_r is linked into libvips.so (not libvips-cpp.so), so we check libvips.so directly.
-    let hasLibraw = false;
-    try {
-      const fatLib = execSync(`find node_modules -path "*/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.*.*.*" -type f 2>/dev/null | head -1`, {
-        encoding: 'utf-8',
-        timeout: 5000,
-        cwd: process.cwd(),
-      }).trim();
-      if (fatLib) {
-        const bundledDir = fatLib.substring(0, fatLib.lastIndexOf('/'));
-        const lddLdPath = `${bundledDir}:${ldPath}`;
-        // Check libvips-cpp.so first (direct), then libvips.so (where libraw_r actually lives)
-        const lddCpp = execSync(`LD_LIBRARY_PATH="${lddLdPath}" ldd "${fatLib}" 2>/dev/null | grep raw || true`, {
-          encoding: 'utf-8',
-          timeout: 5000,
-        }).trim();
-        const vipsLib = execSync(`find "${bundledDir}" -name "libvips.so*" -type f 2>/dev/null | head -1`, {
-          encoding: 'utf-8',
-          timeout: 5000,
-        }).trim();
-        let lddVips = '';
-        if (vipsLib) {
-          lddVips = execSync(`LD_LIBRARY_PATH="${lddLdPath}" ldd "${vipsLib}" 2>/dev/null | grep raw || true`, {
-            encoding: 'utf-8',
-            timeout: 5000,
-          }).trim();
-        }
-        hasLibraw = lddCpp.includes('libraw') || lddVips.includes('libraw');
-      }
-    } catch {}
-
-    // Check 4: Was libvips built with libraw? Check --vips-config (build-time flag, not the built-in rawload op)
-    let vipsRaw = false;
-    try {
-      const vipsOut = execSync(`LD_LIBRARY_PATH="${ldPath}" /usr/local/bin/vips --vips-config 2>&1 | grep -i "libraw" || true`, { encoding: 'utf-8', timeout: 5000 }).trim();
-      vipsRaw = vipsOut.toLowerCase().includes('libraw');
-    } catch {}
-
-    const installed = hasLibheif && vipsHeic && hasLibraw && vipsRaw;
+    const installed = hasLibheif && vipsHeic;
     const parts = [
       `libheif: ${hasLibheif ? 'yes' : 'no'}`,
       `vips .heic: ${vipsHeic ? 'yes' : 'no'}`,
-      `libraw: ${hasLibraw ? 'yes' : 'no'}`,
-      `vips libraw: ${vipsRaw ? 'yes' : 'no'}`,
     ];
-    const version = installed ? `HEIC/HEIF/AVIF + RAW camera support active` : parts.join(', ');
+    const version = installed ? `HEIC/HEIF/AVIF support active` : parts.join(', ');
     return { installed, version };
   } catch {
     return { installed: false, version: null };
