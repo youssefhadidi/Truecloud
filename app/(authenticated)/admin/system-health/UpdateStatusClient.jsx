@@ -185,12 +185,12 @@ export default function UpdateStatusClient() {
         </div>
 
         {/* Current step text */}
-        <div className="text-center mt-6">
+        <div className="text-center mt-6 min-w-0">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Step</p>
-          <p className="text-xl font-semibold text-white">{headlineLabel}</p>
+          <p className="text-xl font-semibold text-white break-words">{headlineLabel}</p>
           {headlineSub && (
             <p
-              className={`text-xs mt-1 ${
+              className={`text-xs mt-1 break-words ${
                 runningStep ? 'text-blue-400 animate-pulse' : failedStep ? 'text-red-400' : 'text-gray-400'
               }`}
             >
@@ -211,7 +211,7 @@ export default function UpdateStatusClient() {
             {visibleStep.logs.map((log, idx) => (
               <div
                 key={idx}
-                className={
+                className={`whitespace-pre-wrap break-all ${
                   log.type === 'error'
                     ? 'text-red-400'
                     : log.type === 'success'
@@ -219,7 +219,7 @@ export default function UpdateStatusClient() {
                     : log.type === 'info'
                     ? 'text-blue-400'
                     : 'text-gray-400'
-                }
+                }`}
               >
                 {log.message}
               </div>

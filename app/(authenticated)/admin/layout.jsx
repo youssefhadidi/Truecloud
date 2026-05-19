@@ -141,7 +141,7 @@ export default function AdminLayout({ children }) {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Mobile Header */}
         <div className="lg:hidden bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
           <Link href="/files" className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors">
