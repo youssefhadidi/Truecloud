@@ -63,35 +63,9 @@ export default function UpdateStatusClient() {
     ];
   }, [status?.steps, status?.success, reloadActive]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (!status) {
-    return <div className="p-4 text-center text-gray-400">No status available</div>;
-  }
-
   const runningStep = allSteps.find((s) => s.status === 'running');
   const failedStep = allSteps.find((s) => s.status === 'failed');
   const focusStep = runningStep || failedStep || null;
-
-  const headlineLabel = (() => {
-    if (runningStep) return runningStep.label;
-    if (failedStep) return `${failedStep.label} — failed`;
-    if (status.success === true) return 'All steps complete';
-    return 'Idle';
-  })();
-  const headlineSub = (() => {
-    if (runningStep) return reloadActive ? 'Reloading frontend in a moment…' : 'Currently executing…';
-    if (failedStep) return 'Expand the failed step below to see logs.';
-    if (status.success === true) return null;
-    if (status.startTime && !status.isRunning) return 'Run an update to begin.';
-    return null;
-  })();
 
   const visibleStep = expandedStep
     ? allSteps.find((s) => s.name === expandedStep)
@@ -108,6 +82,32 @@ export default function UpdateStatusClient() {
     const el = logsContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [visibleStep?.name, visibleStep?.logs?.length, stickLogsToBottom]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!status) {
+    return <div className="p-4 text-center text-gray-400">No status available</div>;
+  }
+
+  const headlineLabel = (() => {
+    if (runningStep) return runningStep.label;
+    if (failedStep) return `${failedStep.label} — failed`;
+    if (status.success === true) return 'All steps complete';
+    return 'Idle';
+  })();
+  const headlineSub = (() => {
+    if (runningStep) return reloadActive ? 'Reloading frontend in a moment…' : 'Currently executing…';
+    if (failedStep) return 'Expand the failed step below to see logs.';
+    if (status.success === true) return null;
+    if (status.startTime && !status.isRunning) return 'Run an update to begin.';
+    return null;
+  })();
 
   const handleLogsScroll = () => {
     const el = logsContainerRef.current;
