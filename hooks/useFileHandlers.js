@@ -27,7 +27,7 @@ export function useFileHandlers({
 
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
-  const uploadMutation = useUploadFile(currentPath, (uploadId, progress) => {
+  const uploadMutation = useUploadFile((uploadId, progress) => {
     updateTransfer(uploadId, { progress });
   });
   const startDownloadMutation = useStartDownload();
@@ -67,7 +67,7 @@ export function useFileHandlers({
   };
 
   // Upload operations
-  const uploadSingleFile = (file) => {
+  const uploadSingleFile = (file, uploadPath) => {
     const uploadId = Date.now() + Math.random();
 
     addTransfer({
@@ -80,7 +80,7 @@ export function useFileHandlers({
 
     return new Promise((resolve) => {
       uploadMutation.mutate(
-        { file, uploadId },
+        { file, uploadId, path: uploadPath },
         {
           onSuccess: () => {
             updateTransfer(uploadId, { status: 'success', progress: 100 });
@@ -118,6 +118,8 @@ export function useFileHandlers({
   const uploadFiles = async (files) => {
     if (!files || files.length === 0) return;
 
+    const uploadPath = currentPath;
+
     // Separate torrent files from regular uploads
     const torrentFiles = files.filter((f) => f.name.toLowerCase().endsWith('.torrent'));
     const regularFiles = files.filter((f) => !f.name.toLowerCase().endsWith('.torrent'));
@@ -131,7 +133,7 @@ export function useFileHandlers({
     if (regularFiles.length > 0) {
       setTransferring(true);
       for (const file of regularFiles) {
-        await uploadSingleFile(file);
+        await uploadSingleFile(file, uploadPath);
       }
       setTransferring(false);
     }
