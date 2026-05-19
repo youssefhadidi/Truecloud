@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFiles, usePathShares } from '@/lib/api/files';
 import { useUsbFiles } from '@/hooks/useUsbFiles';
@@ -25,6 +25,7 @@ import {
 export function useFilesPage(status) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
 
@@ -144,9 +145,12 @@ export function useFilesPage(status) {
   }, [preferences.sortBy]);
 
   // Sync URL with currentPath (but not during browser back/forward or
-  // external sidebar navigation that already updated the URL)
+  // external sidebar navigation that already updated the URL).
+  // Skip when the active route isn't /files — otherwise we'd hijack
+  // navigation away from /files and force the user back here.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (pathname !== '/files') return;
     if (navigation.isPopstateNavigation) {
       setNavigation((prev) => ({ ...prev, isPopstateNavigation: false }));
       return;
@@ -159,7 +163,7 @@ export function useFilesPage(status) {
         : '/files';
       router.replace(target);
     }
-  }, [navigation.currentPath, navigation.isPopstateNavigation, router]);
+  }, [navigation.currentPath, navigation.isPopstateNavigation, router, pathname]);
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -175,13 +179,16 @@ export function useFilesPage(status) {
   }, []);
 
   // Sync state from URL when it changes externally (e.g., sidebar navigation
-  // through the shared layout via router.push)
+  // through the shared layout via router.push). Only apply while we're
+  // actually on /files — when navigating away, useSearchParams reports
+  // an empty path and would otherwise wipe our state mid-transition.
   const urlPath = searchParams?.get('path') ?? '';
   useEffect(() => {
+    if (pathname !== '/files') return;
     if (urlPath !== navigation.currentPath) {
       setNavigation((prev) => ({ ...prev, isPopstateNavigation: true, currentPath: urlPath }));
     }
-  }, [urlPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlPath, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset selection on path change
   useEffect(() => {
