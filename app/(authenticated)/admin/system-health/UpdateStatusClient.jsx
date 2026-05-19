@@ -2,41 +2,64 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from '@/lib/timeAgo';
-import { FiChevronDown, FiChevronUp, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';
+
+const RELOAD_DELAY_MS = 1000;
+const RELOAD_STEP_NAME = '__reload_frontend__';
 
 export default function UpdateStatusClient() {
   const [status, setStatus] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [error, setError] = useState(null);
+  const [reloadActive, setReloadActive] = useState(false);
+  const prevRunningRef = useRef(false);
   const { connected, subscribe } = useWebSocket();
 
-  // React Query hook for initial status fetch
   const { data: initialStatus, isLoading } = useUpdateStatus();
   const runUpdateMutation = useRunUpdate();
 
-  // Initialize status from query data
   useEffect(() => {
-    if (initialStatus) {
-      setStatus(initialStatus);
-    }
+    if (initialStatus) setStatus(initialStatus);
   }, [initialStatus]);
 
-  // Subscribe to update status messages from unified WebSocket
   useEffect(() => {
-    const unsubscribe = subscribe('update-status', (message) => {
+    return subscribe('update-status', (message) => {
       try {
         setStatus(message.payload);
       } catch (err) {
         console.error('Error processing update status message:', err);
       }
     });
-
-    return unsubscribe;
   }, [subscribe]);
+
+  // Detect backend completion and trigger frontend reload
+  useEffect(() => {
+    const wasRunning = prevRunningRef.current;
+    const isRunning = !!status?.isRunning;
+    prevRunningRef.current = isRunning;
+
+    if (wasRunning && !isRunning && status?.success === true) {
+      setReloadActive(true);
+      const t = setTimeout(() => window.location.reload(), RELOAD_DELAY_MS);
+      return () => clearTimeout(t);
+    }
+  }, [status?.isRunning, status?.success]);
+
+  // Append synthetic reload step
+  const allSteps = useMemo(() => {
+    if (!status?.steps) return [];
+    let reloadStatus = 'pending';
+    if (reloadActive) reloadStatus = 'running';
+    else if (status.success === true) reloadStatus = 'completed';
+    return [
+      ...status.steps,
+      { name: RELOAD_STEP_NAME, label: 'Reload Frontend', status: reloadStatus, logs: [] },
+    ];
+  }, [status?.steps, status?.success, reloadActive]);
 
   if (isLoading) {
     return (
@@ -50,157 +73,163 @@ export default function UpdateStatusClient() {
     return <div className="p-4 text-center text-gray-400">No status available</div>;
   }
 
-  const currentStepIndex = status.steps.findIndex((s) => s.status === 'running');
-  const completedSteps = status.steps.filter((s) => s.status === 'completed').length;
-  const failedSteps = status.steps.filter((s) => s.status === 'failed').length;
+  const runningStep = allSteps.find((s) => s.status === 'running');
+  const failedStep = allSteps.find((s) => s.status === 'failed');
+  const focusStep = runningStep || failedStep || null;
+
+  const headlineLabel = (() => {
+    if (runningStep) return runningStep.label;
+    if (failedStep) return `${failedStep.label} — failed`;
+    if (status.success === true) return 'All steps complete';
+    return 'Idle';
+  })();
+  const headlineSub = (() => {
+    if (runningStep) return reloadActive ? 'Reloading frontend in a moment…' : 'Currently executing…';
+    if (failedStep) return 'Expand the failed step below to see logs.';
+    if (status.success === true) return null;
+    if (status.startTime && !status.isRunning) return 'Run an update to begin.';
+    return null;
+  })();
+
+  const visibleStep = expandedStep
+    ? allSteps.find((s) => s.name === expandedStep)
+    : focusStep;
 
   return (
     <div className="space-y-6">
-      {/* Main System Update Box with Status and Steps */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-700">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-white mb-2">System Update</h1>
-              <div className="flex items-center gap-2 mb-3">
-                {connected ? (
-                  <>
-                    <FiWifi className="text-green-500" size={16} />
-                    <span className="text-sm text-green-400">Connected</span>
-                  </>
-                ) : (
-                  <>
-                    <FiWifiOff className="text-red-500" size={16} />
-                    <span className="text-sm text-red-400">Disconnected</span>
-                  </>
+      {/* Header */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-white mb-2">System Update</h2>
+            <div className="flex items-center gap-2">
+              {connected ? (
+                <>
+                  <FiWifi className="text-green-500" size={16} />
+                  <span className="text-sm text-green-400">Connected</span>
+                </>
+              ) : (
+                <>
+                  <FiWifiOff className="text-red-500" size={16} />
+                  <span className="text-sm text-red-400">Disconnected</span>
+                </>
+              )}
+            </div>
+            {status.startTime && (
+              <div className="text-sm text-gray-400 mt-2">
+                <p>Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}</p>
+                {status.endTime && (
+                  <p>
+                    Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s
+                  </p>
                 )}
               </div>
-
-              {/* Timing Info */}
-              {status.startTime && (
-                <div className="text-sm text-gray-400">
-                  <p>Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}</p>
-                  {status.endTime && <p>Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s</p>}
-                </div>
-              )}
-            </div>
-
-            {/* Status Badge */}
-            <div className="flex-shrink-0">
-              {status.isRunning && (
-                <div className="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2">
-                  <p className="text-sm font-medium text-blue-300">In Progress</p>
-                </div>
-              )}
-              {status.success === true && (
-                <div className="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2">
-                  <p className="text-sm font-medium text-green-300">✓ Completed</p>
-                </div>
-              )}
-              {status.success === false && (
-                <div className="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2">
-                  <p className="text-sm font-medium text-red-300">✕ Failed</p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* Progress Summary - Inline */}
-          {status.isRunning && (
-            <div className="mt-4 flex gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Completed:</p>
-                <p className="text-green-400 font-semibold">
-                  {completedSteps}/{status.steps.length}
-                </p>
+          <div className="flex-shrink-0">
+            {status.isRunning && (
+              <div className="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2">
+                <p className="text-sm font-medium text-blue-300">In Progress</p>
               </div>
-              <div>
-                <p className="text-gray-500">Current:</p>
-                <p className="text-blue-400 font-semibold">{currentStepIndex >= 0 ? status.steps[currentStepIndex].label : '—'}</p>
+            )}
+            {!status.isRunning && status.success === true && (
+              <div className="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2">
+                <p className="text-sm font-medium text-green-300">✓ Completed</p>
               </div>
-              {failedSteps > 0 && (
-                <div>
-                  <p className="text-gray-500">Failed:</p>
-                  <p className="text-red-400 font-semibold">{failedSteps}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Update Steps Timeline */}
-        <div className="p-6">
-          {/* Steps Timeline */}
-          <div className="space-y-4">
-            {status.steps.map((step, index) => (
-              <div key={step.name} className="relative">
-                {/* Connector Line */}
-                {index < status.steps.length - 1 && (
-                  <div
-                    className={`absolute left-6 top-12 w-1 h-6 ${
-                      step.status === 'completed' ? 'bg-green-500' : step.status === 'failed' ? 'bg-red-500' : step.status === 'running' ? 'bg-blue-500' : 'bg-gray-600'
-                    }`}
-                  />
-                )}
-
-                {/* Step Card */}
-                <div className="relative flex gap-4">
-                  {/* Status Circle */}
-                  <div className="flex-shrink-0 pt-1">
-                    <StepCircle status={step.status} isRunning={step.status === 'running'} />
-                  </div>
-
-                  {/* Step Content */}
-                  <div
-                    className="flex-1 bg-gray-700/50 rounded-lg border border-gray-600 overflow-hidden hover:border-gray-500 transition-colors"
-                    onClick={() => setExpandedStep(expandedStep === step.name ? null : step.name)}
-                  >
-                    <div className="px-4 py-3 flex items-center justify-between cursor-pointer">
-                      <div className="flex-1">
-                        <p className="font-medium text-white">{step.label}</p>
-                        {step.status === 'running' && <p className="text-xs text-blue-400 mt-1">Currently executing...</p>}
-                        {step.status === 'completed' && step.endTime && step.startTime && (
-                          <p className="text-xs text-green-400 mt-1">Completed in {Math.round((new Date(step.endTime) - new Date(step.startTime)) / 1000)}s</p>
-                        )}
-                        {step.status === 'failed' && step.logs.some((l) => l.type === 'error') && (
-                          <p className="text-xs text-red-400 mt-1">{step.logs.find((l) => l.type === 'error')?.message}</p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={step.status} />
-                        {step.logs.length > 0 && <div className="text-gray-400">{expandedStep === step.name ? <FiChevronUp /> : <FiChevronDown />}</div>}
-                      </div>
-                    </div>
-
-                    {/* Step Logs - Expandable */}
-                    {expandedStep === step.name && step.logs.length > 0 && (
-                      <div className="border-t border-gray-600 bg-black/20 max-h-64 overflow-y-auto">
-                        <div className="p-3 space-y-1 font-mono text-xs">
-                          {step.logs.map((log, idx) => (
-                            <div
-                              key={idx}
-                              className={`${
-                                log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : log.type === 'info' ? 'text-blue-400' : 'text-gray-400'
-                              }`}
-                            >
-                              {log.message}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            )}
+            {!status.isRunning && status.success === false && (
+              <div className="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2">
+                <p className="text-sm font-medium text-red-300">✕ Failed</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
 
+      {/* Stepper + current step */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="overflow-x-auto">
+          <div className="flex items-center min-w-fit">
+            {allSteps.map((step, i) => (
+              <Fragment key={step.name}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedStep(expandedStep === step.name ? null : step.name)}
+                  className="flex-shrink-0"
+                  title={step.label}
+                  aria-label={step.label}
+                >
+                  <StepCircle
+                    status={step.status}
+                    index={i + 1}
+                    active={(expandedStep ?? focusStep?.name) === step.name}
+                  />
+                </button>
+                {i < allSteps.length - 1 && (
+                  <div
+                    className={`flex-1 h-1 mx-1 rounded min-w-[20px] ${
+                      step.status === 'completed'
+                        ? 'bg-green-500'
+                        : step.status === 'failed'
+                        ? 'bg-red-500'
+                        : step.status === 'running'
+                        ? 'bg-blue-500/60'
+                        : 'bg-gray-600'
+                    }`}
+                  />
+                )}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Current step text */}
+        <div className="text-center mt-6">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Step</p>
+          <p className="text-xl font-semibold text-white">{headlineLabel}</p>
+          {headlineSub && (
+            <p
+              className={`text-xs mt-1 ${
+                runningStep ? 'text-blue-400 animate-pulse' : failedStep ? 'text-red-400' : 'text-gray-400'
+              }`}
+            >
+              {headlineSub}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Logs panel for selected/active step */}
+      {visibleStep && visibleStep.logs && visibleStep.logs.length > 0 && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+            <p className="text-sm text-white font-medium">{visibleStep.label} — Logs</p>
+            <StatusBadge status={visibleStep.status} />
+          </div>
+          <div className="max-h-72 overflow-y-auto p-3 space-y-1 font-mono text-xs bg-black/20">
+            {visibleStep.logs.map((log, idx) => (
+              <div
+                key={idx}
+                className={
+                  log.type === 'error'
+                    ? 'text-red-400'
+                    : log.type === 'success'
+                    ? 'text-green-400'
+                    : log.type === 'info'
+                    ? 'text-blue-400'
+                    : 'text-gray-400'
+                }
+              >
+                {log.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Start Update Button */}
-      {!status.isRunning && (
+      {!status.isRunning && !reloadActive && (
         <div className="flex gap-3">
           <button
             onClick={async () => {
@@ -219,7 +248,6 @@ export default function UpdateStatusClient() {
         </div>
       )}
 
-      {/* Error Display */}
       {error && (
         <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
           <p className="text-red-300 text-sm">{error}</p>
@@ -229,19 +257,31 @@ export default function UpdateStatusClient() {
   );
 }
 
-function StepCircle({ status, isRunning }) {
-  const baseClasses = 'w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0';
-
+function StepCircle({ status, index, active }) {
+  const base =
+    'w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all';
+  let style;
   switch (status) {
     case 'completed':
-      return <div className={`${baseClasses} bg-green-500/20 border-2 border-green-500 text-green-400`}>✓</div>;
+      style = 'bg-green-500/20 border-green-500 text-green-400';
+      break;
     case 'failed':
-      return <div className={`${baseClasses} bg-red-500/20 border-2 border-red-500 text-red-400`}>✕</div>;
+      style = 'bg-red-500/20 border-red-500 text-red-400';
+      break;
     case 'running':
-      return <div className={`${baseClasses} bg-blue-500/20 border-2 border-blue-500 text-blue-400 animate-pulse`}>→</div>;
+      style = 'bg-blue-500/20 border-blue-500 text-blue-400 animate-pulse';
+      break;
     default:
-      return <div className={`${baseClasses} bg-gray-600/20 border-2 border-gray-600 text-gray-400`}>—</div>;
+      style = 'bg-gray-700 border-gray-600 text-gray-400';
   }
+  const ring = active ? 'ring-2 ring-blue-400/60 ring-offset-2 ring-offset-gray-800' : '';
+
+  let content;
+  if (status === 'completed') content = '✓';
+  else if (status === 'failed') content = '✕';
+  else content = index;
+
+  return <div className={`${base} ${style} ${ring}`}>{content}</div>;
 }
 
 function StatusBadge({ status }) {
@@ -253,6 +293,8 @@ function StatusBadge({ status }) {
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status] || styles.pending}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status] || styles.pending}`}>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
   );
 }

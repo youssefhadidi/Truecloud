@@ -9,12 +9,12 @@ import SystemRequirementsCheck from '@/components/SystemRequirementsCheck';
 import UpdateStatusClient from './UpdateStatusClient';
 
 const TABS = [
-  { key: 'requirements', label: 'Requirements', icon: FiCheckSquare },
   { key: 'updates', label: 'Server Updates', icon: FiZap },
+  { key: 'requirements', label: 'Requirements', icon: FiCheckSquare },
 ];
 
 export default function SystemHealthPage() {
-  const [active, setActive] = useState('requirements');
+  const [active, setActive] = useState('updates');
 
   return (
     <>
