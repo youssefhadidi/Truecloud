@@ -73,17 +73,26 @@ export default function UserMenu({ email, isAdmin = false }) {
   const close = () => setIsOpen(false);
   const go = (path) => {
     console.log('[NAV-DBG] UserMenu.go ->', path, 'at', window.location.pathname + window.location.search);
-    router.push(path);
-    queueMicrotask(() => {
-      console.log('[NAV-DBG] after push, location is', window.location.pathname + window.location.search);
-    });
+    close();
+    try {
+      const ret = router.push(path);
+      console.log('[NAV-DBG] router.push returned:', ret);
+    } catch (e) {
+      console.error('[NAV-DBG] router.push THREW:', e);
+    }
     setTimeout(() => {
       console.log('[NAV-DBG] +100ms, location is', window.location.pathname + window.location.search);
     }, 100);
     setTimeout(() => {
       console.log('[NAV-DBG] +500ms, location is', window.location.pathname + window.location.search);
     }, 500);
-    close();
+    setTimeout(() => {
+      console.log('[NAV-DBG] +2000ms, location is', window.location.pathname + window.location.search, '— trying window.location.assign now');
+      if (window.location.pathname === '/files') {
+        console.log('[NAV-DBG] still stuck — calling window.location.assign(', path, ')');
+        window.location.assign(path);
+      }
+    }, 2000);
   };
 
   return (
