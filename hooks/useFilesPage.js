@@ -377,7 +377,16 @@ export function useFilesPage(status) {
         }
       });
       if (Object.keys(newDisplayNames).length > 0) {
-        setFolderDisplayNames((prev) => ({ ...prev, ...newDisplayNames }));
+        setFolderDisplayNames((prev) => {
+          let changed = false;
+          for (const key in newDisplayNames) {
+            if (prev[key] !== newDisplayNames[key]) {
+              changed = true;
+              break;
+            }
+          }
+          return changed ? { ...prev, ...newDisplayNames } : prev;
+        });
       }
     }
   }, [files]);
