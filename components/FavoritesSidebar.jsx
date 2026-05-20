@@ -352,13 +352,13 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
           icon={FiDownload}
           label="Downloads"
           active={currentPath === '__downloads__'}
-          onClick={() => router.push('/downloads')}
+          onClick={() => router.push('/files/downloads')}
         />
         <NavRow
           icon={FiShare2}
           label="Shares"
           active={currentPath === '__shares__'}
-          onClick={() => router.push('/shares')}
+          onClick={() => router.push('/files/shares')}
         />
         <NavRow
           icon={FiTrash2}

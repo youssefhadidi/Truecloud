@@ -36,17 +36,6 @@ export function useFilesPage(status) {
     return '';
   });
 
-  // Workaround: clicking a link from /files (no query) fails to commit the
-  // router transition, but works fine from /files?path=… . Forcing a query
-  // string on mount sidesteps the bug.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.location.pathname !== '/files') return;
-    if (window.location.search === '') {
-      window.history.replaceState(null, '', '/files?path=');
-    }
-  }, []);
-
   // Navigation state - grouped
   const [navigation, setNavigation] = useState({
     currentPath: initialPath,
@@ -159,7 +148,7 @@ export function useFilesPage(status) {
   // with an outgoing router.push() to a different route.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (pathname !== '/files') return;
+    if (pathname !== '/files/list') return;
     if (navigation.isPopstateNavigation) {
       setNavigation((prev) => ({ ...prev, isPopstateNavigation: false }));
       return;
@@ -167,8 +156,8 @@ export function useFilesPage(status) {
     const currentUrlPath = new URL(window.location.href).searchParams.get('path') || '';
     if (currentUrlPath !== navigation.currentPath) {
       const target = navigation.currentPath
-        ? `/files?path=${encodeURIComponent(navigation.currentPath)}`
-        : '/files';
+        ? `/files/list?path=${encodeURIComponent(navigation.currentPath)}`
+        : '/files/list';
       window.history.replaceState({ path: navigation.currentPath }, '', target);
       window.dispatchEvent(
         new CustomEvent('tc-files-set-path', { detail: { path: navigation.currentPath } }),

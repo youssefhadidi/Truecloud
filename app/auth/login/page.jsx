@@ -33,7 +33,7 @@ export default function LoginPage() {
         setError('Invalid email or password');
       } else {
         await queryClient.invalidateQueries({ queryKey: ['session'] });
-        router.push('/files');
+        router.push('/files/list');
       }
     } catch {
       setError('An error occurred. Please try again.');

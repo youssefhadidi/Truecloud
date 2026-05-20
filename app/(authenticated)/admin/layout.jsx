@@ -22,7 +22,7 @@ export default function AdminLayout({ children }) {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
     } else if (status === 'authenticated' && session?.user?.role !== 'admin') {
-      router.push('/files');
+      router.push('/files/list');
     }
   }, [status, session, router]);
 
@@ -118,7 +118,7 @@ export default function AdminLayout({ children }) {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Mobile Header */}
         <div className="lg:hidden bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
-          <Link href="/files" className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors">
+          <Link href="/files/list" className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors">
             <FiArrowLeft size={20} />
             <span className="text-sm">Back</span>
           </Link>

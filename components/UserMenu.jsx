@@ -163,9 +163,9 @@ export default function UserMenu({ email, isAdmin = false }) {
                 <Divider />
               </>
             )}
-            <MenuItem icon={FiShare2}    label="My Shares"     onClick={() => go('/shares')} />
-            <MenuItem icon={FiDownload}  label="Downloads"     onClick={() => go('/downloads')} />
-            <MenuItem icon={FiTrash2}    label="Trash"         onClick={() => go('/files?path=trash')} />
+            <MenuItem icon={FiShare2}    label="My Shares"     onClick={() => go('/files/shares')} />
+            <MenuItem icon={FiDownload}  label="Downloads"     onClick={() => go('/files/downloads')} />
+            <MenuItem icon={FiTrash2}    label="Trash"         onClick={() => go('/files/list?path=trash')} />
             <Divider />
             <MenuItem icon={FiSettings} label="Account Settings" onClick={() => go('/account')} />
             <MenuItem

@@ -52,7 +52,7 @@ function AuthenticatedLayoutContent({ children }) {
         }}
       >
         <button
-          onClick={() => router.push('/files')}
+          onClick={() => router.push('/files/list')}
           style={{
             display: 'flex',
             alignItems: 'center',

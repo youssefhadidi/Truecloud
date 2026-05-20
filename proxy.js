@@ -15,7 +15,7 @@ export async function proxy(request) {
   // Root: redirect based on auth status
   if (pathname === '/') {
     return NextResponse.redirect(
-      new URL(isAuthenticated ? '/files' : '/auth/login', request.url)
+      new URL(isAuthenticated ? '/files/list' : '/auth/login', request.url)
     );
   }
 
@@ -23,7 +23,7 @@ export async function proxy(request) {
   if (pathname.startsWith('/auth/')) {
     // If already authenticated, bounce away from login page
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL('/files', request.url));
+      return NextResponse.redirect(new URL('/files/list', request.url));
     }
     return NextResponse.next();
   }
