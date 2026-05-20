@@ -367,29 +367,35 @@ export function useFilesPage(status) {
     return sorted;
   }, [filesData, apiDownloads, wsDownloads, preferences.sortBy, preferences.searchQuery, navigation.currentPath, usbMode, usbFilesData]);
 
-  // Store folder display names
-  useEffect(() => {
-    if (files && files.length > 0) {
-      const newDisplayNames = {};
-      files.forEach((file) => {
-        if (file.name.startsWith('user_') && file.displayName) {
-          newDisplayNames[file.name] = file.displayName;
-        }
-      });
-      if (Object.keys(newDisplayNames).length > 0) {
-        setFolderDisplayNames((prev) => {
-          let changed = false;
-          for (const key in newDisplayNames) {
-            if (prev[key] !== newDisplayNames[key]) {
-              changed = true;
-              break;
-            }
-          }
-          return changed ? { ...prev, ...newDisplayNames } : prev;
-        });
+  // Store folder display names — derive a stable signature so the effect
+  // only fires when the user_* displayName mappings actually change in
+  // content, not just when the `files` array reference changes.
+  const userFoldersSignature = useMemo(() => {
+    if (!files || files.length === 0) return '';
+    const entries = [];
+    for (const f of files) {
+      if (f.name.startsWith('user_') && f.displayName) {
+        entries.push([f.name, f.displayName]);
       }
     }
+    entries.sort((a, b) => a[0].localeCompare(b[0]));
+    return JSON.stringify(entries);
   }, [files]);
+
+  useEffect(() => {
+    if (!userFoldersSignature) return;
+    const entries = JSON.parse(userFoldersSignature);
+    if (entries.length === 0) return;
+    const newDisplayNames = Object.fromEntries(entries);
+    setFolderDisplayNames((prev) => {
+      for (const key in newDisplayNames) {
+        if (prev[key] !== newDisplayNames[key]) {
+          return { ...prev, ...newDisplayNames };
+        }
+      }
+      return prev;
+    });
+  }, [userFoldersSignature]);
 
   // Get viewable files for media viewer
   const viewableFiles = useMemo(() => {

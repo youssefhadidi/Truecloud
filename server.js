@@ -283,27 +283,31 @@ loadEsModules().then(() => {
     console.log('> Ready on http://localhost:3000');
 
     // Bridge WebSocket events from the torrent microservice to main app WebSocket clients
-    const { WebSocket: WsClient } = require('ws');
-    const torrentServiceBase = process.env.TORRENT_SERVICE_URL || 'http://localhost:9669';
-    const torrentWsUrl = torrentServiceBase.replace(/^http/, 'ws') + '/events';
-    function connectTorrentServiceWs() {
-      const ws = new WsClient(torrentWsUrl);
-      ws.on('open', () => console.log('[server] Connected to torrent service WS'));
-      ws.on('message', (data) => {
-        try {
-          const message = JSON.parse(data.toString());
-          if (global.broadcastTorrentDownloadUpdate) {
-            global.broadcastTorrentDownloadUpdate(message);
-          }
-        } catch (_) {}
-      });
-      ws.on('close', () => {
-        console.log('[server] Torrent service WS disconnected, reconnecting in 3s...');
-        setTimeout(connectTorrentServiceWs, 3000);
-      });
-      ws.on('error', (err) => console.error('[server] Torrent service WS error:', err.message));
+    if (process.env.DISABLE_TORRENT_SERVICE !== '1') {
+      const { WebSocket: WsClient } = require('ws');
+      const torrentServiceBase = process.env.TORRENT_SERVICE_URL || 'http://localhost:9669';
+      const torrentWsUrl = torrentServiceBase.replace(/^http/, 'ws') + '/events';
+      function connectTorrentServiceWs() {
+        const ws = new WsClient(torrentWsUrl);
+        ws.on('open', () => console.log('[server] Connected to torrent service WS'));
+        ws.on('message', (data) => {
+          try {
+            const message = JSON.parse(data.toString());
+            if (global.broadcastTorrentDownloadUpdate) {
+              global.broadcastTorrentDownloadUpdate(message);
+            }
+          } catch (_) {}
+        });
+        ws.on('close', () => {
+          console.log('[server] Torrent service WS disconnected, reconnecting in 3s...');
+          setTimeout(connectTorrentServiceWs, 3000);
+        });
+        ws.on('error', (err) => console.error('[server] Torrent service WS error:', err.message));
+      }
+      connectTorrentServiceWs();
+    } else {
+      console.log('[server] Torrent service WS bridge disabled (DISABLE_TORRENT_SERVICE=1)');
     }
-    connectTorrentServiceWs();
 
     // Start log stream manager
     startLogStream();
