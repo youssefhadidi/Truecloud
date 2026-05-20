@@ -13,9 +13,10 @@ const nextConfig = {
     remotePatterns: [{ hostname: '192.168.1.240' }, { hostname: 'localhost' }],
   },
 
-  // Enable compression (gzip + Brotli for production)
-  // Brotli typically achieves 15-20% better compression than gzip
-  compress: true,
+  // Compression is delegated to the reverse proxy (nginx/traefik in front
+  // of the public .mooo.com host). Next.js + proxy doing it together
+  // broke RSC streaming for the soft-nav transition commit on that host.
+  compress: false,
 
   // Enable more detailed logging
   logging: {
