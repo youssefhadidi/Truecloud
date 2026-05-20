@@ -1095,15 +1095,5 @@ function FilesPageContent() {
 }
 
 export default function FilesPage() {
-  return (
-    <Suspense
-      fallback={
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-          <LoadingPanel />
-        </div>
-      }
-    >
-      <FilesPageContent />
-    </Suspense>
-  );
+  return <FilesPageContent />;
 }

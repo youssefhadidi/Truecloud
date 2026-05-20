@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { HomeContext } from './HomeContext';
@@ -105,9 +105,5 @@ function HomeLayoutContent({ children }) {
 }
 
 export default function HomeLayout({ children }) {
-  return (
-    <Suspense fallback={null}>
-      <HomeLayoutContent>{children}</HomeLayoutContent>
-    </Suspense>
-  );
+  return <HomeLayoutContent>{children}</HomeLayoutContent>;
 }

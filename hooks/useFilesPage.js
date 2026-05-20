@@ -36,6 +36,17 @@ export function useFilesPage(status) {
     return '';
   });
 
+  // Workaround: clicking a link from /files (no query) fails to commit the
+  // router transition, but works fine from /files?path=… . Forcing a query
+  // string on mount sidesteps the bug.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname !== '/files') return;
+    if (window.location.search === '') {
+      window.history.replaceState(null, '', '/files?path=');
+    }
+  }, []);
+
   // Navigation state - grouped
   const [navigation, setNavigation] = useState({
     currentPath: initialPath,
