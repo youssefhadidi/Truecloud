@@ -3,16 +3,13 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { FiLock } from 'react-icons/fi';
-import { signOut } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 import Spinner from '@/components/ui/Spinner';
 
 export default function SessionLockScreen({ children }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const logout = useLogout();
   const { isLocked, isLoading, unlock } = useSessionLock();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -214,11 +211,7 @@ export default function SessionLockScreen({ children }) {
           </p>
 
           <button
-            onClick={async () => {
-              await signOut({ redirect: false });
-              await queryClient.invalidateQueries({ queryKey: ['session'] });
-              router.push('/auth/login');
-            }}
+            onClick={() => logout()}
             style={{
               width: '100%',
               fontSize: 13,

@@ -4,13 +4,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import {
   FiChevronDown, FiUser, FiDownload, FiLogOut, FiShare2, FiTrash2,
   FiSettings, FiLock, FiSun, FiMoon,
 } from 'react-icons/fi';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { useTheme } from '@/components/ThemeProvider';
+import { useLogout } from '@/hooks/useLogout';
 import Badge from '@/components/ui/Badge';
 import Divider from '@/components/ui/Divider';
 import Toggle from '@/components/ui/Toggle';
@@ -59,6 +59,7 @@ export default function UserMenu({ email, isAdmin = false }) {
   const pathname = usePathname();
   const { settings, lockNow } = useSessionLock();
   const { theme, toggle } = useTheme();
+  const logout = useLogout();
 
   useEffect(() => {
     if (isOpen) setIsOpen(false);
@@ -184,8 +185,7 @@ export default function UserMenu({ email, isAdmin = false }) {
               danger
               onClick={async () => {
                 close();
-                await signOut({ redirect: false });
-                router.push('/auth/login');
+                await logout();
               }}
             />
           </div>
