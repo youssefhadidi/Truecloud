@@ -159,6 +159,9 @@ export function useFilesPage(status) {
         ? `/files?path=${encodeURIComponent(navigation.currentPath)}`
         : '/files';
       window.history.replaceState({ path: navigation.currentPath }, '', target);
+      window.dispatchEvent(
+        new CustomEvent('tc-files-set-path', { detail: { path: navigation.currentPath } }),
+      );
     }
   }, [navigation.currentPath, navigation.isPopstateNavigation, pathname]);
 

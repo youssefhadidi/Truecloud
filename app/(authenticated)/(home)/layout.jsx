@@ -2,19 +2,44 @@
 
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import FavoritesSidebar from '@/components/FavoritesSidebar';
 import { HomeContext } from './HomeContext';
 
 function HomeLayoutContent({ children }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filesPath = pathname === '/files' ? (searchParams.get('path') || '') : '';
+  // Track the /files subpath ourselves — reading via useSearchParams subscribes
+  // this layout to every URL change and (in 16.x) appears to interfere with
+  // outgoing router transitions when the param is absent. We update this from
+  // initial load, popstate, and the same custom event /files uses.
+  const [filesPath, setFilesPath] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    if (window.location.pathname !== '/files') return '';
+    return new URL(window.location.href).searchParams.get('path') || '';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const readPath = () => {
+      if (window.location.pathname !== '/files') return '';
+      return new URL(window.location.href).searchParams.get('path') || '';
+    };
+    const onPop = () => setFilesPath(readPath());
+    const onSet = (e) => setFilesPath(e.detail?.path ?? readPath());
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('tc-files-set-path', onSet);
+    // Resync on pathname changes (e.g. routing to /files from /downloads)
+    setFilesPath(readPath());
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('tc-files-set-path', onSet);
+    };
+  }, [pathname]);
 
   const sidebarCurrentPath = useMemo(() => {
     if (pathname === '/files') return filesPath;
