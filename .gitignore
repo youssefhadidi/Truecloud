@@ -39,7 +39,7 @@ package-lock.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
+.claude
 # Custom
 uploads
 prisma/*.db

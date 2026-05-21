@@ -83,6 +83,31 @@ Video thumbnail generation requires FFmpeg to be installed on your system:
 - **Linux**: `sudo apt install ffmpeg`
 - **macOS**: `brew install ffmpeg`
 
+## Power Management (Debian)
+
+For 24/7 NAS deployments the admin panel includes a **Power Management** page
+(`/admin/power-management`) that configures:
+
+- **HDD spindown** via `hd-idle` — per-disk idle timeouts written to
+  `/etc/default/hd-idle`; manages the `hd-idle.service` systemd unit.
+- **CPU frequency governor** — writes `/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`
+  and persists across reboots via `truecloud-cpu-governor.service`.
+- **PowerTOP auto-tune at boot** — installs `truecloud-powertop.service`
+  (oneshot) that runs `powertop --auto-tune` to enable SATA ALPM, PCIe ASPM,
+  NVMe APST, and USB autosuspend.
+- **Mount audit** — flags mounts missing `noatime` (which would otherwise
+  keep HDDs awake on every read).
+
+Required packages (installable from **System Health → Requirements**):
+
+```bash
+sudo apt-get install -y hd-idle powertop linux-cpupower
+```
+
+The Truecloud service needs root (or appropriate CAP_SYS_ADMIN / write access
+to `/etc/default/hd-idle`, `/etc/systemd/system/`, and the cpufreq sysfs nodes)
+to apply these settings — the existing systemd unit already runs as root.
+
 ## TrueNAS Integration
 
 The app is designed to work with TrueNAS shares. Configure your TrueNAS connection in `.env.local`. The SMB client integration can be enhanced based on your specific TrueNAS setup.

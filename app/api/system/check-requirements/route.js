@@ -223,6 +223,27 @@ const REQUIRED_PROGRAMS = [
     installable: true,
     installCommand: 'sudo apt-get install -y unzip',
   },
+  {
+    name: 'hd-idle',
+    command: 'hd-idle',
+    description: 'Spins down idle HDDs to save power (Power Management)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y hd-idle',
+  },
+  {
+    name: 'PowerTOP',
+    command: 'powertop',
+    description: 'Tunes SATA ALPM / PCIe ASPM / USB autosuspend at boot (Power Management)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y powertop',
+  },
+  {
+    name: 'cpupower',
+    command: 'cpupower',
+    description: 'CPU frequency governor control (Power Management)',
+    installable: true,
+    installCommand: 'sudo apt-get install -y linux-cpupower',
+  },
 ];
 
 /**

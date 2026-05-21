@@ -84,6 +84,9 @@ export async function POST(req) {
       samba: 'samba',
       zfs: 'zfsutils-linux',
       'vaapi hardware acceleration': 'i965-va-driver libva2 libva-drm2 vainfo',
+      'hd-idle': 'hd-idle',
+      powertop: 'powertop',
+      cpupower: 'linux-cpupower',
     };
 
     const packageName = packages[name.toLowerCase()];

@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -76,6 +76,7 @@ export default function AdminLayout({ children }) {
         { href: '/admin/activity', icon: FiActivity, label: 'Activity' },
         { href: '/admin/indexation', icon: FiSearch, label: 'Indexation' },
         { href: '/admin/system-health', icon: FiCheckSquare, label: 'System Health' },
+        { href: '/admin/power-management', icon: FiZap, label: 'Power Management' },
         { href: '/admin/extensions', icon: FiPackage, label: 'Extensions' },
       ],
     },
