@@ -142,6 +142,10 @@ global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
 
+global.broadcastAppUpdated = () => {
+  broadcastMessage({ type: 'app-updated', payload: { at: Date.now() } });
+};
+
 global.broadcastUsbDrives = (drives) => {
   broadcastMessage({ type: 'usb-drives', payload: drives });
 };

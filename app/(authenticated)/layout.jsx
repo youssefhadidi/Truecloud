@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { FiCloud } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
+import PendingReloadBanner from '@/components/PendingReloadBanner';
 import JobsBadge from '@/components/JobsBadge';
 import { useStableSession } from '@/lib/api/session';
 import AuthProvider from '@/components/AuthProvider';
@@ -100,6 +101,7 @@ function AuthenticatedLayoutContent({ children }) {
       <main style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>{children}</main>
 
       <UpdateChecker />
+      <PendingReloadBanner />
     </div>
   );
 }

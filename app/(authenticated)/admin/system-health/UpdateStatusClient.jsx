@@ -8,16 +8,11 @@ import { FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';
 
-const RELOAD_DELAY_MS = 1000;
-const RELOAD_STEP_NAME = '__reload_frontend__';
-
 export default function UpdateStatusClient() {
   const [status, setStatus] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [error, setError] = useState(null);
-  const [reloadActive, setReloadActive] = useState(false);
   const [stickLogsToBottom, setStickLogsToBottom] = useState(true);
-  const prevRunningRef = useRef(false);
   const logsContainerRef = useRef(null);
   const { connected, subscribe } = useWebSocket();
 
@@ -38,30 +33,7 @@ export default function UpdateStatusClient() {
     });
   }, [subscribe]);
 
-  // Detect backend completion and trigger frontend reload
-  useEffect(() => {
-    const wasRunning = prevRunningRef.current;
-    const isRunning = !!status?.isRunning;
-    prevRunningRef.current = isRunning;
-
-    if (wasRunning && !isRunning && status?.success === true) {
-      setReloadActive(true);
-      const t = setTimeout(() => window.location.reload(), RELOAD_DELAY_MS);
-      return () => clearTimeout(t);
-    }
-  }, [status?.isRunning, status?.success]);
-
-  // Append synthetic reload step
-  const allSteps = useMemo(() => {
-    if (!status?.steps) return [];
-    let reloadStatus = 'pending';
-    if (reloadActive) reloadStatus = 'running';
-    else if (status.success === true) reloadStatus = 'completed';
-    return [
-      ...status.steps,
-      { name: RELOAD_STEP_NAME, label: 'Reload Frontend', status: reloadStatus, logs: [] },
-    ];
-  }, [status?.steps, status?.success, reloadActive]);
+  const allSteps = useMemo(() => status?.steps ?? [], [status?.steps]);
 
   const runningStep = allSteps.find((s) => s.status === 'running');
   const failedStep = allSteps.find((s) => s.status === 'failed');
@@ -102,7 +74,7 @@ export default function UpdateStatusClient() {
     return 'Idle';
   })();
   const headlineSub = (() => {
-    if (runningStep) return reloadActive ? 'Reloading frontend in a moment…' : 'Currently executing…';
+    if (runningStep) return 'Currently executing…';
     if (failedStep) return 'Expand the failed step below to see logs.';
     if (status.success === true) return null;
     if (status.startTime && !status.isRunning) return 'Run an update to begin.';
@@ -254,7 +226,7 @@ export default function UpdateStatusClient() {
       )}
 
       {/* Start Update Button */}
-      {!status.isRunning && !reloadActive && (
+      {!status.isRunning && (
         <div className="flex gap-3">
           <button
             onClick={async () => {
