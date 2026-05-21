@@ -87,6 +87,7 @@ export async function POST(req) {
       'hd-idle': 'hd-idle',
       powertop: 'powertop',
       cpupower: 'linux-cpupower',
+      smartmontools: 'smartmontools',
     };
 
     const packageName = packages[name.toLowerCase()];

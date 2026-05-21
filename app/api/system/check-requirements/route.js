@@ -244,6 +244,13 @@ const REQUIRED_PROGRAMS = [
     installable: true,
     installCommand: 'sudo apt-get install -y linux-cpupower',
   },
+  {
+    name: 'smartmontools',
+    command: 'smartctl',
+    description: 'Reads SMART data — required for per-disk temperatures',
+    installable: true,
+    installCommand: 'sudo apt-get install -y smartmontools',
+  },
 ];
 
 /**
