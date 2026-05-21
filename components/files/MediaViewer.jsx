@@ -279,37 +279,55 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             </button>
           </div>
 
-          {/* Stage */}
-          <div className="mv-stage" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-            <div className="mv-stage__content">{renderMedia()}</div>
+          {/* Stage + AI panel row */}
+          <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'row' }}>
+            <div
+              className="mv-stage"
+              style={{ flex: 1, minWidth: 0 }}
+              onContextMenu={handleContextMenu}
+              onClick={() => setContextMenu(null)}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div className="mv-stage__content">{renderMedia()}</div>
 
-            {multi && (
-              <>
-                <button
-                  type="button"
-                  className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
-                  aria-label="Previous"
-                  disabled={!canGoPrev}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNavigate?.('prev');
-                  }}
-                >
-                  <FiChevronLeft size={22} />
-                </button>
-                <button
-                  type="button"
-                  className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
-                  aria-label="Next"
-                  disabled={!canGoNext}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNavigate?.('next');
-                  }}
-                >
-                  <FiChevronRight size={22} />
-                </button>
-              </>
+              {multi && (
+                <>
+                  <button
+                    type="button"
+                    className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
+                    aria-label="Previous"
+                    disabled={!canGoPrev}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate?.('prev');
+                    }}
+                  >
+                    <FiChevronLeft size={22} />
+                  </button>
+                  <button
+                    type="button"
+                    className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
+                    aria-label="Next"
+                    disabled={!canGoNext}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate?.('next');
+                    }}
+                  >
+                    <FiChevronRight size={22} />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {aiAvailable && aiOpen && (
+              <AiChatPanel
+                filePath={aiFilePath}
+                fileName={viewerFile.name}
+                isMobile={isMobile}
+                onClose={() => setAiOpen(false)}
+              />
             )}
           </div>
 
@@ -324,15 +342,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
               onSelect={onSelectFile}
               onScroll={handleStripScroll}
               stripRef={stripRef}
-            />
-          )}
-
-          {aiAvailable && aiOpen && (
-            <AiChatPanel
-              filePath={aiFilePath}
-              fileName={viewerFile.name}
-              isMobile={isMobile}
-              onClose={() => setAiOpen(false)}
             />
           )}
 
@@ -382,37 +391,53 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         </button>
       </div>
 
-      {/* Stage */}
-      <div className="mv-stage" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)}>
-        <div className="mv-stage__content">{renderMedia()}</div>
+      {/* Stage + AI panel row */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'row' }}>
+        <div
+          className="mv-stage"
+          style={{ flex: 1, minWidth: 0 }}
+          onContextMenu={handleContextMenu}
+          onClick={() => setContextMenu(null)}
+        >
+          <div className="mv-stage__content">{renderMedia()}</div>
 
-        {multi && (
-          <>
-            <button
-              type="button"
-              className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
-              aria-label="Previous"
-              disabled={!canGoPrev}
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate?.('prev');
-              }}
-            >
-              <FiChevronLeft size={22} />
-            </button>
-            <button
-              type="button"
-              className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
-              aria-label="Next"
-              disabled={!canGoNext}
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate?.('next');
-              }}
-            >
-              <FiChevronRight size={22} />
-            </button>
-          </>
+          {multi && (
+            <>
+              <button
+                type="button"
+                className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
+                aria-label="Previous"
+                disabled={!canGoPrev}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate?.('prev');
+                }}
+              >
+                <FiChevronLeft size={22} />
+              </button>
+              <button
+                type="button"
+                className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
+                aria-label="Next"
+                disabled={!canGoNext}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate?.('next');
+                }}
+              >
+                <FiChevronRight size={22} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {aiAvailable && aiOpen && (
+          <AiChatPanel
+            filePath={aiFilePath}
+            fileName={viewerFile.name}
+            isMobile={isMobile}
+            onClose={() => setAiOpen(false)}
+          />
         )}
       </div>
 
@@ -427,15 +452,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           onSelect={onSelectFile}
           onScroll={handleStripScroll}
           stripRef={stripRef}
-        />
-      )}
-
-      {aiAvailable && aiOpen && (
-        <AiChatPanel
-          filePath={aiFilePath}
-          fileName={viewerFile.name}
-          isMobile={isMobile}
-          onClose={() => setAiOpen(false)}
         />
       )}
 

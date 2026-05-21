@@ -87,17 +87,14 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        bottom: 0,
+        flex: isMobile ? '1 1 100%' : `0 0 ${400}px`,
         width: isMobile ? '100%' : 400,
+        minWidth: 0,
         background: 'var(--surface)',
         borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        zIndex: 50,
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
       }}
       onClick={(e) => e.stopPropagation()}
     >
