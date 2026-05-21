@@ -65,6 +65,229 @@ function actionBtn({ color = 'var(--text-2)' } = {}) {
   };
 }
 
+// Memo'd normal-row component. Only re-renders when its own props change, so
+// selection clicks repaint just the row(s) whose isSelected actually flipped
+// instead of every visible row.
+const ListRow = memo(function ListRow({
+  file,
+  style,
+  isMobile,
+  gridCols,
+  isGlobalSearch,
+  selectionMode,
+  isSelected,
+  isShared,
+  isFavorite,
+  isProcessing,
+  showActions,
+  formatFileSize,
+  onClick,
+  onContextMenu,
+  onTouchStart,
+  onTouchEnd,
+  onTouchMove,
+  onToggleSelect,
+  onOpenMediaViewer,
+  onInitiateRename,
+  onHandleDownload,
+  onInitiateDelete,
+  onInitiateShare,
+  onClearActions,
+}) {
+  return (
+    <div
+      className="tc-list-row"
+      style={{
+        ...style,
+        display: 'grid',
+        gridTemplateColumns: gridCols,
+        gap: isMobile ? 8 : 16,
+        padding: isMobile ? '6px 12px' : '8px 24px',
+        background: isSelected ? 'var(--accent-light)' : 'transparent',
+        borderBottom: '1px solid var(--border)',
+        alignItems: 'center',
+        cursor: 'pointer',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'background 120ms',
+      }}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onTouchMove={onTouchMove}
+      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)'; }}
+      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        {selectionMode && (
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggleSelect?.(file); }}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 99,
+              border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-strong)'}`,
+              background: isSelected ? 'var(--accent)' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 150ms',
+              flexShrink: 0,
+            }}
+          >
+            {isSelected && <FiCheck size={10} color="#fff" />}
+          </div>
+        )}
+        {isProcessing ? (
+          <div
+            style={{
+              width: 18,
+              height: 18,
+              border: '2px solid var(--border)',
+              borderTopColor: 'var(--accent)',
+              borderRadius: 99,
+              animation: 'tc-spin 700ms linear infinite',
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <ThumbBadge file={file} />
+            {isShared && (
+              <div
+                title="Shared"
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  background: 'var(--success)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 14,
+                  height: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiShare2 size={7} />
+              </div>
+            )}
+            {isFavorite && (
+              <div
+                title="Favorite"
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  left: -4,
+                  background: 'var(--warning)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 14,
+                  height: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiStar size={8} fill="currentColor" />
+              </div>
+            )}
+          </div>
+        )}
+        <span
+          className="tc-truncate"
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: file.isDirectory ? 'var(--accent)' : 'var(--text)',
+          }}
+          title={file.displayName || file.name}
+        >
+          {file.displayName || file.name}
+        </span>
+      </div>
+
+      {!isMobile && (
+        isGlobalSearch ? (
+          <div className="tc-truncate" style={{ fontSize: 12, color: 'var(--text-3)' }} title={file._parentPath || '/'}>
+            {file._parentPath || '/'}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+            {file.isDirectory ? '—' : formatFileSize(file.size)}
+          </div>
+        )
+      )}
+      {!isMobile && !isGlobalSearch && (
+        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+          {file.updatedAt ? new Date(file.updatedAt).toLocaleDateString() : ''}
+        </div>
+      )}
+
+      {!isGlobalSearch && !selectionMode && (!isMobile || showActions) && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2, position: 'relative' }}>
+          {isViewableFile(file) && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClearActions(); onOpenMediaViewer(file); }}
+              title="View"
+              disabled={isProcessing}
+              style={actionBtn({ color: 'var(--accent)' })}
+            >
+              {is3dFile(file.name) ? <FiBox size={15} />
+               : isVideo(file.name) ? <FiVideo size={15} />
+               : isImage(file.name) ? <FiImage size={15} />
+               : isAudio(file.name) ? <FiMusic size={15} />
+               : isPdf(file.name) ? <FiFileText size={15} />
+               : isXlsx(file.name) ? <FiFileText size={15} />
+               : <FiFile size={15} />}
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateRename(file); }}
+            title="Rename"
+            disabled={isProcessing}
+            style={actionBtn({ color: 'var(--text-2)' })}
+          ><FiEdit size={15} /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onClearActions(); onHandleDownload(file.id, file.name); }}
+            title="Download"
+            disabled={isProcessing}
+            style={actionBtn({ color: 'var(--text-2)' })}
+          ><FiDownload size={15} /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateDelete(file); }}
+            title="Delete"
+            disabled={isProcessing}
+            style={actionBtn({ color: 'var(--danger)' })}
+          ><FiTrash2 size={15} /></button>
+          {onInitiateShare && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateShare(file); }}
+              title="Share"
+              disabled={isProcessing}
+              style={actionBtn({ color: 'var(--success)' })}
+            ><FiShare2 size={15} /></button>
+          )}
+        </div>
+      )}
+
+      {showActions && isMobile && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 0 }}
+          onClick={(e) => { e.stopPropagation(); onClearActions(); }}
+          onTouchEnd={(e) => { e.stopPropagation(); onClearActions(); }}
+        />
+      )}
+    </div>
+  );
+});
+
 const ListView = forwardRef(({
   files,
   creatingFolder,
@@ -115,6 +338,33 @@ const ListView = forwardRef(({
     return () => window.removeEventListener('resize', checkMobile);
   }, [checkMobile]);
 
+  // Refs that rowRenderer reads instead of closing over state. This keeps
+  // rowRenderer's identity stable across selection / hover / share changes
+  // so react-virtualized doesn't recreate the renderer; the forceUpdateGrid
+  // effect below tells it when to repaint visible rows.
+  const selectedFilesRef = useRef(selectedFiles);
+  const processingFileRef = useRef(processingFile);
+  const sharedPathsRef = useRef(sharedPaths);
+  const favoritePathsRef = useRef(favoritePaths);
+  const deletingFileIdRef = useRef(deletingFile?.id);
+  const renamingFileIdRef = useRef(renamingFile?.id);
+  const showingActionsForRef = useRef(showingActionsFor);
+
+  useEffect(() => { selectedFilesRef.current = selectedFiles; }, [selectedFiles]);
+  useEffect(() => { processingFileRef.current = processingFile; }, [processingFile]);
+  useEffect(() => { sharedPathsRef.current = sharedPaths; }, [sharedPaths]);
+  useEffect(() => { favoritePathsRef.current = favoritePaths; }, [favoritePaths]);
+  useEffect(() => { deletingFileIdRef.current = deletingFile?.id; }, [deletingFile]);
+  useEffect(() => { renamingFileIdRef.current = renamingFile?.id; }, [renamingFile]);
+  useEffect(() => { showingActionsForRef.current = showingActionsFor; }, [showingActionsFor]);
+
+  // Tell react-virtualized to repaint visible rows whenever the per-row state
+  // that lives in refs changes. Memo on <ListRow> ensures only the rows whose
+  // props actually changed re-render to the DOM.
+  useEffect(() => {
+    listRef.current?.forceUpdateGrid();
+  }, [selectedFiles, processingFile, sharedPaths, favoritePaths, deletingFile, renamingFile, showingActionsFor]);
+
   const handleTouchStart = useCallback((file) => {
     if (!isMobile) return;
     longPressTimerRef.current = setTimeout(() => setShowingActionsFor(file.id), 500);
@@ -128,13 +378,7 @@ const ListView = forwardRef(({
     if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
   }, []);
 
-  const shouldShowActions = useCallback(
-    (fileId) => {
-      if (deletingFile?.id || renamingFile?.id) return false;
-      return showingActionsFor === fileId;
-    },
-    [deletingFile, renamingFile, showingActionsFor],
-  );
+  const clearActions = useCallback(() => setShowingActionsFor(null), []);
 
   const allItems = useMemo(() => {
     const items = [...files];
@@ -142,15 +386,19 @@ const ListView = forwardRef(({
     return items;
   }, [files, creatingFolder]);
 
+  const allItemsRef = useRef(allItems);
+  useEffect(() => { allItemsRef.current = allItems; }, [allItems]);
+
   useImperativeHandle(ref, () => ({
     scrollToFile: (fileName) => {
-      const index = allItems.findIndex((f) => f.name === fileName);
+      const index = allItemsRef.current.findIndex((f) => f.name === fileName);
       if (index >= 0 && listRef.current) listRef.current.scrollToRow(index);
     },
-  }), [allItems]);
+  }), []);
 
   const gridColsDesktop = isGlobalSearch ? '1fr 1fr 150px' : '1fr 150px 150px 200px';
   const gridColsMobile = '1fr 100px';
+  const gridCols = isMobile ? gridColsMobile : gridColsDesktop;
 
   const rowRenderer = useCallback(
     ({ index, key, style }) => {
@@ -199,7 +447,7 @@ const ListView = forwardRef(({
         );
       }
 
-      if (deletingFile?.id === file.id) {
+      if (deletingFileIdRef.current === file.id) {
         return (
           <div
             key={key}
@@ -225,7 +473,7 @@ const ListView = forwardRef(({
         );
       }
 
-      if (renamingFile?.id === file.id) {
+      if (renamingFileIdRef.current === file.id) {
         return (
           <div
             key={key}
@@ -275,7 +523,7 @@ const ListView = forwardRef(({
             style={style}
             gridCols=""
             selectionMode={selectionMode}
-            selectedFiles={selectedFiles}
+            selectedFiles={selectedFilesRef.current}
             onToggleSelect={onToggleSelect}
             onPauseDownload={onPauseDownload}
             onResumeDownload={onResumeDownload}
@@ -284,220 +532,65 @@ const ListView = forwardRef(({
         );
       }
 
-      const isSelected = !!selectedFiles?.has(file.name);
-      const isShared = sharedPaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
-      const isFavorite = favoritePaths?.has(`${currentPath}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
+      // Normal row — compute per-row props from refs, hand to memo'd ListRow.
+      const isSelected = !!selectedFilesRef.current?.has(file.name);
+      const pathKey = (currentPath ? `${currentPath}/${file.name}` : file.name)
+        .replace(/\/+/g, '/')
+        .replace(/^\//, '');
+      const isShared = sharedPathsRef.current?.has(pathKey) ?? false;
+      const isFavorite = favoritePathsRef.current?.has(pathKey) ?? false;
+      const isProcessing = processingFileRef.current === file.id;
+      const showActions = !deletingFileIdRef.current && !renamingFileIdRef.current && showingActionsForRef.current === file.id;
+
+      const handleClick = (e) => {
+        const ctrl = e.ctrlKey || e.metaKey;
+        const shift = e.shiftKey;
+        if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
+        if (selectionMode) { onToggleSelect?.(file); return; }
+        if (showActions) return;
+        if (file.isDirectory) navigateToFolder(file.name, file);
+        else if (isViewableFile(file)) openMediaViewer(file);
+      };
 
       return (
-        <div
+        <ListRow
           key={key}
-          className="tc-list-row"
-          style={{
-            ...style,
-            display: 'grid',
-            gridTemplateColumns: isMobile ? gridColsMobile : gridColsDesktop,
-            gap: isMobile ? 8 : 16,
-            padding: isMobile ? '6px 12px' : '8px 24px',
-            background: isSelected ? 'var(--accent-light)' : 'transparent',
-            borderBottom: '1px solid var(--border)',
-            alignItems: 'center',
-            cursor: 'pointer',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            WebkitTouchCallout: 'none',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'background 120ms',
-          }}
-          onClick={(e) => {
-            const ctrl = e.ctrlKey || e.metaKey;
-            const shift = e.shiftKey;
-            if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
-            if (selectionMode) { onToggleSelect?.(file); return; }
-            if (shouldShowActions(file.id)) return;
-            if (file.isDirectory) navigateToFolder(file.name, file);
-            else if (isViewableFile(file)) openMediaViewer(file);
-          }}
+          file={file}
+          style={style}
+          isMobile={isMobile}
+          gridCols={gridCols}
+          isGlobalSearch={isGlobalSearch}
+          selectionMode={selectionMode}
+          isSelected={isSelected}
+          isShared={isShared}
+          isFavorite={isFavorite}
+          isProcessing={isProcessing}
+          showActions={showActions}
+          formatFileSize={formatFileSize}
+          onClick={handleClick}
           onContextMenu={(e) => handleContextMenu(e, file)}
           onTouchStart={() => { if (!selectionMode) handleTouchStart(file); }}
           onTouchEnd={handleTouchEnd}
           onTouchMove={handleTouchMove}
-          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)'; }}
-          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            {selectionMode && (
-              <div
-                onClick={(e) => { e.stopPropagation(); onToggleSelect?.(file); }}
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: 99,
-                  border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-strong)'}`,
-                  background: isSelected ? 'var(--accent)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 150ms',
-                  flexShrink: 0,
-                }}
-              >
-                {isSelected && <FiCheck size={10} color="#fff" />}
-              </div>
-            )}
-            {processingFile === file.id ? (
-              <div
-                style={{
-                  width: 18,
-                  height: 18,
-                  border: '2px solid var(--border)',
-                  borderTopColor: 'var(--accent)',
-                  borderRadius: 99,
-                  animation: 'tc-spin 700ms linear infinite',
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <ThumbBadge file={file} />
-                {isShared && (
-                  <div
-                    title="Shared"
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -4,
-                      background: 'var(--success)',
-                      color: '#fff',
-                      borderRadius: 99,
-                      width: 14,
-                      height: 14,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}
-                  >
-                    <FiShare2 size={7} />
-                  </div>
-                )}
-                {isFavorite && (
-                  <div
-                    title="Favorite"
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      left: -4,
-                      background: 'var(--warning)',
-                      color: '#fff',
-                      borderRadius: 99,
-                      width: 14,
-                      height: 14,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}
-                  >
-                    <FiStar size={8} fill="currentColor" />
-                  </div>
-                )}
-              </div>
-            )}
-            <span
-              className="tc-truncate"
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: file.isDirectory ? 'var(--accent)' : 'var(--text)',
-              }}
-              title={file.displayName || file.name}
-            >
-              {file.displayName || file.name}
-            </span>
-          </div>
-
-          {!isMobile && (
-            isGlobalSearch ? (
-              <div className="tc-truncate" style={{ fontSize: 12, color: 'var(--text-3)' }} title={file._parentPath || '/'}>
-                {file._parentPath || '/'}
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                {file.isDirectory ? '—' : formatFileSize(file.size)}
-              </div>
-            )
-          )}
-          {!isMobile && !isGlobalSearch && (
-            <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-              {file.updatedAt ? new Date(file.updatedAt).toLocaleDateString() : ''}
-            </div>
-          )}
-
-          {!isGlobalSearch && !selectionMode && (!isMobile || shouldShowActions(file.id)) && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2, position: 'relative' }}>
-              {isViewableFile(file) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); openMediaViewer(file); }}
-                  title="View"
-                  disabled={processingFile === file.id}
-                  style={actionBtn({ color: 'var(--accent)' })}
-                >
-                  {is3dFile(file.name) ? <FiBox size={15} />
-                   : isVideo(file.name) ? <FiVideo size={15} />
-                   : isImage(file.name) ? <FiImage size={15} />
-                   : isAudio(file.name) ? <FiMusic size={15} />
-                   : isPdf(file.name) ? <FiFileText size={15} />
-                   : isXlsx(file.name) ? <FiFileText size={15} />
-                   : <FiFile size={15} />}
-                </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); initiateRename(file); }}
-                title="Rename"
-                disabled={processingFile === file.id}
-                style={actionBtn({ color: 'var(--text-2)' })}
-              ><FiEdit size={15} /></button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); handleDownload(file.id, file.name); }}
-                title="Download"
-                disabled={processingFile === file.id}
-                style={actionBtn({ color: 'var(--text-2)' })}
-              ><FiDownload size={15} /></button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); initiateDelete(file); }}
-                title="Delete"
-                disabled={processingFile === file.id}
-                style={actionBtn({ color: 'var(--danger)' })}
-              ><FiTrash2 size={15} /></button>
-              {initiateShare && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); initiateShare(file); }}
-                  title="Share"
-                  disabled={processingFile === file.id}
-                  style={actionBtn({ color: 'var(--success)' })}
-                ><FiShare2 size={15} /></button>
-              )}
-            </div>
-          )}
-
-          {shouldShowActions(file.id) && isMobile && (
-            <div
-              style={{ position: 'fixed', inset: 0, zIndex: 0 }}
-              onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-              onTouchEnd={(e) => { e.stopPropagation(); setShowingActionsFor(null); }}
-            />
-          )}
-        </div>
+          onToggleSelect={onToggleSelect}
+          onOpenMediaViewer={openMediaViewer}
+          onInitiateRename={initiateRename}
+          onHandleDownload={handleDownload}
+          onInitiateDelete={initiateDelete}
+          onInitiateShare={initiateShare}
+          onClearActions={clearActions}
+        />
       );
     },
     [
-      allItems, deletingFile, renamingFile, newFolderName, newFileName, isMobile, gridColsDesktop, gridColsMobile,
-      currentPath, sharedPaths, favoritePaths, selectionMode, selectedFiles, processingFile, shouldShowActions,
-      navigateToFolder, openMediaViewer, initiateRename, setNewFileName, cancelRename, confirmRename,
-      handleDownload, initiateDelete, cancelDelete, confirmDelete, initiateShare, onToggleSelect,
-      onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize, isGlobalSearch,
-      onCancelCreateFolder, onConfirmCreateFolder, onNewFolderNameChange, handleContextMenu,
-      handleTouchStart, handleTouchEnd, handleTouchMove,
+      allItems, isMobile, gridCols, isGlobalSearch, selectionMode, currentPath,
+      newFolderName, newFileName,
+      onCancelCreateFolder, onConfirmCreateFolder, onNewFolderNameChange,
+      cancelDelete, confirmDelete, cancelRename, confirmRename, setNewFileName,
+      handleContextMenu, navigateToFolder, openMediaViewer, initiateRename,
+      handleDownload, initiateDelete, initiateShare, onToggleSelect,
+      onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize,
+      handleTouchStart, handleTouchEnd, handleTouchMove, clearActions,
     ],
   );
 

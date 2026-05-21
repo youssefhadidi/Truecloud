@@ -61,7 +61,7 @@ const GridItem = memo(
     onNewFileNameChange,
     onCancelRename,
     onConfirmRename,
-    processingFile,
+    isProcessing,
     currentPath,
     onNavigateToFolder,
     onOpenMediaViewer,
@@ -77,7 +77,7 @@ const GridItem = memo(
     selectionMode,
     isSelected,
     onToggleSelect,
-    shouldShowActions,
+    showActions,
     onTouchStart,
     onTouchEnd,
     onTouchMove,
@@ -216,9 +216,9 @@ const GridItem = memo(
               const shift = e.shiftKey;
               if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(item, { ctrl, shift }); return; }
               if (selectionMode) { onToggleSelect?.(item); return; }
-              if (item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
+              if (item.isDirectory && !isDeletingFile && !showActions) {
                 onNavigateToFolder(item.name, item);
-              } else if (isGlobalSearch && !item.isDirectory && !isDeletingFile && !shouldShowActions(item.id)) {
+              } else if (isGlobalSearch && !item.isDirectory && !isDeletingFile && !showActions) {
                 onNavigateToFolder(item.name, item);
               }
             }}
@@ -450,7 +450,7 @@ const GridItem = memo(
                 }
               }}
             >
-              {processingFile === item.id && (
+              {isProcessing && (
                 <div
                   style={{
                     position: 'absolute',
@@ -565,7 +565,7 @@ const GridItem = memo(
                   <button
                     onClick={(e) => { e.stopPropagation(); onOpenMediaViewer(item); }}
                     title="View"
-                    disabled={processingFile === item.id}
+                    disabled={isProcessing}
                     style={iconBtnStyle('var(--accent)')}
                   >
                     {is3dFile(item.name) ? <FiBox size={14} />
@@ -580,7 +580,7 @@ const GridItem = memo(
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateRename(item); }}
                   title="Rename"
-                  disabled={processingFile === item.id}
+                  disabled={isProcessing}
                   style={iconBtnStyle('var(--accent)')}
                 >
                   <FiEdit size={14} />
@@ -588,7 +588,7 @@ const GridItem = memo(
                 <button
                   onClick={(e) => { e.stopPropagation(); onHandleDownload(item.id, item.name); }}
                   title="Download"
-                  disabled={processingFile === item.id}
+                  disabled={isProcessing}
                   style={iconBtnStyle('var(--accent)')}
                 >
                   <FiDownload size={14} />
@@ -596,7 +596,7 @@ const GridItem = memo(
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateDelete(item); }}
                   title="Delete"
-                  disabled={processingFile === item.id}
+                  disabled={isProcessing}
                   style={iconBtnStyle('var(--danger)')}
                 >
                   <FiTrash2 size={14} />
@@ -605,7 +605,7 @@ const GridItem = memo(
                   <button
                     onClick={(e) => { e.stopPropagation(); onInitiateShare(item); }}
                     title="Share"
-                    disabled={processingFile === item.id}
+                    disabled={isProcessing}
                     style={iconBtnStyle('var(--success)')}
                   >
                     <FiShare2 size={14} />
@@ -715,11 +715,41 @@ const GridView = forwardRef(
       return items;
     }, [files, creatingFolder]);
 
+    // Refs that cellRenderer reads instead of closing over volatile state. Keeps
+    // cellRenderer identity stable across selection / hover / share / typing
+    // changes so react-virtualized doesn't recreate the renderer; the
+    // gridRef.forceUpdate() effect below tells it when to repaint visible cells.
+    const allItemsRef = useRef(allItems);
+    const selectedFilesRef = useRef(selectedFiles);
+    const processingFileRef = useRef(processingFile);
+    const sharedPathsRef = useRef(sharedPaths);
+    const favoritePathsRef = useRef(favoritePaths);
+    const deletingFileIdRef = useRef(deletingFile?.id);
+    const renamingFileIdRef = useRef(renamingFile?.id);
+    const showingActionsForRef = useRef(showingActionsFor);
+    const newFolderNameRef = useRef(newFolderName);
+    const newFileNameRef = useRef(newFileName);
+
+    useEffect(() => { allItemsRef.current = allItems; }, [allItems]);
+    useEffect(() => { selectedFilesRef.current = selectedFiles; }, [selectedFiles]);
+    useEffect(() => { processingFileRef.current = processingFile; }, [processingFile]);
+    useEffect(() => { sharedPathsRef.current = sharedPaths; }, [sharedPaths]);
+    useEffect(() => { favoritePathsRef.current = favoritePaths; }, [favoritePaths]);
+    useEffect(() => { deletingFileIdRef.current = deletingFile?.id; }, [deletingFile]);
+    useEffect(() => { renamingFileIdRef.current = renamingFile?.id; }, [renamingFile]);
+    useEffect(() => { showingActionsForRef.current = showingActionsFor; }, [showingActionsFor]);
+    useEffect(() => { newFolderNameRef.current = newFolderName; }, [newFolderName]);
+    useEffect(() => { newFileNameRef.current = newFileName; }, [newFileName]);
+
+    useEffect(() => {
+      gridRef.current?.forceUpdate();
+    }, [selectedFiles, processingFile, sharedPaths, favoritePaths, deletingFile, renamingFile, showingActionsFor, newFolderName, newFileName, allItems]);
+
     useImperativeHandle(
       ref,
       () => ({
         scrollToFile: (fileName) => {
-          const index = allItems.findIndex((f) => f.name === fileName);
+          const index = allItemsRef.current.findIndex((f) => f.name === fileName);
           if (index >= 0 && gridRef.current && containerWidthRef.current) {
             const columns = getColumnsCount(containerWidthRef.current);
             const rowIndex = Math.floor(index / columns);
@@ -728,7 +758,7 @@ const GridView = forwardRef(
           }
         },
       }),
-      [allItems],
+      [],
     );
 
     const handleTouchStart = useCallback((item) => {
@@ -741,25 +771,25 @@ const GridView = forwardRef(
       if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     }, []);
 
-    const shouldShowActions = useCallback(
-      (itemId) => {
-        if (deletingFile?.id || renamingFile?.id) return false;
-        return showingActionsFor === itemId;
-      },
-      [deletingFile, renamingFile, showingActionsFor],
-    );
-
     const cellRenderer = useCallback(
-      ({ columnIndex, key, rowIndex, style, parent }) => {
-        const containerWidth = parent.props.width;
+      ({ columnIndex, key, rowIndex, style }) => {
+        const containerWidth = containerWidthRef.current;
         const columns = getColumnsCount(containerWidth);
         const gap = containerWidth < BREAKPOINT.sm ? 4 : 12;
         const itemIndex = rowIndex * columns + columnIndex;
-        const item = allItems[itemIndex];
+        const item = allItemsRef.current[itemIndex];
         if (!item) return <div key={key} style={style} />;
         const cellWidth = style.width - gap;
-        const isShared = sharedPaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
-        const isFavorite = favoritePaths?.has(`${currentPath}/${item.name}`.replace(/\/+/g, '/').replace(/^\//, ''));
+        const pathKey = (currentPath ? `${currentPath}/${item.name}` : item.name)
+          .replace(/\/+/g, '/')
+          .replace(/^\//, '');
+        const isShared = sharedPathsRef.current?.has(pathKey) ?? false;
+        const isFavorite = favoritePathsRef.current?.has(pathKey) ?? false;
+        const isCreating = item.isCreating;
+        const isDeletingThis = deletingFileIdRef.current === item.id;
+        const isRenamingThis = renamingFileIdRef.current === item.id;
+        const isProcessing = processingFileRef.current === item.id;
+        const showActions = !deletingFileIdRef.current && !renamingFileIdRef.current && showingActionsForRef.current === item.id;
         return (
           <GridItem
             key={key}
@@ -768,18 +798,18 @@ const GridView = forwardRef(
             containerWidth={containerWidth}
             style={style}
             gap={gap}
-            isCreating={item.isCreating}
-            newFolderName={newFolderName}
+            isCreating={isCreating}
+            newFolderName={isCreating ? newFolderNameRef.current : undefined}
             onNewFolderNameChange={onNewFolderNameChange}
             onCancelCreateFolder={onCancelCreateFolder}
             onConfirmCreateFolder={onConfirmCreateFolder}
-            isDeletingFile={deletingFile?.id === item.id}
-            isRenamingFile={renamingFile?.id === item.id}
-            newFileName={newFileName}
+            isDeletingFile={isDeletingThis}
+            isRenamingFile={isRenamingThis}
+            newFileName={isRenamingThis ? newFileNameRef.current : undefined}
             onNewFileNameChange={onNewFileNameChange}
             onCancelRename={onCancelRename}
             onConfirmRename={onConfirmRename}
-            processingFile={processingFile}
+            isProcessing={isProcessing}
             currentPath={currentPath}
             onNavigateToFolder={onNavigateToFolder}
             onOpenMediaViewer={onOpenMediaViewer}
@@ -794,9 +824,9 @@ const GridView = forwardRef(
             isFavorite={isFavorite}
             onContextMenu={onContextMenu}
             selectionMode={selectionMode}
-            isSelected={!!selectedFiles?.has(item.name)}
+            isSelected={!!selectedFilesRef.current?.has(item.name)}
             onToggleSelect={onToggleSelect}
-            shouldShowActions={shouldShowActions}
+            showActions={showActions}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
@@ -808,13 +838,14 @@ const GridView = forwardRef(
         );
       },
       [
-        allItems, newFolderName, onNewFolderNameChange, onConfirmCreateFolder, onCancelCreateFolder,
-        deletingFile, onCancelDelete, onConfirmDelete, renamingFile, newFileName, onNewFileNameChange,
-        onConfirmRename, onCancelRename, onNavigateToFolder, processingFile, currentPath,
-        onOpenMediaViewer, onInitiateRename, onHandleDownload, onInitiateDelete, onInitiateShare,
-        formatFileSize, showingActionsFor, handleTouchStart, handleTouchEnd, handleTouchMove,
-        shouldShowActions, sharedPaths, favoritePaths, onContextMenu, selectionMode, selectedFiles, onToggleSelect,
-        isGlobalSearch, onPauseDownload, onResumeDownload, onRemoveDownload,
+        currentPath, selectionMode, isGlobalSearch,
+        onNewFolderNameChange, onCancelCreateFolder, onConfirmCreateFolder,
+        onNewFileNameChange, onCancelRename, onConfirmRename,
+        onNavigateToFolder, onOpenMediaViewer, onInitiateRename, onHandleDownload,
+        onInitiateDelete, onConfirmDelete, onCancelDelete, onInitiateShare,
+        formatFileSize, onContextMenu, onToggleSelect,
+        handleTouchStart, handleTouchEnd, handleTouchMove,
+        onPauseDownload, onResumeDownload, onRemoveDownload,
       ],
     );
 
@@ -834,7 +865,7 @@ const GridView = forwardRef(
             return (
               <Grid
                 ref={gridRef}
-                cellRenderer={(props) => cellRenderer({ ...props, parent: { props: { width } } })}
+                cellRenderer={cellRenderer}
                 columnCount={columns}
                 columnWidth={cellSize}
                 height={height}
