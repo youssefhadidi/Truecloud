@@ -775,7 +775,7 @@ const GridView = forwardRef(
       ({ columnIndex, key, rowIndex, style }) => {
         const containerWidth = containerWidthRef.current;
         const columns = getColumnsCount(containerWidth);
-        const gap = containerWidth < BREAKPOINT.sm ? 4 : 12;
+        const gap = containerWidth < BREAKPOINT.sm ? 3 : 8;
         const itemIndex = rowIndex * columns + columnIndex;
         const item = allItemsRef.current[itemIndex];
         if (!item) return <div key={key} style={style} />;
