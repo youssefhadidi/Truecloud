@@ -816,6 +816,7 @@ function FilesPageContent() {
                     </div>
                     <Suspense fallback={<LoadingPanel />}>
                       <ListView
+                        key={state.currentPath}
                         ref={listViewRef}
                         files={displayFiles}
                         creatingFolder={state.creatingFolder}
@@ -887,6 +888,7 @@ function FilesPageContent() {
                 ) : (
                   <Suspense fallback={<LoadingPanel />}>
                     <GridView
+                      key={state.currentPath}
                       ref={gridViewRef}
                       files={displayFiles}
                       creatingFolder={isGlobalSearch ? false : state.creatingFolder}
