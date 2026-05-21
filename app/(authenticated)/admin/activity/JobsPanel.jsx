@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiActivity, FiCheckCircle, FiXCircle, FiLoader, FiClock, FiAlertCircle, FiChevronDown, FiChevronUp, FiSlash } from 'react-icons/fi';
+import { FiActivity, FiCheckCircle, FiXCircle, FiLoader, FiClock, FiAlertCircle, FiSlash } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useJobs, useCancelJob } from '@/lib/api/jobs';
 import { useQueryClient } from '@tanstack/react-query';
@@ -46,14 +46,17 @@ function typeLabel(type) {
 // ─── JobCard ──────────────────────────────────────────────────────────────────
 
 function JobCard({ job }) {
-  const [expanded, setExpanded] = useState(false);
   const cancelJob = useCancelJob();
   const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.pending;
   const Icon = cfg.icon;
+  const lastLog = job.lastLog;
+  const lastLogColor =
+    lastLog?.level === 'error' ? 'text-red-400'
+    : lastLog?.level === 'warn' ? 'text-yellow-400'
+    : 'text-gray-400';
 
   return (
     <div className={`rounded-lg border ${cfg.bg} overflow-hidden`}>
-      {/* Header row */}
       <div className="p-4 flex items-start gap-3">
         <Icon size={18} className={`${cfg.color} flex-shrink-0 mt-0.5 ${cfg.spin ? 'animate-spin' : ''}`} />
 
@@ -78,7 +81,6 @@ function JobCard({ job }) {
             )}
           </div>
 
-          {/* Progress bar for running jobs */}
           {job.status === 'running' && job.progress > 0 && (
             <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
               <div
@@ -86,6 +88,12 @@ function JobCard({ job }) {
                 style={{ width: `${job.progress}%` }}
               />
             </div>
+          )}
+
+          {lastLog && (
+            <p className={`mt-1 text-xs font-mono truncate ${lastLogColor}`} title={lastLog.message}>
+              {lastLog.message}
+            </p>
           )}
 
           {job.error && (
@@ -104,33 +112,8 @@ function JobCard({ job }) {
               <FiSlash size={14} />
             </button>
           )}
-          {job.logs.length > 0 && (
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-              title={expanded ? 'Hide logs' : 'Show logs'}
-            >
-              {expanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
-            </button>
-          )}
         </div>
       </div>
-
-      {/* Log panel */}
-      {expanded && job.logs.length > 0 && (
-        <div className="border-t border-gray-700/50 bg-gray-900/50 p-3 max-h-48 overflow-y-auto">
-          <ul className="space-y-0.5 font-mono text-xs">
-            {job.logs.map((log, i) => (
-              <li key={i} className={log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-gray-300'}>
-                <span className="text-gray-500 mr-2 select-none">
-                  {new Date(log.time).toLocaleTimeString()}
-                </span>
-                {log.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ process.env.OMP_NUM_THREADS = process.env.OMP_NUM_THREADS || '1';
 const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const next = require('next');
-const { startLogStream } = require('./lib/logStreamManager');
+const { startLogStream, stopLogStream } = require('./lib/logStreamManager');
 
 
 // Dynamic imports for ES modules
@@ -34,6 +34,10 @@ const wsClients = new Set();
 
 // Clients that have subscribed to system-metrics (opt-in polling)
 const metricsSubscribers = new Set();
+
+// Clients that have subscribed to the live logs stream (opt-in polling).
+// The log file poller in logStreamManager only runs while this set is non-empty.
+const logSubscribers = new Set();
 
 // Global update status state
 global.updateStatus = {
@@ -111,7 +115,12 @@ global.broadcastFileChange = (message) => {
 };
 
 global.broadcastLogs = (message) => {
-  broadcastMessage({ type: 'logs', payload: message });
+  const frame = JSON.stringify({ type: 'logs', payload: message });
+  logSubscribers.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(frame);
+    }
+  });
 };
 
 global.broadcastFileIndexUpdate = (message) => {
@@ -239,6 +248,14 @@ loadEsModules().then(() => {
                   import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
                 }
               }
+            } else if (msg.channel === 'logs') {
+              if (msg.type === 'subscribe') {
+                logSubscribers.add(ws);
+                if (logSubscribers.size === 1) startLogStream();
+              } else if (msg.type === 'unsubscribe') {
+                logSubscribers.delete(ws);
+                if (logSubscribers.size === 0) stopLogStream();
+              }
             }
           } catch {}
         });
@@ -248,12 +265,18 @@ loadEsModules().then(() => {
           if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
             import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
           }
+          if (logSubscribers.delete(ws) && logSubscribers.size === 0) {
+            stopLogStream();
+          }
         });
 
         ws.on('error', () => {
           wsClients.delete(ws);
           if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
             import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
+          }
+          if (logSubscribers.delete(ws) && logSubscribers.size === 0) {
+            stopLogStream();
           }
         });
       });
@@ -308,8 +331,7 @@ loadEsModules().then(() => {
       console.log('[server] Torrent service WS bridge disabled (DISABLE_TORRENT_SERVICE=1)');
     }
 
-    // Start log stream manager
-    startLogStream();
+    // Log stream is subscription-based; it starts on first WS subscriber.
 
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());

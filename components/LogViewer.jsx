@@ -1,13 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { FiRefreshCw, FiDownload } from 'react-icons/fi';
+import { FiDownload } from 'react-icons/fi';
 import { useLogsStream } from '@/hooks/useLogsStream';
-import { useLogs } from '@/lib/api/logs';
 
 export default function LogViewer() {
   const { logs, isLoading, error: streamError } = useLogsStream();
-  const { refetch } = useLogs();
   const [autoScroll, setAutoScroll] = useState(true);
   const [error, setError] = useState(null);
   const logsEndRef = useRef(null);
@@ -28,17 +26,6 @@ export default function LogViewer() {
   useEffect(() => {
     scrollToBottom();
   }, [logs, autoScroll]);
-
-  // Manual refresh - re-fetch initial logs from API
-  const refreshLogs = async () => {
-    setError(null);
-    try {
-      await refetch();
-    } catch (err) {
-      setError('Failed to refresh logs');
-      console.error('[LOGS] Error refreshing:', err);
-    }
-  };
 
   const downloadLogs = () => {
     const content = logs.join('\n');
@@ -74,15 +61,6 @@ export default function LogViewer() {
             >
               <span className="hidden sm:inline">{autoScroll ? '📍 Auto-scroll ON' : '📍 Auto-scroll OFF'}</span>
               <span className="sm:hidden">📍</span>
-            </button>
-            <button
-              onClick={refreshLogs}
-              disabled={isLoading}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500"
-              title="Refresh"
-            >
-              <FiRefreshCw className={isLoading ? 'animate-spin' : ''} size={16} />
-              <span className="hidden sm:inline text-sm">Refresh</span>
             </button>
             <button
               onClick={downloadLogs}
