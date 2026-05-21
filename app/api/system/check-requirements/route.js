@@ -251,6 +251,13 @@ const REQUIRED_PROGRAMS = [
     installable: true,
     installCommand: 'sudo apt-get install -y smartmontools',
   },
+  {
+    name: 'Claude Code',
+    command: 'claude',
+    description: 'Anthropic Claude CLI — powers the in-app AI file Q&A. After install, run `claude` once as the Truecloud service user to log in with a Claude Pro/Max account.',
+    installable: true,
+    installCommand: 'sudo npm install -g @anthropic-ai/claude-code',
+  },
 ];
 
 /**

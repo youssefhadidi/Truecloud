@@ -145,12 +145,13 @@ model SmbShare {
 }
 
 model AiChat {
-  id        String      @id @default(cuid())
-  ownerId   String
-  filePath  String      // normalized path inside uploads, e.g. "user_abc/docs/report.pdf"
-  model     String      @default("")  // last model used in this chat
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id               String      @id @default(cuid())
+  ownerId          String
+  filePath         String      // normalized path inside uploads
+  model            String      @default("")
+  claudeSessionId  String?     // Claude Code session id for --resume continuity
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   owner    User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   messages AiMessage[]
@@ -160,45 +161,25 @@ model AiChat {
 }
 
 model AiMessage {
-  id               String   @id @default(cuid())
-  chatId           String
-  role             String   // "user" | "assistant"
-  content          String   // assistant text or user prompt
-  inputTokens      Int      @default(0)
-  outputTokens     Int      @default(0)
-  cacheReadTokens  Int      @default(0)
-  cacheWriteTokens Int      @default(0)
-  costUsd          Float    @default(0)
-  createdAt        DateTime @default(now())
+  id        String   @id @default(cuid())
+  chatId    String
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
 
   chat AiChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
 }
 
-// Cache of files uploaded to Anthropic's Files API so we don't re-upload on every turn.
-// Busted when the local file's mtime or size changes.
-model AiFileUpload {
-  id              String   @id @default(cuid())
-  filePath        String   @unique // normalized path inside uploads
-  fileSize        BigInt
-  mtimeMs         BigInt
-  anthropicFileId String
-  mediaType       String   // mime type sent to Anthropic
-  uploadedAt      DateTime @default(now())
-}
-
-// One row per API call. Used for daily/monthly spend rollups and per-user quotas.
+// One row per turn. With Claude CLI we no longer track $ cost — just request
+// count for a simple per-user daily safety cap so a runaway loop can't burn
+// the subscription's usage allotment.
 model AiUsage {
-  id               String   @id @default(cuid())
-  userId           String
-  model            String
-  inputTokens      Int
-  outputTokens     Int
-  cacheReadTokens  Int      @default(0)
-  cacheWriteTokens Int      @default(0)
-  costUsd          Float
-  createdAt        DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  model     String
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

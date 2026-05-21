@@ -88,6 +88,7 @@ export async function POST(req) {
       powertop: 'powertop',
       cpupower: 'linux-cpupower',
       smartmontools: 'smartmontools',
+      'claude code': '@anthropic-ai/claude-code',
     };
 
     const packageName = packages[name.toLowerCase()];
@@ -120,6 +121,50 @@ export async function POST(req) {
 
     try {
       logger.info('Executing install command for:', { name, packageName });
+
+      // Claude Code is an npm-published CLI, not an apt package
+      if (name.toLowerCase() === 'claude code') {
+        // Verify npm is available — Claude Code is shipped via npm even though
+        // Truecloud itself uses bun, so npm needs to be on the host.
+        try {
+          await execAsync('command -v npm >/dev/null 2>&1', execOpts);
+        } catch {
+          return NextResponse.json({
+            message: 'npm is not installed. Install Node.js/npm first, then retry: sudo apt-get install -y nodejs npm',
+            error: 'npm not found',
+          }, { status: 400 });
+        }
+
+        try {
+          const { stdout, stderr } = await execAsync(
+            'sudo npm install -g @anthropic-ai/claude-code 2>&1',
+            { ...execOpts, timeout: 300000 },
+          );
+          logger.info('Claude Code install output:', (stdout || stderr || '').slice(-1500));
+
+          // Confirm the binary landed on PATH
+          let claudePath = '';
+          try {
+            const { stdout: which } = await execAsync('command -v claude 2>/dev/null || which claude 2>/dev/null || echo ""', execOpts);
+            claudePath = which.trim();
+          } catch {}
+
+          return NextResponse.json({
+            message: claudePath
+              ? `Claude Code installed at ${claudePath}. Next: SSH in as the Truecloud service user and run \`claude\` once to log in with your Pro/Max account.`
+              : 'Claude Code install command completed, but the `claude` binary was not found on PATH. Check npm global bin directory and adjust CLAUDE_BIN in .env if needed.',
+            success: !!claudePath,
+            authRequired: true,
+          });
+        } catch (npmErr) {
+          const detail = (npmErr.stderr || npmErr.stdout || npmErr.message || '').slice(-1500);
+          logger.error('Claude Code install failed:', detail);
+          return NextResponse.json({
+            message: `Claude Code install failed: ${detail}`,
+            error: 'Install error',
+          }, { status: 400 });
+        }
+      }
 
       // Sharp HEVC requires building libde265 + libheif + libvips from source
       if (name.toLowerCase() === 'sharp hevc') {

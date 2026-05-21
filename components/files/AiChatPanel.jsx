@@ -7,8 +7,9 @@ import { FiX, FiSend, FiTrash2, FiAlertCircle } from 'react-icons/fi';
 import { useAiChat } from '@/hooks/useAiChat';
 
 const MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku — fast & cheap' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet — better reasoning' },
+  { id: 'sonnet', label: 'Sonnet — recommended' },
+  { id: 'haiku', label: 'Haiku — faster' },
+  { id: 'opus', label: 'Opus — strongest' },
 ];
 
 const iconBtn = {
@@ -51,7 +52,6 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
   const { messages, streaming, streamingText, usage, error, send, clear, loadingHistory } = useAiChat(filePath);
   const [input, setInput] = useState('');
   const [model, setModel] = useState(MODELS[0].id);
-  const [longAnswer, setLongAnswer] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -63,14 +63,14 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    send(text, { model, longAnswer });
+    send(text, { model });
   };
 
-  const quotaSpent = usage
-    ? `$${usage.todayUsd.toFixed(3)} / $${usage.dailyLimit.toFixed(2)}`
+  const quotaText = usage
+    ? `${usage.todayRequests} / ${usage.dailyLimit} requests today`
     : '…';
-  const quotaPct = usage
-    ? Math.min(100, (usage.todayUsd / usage.dailyLimit) * 100)
+  const quotaPct = usage && usage.dailyLimit > 0
+    ? Math.min(100, (usage.todayRequests / usage.dailyLimit) * 100)
     : 0;
   const barColor =
     quotaPct >= 100 ? 'var(--danger)' :
@@ -132,8 +132,7 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span>Today's AI spend</span>
-          <span>{quotaSpent}</span>
+          <span>{quotaText}</span>
         </div>
         <div style={{ height: 3, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
           <div
@@ -235,15 +234,6 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={longAnswer}
-              onChange={(e) => setLongAnswer(e.target.checked)}
-              disabled={streaming}
-            />
-            Long answer
-          </label>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
           <textarea

@@ -5,6 +5,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
+async function fetchJson(url, init) {
+  const res = await fetch(url, init);
+  const text = await res.text();
+  if (!res.ok) {
+    let parsed;
+    try { parsed = JSON.parse(text); } catch {}
+    const detail = parsed?.error || text.slice(0, 200) || `${res.status} ${res.statusText}`;
+    const err = new Error(detail);
+    err.status = res.status;
+    err.body = parsed;
+    throw err;
+  }
+  if (!text) return {};
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Invalid JSON from ${url}`); }
+}
+
 export function useAiChat(filePath) {
   const { subscribe } = useWebSocket();
   const [messages, setMessages] = useState([]);
@@ -25,8 +42,7 @@ export function useAiChat(filePath) {
     activeRequestIdRef.current = null;
 
     const ctrl = new AbortController();
-    fetch(`/api/ai/chat?filePath=${encodeURIComponent(filePath)}`, { signal: ctrl.signal })
-      .then((r) => r.json())
+    fetchJson(`/api/ai/chat?filePath=${encodeURIComponent(filePath)}`, { signal: ctrl.signal })
       .then((data) => {
         if (Array.isArray(data?.messages)) setMessages(data.messages);
       })
@@ -39,7 +55,9 @@ export function useAiChat(filePath) {
   }, [filePath]);
 
   const refreshUsage = useCallback(() => {
-    fetch('/api/ai/usage').then((r) => r.json()).then(setUsage).catch(() => {});
+    fetchJson('/api/ai/usage').then(setUsage).catch((err) => {
+      console.warn('[useAiChat] usage fetch failed:', err.message);
+    });
   }, []);
 
   useEffect(() => { refreshUsage(); }, [refreshUsage]);
@@ -91,19 +109,13 @@ export function useAiChat(filePath) {
     setStreaming(true);
 
     try {
-      const res = await fetch('/api/ai/chat', {
+      await fetchJson('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath, requestId, message: text, ...opts }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || `Request failed (${res.status})`);
-        setStreaming(false);
-        activeRequestIdRef.current = null;
-        if (body.snapshot) setUsage(body.snapshot);
-      }
     } catch (err) {
+      if (err.body?.snapshot) setUsage(err.body.snapshot);
       setError(err?.message || 'Network error');
       setStreaming(false);
       activeRequestIdRef.current = null;
