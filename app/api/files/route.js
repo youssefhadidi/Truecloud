@@ -64,21 +64,9 @@ export async function GET(req) {
       });
     }
 
-    // Determine base directory based on path
-    let targetDir;
-    let isPrivateFolder = false;
-
     if (relativePath.startsWith('user_')) {
-      // Accessing a user's private folder
-      targetDir = join(UPLOAD_DIR, relativePath);
-      isPrivateFolder = true;
-
-      // Extract user ID from path
-      const pathParts = relativePath.split('/');
-      const userFolderName = pathParts[0];
-      const userIdFromPath = userFolderName.replace('user_', '');
-
-      // Check if user has access (must be owner or admin)
+      // Accessing a user's private folder — check ownership before any IO.
+      const userIdFromPath = relativePath.split('/')[0].replace('user_', '');
       if (session.user.id !== userIdFromPath && session.user.role !== 'admin') {
         logger.warn('GET /api/files - Access denied to private folder', {
           requestedPath: relativePath,
@@ -88,10 +76,9 @@ export async function GET(req) {
         });
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
-    } else {
-      // Accessing shared folder
-      targetDir = join(UPLOAD_DIR, relativePath);
     }
+
+    const targetDir = join(UPLOAD_DIR, relativePath);
 
     // Security: prevent directory traversal
     const resolvedTarget = resolve(targetDir) + sep;
@@ -105,129 +92,126 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Read files from filesystem
-    const fileNames = await readdir(targetDir);
-
-    // Collect user IDs that need lookup (only at root level)
-    const userIdsToLookup = !relativePath
-      ? fileNames
-          .filter((name) => name.startsWith('user_'))
-          .map((name) => name.replace('user_', ''))
-      : [];
-
-    // Batch query: fetch all users at once instead of N individual queries
-    let userMap = {};
-    if (userIdsToLookup.length > 0) {
+    // Kick off the torrent service call in parallel with the directory walk.
+    // Why: today readdir → stat-all → fetch downloads ran sequentially, so the
+    // torrent service latency was always on the critical path. Overlapping it
+    // with the filesystem work hides it under the slower of the two.
+    const downloadsPromise = (async () => {
       try {
-        const users = await prisma.user.findMany({
-          where: { id: { in: userIdsToLookup } },
-          select: { id: true, username: true },
+        const [active, waiting] = await Promise.all([
+          getActiveDownloads(relativePath),
+          getWaitingDownloads(0, 100, relativePath),
+        ]);
+        return [...active, ...waiting];
+      } catch (downloadError) {
+        logger.warn('GET /api/files - Error fetching downloads', {
+          path: relativePath,
+          error: downloadError.message,
         });
-        userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
-      } catch (e) {
-        logger.warn('GET /api/files - Failed to batch fetch users', { error: e.message });
-        // Continue without user names
+        return [];
       }
-    }
+    })();
 
-    // Get file stats for each file with concurrency limit
-    let files = await Promise.all(
-      fileNames.map(async (name) => {
-        // Acquire semaphore before stat call
-        await statSemaphore.acquire();
-        try {
-          const filePath = join(targetDir, name);
-          const stats = await stat(filePath);
+    // Read entries with file types so we can filter without statting first.
+    const entries = await readdir(targetDir, { withFileTypes: true });
 
-          // Get user info for user folders to display username (from pre-fetched map)
-          let displayName = name;
-          if (!relativePath && name.startsWith('user_')) {
-            const userId = name.replace('user_', '');
-            const username = userMap[userId];
-            if (username) {
-              displayName = `📁 ${username} (Private)`;
-            }
-          }
-
-          return {
-            id: name, // Use filename as ID
-            name: name,
-            displayName: displayName,
-            path: filePath.replace(/\\/g, '/'),
-            size: stats.size,
-            isDirectory: stats.isDirectory(),
-            createdAt: stats.birthtime,
-            updatedAt: stats.mtime,
-          };
-        } finally {
-          statSemaphore.release();
-        }
-      }),
-    );
-
-    // Filter user folders at root level if not admin
-    if (!relativePath && session.user.role !== 'admin') {
-      files = files.filter((file) => {
-        if (!file.name.startsWith('user_')) return true; // Show shared files/folders
-        const userIdFromFolder = file.name.replace('user_', '');
-        return userIdFromFolder === session.user.id; // Only show user's own folder
-      });
-    }
-
-    // Filter out trash folder at root (system folder, not for direct browsing)
-    files = files.filter((file) => file.name !== 'trash');
-
-    // Filter out Windows-generated system files that aren't useful to surface.
-    // Reason: Windows creates these as side effects of folder browsing and
-    // they clutter the listing without ever being user content.
-    const HIDDEN_NAMES = new Set(['Thumbs.db', 'Thumbs.db:encryptable',"desktop.ini"]);
-    files = files.filter((file) => !HIDDEN_NAMES.has(file.name));
-
-    // Normalize paths for frontend (hide uploads/ prefix only, preserve user folder structure)
-    files = files.map((file) => {
-      let normalizedPath = file.path.replace(/\\/g, '/');
-      // Remove uploads/ prefix only, preserve user_123/ and all subfolder structure
-      normalizedPath = normalizedPath.replace(/^uploads\//, '');
-      return {
-        ...file,
-        path: normalizedPath,
-      };
-    });
-
-    // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
-    // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
-
-    // Fetch torrent downloads for this directory (filter by relative path)
-    let downloads = [];
-    try {
-      const [activeDownloads, waitingDownloads] = await Promise.all([
-        getActiveDownloads(relativePath),
-        getWaitingDownloads(0, 100, relativePath),
-      ]);
-      downloads = [...activeDownloads, ...waitingDownloads];
-
-      logger.debug('GET /api/files - Downloads fetched', {
-        path: relativePath,
-        active: activeDownloads.length,
-        waiting: waitingDownloads.length,
-      });
-    } catch (downloadError) {
-      logger.warn('GET /api/files - Error fetching downloads', {
-        path: relativePath,
-        error: downloadError.message,
-      });
-      // Continue without downloads if there's an error
-      downloads = [];
-    }
-
-    // Filter out files that are currently being downloaded (active or waiting)
-    // Only exclude active/waiting downloads, not completed ones
+    // Resolve downloads before the stat fan-out so we can pre-filter the
+    // entries that would have been dropped anyway. Each skipped entry is one
+    // saved stat() syscall — significant on large folders / network storage.
+    const downloads = await downloadsPromise;
     const downloadingNames = new Set(
       downloads
         .filter((d) => d.status === 'active' || d.status === 'paused')
-        .map((d) => d.name)
+        .map((d) => d.name),
     );
-    files = files.filter((file) => !downloadingNames.has(file.name));
+
+    // Windows-generated system files that clutter listings without ever being
+    // user content. Filtered pre-stat so we never pay for them.
+    const HIDDEN_NAMES = new Set(['Thumbs.db', 'Thumbs.db:encryptable', 'desktop.ini']);
+    const isAdmin = session.user.role === 'admin';
+    const atRoot = !relativePath;
+
+    const visibleEntries = entries.filter((entry) => {
+      const name = entry.name;
+      if (name.startsWith('.')) return false;
+      if (HIDDEN_NAMES.has(name)) return false;
+      if (downloadingNames.has(name)) return false;
+      if (atRoot) {
+        if (name === 'trash') return false;
+        // Non-admin users only see their own user_ folder at root.
+        if (!isAdmin && name.startsWith('user_')) {
+          return name.replace('user_', '') === session.user.id;
+        }
+      }
+      return true;
+    });
+
+    // Batch user lookup against the already-filtered set (skips lookups for
+    // user_* folders that a non-admin caller can't see).
+    const userIdsToLookup = atRoot
+      ? visibleEntries
+          .filter((e) => e.name.startsWith('user_'))
+          .map((e) => e.name.replace('user_', ''))
+      : [];
+
+    const userLookupPromise = userIdsToLookup.length > 0
+      ? prisma.user
+          .findMany({
+            where: { id: { in: userIdsToLookup } },
+            select: { id: true, username: true },
+          })
+          .then((users) => Object.fromEntries(users.map((u) => [u.id, u.username])))
+          .catch((e) => {
+            logger.warn('GET /api/files - Failed to batch fetch users', { error: e.message });
+            return {};
+          })
+      : Promise.resolve({});
+
+    // Stat the surviving entries with the existing concurrency limit. The
+    // user lookup runs in parallel because it's an independent DB query.
+    const [userMap, files] = await Promise.all([
+      userLookupPromise,
+      Promise.all(
+        visibleEntries.map(async (entry) => {
+          await statSemaphore.acquire();
+          try {
+            const name = entry.name;
+            const filePath = join(targetDir, name);
+            const stats = await stat(filePath);
+
+            // Normalize path for the frontend: hide the uploads/ prefix only,
+            // preserve user_123/ and all sub-folder structure.
+            const normalizedPath = filePath.replace(/\\/g, '/').replace(/^uploads\//, '');
+
+            return {
+              id: name,
+              name,
+              displayName: name, // overridden below for user_* folders once userMap resolves
+              path: normalizedPath,
+              size: stats.size,
+              isDirectory: stats.isDirectory(),
+              createdAt: stats.birthtime,
+              updatedAt: stats.mtime,
+            };
+          } finally {
+            statSemaphore.release();
+          }
+        }),
+      ),
+    ]);
+
+    // Patch displayName for user folders now that userMap is resolved.
+    if (atRoot && userIdsToLookup.length > 0) {
+      for (const file of files) {
+        if (file.name.startsWith('user_')) {
+          const username = userMap[file.name.replace('user_', '')];
+          if (username) file.displayName = `📁 ${username} (Private)`;
+        }
+      }
+    }
+
+    // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
+    // This avoids redundant CPU usage and allows dynamic sorting without additional API calls
 
     const duration = Date.now() - startTime;
     logger.info('GET /api/files - Success', {
