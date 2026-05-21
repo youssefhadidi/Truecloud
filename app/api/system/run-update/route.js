@@ -19,7 +19,6 @@ async function runUpdateProcess() {
     { name: STEPS.PULLING, command: 'bun', args: ['run', 'pull'] },
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
     { name: STEPS.REBUILDING, command: 'sh', args: ['-c', 'SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all'] },
-    { name: STEPS.DB_PUSH, command: 'bun', args: ['run', 'db:push'] },
     { name: STEPS.DB_MIGRATE, command: 'bun', args: ['run', 'db:migrate'] },
     { name: STEPS.BUILDING, command: 'bun', args: ['run', 'build'] },
     { name: STEPS.RESTARTING, command: 'bun', args: ['run', 'restart'] },
