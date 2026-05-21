@@ -4,10 +4,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { AudioPlayer } from './viewers/AudioPlayer';
+import { isAiSupported } from '@/lib/ai/fileTypes';
+import AiChatPanel from './AiChatPanel';
 
 const VideoPlayer = dynamic(
   () => import('./viewers/VideoPlayer').then((m) => ({ default: m.VideoPlayer })),
@@ -89,8 +91,21 @@ function UnsupportedViewer({ file, getFileUrl }) {
 
 export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
   const [contextMenu, setContextMenu] = useState(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
+
+  // The AI chat is only available for authenticated users (not share visitors)
+  // and only for file types Claude can read (images, PDFs, text, xlsx).
+  const aiAvailable = !shareToken && viewerFile && isAiSupported(viewerFile.name);
+  const aiFilePath = viewerFile
+    ? (currentPath ? `${currentPath}/${viewerFile.name}` : viewerFile.name).replace(/\/+/g, '/').replace(/^\//, '')
+    : '';
+
+  // Close the chat panel when navigating to a different file
+  useEffect(() => {
+    setAiOpen(false);
+  }, [viewerFile?.id]);
 
   const { isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen, stripRef, scrollTimeoutRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
     useMediaViewerState(viewerFile, viewableFiles);
@@ -238,6 +253,17 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
               )}
             </div>
             <div className="mv-header__actions">
+              {aiAvailable && (
+                <button
+                  type="button"
+                  className="mv-icon-btn"
+                  title={aiOpen ? 'Hide Claude' : 'Ask Claude about this file'}
+                  onClick={() => setAiOpen((v) => !v)}
+                  style={aiOpen ? { color: 'var(--accent)' } : undefined}
+                >
+                  <FiMessageSquare size={16} />
+                </button>
+              )}
               <button type="button" className="mv-icon-btn" title="Download" onClick={handleDownload}>
                 <FiDownload size={16} />
               </button>
@@ -301,6 +327,15 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             />
           )}
 
+          {aiAvailable && aiOpen && (
+            <AiChatPanel
+              filePath={aiFilePath}
+              fileName={viewerFile.name}
+              isMobile={isMobile}
+              onClose={() => setAiOpen(false)}
+            />
+          )}
+
           <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
         </div>
       </div>
@@ -321,6 +356,17 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           )}
         </div>
         <div className="mv-header__actions">
+          {aiAvailable && (
+            <button
+              type="button"
+              className="mv-icon-btn"
+              title={aiOpen ? 'Hide Claude' : 'Ask Claude about this file'}
+              onClick={() => setAiOpen((v) => !v)}
+              style={aiOpen ? { color: 'var(--accent)' } : undefined}
+            >
+              <FiMessageSquare size={16} />
+            </button>
+          )}
           <button type="button" className="mv-icon-btn" title="Download" onClick={handleDownload}>
             <FiDownload size={16} />
           </button>
@@ -381,6 +427,15 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           onSelect={onSelectFile}
           onScroll={handleStripScroll}
           stripRef={stripRef}
+        />
+      )}
+
+      {aiAvailable && aiOpen && (
+        <AiChatPanel
+          filePath={aiFilePath}
+          fileName={viewerFile.name}
+          isMobile={isMobile}
+          onClose={() => setAiOpen(false)}
         />
       )}
 

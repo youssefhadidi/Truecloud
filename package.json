@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.277.0",
+  "version": "1.278.0",
   "private": true,
   "scripts": {
     "dev": "bun server.js",
@@ -24,6 +24,7 @@
     "module:list": "bun scripts/module-manager.js list"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@prisma/client": "^5.22.0",
     "@reduxjs/toolkit": "^2.11.2",
     "@tanstack/react-query": "^5.90.21",

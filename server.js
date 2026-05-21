@@ -32,6 +32,35 @@ const handle = app.getRequestHandler();
 // Unified WebSocket clients set - all messages route through here
 const wsClients = new Set();
 
+// Per-user index for targeted broadcasts (AI chat streams, etc.). Share-token
+// sockets are not indexed here; AI features are session-only.
+const userWsClients = new Map();
+
+function addUserWs(userId, ws) {
+  if (!userId) return;
+  let set = userWsClients.get(userId);
+  if (!set) { set = new Set(); userWsClients.set(userId, set); }
+  set.add(ws);
+}
+
+function removeUserWs(ws) {
+  const userId = ws.userId;
+  if (!userId) return;
+  const set = userWsClients.get(userId);
+  if (!set) return;
+  set.delete(ws);
+  if (set.size === 0) userWsClients.delete(userId);
+}
+
+global.broadcastToUser = (userId, message) => {
+  const set = userWsClients.get(userId);
+  if (!set) return;
+  const frame = JSON.stringify(message);
+  set.forEach((client) => {
+    if (client.readyState === 1) client.send(frame);
+  });
+};
+
 // Clients that have subscribed to system-metrics (opt-in polling)
 const metricsSubscribers = new Set();
 
@@ -169,12 +198,15 @@ loadEsModules().then(() => {
 
   const wss = new WebSocketServer({ noServer: true });
 
-  // Authenticate WebSocket upgrade requests
+  // Authenticate WebSocket upgrade requests. Returns the authenticated userId
+  // when a valid NextAuth session is present, or `'share'` for share-token
+  // sessions (which don't have a user id but are allowed to connect for
+  // generic broadcasts like file-change). Returns null when unauthenticated.
   async function authenticateWsUpgrade(request) {
     // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
     try {
       const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-      if (token) return true;
+      if (token?.id) return { userId: token.id };
     } catch {
       // No valid session, continue to share check
     }
@@ -187,13 +219,13 @@ loadEsModules().then(() => {
     if (shareToken && sharePassword) {
       try {
         const result = await verifyShare(shareToken, sharePassword);
-        if (result.valid) return true;
+        if (result.valid) return { userId: null };
       } catch {
         // Share verification failed
       }
     }
 
-    return false;
+    return null;
   }
 
   server.on('upgrade', (request, socket, head) => {
@@ -204,8 +236,8 @@ loadEsModules().then(() => {
       return;
     }
 
-    authenticateWsUpgrade(request).then((authenticated) => {
-      if (!authenticated) {
+    authenticateWsUpgrade(request).then((authResult) => {
+      if (!authResult) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
         return;
@@ -213,7 +245,9 @@ loadEsModules().then(() => {
 
       wss.handleUpgrade(request, socket, head, (ws) => {
         ws.isAlive = true;
+        ws.userId = authResult.userId || null;
         wsClients.add(ws);
+        addUserWs(ws.userId, ws);
 
         ws.send(JSON.stringify({
           type: 'update-status',
@@ -266,6 +300,7 @@ loadEsModules().then(() => {
 
         ws.on('close', () => {
           wsClients.delete(ws);
+          removeUserWs(ws);
           if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
             import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
           }
@@ -276,6 +311,7 @@ loadEsModules().then(() => {
 
         ws.on('error', () => {
           wsClients.delete(ws);
+          removeUserWs(ws);
           if (metricsSubscribers.delete(ws) && metricsSubscribers.size === 0) {
             import('./lib/metricsCollector.js').then(({ stopMetricsCollector }) => stopMetricsCollector());
           }
@@ -296,6 +332,7 @@ loadEsModules().then(() => {
     wsClients.forEach((ws) => {
       if (ws.isAlive === false) {
         wsClients.delete(ws);
+        removeUserWs(ws);
         ws.terminate();
         return;
       }

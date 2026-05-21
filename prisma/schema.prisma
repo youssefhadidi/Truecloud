@@ -32,6 +32,8 @@ model User {
   sessions    Session[]
   shares      Share[]
   favorites   Favorite[]
+  aiChats     AiChat[]
+  aiUsage     AiUsage[]
 }
 
 model Session {
@@ -140,6 +142,67 @@ model SmbShare {
   validUsers String   @default("[]") // JSON array of usernames (empty = all users)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model AiChat {
+  id        String      @id @default(cuid())
+  ownerId   String
+  filePath  String      // normalized path inside uploads, e.g. "user_abc/docs/report.pdf"
+  model     String      @default("")  // last model used in this chat
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  owner    User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@unique([ownerId, filePath])
+  @@index([ownerId])
+}
+
+model AiMessage {
+  id               String   @id @default(cuid())
+  chatId           String
+  role             String   // "user" | "assistant"
+  content          String   // assistant text or user prompt
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  costUsd          Float    @default(0)
+  createdAt        DateTime @default(now())
+
+  chat AiChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+}
+
+// Cache of files uploaded to Anthropic's Files API so we don't re-upload on every turn.
+// Busted when the local file's mtime or size changes.
+model AiFileUpload {
+  id              String   @id @default(cuid())
+  filePath        String   @unique // normalized path inside uploads
+  fileSize        BigInt
+  mtimeMs         BigInt
+  anthropicFileId String
+  mediaType       String   // mime type sent to Anthropic
+  uploadedAt      DateTime @default(now())
+}
+
+// One row per API call. Used for daily/monthly spend rollups and per-user quotas.
+model AiUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  model            String
+  inputTokens      Int
+  outputTokens     Int
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  costUsd          Float
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model MinecraftServer {

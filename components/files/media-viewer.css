@@ -136,6 +136,7 @@
 }
 
 .mv-sheet {
+  position: relative;
   width: min(1600px, 95vw);
   height: min(90vh, 1000px);
   background: var(--mv-surface);
