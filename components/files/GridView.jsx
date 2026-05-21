@@ -478,6 +478,7 @@ const GridItem = memo(
               {showThumbnail ? (
                 <>
                   <LazyImage
+                    key={item.id}
                     src=""
                     alt={item.name}
                     className=""
