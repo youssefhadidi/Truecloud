@@ -78,6 +78,7 @@ function buildFirstTurnPrompt({ kind, fileName, absolutePath, csvText, userMessa
 }
 
 export async function POST(req) {
+  try {
   const { session, error: authError } = await requireAuthNoActivity();
   if (authError) return authError;
 
@@ -200,51 +201,74 @@ export async function POST(req) {
   })();
 
   return NextResponse.json({ ok: true, requestId, chatId: chat.id });
+  } catch (err) {
+    console.error('[POST /api/ai/chat] error:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Internal server error', kind: err?.name || 'Error' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function GET(req) {
-  const { session, error: authError } = await requireAuthNoActivity();
-  if (authError) return authError;
+  try {
+    const { session, error: authError } = await requireAuthNoActivity();
+    if (authError) return authError;
 
-  const url = new URL(req.url);
-  const filePath = url.searchParams.get('filePath') || '';
-  const resolved = await resolveAndAuthorizePath(session, filePath);
-  if (resolved.error) return resolved.error;
+    const url = new URL(req.url);
+    const filePath = url.searchParams.get('filePath') || '';
+    const resolved = await resolveAndAuthorizePath(session, filePath);
+    if (resolved.error) return resolved.error;
 
-  const chat = await prisma.aiChat.findUnique({
-    where: { ownerId_filePath: { ownerId: session.user.id, filePath: resolved.normalized } },
-    include: { messages: { orderBy: { createdAt: 'asc' } } },
-  });
+    const chat = await prisma.aiChat.findUnique({
+      where: { ownerId_filePath: { ownerId: session.user.id, filePath: resolved.normalized } },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    });
 
-  if (!chat) return NextResponse.json({ chat: null, messages: [] });
+    if (!chat) return NextResponse.json({ chat: null, messages: [] });
 
-  return NextResponse.json({
-    chat: {
-      id: chat.id,
-      model: chat.model,
-      createdAt: chat.createdAt,
-      updatedAt: chat.updatedAt,
-    },
-    messages: chat.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt,
-    })),
-  });
+    return NextResponse.json({
+      chat: {
+        id: chat.id,
+        model: chat.model,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt,
+      },
+      messages: chat.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[GET /api/ai/chat] error:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Internal server error', kind: err?.name || 'Error' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function DELETE(req) {
-  const { session, error: authError } = await requireAuthNoActivity();
-  if (authError) return authError;
+  try {
+    const { session, error: authError } = await requireAuthNoActivity();
+    if (authError) return authError;
 
-  const url = new URL(req.url);
-  const filePath = url.searchParams.get('filePath') || '';
-  const resolved = await resolveAndAuthorizePath(session, filePath);
-  if (resolved.error) return resolved.error;
+    const url = new URL(req.url);
+    const filePath = url.searchParams.get('filePath') || '';
+    const resolved = await resolveAndAuthorizePath(session, filePath);
+    if (resolved.error) return resolved.error;
 
-  await prisma.aiChat.deleteMany({
-    where: { ownerId: session.user.id, filePath: resolved.normalized },
-  });
-  return NextResponse.json({ ok: true });
+    await prisma.aiChat.deleteMany({
+      where: { ownerId: session.user.id, filePath: resolved.normalized },
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('[DELETE /api/ai/chat] error:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Internal server error', kind: err?.name || 'Error' },
+      { status: 500 },
+    );
+  }
 }
