@@ -6,6 +6,20 @@ import { prisma } from '@/lib/prisma';
 import { clearLockStatusCache } from '@/lib/authOptions';
 import bcryptjs from 'bcryptjs';
 
+// After this many consecutive failures, start blocking PIN entry with
+// exponentially growing delays. 4-digit PIN is small keyspace, so we cap
+// throughput aggressively.
+const FAILURE_GRACE = 3;
+const BASE_LOCKOUT_MS = 30 * 1000; // 30s after the 4th failure
+const MAX_LOCKOUT_MS = 60 * 60 * 1000; // cap at 1 hour
+
+function computeLockoutMs(failures) {
+  if (failures <= FAILURE_GRACE) return 0;
+  const exponent = failures - FAILURE_GRACE - 1;
+  const ms = BASE_LOCKOUT_MS * Math.pow(2, exponent);
+  return Math.min(ms, MAX_LOCKOUT_MS);
+}
+
 /**
  * POST /api/account/verify-pin
  * Verify the 4-digit session lock PIN
@@ -29,7 +43,12 @@ export async function POST(req) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { sessionLockPin: true, sessionLockEnabled: true },
+      select: {
+        sessionLockPin: true,
+        sessionLockEnabled: true,
+        pinFailures: true,
+        pinLockedUntil: true,
+      },
     });
 
     if (!user || !user.sessionLockEnabled || !user.sessionLockPin) {
@@ -39,21 +58,46 @@ export async function POST(req) {
       );
     }
 
-    const isValid = await bcryptjs.compare(pin, user.sessionLockPin);
-
-    if (!isValid) {
+    // Enforce any existing lockout window before doing any bcrypt work.
+    const now = Date.now();
+    if (user.pinLockedUntil && new Date(user.pinLockedUntil).getTime() > now) {
+      const retryAfterSec = Math.ceil((new Date(user.pinLockedUntil).getTime() - now) / 1000);
       return NextResponse.json(
-        { success: false },
-        { status: 200 }
+        { success: false, lockedOut: true, retryAfter: retryAfterSec },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } }
       );
     }
 
-    // PIN is correct - clear lock and reset activity timer
+    const isValid = await bcryptjs.compare(pin, user.sessionLockPin);
+
+    if (!isValid) {
+      const failures = (user.pinFailures || 0) + 1;
+      const lockoutMs = computeLockoutMs(failures);
+      const lockedUntil = lockoutMs > 0 ? new Date(now + lockoutMs) : null;
+
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { pinFailures: failures, pinLockedUntil: lockedUntil },
+      });
+
+      if (lockoutMs > 0) {
+        const retryAfterSec = Math.ceil(lockoutMs / 1000);
+        return NextResponse.json(
+          { success: false, lockedOut: true, retryAfter: retryAfterSec },
+          { status: 429, headers: { 'Retry-After': String(retryAfterSec) } }
+        );
+      }
+      return NextResponse.json({ success: false }, { status: 200 });
+    }
+
+    // PIN is correct - clear lock and reset activity timer + failure counter
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
         isSessionLocked: false,
         lastActivityAt: new Date(),
+        pinFailures: 0,
+        pinLockedUntil: null,
       },
     });
 

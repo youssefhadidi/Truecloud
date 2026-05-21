@@ -4,7 +4,8 @@
 
 import { createContext, useContext, useCallback, useEffect, useState } from 'react';
 import { useStableSession, useVerifyPin, useLockAccount, useUpdateAccountSettings } from '@/lib/api/session';
-import { setupAxiosInterceptor } from '@/lib/axios';
+import { setSessionLockedHandler } from '@/lib/axiosConfig';
+import { useActivityHeartbeat } from '@/hooks/useActivityHeartbeat';
 
 const SessionLockContext = createContext();
 
@@ -18,30 +19,43 @@ export function SessionLockProvider({ children }) {
   const updateAccountSettingsMutation = useUpdateAccountSettings();
 
   useEffect(() => {
-    // Setup axios interceptor to catch 423 (Locked) responses
-    setupAxiosInterceptor(update);
+    // Register handler so the default axios interceptor can flip the UI
+    // into locked state immediately on a 423 response.
+    setSessionLockedHandler(update);
+    return () => setSessionLockedHandler(null);
+  }, [update]);
 
+  useEffect(() => {
     if (status !== 'loading') {
       setIsLoading(false);
     }
-  }, [status, update]);
+  }, [status]);
 
   const isLocked = session?.user?.isLocked ?? false;
+  const sessionLockEnabled = session?.user?.sessionLockEnabled ?? false;
+  const isAuthenticated = status === 'authenticated';
+
+  // Heartbeat only when the lock is actually configured AND the session is
+  // currently usable (authenticated and not locked). No point pinging
+  // activity from the lock screen or before login.
+  useActivityHeartbeat({ enabled: isAuthenticated && sessionLockEnabled && !isLocked });
 
   const unlock = useCallback(
     async (pin) => {
       return new Promise((resolve) => {
         verifyPinMutation.mutate(pin, {
           onSuccess: (data) => {
-            if (data.success) {
-              resolve(true);
+            if (data?.success) {
+              resolve({ success: true });
+            } else if (data?.lockedOut) {
+              resolve({ success: false, lockedOut: true, retryAfter: data.retryAfter });
             } else {
-              resolve(false);
+              resolve({ success: false });
             }
           },
           onError: () => {
             console.error('Error unlocking');
-            resolve(false);
+            resolve({ success: false });
           },
         });
       });
@@ -67,12 +81,10 @@ export function SessionLockProvider({ children }) {
     async (newSettings) => {
       return new Promise((resolve) => {
         updateAccountSettingsMutation.mutate(newSettings, {
-          onSuccess: () => {
-            resolve(true);
-          },
+          onSuccess: () => resolve({ success: true }),
           onError: (error) => {
-            console.error('Error updating settings:', error);
-            resolve(false);
+            const message = error?.response?.data?.error || 'Failed to save settings';
+            resolve({ success: false, error: message });
           },
         });
       });

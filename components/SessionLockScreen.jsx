@@ -8,17 +8,38 @@ import { FiLock } from 'react-icons/fi';
 import { useLogout } from '@/hooks/useLogout';
 import Spinner from '@/components/ui/Spinner';
 
+function formatRetry(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.ceil(seconds / 60);
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'}`;
+  const h = Math.ceil(m / 60);
+  return `${h} hour${h === 1 ? '' : 's'}`;
+}
+
 export default function SessionLockScreen({ children }) {
   const logout = useLogout();
   const { isLocked, isLoading, unlock } = useSessionLock();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [lockoutUntil, setLockoutUntil] = useState(0); // epoch ms
+  const [now, setNow] = useState(Date.now());
   const inputRef = useRef(null);
+
+  // Tick once per second while a lockout window is active so the countdown
+  // re-renders. Stops when the window expires.
+  useEffect(() => {
+    if (!lockoutUntil || lockoutUntil <= Date.now()) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lockoutUntil]);
+
+  const lockoutRemaining = lockoutUntil > now ? Math.ceil((lockoutUntil - now) / 1000) : 0;
+  const isLockedOut = lockoutRemaining > 0;
 
   const handleKeyDown = useCallback(
     async (e) => {
-      if (!isLocked) return;
+      if (!isLocked || isLockedOut) return;
       const key = e.key;
       if (key === 'Backspace') {
         e.preventDefault();
@@ -33,17 +54,23 @@ export default function SessionLockScreen({ children }) {
         setPin(newPin);
         setError('');
         if (newPin.length === 4) {
-          const success = await unlock(newPin);
-          if (!success) {
+          const result = await unlock(newPin);
+          if (!result.success) {
             setPin('');
-            setError('Incorrect PIN');
             setIsShaking(true);
             setTimeout(() => setIsShaking(false), 500);
+            if (result.lockedOut) {
+              setLockoutUntil(Date.now() + (result.retryAfter || 30) * 1000);
+              setNow(Date.now());
+              setError(`Too many attempts. Try again in ${formatRetry(result.retryAfter || 30)}.`);
+            } else {
+              setError('Incorrect PIN');
+            }
           }
         }
       }
     },
-    [isLocked, pin, unlock],
+    [isLocked, isLockedOut, pin, unlock],
   );
 
   useEffect(() => {
@@ -51,6 +78,17 @@ export default function SessionLockScreen({ children }) {
       setPin('');
       setError('');
     }
+  }, [isLocked]);
+
+  // Pause any audio/video the moment the session locks. The lock screen is
+  // an overlay, so without this an in-flight stream would continue playing
+  // audibly behind it.
+  useEffect(() => {
+    if (!isLocked) return;
+    const media = document.querySelectorAll('audio, video');
+    media.forEach((el) => {
+      try { el.pause(); } catch {}
+    });
   }, [isLocked]);
 
   useEffect(() => {
@@ -62,23 +100,31 @@ export default function SessionLockScreen({ children }) {
 
   const handleInputChange = useCallback(
     async (e) => {
+      if (isLockedOut) {
+        e.target.value = '';
+        return;
+      }
       const value = e.target.value.replace(/\D/g, '').slice(0, 4);
       setPin(value);
       setError('');
       if (value.length === 4) {
-        const success = await unlock(value);
-        if (!success) {
-          e.target.value = '';
+        const result = await unlock(value);
+        e.target.value = '';
+        if (!result.success) {
           setPin('');
-          setError('Incorrect PIN');
           setIsShaking(true);
           setTimeout(() => setIsShaking(false), 500);
-        } else {
-          e.target.value = '';
+          if (result.lockedOut) {
+            setLockoutUntil(Date.now() + (result.retryAfter || 30) * 1000);
+            setNow(Date.now());
+            setError(`Too many attempts. Try again in ${formatRetry(result.retryAfter || 30)}.`);
+          } else {
+            setError('Incorrect PIN');
+          }
         }
       }
     },
-    [unlock],
+    [isLockedOut, unlock],
   );
 
   if (isLoading) {
@@ -202,12 +248,14 @@ export default function SessionLockScreen({ children }) {
 
           {error && (
             <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--danger)', margin: '0 0 16px' }}>
-              {error}
+              {isLockedOut
+                ? `Too many attempts. Try again in ${formatRetry(lockoutRemaining)}.`
+                : error}
             </p>
           )}
 
           <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-3)', margin: '0 0 20px' }}>
-            Type your 4-digit PIN using your keyboard.
+            {isLockedOut ? 'PIN entry is temporarily disabled.' : 'Type your 4-digit PIN using your keyboard.'}
           </p>
 
           <button

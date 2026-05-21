@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { clearLockStatusCache } from '@/lib/authOptions';
 import bcryptjs from 'bcryptjs';
 
+const MAX_TIMEOUT_MINUTES = 24 * 60; // 24 hours
+
 /**
  * GET /api/account/settings
  * Returns user's session lock settings (doesn't reset activity timer)
@@ -43,7 +45,12 @@ export async function GET(req) {
 /**
  * PUT /api/account/settings
  * Update session lock settings (enable/disable, timeout, PIN)
- * Resets activity timer on success but allowed when session is locked
+ *
+ * Security: when the lock is already configured (sessionLockEnabled === true
+ * AND sessionLockPin is set), the caller must supply `currentPin` in the body
+ * and we verify it before applying any change. This prevents an attacker with
+ * an authenticated cookie (e.g. via devtools on a locked tab) from disabling
+ * the lock or overwriting the PIN.
  */
 export async function PUT(req) {
   const { session, error } = await requireAuthAllowLocked();
@@ -51,7 +58,30 @@ export async function PUT(req) {
 
   try {
     const body = await req.json();
-    const { sessionLockEnabled, sessionLockTimeout, sessionLockPin } = body;
+    const { sessionLockEnabled, sessionLockTimeout, sessionLockPin, currentPin } = body;
+
+    const existing = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { sessionLockEnabled: true, sessionLockPin: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const lockIsConfigured = existing.sessionLockEnabled && !!existing.sessionLockPin;
+    if (lockIsConfigured) {
+      if (typeof currentPin !== 'string' || currentPin.length !== 4 || !/^\d+$/.test(currentPin)) {
+        return NextResponse.json(
+          { error: 'Current PIN is required to change lock settings' },
+          { status: 400 }
+        );
+      }
+      const ok = await bcryptjs.compare(currentPin, existing.sessionLockPin);
+      if (!ok) {
+        return NextResponse.json({ error: 'Current PIN is incorrect' }, { status: 401 });
+      }
+    }
 
     const updateData = {};
 
@@ -59,7 +89,13 @@ export async function PUT(req) {
       updateData.sessionLockEnabled = sessionLockEnabled;
     }
 
-    if (typeof sessionLockTimeout === 'number' && sessionLockTimeout > 0) {
+    if (typeof sessionLockTimeout === 'number' && Number.isFinite(sessionLockTimeout)) {
+      if (sessionLockTimeout <= 0 || sessionLockTimeout > MAX_TIMEOUT_MINUTES) {
+        return NextResponse.json(
+          { error: `Timeout must be between 1 and ${MAX_TIMEOUT_MINUTES} minutes` },
+          { status: 400 }
+        );
+      }
       updateData.sessionLockTimeout = sessionLockTimeout;
     }
 

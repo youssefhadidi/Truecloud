@@ -43,11 +43,16 @@ export default function AccountPage() {
   const { theme, setTheme } = useTheme();
   const [isEnabled, setIsEnabled] = useState(false);
   const [timeoutMins, setTimeoutMins] = useState(60);
+  const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // True if the user already has a PIN configured server-side. In that case
+  // we must prompt for the current PIN before any change is applied.
+  const lockIsConfigured = !!settings?.sessionLockEnabled;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -76,19 +81,28 @@ export default function AccountPage() {
       }
     }
 
+    if (lockIsConfigured) {
+      if (currentPin.length !== 4 || !/^\d+$/.test(currentPin)) {
+        setPinError('Enter your current 4-digit PIN to save changes');
+        return;
+      }
+    }
+
     setIsSaving(true);
     const updateData = { sessionLockEnabled: isEnabled, sessionLockTimeout: timeoutMins };
     if (newPin) updateData.sessionLockPin = newPin;
-    const success = await updateSettings(updateData);
+    if (lockIsConfigured) updateData.currentPin = currentPin;
+    const result = await updateSettings(updateData);
     setIsSaving(false);
 
-    if (success) {
+    if (result.success) {
       setSuccessMessage('Settings saved successfully');
+      setCurrentPin('');
       setNewPin('');
       setConfirmPin('');
       window.setTimeout(() => setSuccessMessage(''), 3000);
     } else {
-      setPinError('Failed to save settings');
+      setPinError(result.error || 'Failed to save settings');
     }
   };
 
@@ -190,6 +204,22 @@ export default function AccountPage() {
                   </div>
                 </div>
               </>
+            )}
+
+            {lockIsConfigured && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                <Field
+                  label="Current PIN"
+                  type="password"
+                  value={currentPin}
+                  onChange={(v) => setCurrentPin(v.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••"
+                  autoComplete="off"
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
+                  Required to change any lock setting or disable the lock.
+                </div>
+              </div>
             )}
 
             {pinError && <StatusMessage kind="error">{pinError}</StatusMessage>}
