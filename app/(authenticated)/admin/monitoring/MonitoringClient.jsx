@@ -344,16 +344,36 @@ export default function MonitoringClient() {
 
             {/* CPU */}
             <Card title="CPU" icon={FiCpu}>
-              <div className="flex items-end justify-between mb-2">
-                <span className={`text-3xl font-bold font-mono ${usageTextColor(latest.cpu.overall)}`}>
-                  {latest.cpu.overall.toFixed(1)}%
-                </span>
-                <span className="text-xs text-gray-500">
-                  {latest.cpu.cores.length} cores
-                </span>
-              </div>
-              <Sparkline data={h.cpuOverall} color="#3b82f6" max={100} height={48} />
-              <CoreGrid cores={latest.cpu.cores} />
+              {(() => {
+                const freqs = latest.cpu.cores.map((c) => c.freq).filter((f) => f > 0);
+                const hasFreq = freqs.length > 0;
+                const avgFreq = hasFreq ? freqs.reduce((a, b) => a + b, 0) / freqs.length : 0;
+                const minFreq = hasFreq ? Math.min(...freqs) : 0;
+                const maxFreq = hasFreq ? Math.max(...freqs) : 0;
+                const fmt = (mhz) => (mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz} MHz`);
+                return (
+                  <>
+                    <div className="flex items-end justify-between mb-1">
+                      <span className={`text-3xl font-bold font-mono ${usageTextColor(latest.cpu.overall)}`}>
+                        {latest.cpu.overall.toFixed(1)}%
+                      </span>
+                      <div className="text-right">
+                        {hasFreq && (
+                          <div className="text-lg font-mono text-blue-300 leading-tight">{fmt(avgFreq)}</div>
+                        )}
+                        <div className="text-xs text-gray-500">{latest.cpu.cores.length} cores</div>
+                      </div>
+                    </div>
+                    {hasFreq && minFreq !== maxFreq && (
+                      <div className="text-[11px] text-gray-500 font-mono mb-2">
+                        min {fmt(minFreq)} · max {fmt(maxFreq)}
+                      </div>
+                    )}
+                    <Sparkline data={h.cpuOverall} color="#3b82f6" max={100} height={48} />
+                    <CoreGrid cores={latest.cpu.cores} />
+                  </>
+                );
+              })()}
             </Card>
 
             {/* Memory */}
