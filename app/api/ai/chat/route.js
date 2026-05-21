@@ -15,12 +15,21 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 const UPLOAD_DIR_ABS = resolve(process.cwd(), UPLOAD_DIR);
 
-const ALLOWED_MODELS = new Set(['sonnet', 'haiku', 'opus']);
-const DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL || 'sonnet';
+// Tight replacement for Claude Code's verbose default system prompt. Saves
+// thousands of input tokens per turn at the cost of removing coding-specific
+// scaffolding we don't need for file Q&A.
+const SYSTEM_PROMPT =
+  "You are a file Q&A assistant inside Truecloud, a personal cloud storage app. " +
+  "The user attaches one file per chat and asks questions about it. " +
+  "When given a file path, use the Read tool once to load it, then answer concisely and grounded in the file's contents. " +
+  "If the file does not contain the answer, say so plainly. Do not propose code edits or run any tool other than Read.";
 
-function resolveModel(requested) {
-  if (requested && ALLOWED_MODELS.has(requested)) return requested;
-  return DEFAULT_MODEL;
+// Model is forced to Haiku 4.5 for now. The dropdown in the UI is also hidden;
+// remove this hardcode and reintroduce ALLOWED_MODELS if/when we expose it.
+const FORCED_MODEL = process.env.AI_DEFAULT_MODEL || 'claude-haiku-4-5-20251001';
+
+function resolveModel(_requested) {
+  return FORCED_MODEL;
 }
 
 async function resolveAndAuthorizePath(session, rawPath) {
@@ -157,6 +166,7 @@ export async function POST(req) {
     try {
       const result = await runClaude({
         prompt,
+        systemPrompt: SYSTEM_PROMPT,
         model,
         resumeSessionId: chat.claudeSessionId || undefined,
         allowedDirs: [UPLOAD_DIR_ABS],

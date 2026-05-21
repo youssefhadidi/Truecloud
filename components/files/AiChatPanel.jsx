@@ -5,12 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FiX, FiSend, FiTrash2, FiAlertCircle } from 'react-icons/fi';
 import { useAiChat } from '@/hooks/useAiChat';
-
-const MODELS = [
-  { id: 'sonnet', label: 'Sonnet — recommended' },
-  { id: 'haiku', label: 'Haiku — faster' },
-  { id: 'opus', label: 'Opus — strongest' },
-];
+import MarkdownText from './MarkdownText';
 
 const iconBtn = {
   width: 28,
@@ -28,22 +23,35 @@ const iconBtn = {
 
 function MessageBubble({ role, content, pulsing }) {
   const isUser = role === 'user';
+  const baseStyle = {
+    alignSelf: isUser ? 'flex-end' : 'flex-start',
+    maxWidth: '88%',
+    background: isUser ? 'var(--accent)' : 'var(--surface-2)',
+    color: isUser ? '#fff' : 'var(--text)',
+    padding: '8px 12px',
+    borderRadius: 'var(--r-md)',
+    fontSize: 13,
+    lineHeight: 1.5,
+    wordBreak: 'break-word',
+  };
+
+  if (!content) {
+    return (
+      <div style={{ ...baseStyle, whiteSpace: 'pre-wrap' }}>
+        {pulsing ? <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Thinking…</span> : ''}
+      </div>
+    );
+  }
+
+  if (isUser) {
+    return (
+      <div style={{ ...baseStyle, whiteSpace: 'pre-wrap' }}>{content}</div>
+    );
+  }
+
   return (
-    <div
-      style={{
-        alignSelf: isUser ? 'flex-end' : 'flex-start',
-        maxWidth: '88%',
-        background: isUser ? 'var(--accent)' : 'var(--surface-2)',
-        color: isUser ? '#fff' : 'var(--text)',
-        padding: '8px 12px',
-        borderRadius: 'var(--r-md)',
-        fontSize: 13,
-        lineHeight: 1.5,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      {content || (pulsing ? <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Thinking…</span> : '')}
+    <div style={baseStyle}>
+      <MarkdownText text={content} />
     </div>
   );
 }
@@ -51,7 +59,6 @@ function MessageBubble({ role, content, pulsing }) {
 export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
   const { messages, streaming, streamingText, usage, error, send, clear, loadingHistory } = useAiChat(filePath);
   const [input, setInput] = useState('');
-  const [model, setModel] = useState(MODELS[0].id);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -63,7 +70,7 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    send(text, { model });
+    send(text);
   };
 
   const quotaText = usage
@@ -206,35 +213,6 @@ export default function AiChatPanel({ filePath, fileName, isMobile, onClose }) {
           gap: 8,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            fontSize: 11,
-            color: 'var(--text-3)',
-          }}
-        >
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            disabled={streaming}
-            style={{
-              flex: 1,
-              background: 'var(--surface-2)',
-              color: 'var(--text-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r-xs)',
-              padding: '4px 6px',
-              fontSize: 11,
-              fontFamily: 'inherit',
-            }}
-          >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
           <textarea
             value={input}
