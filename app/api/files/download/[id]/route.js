@@ -58,7 +58,9 @@ export async function GET(req, { params }) {
 
     const fileStats = await stat(filePath);
 
-    // If it's a directory, create a streaming zip archive
+    // If it's a directory, create a streaming zip archive.
+    // We use Readable.toWeb (pull-based) so client disconnect backpressures
+    // the archiver and triggers cancel() / destroy() — see lib/streamUtils.js.
     if (fileStats.isDirectory()) {
       const archive = archiver('zip', {
         zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
@@ -70,72 +72,36 @@ export async function GET(req, { params }) {
         aborted = true;
         logger.info('Download: aborting zip archive', { reason, path: filePath });
         try { archive.abort(); } catch {}
+        try { archive.destroy(); } catch {}
       };
 
-      // Next.js with a custom server doesn't always fire ReadableStream.cancel()
-      // on client disconnect, so listen to req.signal directly.
+      archive.on('error', (err) => logger.error('Download: archive error', { error: err.message }));
+      archive.on('warning', (err) => {
+        if (err.code === 'ENOENT') {
+          logger.warn('Download: archive warning (missing file)', { message: err.message });
+        } else {
+          logger.error('Download: archive warning', { error: err.message });
+          abortArchive('archive-warning');
+        }
+      });
+      archive.on('close', () => logger.debug?.('Download: archive closed', { path: filePath }));
+
+      // Belt-and-suspenders: also listen to req.signal in case Readable.toWeb's
+      // cancel propagation lags behind the actual disconnect.
       if (req.signal) {
         if (req.signal.aborted) abortArchive('signal-already-aborted');
         else req.signal.addEventListener('abort', () => abortArchive('req.signal abort'), { once: true });
       }
 
-      // Create a ReadableStream that pipes from the archive with proper error handling
-      const stream = new ReadableStream({
-        cancel() {
-          abortArchive('stream.cancel');
-        },
+      try {
+        archive.directory(filePath, false);
+        archive.finalize();
+      } catch (err) {
+        logger.error('Download: error finalizing archive', { error: err.message });
+        abortArchive('finalize-throw');
+      }
 
-        start(controller) {
-          let isErrored = false;
-
-          archive.on('data', (chunk) => {
-            try {
-              if (!isErrored) {
-                controller.enqueue(chunk);
-              }
-            } catch (err) {
-              logger.error('Download: error enqueueing archive chunk', { error: err.message });
-              isErrored = true;
-              controller.error(err);
-              archive.abort();
-            }
-          });
-
-          archive.on('end', () => {
-            if (!isErrored) {
-              controller.close();
-            }
-          });
-
-          archive.on('error', (err) => {
-            logger.error('Download: archive error', { error: err.message });
-            if (!isErrored) {
-              isErrored = true;
-              controller.error(err);
-            }
-          });
-
-          archive.on('warning', (err) => {
-            if (err.code === 'ENOENT') {
-              logger.warn('Download: archive warning (missing file)', { message: err.message });
-            } else {
-              logger.error('Download: archive warning', { error: err.message });
-              isErrored = true;
-              controller.error(err);
-              archive.abort();
-            }
-          });
-
-          try {
-            archive.directory(filePath, false);
-            archive.finalize();
-          } catch (err) {
-            logger.error('Download: error finalizing archive', { error: err.message });
-            isErrored = true;
-            controller.error(err);
-          }
-        },
-      });
+      const stream = nodeToWebStream(archive);
 
       return new Response(stream, {
         headers: {
