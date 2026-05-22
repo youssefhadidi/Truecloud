@@ -7,42 +7,14 @@ process.env.VIPS_CONCURRENCY = process.env.VIPS_CONCURRENCY || '1';
 process.env.OMP_NUM_THREADS = process.env.OMP_NUM_THREADS || '1';
 
 const { createServer } = require('http');
-const fs = require('fs');
-const path = require('path');
 const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream, stopLogStream } = require('./lib/logStreamManager');
 
-// Detect whether this boot followed an app update. We compare the current
-// package.json version against the version recorded at the previous boot
-// (stored in .app-version). When they differ, we mark `bootWasUpdate` so
-// the WS upgrade handler can send `app-updated` to clients reconnecting
-// after the systemctl restart — the in-flight broadcast from finishUpdate()
-// races the SIGTERM and often does not reach clients.
-const APP_VERSION_FILE = path.join(process.cwd(), '.app-version');
+// The server's version of the bundle it last built. Clients send their own
+// version on WS connect (as ?v=...); a mismatch means the client tab is on
+// a stale bundle and we tell it to refresh.
 const CURRENT_APP_VERSION = require('./package.json').version;
-let bootWasUpdate = false;
-try {
-  const prev = fs.existsSync(APP_VERSION_FILE)
-    ? fs.readFileSync(APP_VERSION_FILE, 'utf8').trim()
-    : null;
-  if (prev && prev !== CURRENT_APP_VERSION) {
-    bootWasUpdate = true;
-    console.log(`[server] App updated: ${prev} -> ${CURRENT_APP_VERSION}`);
-  }
-  if (prev !== CURRENT_APP_VERSION) {
-    fs.writeFileSync(APP_VERSION_FILE, CURRENT_APP_VERSION, 'utf8');
-  }
-} catch (err) {
-  console.error('[server] Failed to read/write .app-version:', err.message);
-}
-
-// Stop notifying after this window so tabs opened long after the restart
-// (already on the new bundle) don't see a spurious "refresh" banner.
-const BOOT_UPDATE_WINDOW_MS = 2 * 60 * 1000;
-if (bootWasUpdate) {
-  setTimeout(() => { bootWasUpdate = false; }, BOOT_UPDATE_WINDOW_MS);
-}
 
 
 // Dynamic imports for ES modules
@@ -204,10 +176,6 @@ global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
 
-global.broadcastAppUpdated = () => {
-  broadcastMessage({ type: 'app-updated', payload: { at: Date.now() } });
-};
-
 global.broadcastUsbDrives = (drives) => {
   broadcastMessage({ type: 'usb-drives', payload: drives });
 };
@@ -276,6 +244,8 @@ loadEsModules().then(() => {
         return;
       }
 
+      const clientVersion = url.searchParams.get('v');
+
       wss.handleUpgrade(request, socket, head, (ws) => {
         ws.isAlive = true;
         ws.userId = authResult.userId || null;
@@ -292,7 +262,11 @@ loadEsModules().then(() => {
           payload: global.cacheGenerationStatus,
         }));
 
-        if (bootWasUpdate) {
+        // Client is on a stale bundle — tell it to refresh. Skip when the
+        // client didn't send a version (legacy bundle from before this check
+        // shipped) to avoid loops where the old code can't refresh into
+        // anything different anyway.
+        if (clientVersion && clientVersion !== CURRENT_APP_VERSION) {
           ws.send(JSON.stringify({
             type: 'app-updated',
             payload: { at: Date.now(), version: CURRENT_APP_VERSION },

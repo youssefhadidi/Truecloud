@@ -3,6 +3,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { APP_VERSION } from '@/lib/appVersion';
 
 /**
  * Unified WebSocket Manager
@@ -50,14 +51,12 @@ export function WebSocketProvider({ children }) {
 
     try {
       const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      let wsUrl = `${protocol}//${window.location.host}/api/ws`;
-
-      // Append share credentials as query params if set
+      const params = new URLSearchParams({ v: APP_VERSION });
       if (shareCredentialsRef.current) {
-        const { token, password } = shareCredentialsRef.current;
-        const params = new URLSearchParams({ token, password });
-        wsUrl += `?${params.toString()}`;
+        params.set('token', shareCredentialsRef.current.token);
+        params.set('password', shareCredentialsRef.current.password);
       }
+      const wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
 
       const ws = new WebSocket(wsUrl);
 

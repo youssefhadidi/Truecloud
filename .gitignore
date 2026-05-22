@@ -52,10 +52,6 @@ pnpm-lock.yaml
 
 stream_cache
 
-# Tracks the package.json version of the last server boot so a fresh
-# boot can broadcast `app-updated` to reconnecting clients.
-.app-version
-
 # Installed modules (managed via admin panel)
 /app/(authenticated)/app/
 /app/api/modules/
