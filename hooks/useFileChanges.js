@@ -1,7 +1,6 @@
 /** @format */
 
 import { useEffect, useRef } from 'react';
-import { useStableSession } from '@/lib/api/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
@@ -9,21 +8,14 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
  * Hook to listen for real-time file changes via unified WebSocket
  *
  * Subscribes to 'file-change' messages from the app-level WebSocket connection.
- * Automatically invalidates React Query cache for affected paths.
- * Skips invalidation for changes made by the current user to avoid double invalidation.
+ * Automatically invalidates React Query cache for affected paths so other
+ * tabs/devices of the same user also refresh.
  */
 export function useFileChanges() {
-  const { data: session } = useStableSession();
   const queryClient = useQueryClient();
   const { subscribe } = useWebSocket();
-  const sessionRef = useRef(session);
   const pendingPathsRef = useRef(new Set());
   const flushTimerRef = useRef(null);
-
-  // Keep sessionRef in sync with session
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
 
   useEffect(() => {
     const flushInvalidations = () => {
@@ -35,12 +27,7 @@ export function useFileChanges() {
 
     const unsubscribe = subscribe('file-change', (message) => {
       try {
-        const { path, userId } = message.payload;
-
-        const currentUserId = sessionRef.current?.user?.id;
-        if (currentUserId && userId === currentUserId) {
-          return;
-        }
+        const { path } = message.payload;
 
         pendingPathsRef.current.add(path);
         if (path && path.includes('/')) {
