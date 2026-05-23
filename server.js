@@ -11,6 +11,11 @@ const { WebSocketServer } = require('ws');
 const next = require('next');
 const { startLogStream, stopLogStream } = require('./lib/logStreamManager');
 
+// The server's version of the bundle it last built. Clients send their own
+// version on WS connect (as ?v=...); a mismatch means the client tab is on
+// a stale bundle and we tell it to refresh.
+const CURRENT_APP_VERSION = require('./package.json').version;
+
 
 // Dynamic imports for ES modules
 let getToken;
@@ -171,10 +176,6 @@ global.broadcastJobUpdate = (job) => {
   broadcastMessage({ type: 'job-status', payload: job });
 };
 
-global.broadcastAppUpdated = () => {
-  broadcastMessage({ type: 'app-updated', payload: { at: Date.now() } });
-};
-
 global.broadcastUsbDrives = (drives) => {
   broadcastMessage({ type: 'usb-drives', payload: drives });
 };
@@ -243,6 +244,8 @@ loadEsModules().then(() => {
         return;
       }
 
+      const clientVersion = url.searchParams.get('v');
+
       wss.handleUpgrade(request, socket, head, (ws) => {
         ws.isAlive = true;
         ws.userId = authResult.userId || null;
@@ -258,6 +261,17 @@ loadEsModules().then(() => {
           type: 'cache-generation',
           payload: global.cacheGenerationStatus,
         }));
+
+        // Client is on a stale bundle — tell it to refresh. Skip when the
+        // client didn't send a version (legacy bundle from before this check
+        // shipped) to avoid loops where the old code can't refresh into
+        // anything different anyway.
+        if (clientVersion && clientVersion !== CURRENT_APP_VERSION) {
+          ws.send(JSON.stringify({
+            type: 'app-updated',
+            payload: { at: Date.now(), version: CURRENT_APP_VERSION },
+          }));
+        }
 
         import('./lib/jobManager.js').then(({ listJobs }) => {
           ws.send(JSON.stringify({ type: 'job-list', payload: listJobs() }));

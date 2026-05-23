@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiDatabase, FiShare2, FiRefreshCw, FiCpu, FiServer } from 'react-icons/fi';
+import { FiDatabase, FiShare2, FiRefreshCw, FiCpu, FiServer, FiMessageSquare } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useComponentsConfig, useSaveComponentsConfig } from '@/lib/api/system';
 
@@ -32,6 +32,12 @@ const COMPONENT_DEFS = [
     description: 'Host and manage PaperMC Minecraft servers with a live console.',
     icon: FiServer,
   },
+  {
+    key: 'aiChat',
+    label: 'AI Chat',
+    description: 'Show the Claude chat panel in the media viewer for supported file types.',
+    icon: FiMessageSquare,
+  },
 ];
 
 export default function FeaturesPanel() {
@@ -39,7 +45,7 @@ export default function FeaturesPanel() {
   const { data, isLoading, refetch } = useComponentsConfig();
   const saveMutation = useSaveComponentsConfig();
 
-  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false, minecraft: false });
+  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false, minecraft: false, aiChat: false });
 
   useEffect(() => {
     if (data?.config) {

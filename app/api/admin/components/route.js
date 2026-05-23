@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/authCheck';
+import { requireAdmin, requireAuthNoActivity } from '@/lib/authCheck';
 import { readComponentsConfig, writeComponentsConfig } from '@/lib/componentsConfig';
 import { enableService, disableService } from '@/lib/systemctl';
 
@@ -12,7 +12,7 @@ const SERVICES = {
 };
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { error } = await requireAuthNoActivity();
   if (error) return error;
 
   try {

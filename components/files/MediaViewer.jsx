@@ -9,6 +9,7 @@ import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { isAiSupported } from '@/lib/ai/fileTypes';
+import { useComponentsConfig } from '@/lib/api/system';
 import AiChatPanel from './AiChatPanel';
 
 const VideoPlayer = dynamic(
@@ -95,9 +96,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
 
-  // The AI chat is only available for authenticated users (not share visitors)
-  // and only for file types Claude can read (images, PDFs, text, xlsx).
-  const aiAvailable = !shareToken && viewerFile && isAiSupported(viewerFile.name);
+  const { data: componentsData } = useComponentsConfig();
+  const aiChatEnabled = componentsData?.config?.aiChat ?? false;
+
+  // The AI chat is only available for authenticated users (not share visitors),
+  // only for file types Claude can read (images, PDFs, text, xlsx), and only
+  // when the admin has enabled the AI Chat feature in /admin/extensions.
+  const aiAvailable = !shareToken && aiChatEnabled && viewerFile && isAiSupported(viewerFile.name);
   const aiFilePath = viewerFile
     ? (currentPath ? `${currentPath}/${viewerFile.name}` : viewerFile.name).replace(/\/+/g, '/').replace(/^\//, '')
     : '';

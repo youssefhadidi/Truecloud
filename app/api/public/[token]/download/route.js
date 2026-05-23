@@ -8,6 +8,7 @@ import { join, basename, resolve, sep } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -58,72 +59,50 @@ export async function GET(req, { params }) {
 
     const fileStats = await stat(filePath);
 
-    // If it's a directory, create a streaming zip archive
+    // If it's a directory, create a streaming zip archive.
+    // We use Readable.toWeb (pull-based) so client disconnect backpressures
+    // the archiver and triggers cancel() / destroy() — see lib/streamUtils.js.
     if (fileStats.isDirectory()) {
       const archive = archiver('zip', {
         zlib: { level: 1 }, // Fast compression (level 0-9, lower = faster)
       });
 
-      // Create a ReadableStream that pipes from the archive with proper error handling
-      const stream = new ReadableStream({
-        cancel() {
-          // Client disconnected — abort the archive so all file descriptors are released
-          archive.abort();
-        },
+      let aborted = false;
+      const abortArchive = (reason) => {
+        if (aborted) return;
+        aborted = true;
+        logger.info('Public download: aborting zip archive', { reason, path: filePath });
+        try { archive.abort(); } catch {}
+        try { archive.destroy(); } catch {}
+      };
 
-        start(controller) {
-          let isErrored = false;
-
-          archive.on('data', (chunk) => {
-            try {
-              if (!isErrored) {
-                controller.enqueue(chunk);
-              }
-            } catch (err) {
-              console.error('Error enqueueing archive chunk:', err);
-              isErrored = true;
-              controller.error(err);
-              archive.abort();
-            }
-          });
-
-          archive.on('end', () => {
-            if (!isErrored) {
-              controller.close();
-            }
-          });
-
-          archive.on('error', (err) => {
-            console.error('Archive error:', err);
-            if (!isErrored) {
-              isErrored = true;
-              controller.error(err);
-            }
-          });
-
-          archive.on('warning', (err) => {
-            if (err.code === 'ENOENT') {
-              // File not found warning, continue
-              console.warn('Archive warning:', err.message);
-            } else {
-              console.error('Archive warning:', err);
-              isErrored = true;
-              controller.error(err);
-              archive.abort();
-            }
-          });
-
-          try {
-            // Add directory contents to archive
-            archive.directory(filePath, false);
-            archive.finalize();
-          } catch (err) {
-            console.error('Error finalizing archive:', err);
-            isErrored = true;
-            controller.error(err);
-          }
-        },
+      archive.on('error', (err) => logger.error('Public download: archive error', { error: err.message }));
+      archive.on('warning', (err) => {
+        if (err.code === 'ENOENT') {
+          logger.warn('Public download: archive warning (missing file)', { message: err.message });
+        } else {
+          logger.error('Public download: archive warning', { error: err.message });
+          abortArchive('archive-warning');
+        }
       });
+      archive.on('close', () => logger.debug?.('Public download: archive closed', { path: filePath }));
+
+      // Belt-and-suspenders: also listen to req.signal in case Readable.toWeb's
+      // cancel propagation lags behind the actual disconnect.
+      if (req.signal) {
+        if (req.signal.aborted) abortArchive('signal-already-aborted');
+        else req.signal.addEventListener('abort', () => abortArchive('req.signal abort'), { once: true });
+      }
+
+      try {
+        archive.directory(filePath, false);
+        archive.finalize();
+      } catch (err) {
+        logger.error('Public download: error finalizing archive', { error: err.message });
+        abortArchive('finalize-throw');
+      }
+
+      const stream = nodeToWebStream(archive);
 
       return new Response(stream, {
         headers: {
@@ -151,7 +130,7 @@ export async function GET(req, { params }) {
       }
     );
   } catch (error) {
-    console.error('GET /api/public/[token]/download - Error:', error);
+    logger.error('Public download: handler error', { error: error.message });
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });
   }
 }
