@@ -10,6 +10,7 @@ import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { createHash } from 'crypto';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 
@@ -63,6 +64,9 @@ export async function GET(req, { params }) {
 
     // Use normalized path
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const filePath = join(UPLOAD_DIR, relativePath, fileName);
 

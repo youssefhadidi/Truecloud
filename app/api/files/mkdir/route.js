@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -61,6 +62,9 @@ export async function POST(req) {
         newPath: adjustedPath,
       });
     }
+
+    const locked = await requireFolderUnlock(req, adjustedPath);
+    if (locked) return locked;
 
     logger.debug('POST /api/files/mkdir - Creating folder', {
       folderName,

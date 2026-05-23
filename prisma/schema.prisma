@@ -199,3 +199,19 @@ model MinecraftServer {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+// Admin-set passcode gate on a root-level shared folder. The lock applies to
+// the folder AND every path beneath it; checked at the root segment of any
+// file API request. Admins can change/remove locks without supplying the old
+// PIN (recovery path), but everyone — including admins — must enter the PIN
+// to read folder contents.
+model FolderLock {
+  id             String    @id @default(cuid())
+  path           String    @unique  // single root segment, e.g. "Documents"
+  pinHash        String              // bcrypt hash of 4-digit PIN
+  createdById    String              // admin user.id who created the lock
+  pinFailures    Int       @default(0)
+  pinLockedUntil DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}

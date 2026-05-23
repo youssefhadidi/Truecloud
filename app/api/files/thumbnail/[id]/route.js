@@ -8,6 +8,7 @@ import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 import { Semaphore } from '@/lib/semaphore';
@@ -56,6 +57,9 @@ export async function GET(req, { params }) {
     }
 
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {

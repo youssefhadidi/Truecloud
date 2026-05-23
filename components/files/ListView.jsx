@@ -5,7 +5,7 @@
 import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo, memo } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import {
-  FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
+  FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiLock,
   FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
@@ -206,9 +206,13 @@ const ListRow = memo(function ListRow({
             fontSize: 13,
             fontWeight: 600,
             color: file.isDirectory ? 'var(--accent)' : 'var(--text)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
           }}
           title={file.displayName || file.name}
         >
+          {file.locked && <FiLock size={12} color="var(--warning)" title="Passcode-locked" />}
           {file.displayName || file.name}
         </span>
       </div>

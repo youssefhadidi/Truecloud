@@ -8,7 +8,13 @@
       "Bash(ls:*)",
       "Bash(find:*)",
       "Bash(head -50 \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\\\\app\\\\\\(authenticated\\)\\\\admin\\\\accounts\\\\page.jsx\")",
-      "Bash(ls -la \"c:\\\\Users\\\\yhadidi\\\\Desktop\\\\Truecloud/app/\\(authenticated\\)/admin\")"
+      "Bash(ls -la \"c:\\\\Users\\\\yhadidi\\\\Desktop\\\\Truecloud/app/\\(authenticated\\)/admin\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" -Force)",
+      "Bash(Select-Object -First 20)",
+      "Bash(mkdir \"C:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\\\\app\\\\api\\\\admin\\\\folder-locks\" \"C:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\\\\app\\\\api\\\\admin\\\\folder-locks\\\\[path]\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks"
     ]
   }
 }

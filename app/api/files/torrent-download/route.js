@@ -27,6 +27,7 @@ import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'fs';
 import { logger } from '@/lib/logger';
 import { addDownload, getActiveDownloads, getWaitingDownloads, pauseDownload, resumeDownload, removeDownload } from '@/lib/torrentClient';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
 const UPLOAD_DIR = process.env.UPLOAD_DIR
@@ -55,6 +56,9 @@ export async function POST(req) {
     if (url && !url.startsWith('magnet:')) {
       return NextResponse.json({ error: 'Only magnet links are supported (no HTTP downloads)' }, { status: 400 });
     }
+
+    const locked = await requireFolderUnlock(req, downloadPath || '');
+    if (locked) return locked;
 
     // Build absolute download directory - use UPLOAD_DIR from env if available
     let downloadDir = UPLOAD_DIR; // default: root of UPLOAD_DIR

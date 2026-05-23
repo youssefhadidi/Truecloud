@@ -16,6 +16,7 @@ import { isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob, markNative, isMarkedNative } from '@/lib/hlsManager';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -47,6 +48,9 @@ export async function GET(req, { params }) {
       logger.error('GET /api/files/stream - Directory traversal attempt', { fileId, relativePath });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);

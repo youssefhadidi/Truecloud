@@ -77,6 +77,32 @@ export default async function handler(req, res) {
 
 
     relativePath = accessCheck.normalizedPath;
+
+    // Folder lock gate. Pages API uses Node req.headers (lowercased).
+    const { getRootSegment, isLockableRootFolder, verifyFolderPin } = await import('@/lib/folderLocks');
+    const { prisma: prismaForLock } = await import('@/lib/prisma');
+    const rootSeg = getRootSegment(relativePath);
+    if (isLockableRootFolder(rootSeg)) {
+      const existingLock = await prismaForLock.folderLock.findUnique({
+        where: { path: rootSeg },
+        select: { id: true },
+      });
+      if (existingLock) {
+        const pin = req.headers['x-folder-pin'];
+        if (!pin) {
+          return res.status(423).json({ error: 'pin_required', path: rootSeg });
+        }
+        const result = await verifyFolderPin(rootSeg, pin);
+        if (!result.ok) {
+          if (result.lockedOut) {
+            res.setHeader('Retry-After', String(result.retryAfter));
+            return res.status(429).json({ error: 'pin_locked_out', path: rootSeg, retryAfter: result.retryAfter });
+          }
+          return res.status(401).json({ error: 'pin_incorrect', path: rootSeg });
+        }
+      }
+    }
+
     const targetDir = join(UPLOAD_DIR, relativePath);
 
     if (!(resolve(targetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {

@@ -7,6 +7,7 @@ import fsPromises from 'fs/promises';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -42,6 +43,9 @@ export async function GET(req, { params }) {
     }
 
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {

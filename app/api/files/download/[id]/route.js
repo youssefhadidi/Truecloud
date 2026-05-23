@@ -10,6 +10,7 @@ import archiver from 'archiver';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -48,6 +49,9 @@ export async function GET(req, { params }) {
 
     // Use normalized path
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const filePath = join(UPLOAD_DIR, relativePath, fileName);
 

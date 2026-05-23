@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -58,6 +59,11 @@ export async function POST(req) {
     // Calculate original path by removing 'trash/' prefix
     const pathWithoutTrash = trashPath.replace(/^trash\/?/, '');
     const originalPath = pathWithoutTrash;
+
+    // Restore lands in the original folder — gate on that, not on trash itself
+    // (trash is intentionally excluded from being lockable).
+    const locked = await requireFolderUnlock(req, originalPath);
+    if (locked) return locked;
 
     logger.debug('POST /api/files/restore - Restoring file', {
       trashPath,

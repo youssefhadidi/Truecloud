@@ -5,7 +5,7 @@
 import { useRef, useMemo, useCallback, useState, useEffect, memo, forwardRef, useImperativeHandle } from 'react';
 import { Grid, AutoSizer } from 'react-virtualized';
 import {
-  FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2,
+  FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiLock,
   FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
@@ -524,9 +524,10 @@ const GridItem = memo(
               <div
                 title={item.displayName || item.name}
                 className="tc-truncate"
-                style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}
+                style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                {item.displayName || item.name}
+                {item.locked && <FiLock size={12} color="var(--warning)" title="Passcode-locked" />}
+                <span className="tc-truncate">{item.displayName || item.name}</span>
               </div>
               {isGlobalSearch && item._parentPath != null && (
                 <div className="tc-truncate" style={{ fontSize: 10, color: 'var(--text-3)' }}>

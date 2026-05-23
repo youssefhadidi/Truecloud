@@ -8,6 +8,7 @@ import { stat, rename } from 'fs/promises';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -60,6 +61,14 @@ export async function POST(req) {
 
     const normalizedSource = sourceAccess.normalizedPath;
     const normalizedDest = destAccess.normalizedPath;
+
+    // Both endpoints of the move must be unlocked. Same PIN header gates
+    // both — moves between two different locked folders aren't supported
+    // (would need two PINs); user can copy-then-delete in that case.
+    const lockedSrc = await requireFolderUnlock(req, normalizedSource);
+    if (lockedSrc) return lockedSrc;
+    const lockedDst = await requireFolderUnlock(req, normalizedDest);
+    if (lockedDst) return lockedDst;
 
     if (normalizedSource === normalizedDest) {
       return NextResponse.json({ error: 'Destination matches source' }, { status: 400 });

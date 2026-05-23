@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const execPromise = promisify(exec);
 
@@ -64,6 +65,9 @@ export async function GET(req) {
     }
 
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const fullPath = join(UPLOAD_DIR, relativePath, fileName);
 

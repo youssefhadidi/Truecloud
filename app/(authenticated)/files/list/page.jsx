@@ -28,6 +28,8 @@ import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 import Spinner from '@/components/ui/Spinner';
+import FolderPinModal from '@/components/FolderPinModal';
+import axios from '@/lib/axiosConfig';
 
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
@@ -310,6 +312,59 @@ function FilesPageContent() {
   }, [allSelected, selectableFiles, state.setSelectedFiles]);
 
   const queryClient = useQueryClient();
+
+  // Folder-lock unlock state. We track the PIN + the root segment it grants
+  // access to. The PIN lives in memory only (no localStorage / sessionStorage)
+  // and clears as soon as the user navigates to a different root — that's the
+  // "re-prompt on every navigation into a locked folder" guarantee.
+  const [pendingLock, setPendingLock] = useState(null); // { name, path }
+  const [unlockedRoot, setUnlockedRoot] = useState(null);
+
+  const getRootSegment = useCallback((p) => (p ? p.split(/[/\\]/)[0] : ''), []);
+
+  // Clear the X-Folder-Pin header whenever currentPath leaves the unlocked
+  // root (including back-to-root). This is what enforces re-prompt.
+  useEffect(() => {
+    if (!unlockedRoot) return;
+    const root = getRootSegment(state.currentPath);
+    if (root !== unlockedRoot) {
+      delete axios.defaults.headers.common['X-Folder-Pin'];
+      setUnlockedRoot(null);
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    }
+  }, [state.currentPath, unlockedRoot, getRootSegment, queryClient]);
+
+  // Clear on unmount so the header doesn't leak to other pages.
+  useEffect(() => {
+    return () => {
+      delete axios.defaults.headers.common['X-Folder-Pin'];
+    };
+  }, []);
+
+  const handleFolderClick = useCallback(
+    (name, file) => {
+      // file may be undefined when invoked from breadcrumb/context-menu paths,
+      // in which case there's nothing locked yet to gate.
+      if (file?.locked) {
+        setPendingLock({ name, path: name });
+        return;
+      }
+      navigation.navigateToFolder(name);
+    },
+    [navigation],
+  );
+
+  const handlePinSuccess = useCallback(
+    (pin) => {
+      if (!pendingLock) return;
+      axios.defaults.headers.common['X-Folder-Pin'] = pin;
+      setUnlockedRoot(pendingLock.path);
+      navigation.navigateToFolder(pendingLock.name);
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      setPendingLock(null);
+    },
+    [pendingLock, navigation, queryClient],
+  );
 
   const fetchMoveFolders = useCallback(
     async (path) => {
@@ -846,7 +901,7 @@ function FilesPageContent() {
                                   setPendingScrollTarget(name);
                                 }
                               }
-                            : navigation.navigateToFolder
+                            : handleFolderClick
                         }
                         formatFileSize={fileUtils.formatFileSize}
                         openMediaViewer={
@@ -915,7 +970,7 @@ function FilesPageContent() {
                                 setPendingScrollTarget(name);
                               }
                             }
-                          : navigation.navigateToFolder
+                          : handleFolderClick
                       }
                       onOpenMediaViewer={
                         isGlobalSearch
@@ -992,7 +1047,7 @@ function FilesPageContent() {
         file={state.selectedContextFile}
         currentPath={state.currentPath}
         onNavigateToFolder={() => {
-          navigation.navigateToFolder(state.selectedContextFile.name);
+          handleFolderClick(state.selectedContextFile.name, state.selectedContextFile);
           contextMenu.closeContextMenu();
         }}
         onRename={readOnly ? undefined : () => handlers.initiateRename(state.selectedContextFile)}
@@ -1078,6 +1133,15 @@ function FilesPageContent() {
             onClose={() => setMoveModalOpen(false)}
           />
         </Suspense>
+      )}
+
+      {pendingLock && (
+        <FolderPinModal
+          folderPath={pendingLock.path}
+          folderName={pendingLock.name}
+          onSuccess={handlePinSuccess}
+          onCancel={() => setPendingLock(null)}
+        />
       )}
 
       <style jsx>{`

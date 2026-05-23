@@ -8,6 +8,7 @@ import archiver from 'archiver';
 import sharp from 'sharp';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -37,6 +38,9 @@ export async function GET(req) {
       return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const folderPath = join(UPLOAD_DIR, relativePath);
     let entries;

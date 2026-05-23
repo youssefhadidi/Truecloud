@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { getHlsOutputDir } from '@/lib/hlsManager';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -89,6 +90,9 @@ export async function GET(req, { params }) {
       logger.warn('GET /api/files/hls - Invalid segment filename', { segment });
       return NextResponse.json({ error: 'Invalid segment' }, { status: 400 });
     }
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);

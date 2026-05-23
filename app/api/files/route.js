@@ -11,6 +11,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentClient';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
+import { requireFolderUnlock, lockedRootFolderPaths } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -77,6 +78,11 @@ export async function GET(req) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
     }
+
+    // Folder lock gate: admins set a PIN on root-level shared folders.
+    // Sub-paths inherit the lock (Documents/Reports gated by lock on Documents).
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     const targetDir = join(UPLOAD_DIR, relativePath);
 
@@ -167,10 +173,15 @@ export async function GET(req) {
           })
       : Promise.resolve({});
 
+    // At root we also need the set of locked folder paths to flag entries with
+    // a 🔒 badge in the UI. Runs in parallel with the stat fan-out.
+    const lockedPathsPromise = atRoot ? lockedRootFolderPaths() : Promise.resolve(null);
+
     // Stat the surviving entries with the existing concurrency limit. The
     // user lookup runs in parallel because it's an independent DB query.
-    const [userMap, files] = await Promise.all([
+    const [userMap, lockedPaths, files] = await Promise.all([
       userLookupPromise,
+      lockedPathsPromise,
       Promise.all(
         visibleEntries.map(async (entry) => {
           await statSemaphore.acquire();
@@ -206,6 +217,16 @@ export async function GET(req) {
         if (file.name.startsWith('user_')) {
           const username = userMap[file.name.replace('user_', '')];
           if (username) file.displayName = `📁 ${username} (Private)`;
+        }
+      }
+    }
+
+    // Mark locked root folders so the UI can show a 🔒 badge and open the
+    // PIN modal instead of navigating directly.
+    if (atRoot && lockedPaths && lockedPaths.size > 0) {
+      for (const file of files) {
+        if (file.isDirectory && lockedPaths.has(file.name)) {
+          file.locked = true;
         }
       }
     }
@@ -274,6 +295,9 @@ export async function DELETE(req) {
 
     // Use normalized path
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     // Construct file path
     const targetPath = join(UPLOAD_DIR, relativePath, fileName);
@@ -442,6 +466,9 @@ export async function PATCH(req) {
 
     // Use normalized path
     relativePath = accessCheck.normalizedPath;
+
+    const locked = await requireFolderUnlock(req, relativePath);
+    if (locked) return locked;
 
     logger.debug('PATCH /api/files - Renaming file', {
       oldName,
