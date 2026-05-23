@@ -341,6 +341,21 @@ function FilesPageContent() {
     };
   }, []);
 
+  // Deep-link case: user landed/refreshed on a sub-path inside a locked
+  // folder. The listing query returns 423 + { error: 'pin_required', path }.
+  // Pop the modal automatically, scoped to the root segment so unlocking
+  // grants access to the entire subtree (not just the deep-linked path).
+  useEffect(() => {
+    if (pendingLock) return;
+    const err = state.filesError;
+    if (err?.response?.status !== 423) return;
+    if (err?.response?.data?.error !== 'pin_required') return;
+    const rootFromError = err.response.data.path || getRootSegment(state.currentPath);
+    if (!rootFromError) return;
+    if (unlockedRoot === rootFromError) return; // already unlocked, must be stale
+    setPendingLock({ name: rootFromError, path: rootFromError });
+  }, [state.filesError, pendingLock, unlockedRoot, state.currentPath, getRootSegment]);
+
   const handleFolderClick = useCallback(
     (name, file) => {
       // file may be undefined when invoked from breadcrumb/context-menu paths,
@@ -359,11 +374,17 @@ function FilesPageContent() {
       if (!pendingLock) return;
       axios.defaults.headers.common['X-Folder-Pin'] = pin;
       setUnlockedRoot(pendingLock.path);
-      navigation.navigateToFolder(pendingLock.name);
+      // Only navigate when we're not already inside the locked root (the
+      // deep-link case lands here with currentPath already at e.g.
+      // "Documents/Reports" — just invalidate so the listing refetches).
+      const currentRoot = getRootSegment(state.currentPath);
+      if (currentRoot !== pendingLock.path) {
+        navigation.navigateToFolder(pendingLock.name);
+      }
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setPendingLock(null);
     },
-    [pendingLock, navigation, queryClient],
+    [pendingLock, navigation, queryClient, state.currentPath, getRootSegment],
   );
 
   const fetchMoveFolders = useCallback(

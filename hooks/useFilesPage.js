@@ -247,7 +247,7 @@ export function useFilesPage(status) {
   const usbMode = isUsbPath(navigation.currentPath);
 
   // Fetch files and initial downloads from API (skipped in USB mode)
-  const { files: filesData, downloads: apiDownloads, isLoading: isLoadingFiles } = useFiles(
+  const { files: filesData, downloads: apiDownloads, isLoading: isLoadingFiles, error: filesError } = useFiles(
     navigation.currentPath,
     status === 'authenticated' && !usbMode,
   );
@@ -450,6 +450,7 @@ export function useFilesPage(status) {
     folderDisplayNames,
     files,
     isLoading,
+    filesError,
     viewableFiles,
     sharedPaths,
     usbMode,
