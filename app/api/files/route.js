@@ -11,7 +11,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentClient';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
-import { requireFolderUnlock, lockedRootFolderPaths } from '@/lib/folderLocks';
+import { requireFolderUnlock, getAllLockedPaths } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -173,9 +173,10 @@ export async function GET(req) {
           })
       : Promise.resolve({});
 
-    // At root we also need the set of locked folder paths to flag entries with
-    // a 🔒 badge in the UI. Runs in parallel with the stat fan-out.
-    const lockedPathsPromise = atRoot ? lockedRootFolderPaths() : Promise.resolve(null);
+    // Fetch all lock paths so we can flag any sub-folder (at any depth) with
+    // a 🔒 badge in the UI. Runs in parallel with the stat fan-out. Cheap —
+    // selects just the `path` column from a small table.
+    const lockedPathsPromise = getAllLockedPaths();
 
     // Stat the surviving entries with the existing concurrency limit. The
     // user lookup runs in parallel because it's an independent DB query.
@@ -221,13 +222,16 @@ export async function GET(req) {
       }
     }
 
-    // Mark locked root folders so the UI can show a 🔒 badge and open the
-    // PIN modal instead of navigating directly.
-    if (atRoot && lockedPaths && lockedPaths.size > 0) {
+    // Mark any sub-folder whose absolute relative path matches a lock entry.
+    // Locks are non-nested, so a folder being inside an already-unlocked
+    // ancestor doesn't get a badge — the badge means "you need a PIN to
+    // enter this folder", not "this folder is inside a locked tree".
+    if (lockedPaths && lockedPaths.length > 0) {
+      const lockedSet = new Set(lockedPaths);
       for (const file of files) {
-        if (file.isDirectory && lockedPaths.has(file.name)) {
-          file.locked = true;
-        }
+        if (!file.isDirectory) continue;
+        const fullRel = relativePath ? `${relativePath}/${file.name}` : file.name;
+        if (lockedSet.has(fullRel)) file.locked = true;
       }
     }
 

@@ -313,26 +313,37 @@ function FilesPageContent() {
 
   const queryClient = useQueryClient();
 
-  // Folder-lock unlock state. We track the PIN + the root segment it grants
-  // access to. The PIN lives in memory only (no localStorage / sessionStorage)
-  // and clears as soon as the user navigates to a different root — that's the
-  // "re-prompt on every navigation into a locked folder" guarantee.
+  // Folder-lock unlock state. We track the PIN + the full lock path it
+  // grants access to. The PIN lives in memory only (no localStorage /
+  // sessionStorage) and clears the moment the user navigates outside the
+  // unlocked subtree — that's the "re-prompt every navigation" guarantee.
   const [pendingLock, setPendingLock] = useState(null); // { name, path }
-  const [unlockedRoot, setUnlockedRoot] = useState(null);
+  const [unlockedPath, setUnlockedPath] = useState(null);
 
-  const getRootSegment = useCallback((p) => (p ? p.split(/[/\\]/)[0] : ''), []);
+  const normalizePath = useCallback(
+    (p) => (p || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
+    [],
+  );
+  const isAtOrBelow = useCallback(
+    (ancestor, p) => {
+      if (!ancestor) return false;
+      const a = normalizePath(ancestor);
+      const x = normalizePath(p);
+      return x === a || x.startsWith(a + '/');
+    },
+    [normalizePath],
+  );
 
   // Clear the X-Folder-Pin header whenever currentPath leaves the unlocked
-  // root (including back-to-root). This is what enforces re-prompt.
+  // subtree (including back-to-root). This is what enforces re-prompt.
   useEffect(() => {
-    if (!unlockedRoot) return;
-    const root = getRootSegment(state.currentPath);
-    if (root !== unlockedRoot) {
+    if (!unlockedPath) return;
+    if (!isAtOrBelow(unlockedPath, state.currentPath)) {
       delete axios.defaults.headers.common['X-Folder-Pin'];
-      setUnlockedRoot(null);
+      setUnlockedPath(null);
       queryClient.invalidateQueries({ queryKey: ['files'] });
     }
-  }, [state.currentPath, unlockedRoot, getRootSegment, queryClient]);
+  }, [state.currentPath, unlockedPath, isAtOrBelow, queryClient]);
 
   // Clear on unmount so the header doesn't leak to other pages.
   useEffect(() => {
@@ -341,50 +352,51 @@ function FilesPageContent() {
     };
   }, []);
 
-  // Deep-link case: user landed/refreshed on a sub-path inside a locked
-  // folder. The listing query returns 423 + { error: 'pin_required', path }.
-  // Pop the modal automatically, scoped to the root segment so unlocking
-  // grants access to the entire subtree (not just the deep-linked path).
+  // Deep-link case: user landed/refreshed inside a locked folder. The listing
+  // query returns 423 + { error: 'pin_required', path }. The `path` field is
+  // the actual locked ancestor — use it directly so unlocking grants the full
+  // subtree (not just the deep-linked leaf).
   useEffect(() => {
     if (pendingLock) return;
     const err = state.filesError;
     if (err?.response?.status !== 423) return;
     if (err?.response?.data?.error !== 'pin_required') return;
-    const rootFromError = err.response.data.path || getRootSegment(state.currentPath);
-    if (!rootFromError) return;
-    if (unlockedRoot === rootFromError) return; // already unlocked, must be stale
-    setPendingLock({ name: rootFromError, path: rootFromError });
-  }, [state.filesError, pendingLock, unlockedRoot, state.currentPath, getRootSegment]);
+    const lockPath = err.response.data.path;
+    if (!lockPath) return;
+    if (unlockedPath === lockPath) return; // already unlocked, must be stale
+    const name = lockPath.split('/').pop();
+    setPendingLock({ name, path: lockPath });
+  }, [state.filesError, pendingLock, unlockedPath]);
 
   const handleFolderClick = useCallback(
     (name, file) => {
-      // file may be undefined when invoked from breadcrumb/context-menu paths,
-      // in which case there's nothing locked yet to gate.
+      // file?.locked is true when the folder being clicked has its own lock
+      // entry. The full lock path is currentPath + name.
       if (file?.locked) {
-        setPendingLock({ name, path: name });
+        const lockPath = state.currentPath ? `${state.currentPath}/${name}` : name;
+        setPendingLock({ name, path: normalizePath(lockPath) });
         return;
       }
       navigation.navigateToFolder(name);
     },
-    [navigation],
+    [navigation, state.currentPath, normalizePath],
   );
 
   const handlePinSuccess = useCallback(
     (pin) => {
       if (!pendingLock) return;
       axios.defaults.headers.common['X-Folder-Pin'] = pin;
-      setUnlockedRoot(pendingLock.path);
-      // Only navigate when we're not already inside the locked root (the
-      // deep-link case lands here with currentPath already at e.g.
-      // "Documents/Reports" — just invalidate so the listing refetches).
-      const currentRoot = getRootSegment(state.currentPath);
-      if (currentRoot !== pendingLock.path) {
+      setUnlockedPath(pendingLock.path);
+      // Only navigate when we're not already inside the unlocked subtree —
+      // the deep-link case lands here with currentPath already at e.g.
+      // "Documents/Reports" while the lock is on "Documents".
+      if (!isAtOrBelow(pendingLock.path, state.currentPath)) {
         navigation.navigateToFolder(pendingLock.name);
       }
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setPendingLock(null);
     },
-    [pendingLock, navigation, queryClient, state.currentPath, getRootSegment],
+    [pendingLock, navigation, queryClient, state.currentPath, isAtOrBelow],
   );
 
   const fetchMoveFolders = useCallback(
