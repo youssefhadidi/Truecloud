@@ -20,6 +20,11 @@ async function runUpdateProcess() {
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'] },
     { name: STEPS.REBUILDING, command: 'sh', args: ['-c', 'SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all'] },
     { name: STEPS.DB_MIGRATE, command: 'bun', args: ['run', 'db:migrate'] },
+    // Must run BEFORE `build` — next bundles the generated Prisma client into
+    // .next at build time. Without this, a schema change applies to the DB
+    // but the bundled client has no record of the new model → runtime 500
+    // ("undefined is not an object evaluating prisma.<newModel>.<call>").
+    { name: STEPS.DB_GENERATE, command: 'bun', args: ['run', 'db:generate'] },
     { name: STEPS.BUILDING, command: 'bun', args: ['run', 'build'] },
     { name: STEPS.RESTARTING, command: 'bun', args: ['run', 'restart'] },
   ];
