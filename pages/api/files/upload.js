@@ -346,8 +346,10 @@ export default async function handler(req, res) {
       };
 
       // Default flag 'w' overwrites existing files, matching the multipart
-      // branch's collision behavior.
-      const writeStream = createWriteStream(filePath);
+      // branch's collision behavior. highWaterMark bumped from the 16 KB
+      // default to 1 MB so large uploads don't pay the pipe-drain cost on
+      // every 16 KB chunk.
+      const writeStream = createWriteStream(filePath, { highWaterMark: 1024 * 1024 });
 
       writeStream.on('error', async (error) => {
         logError('POST /api/files/upload - Write error (raw body)', {
