@@ -78,41 +78,34 @@ export default async function handler(req, res) {
 
     relativePath = accessCheck.normalizedPath;
 
-    // Folder lock gate. Pages API uses Node req.headers (lowercased).
-    const { getRootSegment, isLockableRootFolder, verifyFolderPin } = await import('@/lib/folderLocks');
-    const { prisma: prismaForLock } = await import('@/lib/prisma');
-    const rootSeg = getRootSegment(relativePath);
-    if (isLockableRootFolder(rootSeg)) {
-      const existingLock = await prismaForLock.folderLock.findUnique({
-        where: { path: rootSeg },
-        select: { id: true },
-      });
-      if (existingLock) {
-        // Accept the legacy single-PIN header, the per-folder map header
-        // sent by the axios interceptor (X-Folder-Pins), or a ?folderPin=
-        // query param. Mirrors lib/folderLocks.js#requireFolderUnlock.
-        let pin = req.headers['x-folder-pin'];
-        if (!pin) {
-          const raw = req.headers['x-folder-pins'];
-          if (raw) {
-            try {
-              const map = JSON.parse(raw);
-              if (map && typeof map[rootSeg] === 'string') pin = map[rootSeg];
-            } catch {}
-          }
+    // Folder lock gate. Pages API uses Node req.headers (lowercased), so we
+    // can't reuse requireFolderUnlock (NextResponse-based) and instead drive
+    // the lower-level helpers directly.
+    const { getAllLockedPaths, findAncestorLockPath, verifyFolderPin } = await import('@/lib/folderLocks');
+    const lockedPaths = await getAllLockedPaths();
+    const ancestor = lockedPaths.length ? findAncestorLockPath(relativePath, lockedPaths) : null;
+    if (ancestor) {
+      let pin = req.headers['x-folder-pin'];
+      if (!pin) {
+        const raw = req.headers['x-folder-pins'];
+        if (raw) {
+          try {
+            const map = JSON.parse(raw);
+            if (map && typeof map[ancestor] === 'string') pin = map[ancestor];
+          } catch {}
         }
-        if (!pin && req.query?.folderPin) pin = String(req.query.folderPin);
-        if (!pin) {
-          return res.status(423).json({ error: 'pin_required', path: rootSeg });
+      }
+      if (!pin && req.query?.folderPin) pin = String(req.query.folderPin);
+      if (!pin) {
+        return res.status(423).json({ error: 'pin_required', path: ancestor });
+      }
+      const result = await verifyFolderPin(ancestor, pin);
+      if (!result.ok) {
+        if (result.lockedOut) {
+          res.setHeader('Retry-After', String(result.retryAfter));
+          return res.status(429).json({ error: 'pin_locked_out', path: ancestor, retryAfter: result.retryAfter });
         }
-        const result = await verifyFolderPin(rootSeg, pin);
-        if (!result.ok) {
-          if (result.lockedOut) {
-            res.setHeader('Retry-After', String(result.retryAfter));
-            return res.status(429).json({ error: 'pin_locked_out', path: rootSeg, retryAfter: result.retryAfter });
-          }
-          return res.status(401).json({ error: 'pin_incorrect', path: rootSeg });
-        }
+        return res.status(401).json({ error: 'pin_incorrect', path: ancestor });
       }
     }
 
