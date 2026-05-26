@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
+import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { isAiSupported } from '@/lib/ai/fileTypes';
 import { useComponentsConfig } from '@/lib/api/system';
@@ -188,7 +189,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       if (sharePassword) params.append('pwd', sharePassword);
       downloadUrl = `/api/public/${shareToken}/download?${params.toString()}`;
     } else {
-      downloadUrl = `/api/files/download/${viewerFile.id}?path=${encodeURIComponent(currentPath)}`;
+      // Anchor-tag download path can't carry headers, so attach the folder
+      // PIN as a query param when the file lives inside a locked subtree.
+      const targetPath = currentPath ? `${currentPath}/${viewerFile.name}` : viewerFile.name;
+      downloadUrl = appendFolderPinToUrl(
+        `/api/files/download/${viewerFile.id}?path=${encodeURIComponent(currentPath)}`,
+        targetPath,
+      );
     }
     await handleShareOrDownload(downloadUrl, viewerFile.name);
     setContextMenu(null);

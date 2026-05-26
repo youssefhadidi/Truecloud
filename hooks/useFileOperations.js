@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
+import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 
 export function useNavigation({ currentPath, pathHistory, historyIndex, setCurrentPath, setPathHistory, setHistoryIndex }) {
   const navigateToFolder = (folderName) => {
@@ -196,7 +197,14 @@ export function useFileUtils({ currentPath, folderDisplayNames }) {
 
   const handleDownload = useCallback(
     async (fileId, fileName) => {
-      const downloadUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+      // The download endpoint streams via an <a href> link, which can't carry
+      // custom headers — so for passcode-locked folders we attach the PIN as
+      // a query param. The target path is currentPath + fileName.
+      const targetPath = currentPath ? `${currentPath}/${fileName}` : fileName;
+      const downloadUrl = appendFolderPinToUrl(
+        `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`,
+        targetPath,
+      );
       await handleShareOrDownload(downloadUrl, fileName);
     },
     [currentPath, handleShareOrDownload]

@@ -29,7 +29,7 @@ import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 import Spinner from '@/components/ui/Spinner';
 import FolderPinModal from '@/components/FolderPinModal';
-import axios from '@/lib/axiosConfig';
+import { setFolderPin, clearAllFolderPins, useFolderPins } from '@/lib/folderPinStore';
 
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
@@ -313,42 +313,23 @@ function FilesPageContent() {
 
   const queryClient = useQueryClient();
 
-  // Folder-lock unlock state. We track the PIN + the full lock path it
-  // grants access to. The PIN lives in memory only (no localStorage /
-  // sessionStorage) and clears the moment the user navigates outside the
-  // unlocked subtree — that's the "re-prompt every navigation" guarantee.
+  // Folder-lock unlock state. The PIN itself lives in the module-level
+  // folderPinStore (lib/folderPinStore.js) keyed by lock path, so the axios
+  // interceptor and download-URL helpers can all reach it. We only keep the
+  // pending-modal state here. PINs persist for the lifetime of this page
+  // (cleared on unmount) so multiple locked folders can be open at once.
   const [pendingLock, setPendingLock] = useState(null); // { name, path }
-  const [unlockedPath, setUnlockedPath] = useState(null);
+  const unlockedPins = useFolderPins();
 
   const normalizePath = useCallback(
     (p) => (p || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
     [],
   );
-  const isAtOrBelow = useCallback(
-    (ancestor, p) => {
-      if (!ancestor) return false;
-      const a = normalizePath(ancestor);
-      const x = normalizePath(p);
-      return x === a || x.startsWith(a + '/');
-    },
-    [normalizePath],
-  );
 
-  // Clear the X-Folder-Pin header whenever currentPath leaves the unlocked
-  // subtree (including back-to-root). This is what enforces re-prompt.
-  useEffect(() => {
-    if (!unlockedPath) return;
-    if (!isAtOrBelow(unlockedPath, state.currentPath)) {
-      delete axios.defaults.headers.common['X-Folder-Pin'];
-      setUnlockedPath(null);
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-    }
-  }, [state.currentPath, unlockedPath, isAtOrBelow, queryClient]);
-
-  // Clear on unmount so the header doesn't leak to other pages.
+  // Clear all folder PINs on unmount so they don't leak across pages/sessions.
   useEffect(() => {
     return () => {
-      delete axios.defaults.headers.common['X-Folder-Pin'];
+      clearAllFolderPins();
     };
   }, []);
 
@@ -363,10 +344,10 @@ function FilesPageContent() {
     if (err?.response?.data?.error !== 'pin_required') return;
     const lockPath = err.response.data.path;
     if (!lockPath) return;
-    if (unlockedPath === lockPath) return; // already unlocked, must be stale
+    if (unlockedPins.has(lockPath)) return; // already unlocked, must be stale
     const name = lockPath.split('/').pop();
     setPendingLock({ name, path: lockPath });
-  }, [state.filesError, pendingLock, unlockedPath]);
+  }, [state.filesError, pendingLock, unlockedPins]);
 
   const handleFolderClick = useCallback(
     (name, file) => {
@@ -374,29 +355,37 @@ function FilesPageContent() {
       // entry. The full lock path is currentPath + name.
       if (file?.locked) {
         const lockPath = state.currentPath ? `${state.currentPath}/${name}` : name;
-        setPendingLock({ name, path: normalizePath(lockPath) });
+        const normalized = normalizePath(lockPath);
+        // Already-unlocked: navigate without re-prompting.
+        if (unlockedPins.has(normalized)) {
+          navigation.navigateToFolder(name);
+          return;
+        }
+        setPendingLock({ name, path: normalized });
         return;
       }
       navigation.navigateToFolder(name);
     },
-    [navigation, state.currentPath, normalizePath],
+    [navigation, state.currentPath, normalizePath, unlockedPins],
   );
 
   const handlePinSuccess = useCallback(
     (pin) => {
       if (!pendingLock) return;
-      axios.defaults.headers.common['X-Folder-Pin'] = pin;
-      setUnlockedPath(pendingLock.path);
+      setFolderPin(pendingLock.path, pin);
       // Only navigate when we're not already inside the unlocked subtree —
       // the deep-link case lands here with currentPath already at e.g.
       // "Documents/Reports" while the lock is on "Documents".
-      if (!isAtOrBelow(pendingLock.path, state.currentPath)) {
+      const cp = normalizePath(state.currentPath);
+      const lp = pendingLock.path;
+      const isInside = cp === lp || cp.startsWith(lp + '/');
+      if (!isInside) {
         navigation.navigateToFolder(pendingLock.name);
       }
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setPendingLock(null);
     },
-    [pendingLock, navigation, queryClient, state.currentPath, isAtOrBelow],
+    [pendingLock, navigation, queryClient, state.currentPath, normalizePath],
   );
 
   const fetchMoveFolders = useCallback(

@@ -88,7 +88,20 @@ export default async function handler(req, res) {
         select: { id: true },
       });
       if (existingLock) {
-        const pin = req.headers['x-folder-pin'];
+        // Accept the legacy single-PIN header, the per-folder map header
+        // sent by the axios interceptor (X-Folder-Pins), or a ?folderPin=
+        // query param. Mirrors lib/folderLocks.js#requireFolderUnlock.
+        let pin = req.headers['x-folder-pin'];
+        if (!pin) {
+          const raw = req.headers['x-folder-pins'];
+          if (raw) {
+            try {
+              const map = JSON.parse(raw);
+              if (map && typeof map[rootSeg] === 'string') pin = map[rootSeg];
+            } catch {}
+          }
+        }
+        if (!pin && req.query?.folderPin) pin = String(req.query.folderPin);
         if (!pin) {
           return res.status(423).json({ error: 'pin_required', path: rootSeg });
         }
