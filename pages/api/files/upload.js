@@ -1,6 +1,6 @@
 /** @format */
 
-import { mkdir, unlink } from 'fs/promises';
+import { mkdir, unlink, stat } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
 
@@ -120,12 +120,27 @@ export default async function handler(req, res) {
     }
 
 
-    const contentType = req.headers['content-type'];
-    if (!contentType || !contentType.includes('multipart/form-data')) {
-      return res.status(415).json({ error: 'Invalid content type' });
-    }
+    // Strip directory separators, NUL bytes, and reject filenames that would
+    // resolve to the parent directory ("..") or the directory itself ("."). The
+    // resolve-and-prefix check below is defense-in-depth on top of this.
+    const sanitizeFilename = (raw) => {
+      const stripped = (String(raw ?? '').split(/[/\\]/).pop() ?? '').replace(/\0/g, '');
+      if (!stripped || stripped === '.' || stripped === '..') return null;
+      return stripped;
+    };
 
+    const isWithinTargetDir = (filePath) => {
+      const resolvedFile = resolve(filePath);
+      const resolvedDir = resolve(targetDir);
+      return resolvedFile === resolvedDir
+        ? false
+        : (resolvedFile + sep).startsWith(resolvedDir + sep);
+    };
 
+    const contentType = req.headers['content-type'] || '';
+    const isMultipart = contentType.includes('multipart/form-data');
+
+    if (isMultipart) {
     const { default: Busboy } = await import('busboy');
     const busboy = Busboy({
       headers: req.headers,
@@ -165,16 +180,28 @@ export default async function handler(req, res) {
     };
 
     busboy.on('file', (fieldname, file, info) => {
-      if (fieldname !== 'file') {
+      if (fieldname !== 'file' || responded) {
         file.resume();
         return;
       }
 
-      filesReceived += 1;
       const originalName = info?.filename || `upload_${Date.now()}`;
-      const safeName = originalName.split(/[/\\]/).pop() || `upload_${Date.now()}`;
+      const safeName = sanitizeFilename(originalName);
+      if (!safeName) {
+        file.resume();
+        cleanup().finally(() => respond(400, { error: 'Invalid filename' }));
+        return;
+      }
+
       const fileMimeType = info?.mimeType || 'application/octet-stream';
       const filePath = join(targetDir, safeName);
+      if (!isWithinTargetDir(filePath)) {
+        file.resume();
+        cleanup().finally(() => respond(400, { error: 'Invalid path' }));
+        return;
+      }
+
+      filesReceived += 1;
       const normalizedFilePath = filePath
         .replace(/\\/g, '/')
         .replace(new RegExp(`^${UPLOAD_DIR.replace(/\\/g, '/')}/`), '');
@@ -275,6 +302,108 @@ export default async function handler(req, res) {
     });
 
     req.pipe(busboy);
+    } else {
+      // Raw binary body path. The mobile client streams large videos here
+      // because the multipart path requires a full in-memory copy on the
+      // client side and crashes on files >500 MB.
+      const filenameQuery = Array.isArray(req.query.filename)
+        ? req.query.filename[0]
+        : req.query.filename;
+      const safeName = sanitizeFilename(filenameQuery);
+      if (!safeName) {
+        return res.status(400).json({
+          error: 'Missing or invalid filename query parameter',
+        });
+      }
+
+      const filePath = join(targetDir, safeName);
+      if (!isWithinTargetDir(filePath)) {
+        return res.status(400).json({ error: 'Invalid path' });
+      }
+
+      const fileMimeType = contentType || 'application/octet-stream';
+      const normalizedFilePath = filePath
+        .replace(/\\/g, '/')
+        .replace(new RegExp(`^${UPLOAD_DIR.replace(/\\/g, '/')}/`), '');
+
+      let responded = false;
+      const respond = (status, payload) => {
+        if (responded) return;
+        responded = true;
+        if (status >= 500) {
+          logError('POST /api/files/upload - Responding with error (raw body)', {
+            status,
+            payload,
+          });
+        }
+        res.status(status).json(payload);
+      };
+
+      const cleanup = async () => {
+        try {
+          await unlink(filePath);
+        } catch {}
+      };
+
+      // Default flag 'w' overwrites existing files, matching the multipart
+      // branch's collision behavior.
+      const writeStream = createWriteStream(filePath);
+
+      writeStream.on('error', async (error) => {
+        logError('POST /api/files/upload - Write error (raw body)', {
+          message: error?.message,
+          stack: error?.stack,
+        });
+        try { req.unpipe(writeStream); } catch {}
+        await cleanup();
+        respond(500, { error: 'Upload failed' });
+      });
+
+      req.on('aborted', async () => {
+        logError('POST /api/files/upload - Request aborted (raw body)');
+        try { writeStream.destroy(); } catch {}
+        await cleanup();
+      });
+
+      req.on('error', async (error) => {
+        logError('POST /api/files/upload - Request error (raw body)', {
+          message: error?.message,
+          stack: error?.stack,
+        });
+        try { writeStream.destroy(); } catch {}
+        await cleanup();
+        respond(500, { error: 'Upload failed' });
+      });
+
+      writeStream.on('finish', async () => {
+        if (responded) return;
+        try {
+          const stats = await stat(filePath);
+          const fileRecord = {
+            name: safeName,
+            size: stats.size,
+            mimeType: fileMimeType,
+            path: normalizedFilePath,
+          };
+          const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+          broadcastFileChange('upload', relativePath, fileRecord.name, token.id);
+          respond(200, {
+            success: true,
+            files: [fileRecord],
+            file: fileRecord,
+          });
+        } catch (error) {
+          logError('POST /api/files/upload - Stat failed (raw body)', {
+            message: error?.message,
+            stack: error?.stack,
+          });
+          await cleanup();
+          respond(500, { error: 'Upload failed' });
+        }
+      });
+
+      req.pipe(writeStream);
+    }
   } catch (error) {
     console.error('POST /api/files/upload - Handler error (pages api)', {
       message: error?.message,
