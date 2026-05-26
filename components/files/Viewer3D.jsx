@@ -20,6 +20,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 
 export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sharePassword }) {
   const mountRef = useRef(null);
@@ -166,10 +167,19 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
             conversionUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
           }
         } else {
+          // GLTFLoader fetches the URL directly (no axios), so embed the
+          // folder PIN as a query param for passcode-locked folders.
+          const targetPath = currentPath ? `${currentPath}/${fileName}` : fileName;
           if (needsConversion) {
-            conversionUrl = `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`;
+            conversionUrl = appendFolderPinToUrl(
+              `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`,
+              targetPath,
+            );
           } else {
-            conversionUrl = `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`;
+            conversionUrl = appendFolderPinToUrl(
+              `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`,
+              targetPath,
+            );
           }
         }
 

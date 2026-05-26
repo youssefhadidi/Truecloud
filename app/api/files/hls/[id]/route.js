@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { getHlsOutputDir } from '@/lib/hlsManager';
 import { nodeToWebStream } from '@/lib/streamUtils';
-import { requireFolderUnlock } from '@/lib/folderLocks';
+import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -175,7 +175,21 @@ export async function GET(req, { params }) {
     // Rewrite segment URIs so they point back to this endpoint
     // This is necessary because FFmpeg writes bare "seg000.ts" lines in the manifest,
     // but the browser needs full API URLs with auth.
-    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}&segment=`;
+    //
+    // If this manifest request itself carried a folderPin (header, query, or
+    // map), the .ts segment URLs need to carry it too — the HLS player fetches
+    // segments directly via <video src>/hls.js and won't replay our request
+    // headers on each segment.
+    let pinSuffix = '';
+    {
+      const lockedPaths = await getAllLockedPaths();
+      const ancestor = findAncestorLockPath(relativePath, lockedPaths);
+      if (ancestor) {
+        const incomingPin = extractIncomingPin(req, ancestor);
+        if (incomingPin) pinSuffix = `&folderPin=${encodeURIComponent(incomingPin)}`;
+      }
+    }
+    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}${pinSuffix}&segment=`;
     const m3u8Rewritten = m3u8Raw.replace(/^(seg\d+\.ts)$/gm, `${baseUrl}$1`);
 
     return new NextResponse(m3u8Rewritten, {

@@ -144,15 +144,27 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return `/api/public/${shareToken}/${endpoint}?${params.toString()}`;
       }
 
-      // Authenticated branch
+      // Authenticated branch. <img src> / <video src> / anchor downloads
+      // can't carry the X-Folder-Pins header, so for passcode-locked folders
+      // the PIN is embedded as a query param.
+      const targetPath = currentPath ? `${currentPath}/${file.name}` : file.name;
       if (type === 'image' || type === 'full') {
-        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`;
+        return appendFolderPinToUrl(
+          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`,
+          targetPath,
+        );
       }
       if (type === 'thumbnail') {
-        return `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=60&w=400&h=400`;
+        return appendFolderPinToUrl(
+          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=60&w=400&h=400`,
+          targetPath,
+        );
       }
       const stage = type === 'video' || type === 'audio' || type === 'pdf' ? 'stream' : 'download';
-      return `/api/files/${stage}/${file.id}?path=${encodeURIComponent(currentPath)}`;
+      return appendFolderPinToUrl(
+        `/api/files/${stage}/${file.id}?path=${encodeURIComponent(currentPath)}`,
+        targetPath,
+      );
     },
     [shareToken, sharePassword, currentPath],
   );

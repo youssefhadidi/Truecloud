@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { FiClock, FiAlertTriangle, FiDownload } from 'react-icons/fi';
+import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 
 function getExt(filename) {
   const dot = filename.lastIndexOf('.');
@@ -251,20 +252,29 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     async (signal) => {
       try {
         const params = new URLSearchParams({ path: currentPath || '' });
-        const res = await fetch(`/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`, { signal });
+        // Native fetch doesn't go through the axios interceptor, so the
+        // folder PIN (if any) needs to be appended manually. The server
+        // returns a bare hlsUrl too — re-append the PIN before handing it
+        // to hls.js, otherwise the manifest fetch will 423.
+        const targetPath = currentPath ? `${currentPath}/${file.name || file.id}` : (file.name || file.id);
+        const statusUrl = appendFolderPinToUrl(
+          `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`,
+          targetPath,
+        );
+        const res = await fetch(statusUrl, { signal });
         if (!res.ok) return null;
         const data = await res.json();
         if (!mountedRef.current) return null;
         setStatus(data.status);
         if (data.progress !== undefined) setProgress(data.progress);
-        if (data.hlsUrl) setHlsUrl(data.hlsUrl);
+        if (data.hlsUrl) setHlsUrl(appendFolderPinToUrl(data.hlsUrl, targetPath));
         return data.status;
       } catch (err) {
         if (err.name === 'AbortError') return null;
         return null;
       }
     },
-    [file.id, currentPath],
+    [file.id, file.name, currentPath],
   );
 
   const triggerTranscode = useCallback(() => {

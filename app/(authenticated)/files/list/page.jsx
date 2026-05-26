@@ -29,7 +29,7 @@ import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 import Spinner from '@/components/ui/Spinner';
 import FolderPinModal from '@/components/FolderPinModal';
-import { setFolderPin, clearAllFolderPins, useFolderPins } from '@/lib/folderPinStore';
+import { setFolderPin, clearAllFolderPins, useFolderPins, appendFolderPinToUrl } from '@/lib/folderPinStore';
 
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
@@ -229,7 +229,11 @@ function FilesPageContent() {
           w: '0',
           h: '0',
         });
-        const url = `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`;
+        const targetPath = state.currentPath ? `${state.currentPath}/${fileName}` : fileName;
+        const url = appendFolderPinToUrl(
+          `/api/files/optimize-image/${encodeURIComponent(fileName)}?${params}`,
+          targetPath,
+        );
         const outName = fileName.replace(/\.(heic|heif)$/i, '.jpeg');
         await handleShareOrDownload(url, outName);
         if (i < state.selectedFiles.length - 1) await new Promise((r) => setTimeout(r, 300));
@@ -425,7 +429,10 @@ function FilesPageContent() {
       const params = new URLSearchParams({
         path: state.currentPath,
       });
-      const zipUrl = `/api/files/heic-to-jpeg-zip?${params}`;
+      const zipUrl = appendFolderPinToUrl(
+        `/api/files/heic-to-jpeg-zip?${params}`,
+        state.currentPath || '',
+      );
       const folderName = (state.currentPath || '').split('/').filter(Boolean).pop() || 'heic-to-jpeg';
       await handleShareOrDownload(zipUrl, `${folderName}-jpeg.zip`);
       state.addNotification('success', `Preparing ZIP of ${heicFiles.length} HEIC file(s) — download will start shortly`);

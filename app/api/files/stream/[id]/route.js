@@ -16,7 +16,18 @@ import { isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob, markNative, isMarkedNative } from '@/lib/hlsManager';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
-import { requireFolderUnlock } from '@/lib/folderLocks';
+import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
+
+// Re-extract the PIN from the request and format it as a URL suffix to
+// append to the hlsUrl we return. The browser will hit /api/files/hls
+// directly (via hls.js / <video src>) so the PIN must travel in the URL.
+async function buildHlsPinSuffix(req, relativePath) {
+  const lockedPaths = await getAllLockedPaths();
+  const ancestor = findAncestorLockPath(relativePath, lockedPaths);
+  if (!ancestor) return '';
+  const pin = extractIncomingPin(req, ancestor);
+  return pin ? `&folderPin=${encodeURIComponent(pin)}` : '';
+}
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -204,7 +215,11 @@ export async function GET(req, { params }) {
 
               if (job.status === 'done') {
                 const hlsParams = new URLSearchParams({ path: relativePath });
-                const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}`;
+                // Carry the folder PIN forward — the browser will fetch this
+                // manifest URL directly via hls.js / <video src> and can't
+                // attach the X-Folder-Pins header on its own.
+                const hlsPinSuffix = await buildHlsPinSuffix(req, relativePath);
+                const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}${hlsPinSuffix}`;
                 logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
                 return NextResponse.json({ status: 'ready', hlsUrl });
               }
