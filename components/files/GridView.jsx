@@ -782,12 +782,30 @@ const GridView = forwardRef(
         const item = allItemsRef.current[itemIndex];
         if (!item) return <div key={key} style={style} />;
         const cellWidth = style.width - gap;
+
+        if (item.isCreating) {
+          return (
+            <GridItem
+              key={key}
+              item={item}
+              cellWidth={cellWidth}
+              containerWidth={containerWidth}
+              style={style}
+              gap={gap}
+              isCreating
+              newFolderName={newFolderNameRef.current}
+              onNewFolderNameChange={onNewFolderNameChange}
+              onCancelCreateFolder={onCancelCreateFolder}
+              onConfirmCreateFolder={onConfirmCreateFolder}
+            />
+          );
+        }
+
         const pathKey = (currentPath ? `${currentPath}/${item.name}` : item.name)
           .replace(/\/+/g, '/')
           .replace(/^\//, '');
         const isShared = sharedPathsRef.current?.has(pathKey) ?? false;
         const isFavorite = favoritePathsRef.current?.has(pathKey) ?? false;
-        const isCreating = item.isCreating;
         const isDeletingThis = deletingFileIdRef.current === item.id;
         const isRenamingThis = renamingFileIdRef.current === item.id;
         const isProcessing = processingFileRef.current === item.id;
@@ -800,11 +818,6 @@ const GridView = forwardRef(
             containerWidth={containerWidth}
             style={style}
             gap={gap}
-            isCreating={isCreating}
-            newFolderName={isCreating ? newFolderNameRef.current : undefined}
-            onNewFolderNameChange={onNewFolderNameChange}
-            onCancelCreateFolder={onCancelCreateFolder}
-            onConfirmCreateFolder={onConfirmCreateFolder}
             isDeletingFile={isDeletingThis}
             isRenamingFile={isRenamingThis}
             newFileName={isRenamingThis ? newFileNameRef.current : undefined}
