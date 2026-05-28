@@ -3,8 +3,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FiActivity, FiCheckCircle, FiAlertTriangle, FiPieChart, FiCopy } from 'react-icons/fi';
+import { FiActivity, FiCheckCircle, FiAlertTriangle, FiPieChart, FiCopy, FiFolder } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import Tabs from '@/components/ui/Tabs';
 import FolderTree from './FolderTree';
 import CategoryBreakdown from './CategoryBreakdown';
 import DuplicatesList from './DuplicatesList';
@@ -44,6 +45,7 @@ export default function StorageClient() {
   const [scanningPath, setScanningPath] = useState('');
   const [doneInfo, setDoneInfo] = useState(null);
   const [lockedPaths, setLockedPaths] = useState(new Set());
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     setStatus('scanning');
@@ -121,34 +123,47 @@ export default function StorageClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Folder tree</h2>
-            <span className="text-xs text-gray-400 tabular-nums">{formatBytes(totalBytes)} total</span>
-          </div>
-          <FolderTree folders={folders} lockedPaths={lockedPaths} />
-        </div>
+      <Tabs
+        tabs={[
+          { key: 'overview', label: 'Folders & types', icon: FiFolder },
+          { key: 'duplicates', label: 'Duplicates', icon: FiCopy, badge: duplicates.length },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden self-start">
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Folder tree</h2>
+              <span className="text-xs text-gray-400 tabular-nums">{formatBytes(totalBytes)} total</span>
+            </div>
+            <FolderTree folders={folders} lockedPaths={lockedPaths} />
+          </div>
+
+          <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden self-start">
+            <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+              <FiPieChart className="text-gray-400" size={16} />
+              <h2 className="text-sm font-semibold text-white">By file type</h2>
+            </div>
+            <div className="p-4">
+              <CategoryBreakdown categories={categories} totalBytes={totalBytes} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'duplicates' && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
-            <FiPieChart className="text-gray-400" size={16} />
-            <h2 className="text-sm font-semibold text-white">By file type</h2>
+            <FiCopy className="text-amber-400" size={16} />
+            <h2 className="text-sm font-semibold text-white">Duplicates</h2>
+            <span className="text-xs text-gray-500">matched by name + size</span>
           </div>
-          <div className="p-4">
-            <CategoryBreakdown categories={categories} totalBytes={totalBytes} />
-          </div>
+          <DuplicatesList duplicates={duplicates} />
         </div>
-      </div>
-
-      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
-          <FiCopy className="text-amber-400" size={16} />
-          <h2 className="text-sm font-semibold text-white">Duplicates</h2>
-          <span className="text-xs text-gray-500">matched by name + size</span>
-        </div>
-        <DuplicatesList duplicates={duplicates} />
-      </div>
+      )}
     </div>
   );
 

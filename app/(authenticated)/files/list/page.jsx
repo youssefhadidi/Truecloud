@@ -850,6 +850,21 @@ function FilesPageContent() {
           }}
         >
           <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--text-3)',
+              paddingRight: 10,
+              marginRight: 4,
+              borderRight: '1px solid var(--border)',
+              flexShrink: 0,
+            }}
+          >
+            {displayFiles.length} {displayFiles.length === 1 ? 'item' : 'items'}
+          </div>
+          <div
             className="tc-breadcrumb-scroll"
             style={{
               display: 'flex',

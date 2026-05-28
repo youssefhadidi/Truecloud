@@ -8,6 +8,7 @@ export default function Tabs({ tabs, active, onChange }) {
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         const Icon = tab.icon;
+        const hasBadge = tab.badge !== undefined && tab.badge !== null && tab.badge !== 0 && tab.badge !== '';
         return (
           <button
             key={tab.key}
@@ -21,6 +22,15 @@ export default function Tabs({ tabs, active, onChange }) {
           >
             {Icon && <Icon size={16} />}
             {tab.label}
+            {hasBadge && (
+              <span
+                className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold tabular-nums ${
+                  isActive ? 'bg-blue-500 text-white' : 'bg-amber-500/90 text-gray-900'
+                }`}
+              >
+                {tab.badge}
+              </span>
+            )}
           </button>
         );
       })}
