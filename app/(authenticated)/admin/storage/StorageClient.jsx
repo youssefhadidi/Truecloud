@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { FiActivity, FiCheckCircle, FiAlertTriangle, FiPieChart, FiCopy, FiFolder } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import Tabs from '@/components/ui/Tabs';
@@ -166,39 +166,39 @@ export default function StorageClient() {
       )}
     </div>
   );
-
-  function StatusPill({ status, connected, filesScanned, totalBytes, doneInfo, error }) {
-    let icon = null;
-    let label = '';
-    let color = 'bg-gray-700 text-gray-300';
-
-    if (!connected) {
-      icon = <FiAlertTriangle size={14} />;
-      label = 'Disconnected';
-      color = 'bg-red-900/40 text-red-300 border border-red-700/50';
-    } else if (status === 'scanning') {
-      icon = <FiActivity size={14} className="animate-pulse" />;
-      label = `Scanning · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}`;
-      color = 'bg-blue-900/40 text-blue-200 border border-blue-700/50';
-    } else if (status === 'done') {
-      icon = <FiCheckCircle size={14} />;
-      label = `Done · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}${
-        doneInfo ? ` · ${formatDuration(doneInfo.durationMs)}` : ''
-      }`;
-      color = 'bg-green-900/40 text-green-200 border border-green-700/50';
-    } else if (status === 'error' || status === 'denied') {
-      icon = <FiAlertTriangle size={14} />;
-      label = error || 'Error';
-      color = 'bg-red-900/40 text-red-300 border border-red-700/50';
-    } else {
-      label = 'Idle';
-    }
-
-    return (
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${color}`}>
-        {icon}
-        <span>{label}</span>
-      </div>
-    );
-  }
 }
+
+const StatusPill = memo(function StatusPill({ status, connected, filesScanned, totalBytes, doneInfo, error }) {
+  let icon = null;
+  let label = '';
+  let color = 'bg-gray-700 text-gray-300';
+
+  if (!connected) {
+    icon = <FiAlertTriangle size={14} />;
+    label = 'Disconnected';
+    color = 'bg-red-900/40 text-red-300 border border-red-700/50';
+  } else if (status === 'scanning') {
+    icon = <FiActivity size={14} className="animate-pulse" />;
+    label = `Scanning · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}`;
+    color = 'bg-blue-900/40 text-blue-200 border border-blue-700/50';
+  } else if (status === 'done') {
+    icon = <FiCheckCircle size={14} />;
+    label = `Done · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}${
+      doneInfo ? ` · ${formatDuration(doneInfo.durationMs)}` : ''
+    }`;
+    color = 'bg-green-900/40 text-green-200 border border-green-700/50';
+  } else if (status === 'error' || status === 'denied') {
+    icon = <FiAlertTriangle size={14} />;
+    label = error || 'Error';
+    color = 'bg-red-900/40 text-red-300 border border-red-700/50';
+  } else {
+    label = 'Idle';
+  }
+
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${color}`}>
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
+});

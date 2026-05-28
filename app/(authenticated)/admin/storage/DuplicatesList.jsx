@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useDeferredValue } from 'react';
 import { FiCopy, FiTrash2, FiLoader, FiAlertCircle } from 'react-icons/fi';
 
 function formatBytes(bytes) {
@@ -27,18 +27,30 @@ export default function DuplicatesList({ duplicates }) {
   const [busy, setBusy] = useState(() => new Set());
   const [errors, setErrors] = useState(() => new Map()); // path -> message
 
+  // Defer the snapshot ref so the sort/filter doesn't block other state
+  // updates landing in the same WS tick.
+  const deferredDuplicates = useDeferredValue(duplicates);
+
   // Filter out already-deleted paths and groups that have dropped below 2.
   // Sort by wasted space (size × (count − 1)) so the biggest cleanups float up.
   const visible = useMemo(() => {
     const out = [];
-    for (const g of duplicates) {
-      const paths = g.paths.filter((p) => !deleted.has(p));
-      if (paths.length < 2) continue;
-      out.push({ ...g, paths, wasted: g.size * (paths.length - 1) });
+    for (const g of deferredDuplicates) {
+      let kept = null;
+      // Fast path: when nothing has been deleted yet we can keep the array
+      // reference and skip the per-path filter allocation entirely. With a
+      // long-running scan this is the common case.
+      if (deleted.size === 0) {
+        kept = g.paths;
+      } else {
+        kept = g.paths.filter((p) => !deleted.has(p));
+        if (kept.length < 2) continue;
+      }
+      out.push({ name: g.name, size: g.size, paths: kept, wasted: g.size * (kept.length - 1) });
     }
     out.sort((a, b) => b.wasted - a.wasted);
     return out;
-  }, [duplicates, deleted]);
+  }, [deferredDuplicates, deleted]);
 
   const totalWasted = visible.reduce((s, g) => s + g.wasted, 0);
 
