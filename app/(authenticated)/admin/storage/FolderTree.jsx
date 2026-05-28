@@ -33,18 +33,19 @@ function buildChildIndex(folders) {
   return byParent;
 }
 
-// Depth-first flatten that skips descendants of collapsed nodes. Keeps render
-// cost proportional to *visible* folders, not total folders.
-function flattenVisible(byParent, collapsed) {
+// Depth-first flatten that only descends into expanded nodes. Keeps render
+// cost proportional to *visible* folders, not total folders. Root-level
+// children (depth 0) are always shown so the user has somewhere to start.
+function flattenVisible(byParent, expanded) {
   const out = [];
   const rootMax = (byParent.get('') || []).reduce((m, c) => Math.max(m, c.bytes), 0);
   function visit(parent, depth, parentMax) {
     const children = byParent.get(parent) || [];
     for (const c of children) {
       const hasChildren = byParent.has(c.path) && byParent.get(c.path).length > 0;
-      const isCollapsed = collapsed.has(c.path);
-      out.push({ ...c, depth, parentMax, hasChildren, collapsed: isCollapsed });
-      if (!isCollapsed && hasChildren) {
+      const isExpanded = expanded.has(c.path);
+      out.push({ ...c, depth, parentMax, hasChildren, expanded: isExpanded });
+      if (isExpanded && hasChildren) {
         const ownMax = byParent.get(c.path).reduce((m, x) => Math.max(m, x.bytes), 0);
         visit(c.path, depth + 1, ownMax);
       }
@@ -55,7 +56,10 @@ function flattenVisible(byParent, collapsed) {
 }
 
 export default function FolderTree({ folders, lockedPaths }) {
-  const [collapsed, setCollapsed] = useState(() => new Set());
+  // Empty set = all collapsed. New folders discovered mid-scan default to
+  // collapsed too, since they only appear in the rendered tree when their
+  // ancestor is in this set.
+  const [expanded, setExpanded] = useState(() => new Set());
   const listRef = useRef(null);
 
   // Defer the folders reference so the heavy buildChildIndex + flattenVisible
@@ -64,7 +68,7 @@ export default function FolderTree({ folders, lockedPaths }) {
   const deferredFolders = useDeferredValue(folders);
 
   const byParent = useMemo(() => buildChildIndex(deferredFolders), [deferredFolders]);
-  const rows = useMemo(() => flattenVisible(byParent, collapsed), [byParent, collapsed]);
+  const rows = useMemo(() => flattenVisible(byParent, expanded), [byParent, expanded]);
   const totalFolders = useMemo(() => Object.keys(deferredFolders).length, [deferredFolders]);
 
   // react-virtualized caches row contents — when the underlying data updates
@@ -75,7 +79,7 @@ export default function FolderTree({ folders, lockedPaths }) {
   }, [rows, lockedPaths]);
 
   const toggle = useCallback((path) => {
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -83,15 +87,15 @@ export default function FolderTree({ folders, lockedPaths }) {
     });
   }, []);
 
-  const collapseAll = useCallback(() => {
+  const expandAll = useCallback(() => {
     const all = new Set();
     for (const [path, children] of byParent.entries()) {
       if (path && children.length > 0) all.add(path);
     }
-    setCollapsed(all);
+    setExpanded(all);
   }, [byParent]);
 
-  const expandAll = useCallback(() => setCollapsed(new Set()), []);
+  const collapseAll = useCallback(() => setExpanded(new Set()), []);
 
   // Stable rowRenderer per row data + lockedPaths. Re-created when rows
   // change so the new closure sees the updated array.
@@ -100,22 +104,14 @@ export default function FolderTree({ folders, lockedPaths }) {
       const r = rows[index];
       const pct = r.parentMax > 0 ? (r.bytes / r.parentMax) * 100 : 0;
       const indent = r.depth * 16;
-      return (
-        <div
-          key={key}
-          style={style}
-          className="flex items-center gap-2 px-3 border-b border-gray-800/60 hover:bg-gray-800/50"
-        >
+      const interactive = r.hasChildren;
+      const content = (
+        <>
           <div className="shrink-0 flex items-center" style={{ paddingLeft: indent }}>
             {r.hasChildren ? (
-              <button
-                type="button"
-                onClick={() => toggle(r.path)}
-                className="text-gray-500 hover:text-white p-0.5 -m-0.5"
-                aria-label={r.collapsed ? 'Expand' : 'Collapse'}
-              >
-                {r.collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
-              </button>
+              <span className="text-gray-500 inline-flex">
+                {r.expanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+              </span>
             ) : (
               <span className="inline-block w-[14px]" />
             )}
@@ -134,6 +130,26 @@ export default function FolderTree({ folders, lockedPaths }) {
               <div className="h-full bg-blue-500/70" style={{ width: `${Math.max(pct, 0.5).toFixed(1)}%` }} />
             </div>
           </div>
+        </>
+      );
+      return interactive ? (
+        <button
+          key={key}
+          type="button"
+          onClick={() => toggle(r.path)}
+          style={style}
+          aria-expanded={r.expanded}
+          className="flex items-center gap-2 px-3 border-b border-gray-800/60 hover:bg-gray-800/50 text-left w-full"
+        >
+          {content}
+        </button>
+      ) : (
+        <div
+          key={key}
+          style={style}
+          className="flex items-center gap-2 px-3 border-b border-gray-800/60"
+        >
+          {content}
         </div>
       );
     },
