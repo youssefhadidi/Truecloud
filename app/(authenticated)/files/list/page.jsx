@@ -137,6 +137,12 @@ function FilesPageContent() {
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [convertingHeic, setConvertingHeic] = useState(false);
+  // Folder-lock unlock state. The PIN itself lives in the module-level
+  // folderPinStore (lib/folderPinStore.js) keyed by lock path, so the axios
+  // interceptor and download-URL helpers can all reach it. We only keep the
+  // pending-modal state here. PINs persist for the lifetime of this page
+  // (cleared on unmount) so multiple locked folders can be open at once.
+  const [pendingLock, setPendingLock] = useState(null); // { name, path }
 
   const handlers = useFileHandlers({
     currentPath: state.currentPath,
@@ -444,12 +450,6 @@ function FilesPageContent() {
 
   const queryClient = useQueryClient();
 
-  // Folder-lock unlock state. The PIN itself lives in the module-level
-  // folderPinStore (lib/folderPinStore.js) keyed by lock path, so the axios
-  // interceptor and download-URL helpers can all reach it. We only keep the
-  // pending-modal state here. PINs persist for the lifetime of this page
-  // (cleared on unmount) so multiple locked folders can be open at once.
-  const [pendingLock, setPendingLock] = useState(null); // { name, path }
   const unlockedPins = useFolderPins();
 
   const normalizePath = useCallback(
