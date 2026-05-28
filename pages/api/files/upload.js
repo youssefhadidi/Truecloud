@@ -1,8 +1,9 @@
 /** @format */
 
-import { mkdir, unlink, stat } from 'fs/promises';
+import { mkdir, unlink, stat, rename } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
+import { buildTempName } from '@/lib/uploadTemp';
 
 export const config = {
   api: {
@@ -201,12 +202,17 @@ export default async function handler(req, res) {
         return;
       }
 
+      // Stream to a hidden temp name first; rename to the final name on
+      // finish so the list endpoint never sees a half-written file.
+      const tempName = buildTempName(safeName);
+      const tempPath = join(targetDir, tempName);
+
       filesReceived += 1;
       const normalizedFilePath = filePath
         .replace(/\\/g, '/')
         .replace(new RegExp(`^${UPLOAD_DIR.replace(/\\/g, '/')}/`), '');
 
-      writtenFilePaths.push(filePath);
+      writtenFilePaths.push(tempPath);
 
       const fileRecord = {
         name: safeName,
@@ -215,11 +221,16 @@ export default async function handler(req, res) {
         path: normalizedFilePath,
       };
 
-      const writeStream = createWriteStream(filePath);
+      const writeStream = createWriteStream(tempPath);
       const writePromise = new Promise((resolveWrite, rejectWrite) => {
         writeStream.on('finish', resolveWrite);
         writeStream.on('error', rejectWrite);
-      }).then(() => {
+      }).then(async () => {
+        await rename(tempPath, filePath);
+        // Track the final path too so cleanup() on a later request-level error
+        // can still remove already-renamed files (preserving the original
+        // all-or-nothing semantics).
+        writtenFilePaths.push(filePath);
         uploadedFiles.push(fileRecord);
       });
 
@@ -282,8 +293,10 @@ export default async function handler(req, res) {
       }
 
       const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+      const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
       for (const f of uploadedFiles) {
         broadcastFileChange('upload', relativePath, f.name, token.id);
+        generateThumbnailForUpload(join(targetDir, f.name), relativePath, f.name);
       }
 
       respond(200, payload);
@@ -321,6 +334,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid path' });
       }
 
+      // Stream to a hidden temp name first; rename to the final name on
+      // finish so the list endpoint never sees a half-written file.
+      const tempName = buildTempName(safeName);
+      const tempPath = join(targetDir, tempName);
+
       const fileMimeType = contentType || 'application/octet-stream';
       const normalizedFilePath = filePath
         .replace(/\\/g, '/')
@@ -340,16 +358,17 @@ export default async function handler(req, res) {
       };
 
       const cleanup = async () => {
-        try {
-          await unlink(filePath);
-        } catch {}
+        // Try both the temp (pre-rename) and final (post-rename) paths so we
+        // clean up regardless of where in the lifecycle the failure occurred.
+        try { await unlink(tempPath); } catch {}
+        try { await unlink(filePath); } catch {}
       };
 
       // Default flag 'w' overwrites existing files, matching the multipart
       // branch's collision behavior. highWaterMark bumped from the 16 KB
       // default to 1 MB so large uploads don't pay the pipe-drain cost on
       // every 16 KB chunk.
-      const writeStream = createWriteStream(filePath, { highWaterMark: 1024 * 1024 });
+      const writeStream = createWriteStream(tempPath, { highWaterMark: 1024 * 1024 });
 
       writeStream.on('error', async (error) => {
         logError('POST /api/files/upload - Write error (raw body)', {
@@ -380,6 +399,7 @@ export default async function handler(req, res) {
       writeStream.on('finish', async () => {
         if (responded) return;
         try {
+          await rename(tempPath, filePath);
           const stats = await stat(filePath);
           const fileRecord = {
             name: safeName,
@@ -389,6 +409,8 @@ export default async function handler(req, res) {
           };
           const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
           broadcastFileChange('upload', relativePath, fileRecord.name, token.id);
+          const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
+          generateThumbnailForUpload(filePath, relativePath, fileRecord.name);
           respond(200, {
             success: true,
             files: [fileRecord],

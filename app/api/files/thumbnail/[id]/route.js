@@ -13,6 +13,7 @@ import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } 
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
+import { isUploadTempName } from '@/lib/uploadTemp';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -35,6 +36,13 @@ export async function GET(req, { params }) {
 
     const resolvedParams = await params;
     fileId = safeDecodeURIComponent(resolvedParams.id);
+
+    // Refuse in-flight upload temp files — a list refresh fired by an early
+    // upload event can request a thumbnail before the rename has happened,
+    // which would otherwise cache a broken thumbnail from a partial file.
+    if (isUploadTempName(fileId)) {
+      return NextResponse.json({ error: 'Upload in progress' }, { status: 404 });
+    }
 
     // Get path from query params
     const url = new URL(req.url);

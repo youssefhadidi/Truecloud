@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
+import { isUploadTempName } from '@/lib/uploadTemp';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -56,6 +57,10 @@ export async function GET(req, { params }) {
     } catch (e) {
       return NextResponse.json({ error: 'Directory not found' }, { status: 404 });
     }
+
+    // Hide in-flight upload temp files so the share list never shows a
+    // half-written upload.
+    fileNames = fileNames.filter((name) => !isUploadTempName(name));
 
     // Get file stats for each file
     const files = await Promise.all(

@@ -1,9 +1,10 @@
 /** @format */
 
-import { mkdir, unlink } from 'fs/promises';
+import { mkdir, unlink, rename } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { buildTempName } from '@/lib/uploadTemp';
 
 export const config = {
   api: {
@@ -111,7 +112,12 @@ export default async function handler(req, res) {
         : baseName;
       const fileMimeType = info?.mimeType || 'application/octet-stream';
       const filePath = join(targetDir, safeName);
-      writtenFilePaths.push(filePath);
+
+      // Stream to a hidden temp name first; rename to the final name on
+      // finish so the list/thumbnail endpoints never see a half-written file.
+      const tempName = buildTempName(safeName);
+      const tempPath = join(targetDir, tempName);
+      writtenFilePaths.push(tempPath);
 
       const fileRecord = {
         name: safeName,
@@ -119,11 +125,13 @@ export default async function handler(req, res) {
         mimeType: fileMimeType,
       };
 
-      const writeStream = createWriteStream(filePath);
+      const writeStream = createWriteStream(tempPath);
       const writePromise = new Promise((resolveWrite, rejectWrite) => {
         writeStream.on('finish', resolveWrite);
         writeStream.on('error', rejectWrite);
-      }).then(() => {
+      }).then(async () => {
+        await rename(tempPath, filePath);
+        writtenFilePaths.push(filePath);
         uploadedFiles.push(fileRecord);
       });
 
@@ -178,8 +186,10 @@ export default async function handler(req, res) {
       }
 
       const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+      const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
       for (const f of uploadedFiles) {
         broadcastFileChange('upload', pathCheck.fullPath, f.name, 'share-' + token);
+        generateThumbnailForUpload(join(targetDir, f.name), pathCheck.fullPath, f.name);
       }
 
       respond(200, payload);
