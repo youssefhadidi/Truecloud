@@ -2,8 +2,8 @@
 
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
-import { FiFolder, FiLock, FiChevronDown, FiChevronRight } from 'react-icons/fi';
+import { useMemo } from 'react';
+import { FiFolder, FiLock } from 'react-icons/fi';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -28,57 +28,30 @@ function buildChildIndex(folders) {
   return byParent;
 }
 
-// Depth-first flatten that skips descendants of collapsed nodes. The result
-// is a flat list of rows we can render in order — keeps render cost
-// proportional to *visible* folders, not total folders.
-function flattenVisible(byParent, collapsed) {
+// Depth-first flatten — always fully expanded.
+function flattenAll(byParent) {
   const out = [];
-  const rootMax = (byParent.get('') || []).reduce((m, c) => Math.max(m, c.bytes), 0);
   function visit(parent, depth, parentMax) {
     const children = byParent.get(parent) || [];
     for (const c of children) {
-      const hasChildren = byParent.has(c.path) && byParent.get(c.path).length > 0;
-      const isCollapsed = collapsed.has(c.path);
-      out.push({ ...c, depth, parentMax, hasChildren, collapsed: isCollapsed });
-      if (!isCollapsed && hasChildren) {
-        const ownMax = byParent.get(c.path).reduce((m, x) => Math.max(m, x.bytes), 0);
+      out.push({ ...c, depth, parentMax });
+      const grandkids = byParent.get(c.path);
+      if (grandkids && grandkids.length > 0) {
+        const ownMax = grandkids.reduce((m, x) => Math.max(m, x.bytes), 0);
         visit(c.path, depth + 1, ownMax);
       }
     }
   }
+  const rootMax = (byParent.get('') || []).reduce((m, c) => Math.max(m, c.bytes), 0);
   visit('', 0, rootMax);
   return out;
 }
 
 export default function FolderTree({ folders, lockedPaths }) {
-  const [collapsed, setCollapsed] = useState(() => new Set());
-
   const byParent = useMemo(() => buildChildIndex(folders), [folders]);
-  const rows = useMemo(() => flattenVisible(byParent, collapsed), [byParent, collapsed]);
+  const rows = useMemo(() => flattenAll(byParent), [byParent]);
 
-  const toggle = useCallback((path) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
-
-  const collapseAll = useCallback(() => {
-    const all = new Set();
-    for (const path of Object.keys(folders)) {
-      // Only collapse non-leaves to keep the set small
-      if (byParent.has(path) && byParent.get(path).length > 0) all.add(path);
-    }
-    setCollapsed(all);
-  }, [folders, byParent]);
-
-  const expandAll = useCallback(() => setCollapsed(new Set()), []);
-
-  const totalFolders = Object.keys(folders).length;
-
-  if (totalFolders === 0) {
+  if (rows.length === 0) {
     return (
       <div className="text-sm text-gray-500 px-3 py-6 text-center">
         Waiting for the scan to discover folders…
@@ -88,47 +61,25 @@ export default function FolderTree({ folders, lockedPaths }) {
 
   return (
     <div>
-      <div className="px-3 py-2 border-b border-gray-700/60 flex items-center justify-between text-xs">
-        <span className="text-gray-400 tabular-nums">{totalFolders.toLocaleString()} folders · {rows.length.toLocaleString()} visible</span>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={expandAll} className="text-gray-400 hover:text-white transition-colors px-2 py-0.5 rounded hover:bg-gray-700/50">Expand all</button>
-          <button type="button" onClick={collapseAll} className="text-gray-400 hover:text-white transition-colors px-2 py-0.5 rounded hover:bg-gray-700/50">Collapse all</button>
-        </div>
+      <div className="px-3 py-2 border-b border-gray-700/60 text-xs text-gray-400 tabular-nums">
+        {rows.length.toLocaleString()} folders
       </div>
       <ul className="divide-y divide-gray-800/60 max-h-[calc(100vh-340px)] overflow-y-auto">
         {rows.map((r) => (
-          <FolderRow
-            key={r.path}
-            row={r}
-            isLocked={lockedPaths.has(r.path)}
-            onToggle={toggle}
-          />
+          <FolderRow key={r.path} row={r} isLocked={lockedPaths.has(r.path)} />
         ))}
       </ul>
     </div>
   );
 }
 
-function FolderRow({ row, isLocked, onToggle }) {
+function FolderRow({ row, isLocked }) {
   const pct = row.parentMax > 0 ? (row.bytes / row.parentMax) * 100 : 0;
   const indent = row.depth * 16;
 
   return (
     <li className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-800/50">
-      <div className="shrink-0 flex items-center" style={{ paddingLeft: indent }}>
-        {row.hasChildren ? (
-          <button
-            type="button"
-            onClick={() => onToggle(row.path)}
-            className="text-gray-500 hover:text-white p-0.5 -m-0.5"
-            aria-label={row.collapsed ? 'Expand' : 'Collapse'}
-          >
-            {row.collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
-          </button>
-        ) : (
-          <span className="inline-block w-[14px]" />
-        )}
-      </div>
+      <div className="shrink-0" style={{ paddingLeft: indent }} />
       {isLocked ? (
         <FiLock className="text-yellow-400 shrink-0" size={14} />
       ) : (
