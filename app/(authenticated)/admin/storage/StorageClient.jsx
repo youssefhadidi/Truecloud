@@ -3,10 +3,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FiActivity, FiCheckCircle, FiAlertTriangle, FiPieChart } from 'react-icons/fi';
+import { FiActivity, FiCheckCircle, FiAlertTriangle, FiPieChart, FiCopy } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import FolderTree from './FolderTree';
 import CategoryBreakdown from './CategoryBreakdown';
+import DuplicatesList from './DuplicatesList';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -37,6 +38,7 @@ export default function StorageClient() {
   const [error, setError] = useState(null);
   const [folders, setFolders] = useState({});
   const [categories, setCategories] = useState({});
+  const [duplicates, setDuplicates] = useState([]);
   const [filesScanned, setFilesScanned] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [scanningPath, setScanningPath] = useState('');
@@ -57,6 +59,7 @@ export default function StorageClient() {
         case 'progress':
           setFolders(p.folders || {});
           setCategories(p.categories || {});
+          setDuplicates(p.duplicates || []);
           setFilesScanned(p.filesScanned || 0);
           setTotalBytes(p.totalBytes || 0);
           setScanningPath(p.currentPath || '');
@@ -136,6 +139,15 @@ export default function StorageClient() {
             <CategoryBreakdown categories={categories} totalBytes={totalBytes} />
           </div>
         </div>
+      </div>
+
+      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+          <FiCopy className="text-amber-400" size={16} />
+          <h2 className="text-sm font-semibold text-white">Duplicates</h2>
+          <span className="text-xs text-gray-500">matched by name + size</span>
+        </div>
+        <DuplicatesList duplicates={duplicates} />
       </div>
     </div>
   );
