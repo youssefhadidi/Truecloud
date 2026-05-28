@@ -43,6 +43,7 @@ export default function DuplicatesList({ duplicates }) {
   const totalWasted = visible.reduce((s, g) => s + g.wasted, 0);
 
   async function handleDelete(path) {
+    if (!window.confirm(`Move this file to trash?\n\n${path}`)) return;
     setBusy((prev) => new Set(prev).add(path));
     setErrors((prev) => {
       const next = new Map(prev);

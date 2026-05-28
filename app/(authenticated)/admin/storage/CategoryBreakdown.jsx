@@ -3,6 +3,7 @@
 'use client';
 
 import { CATEGORY_ORDER } from '@/lib/storageCategories';
+import { useMemo } from 'react';
 
 const LABELS = {
   video: 'Video',
@@ -38,10 +39,14 @@ function formatBytes(bytes) {
 }
 
 export default function CategoryBreakdown({ categories, totalBytes }) {
-  const rows = CATEGORY_ORDER.map((name) => {
-    const c = categories[name] || { bytes: 0, count: 0 };
-    return { name, bytes: c.bytes, count: c.count };
-  }).filter((r) => r.bytes > 0 || r.count > 0);
+  const rows = useMemo(() => {
+    const out = CATEGORY_ORDER.map((name) => {
+      const c = categories[name] || { bytes: 0, count: 0 };
+      return { name, bytes: c.bytes, count: c.count };
+    }).filter((r) => r.bytes > 0 || r.count > 0);
+    out.sort((a, b) => b.bytes - a.bytes);
+    return out;
+  }, [categories]);
 
   if (rows.length === 0) {
     return <div className="text-sm text-gray-500">No files scanned yet.</div>;
