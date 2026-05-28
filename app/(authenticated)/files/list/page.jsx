@@ -265,16 +265,143 @@ function FilesPageContent() {
     if (!state.selectionMode) lastSelectedRef.current = null;
   }, [state.selectionMode]);
 
+  // Keyboard shortcuts. Skip when typing or when a modal/inline-editor owns the
+  // keystroke. Media viewer has its own handler — defer to it when open.
   useEffect(() => {
-    if (!state.selectionMode) return;
+    const isTyping = (t) => {
+      if (!t) return false;
+      const tag = t.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
+    };
+
+    const modalOpen = () =>
+      Boolean(
+        state.sharingFile ||
+          state.creatingFolder ||
+          state.renamingFile ||
+          state.deletingFile ||
+          moveModalOpen ||
+          pendingLock,
+      );
+
+    const readOnly = Boolean(state.usbMode);
+
     const onKey = (e) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      state.setSelectionMode(false);
-      state.setSelectedFiles([]);
+      if (e.defaultPrevented) return;
+      if (isTyping(e.target)) return;
+
+      // Escape: exit selection mode. Defer to modals / media viewer.
+      if (e.key === 'Escape') {
+        if (state.viewerFile || modalOpen()) return;
+        if (state.selectionMode) {
+          e.preventDefault();
+          state.setSelectionMode(false);
+          state.setSelectedFiles([]);
+        }
+        return;
+      }
+
+      if (state.viewerFile) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+      const { altKey: alt, shiftKey: shift } = e;
+
+      // Alt+←/→ — navigate history (overrides browser back/forward)
+      if (alt && !ctrl && !shift && e.key === 'ArrowLeft') {
+        if (navigation.canGoBack) {
+          e.preventDefault();
+          navigation.goBack();
+        }
+        return;
+      }
+      if (alt && !ctrl && !shift && e.key === 'ArrowRight') {
+        if (navigation.canGoForward) {
+          e.preventDefault();
+          navigation.goForward();
+        }
+        return;
+      }
+
+      // Ctrl/Cmd+A — select all in current folder
+      if (ctrl && !alt && !shift && (e.key === 'a' || e.key === 'A')) {
+        if (isGlobalSearch || readOnly || modalOpen()) return;
+        if (selectableFiles.length === 0) return;
+        e.preventDefault();
+        if (!state.selectionMode) state.setSelectionMode(true);
+        if (allSelected) state.setSelectedFiles([]);
+        else state.setSelectedFiles(selectableFiles.map((f) => f.name));
+        return;
+      }
+
+      if (modalOpen()) return;
+
+      // Delete — two-step bulk delete (first press shows confirm, second deletes)
+      if (!ctrl && !alt && !shift && e.key === 'Delete') {
+        if (readOnly || isGlobalSearch) return;
+        if (!state.selectionMode || state.selectedFiles.length === 0 || bulkDeleting) return;
+        e.preventDefault();
+        if (bulkDeleteConfirming) handleBulkDelete();
+        else setBulkDeleteConfirming(true);
+        return;
+      }
+
+      // F2 — rename the single selected file
+      if (!ctrl && !alt && !shift && e.key === 'F2') {
+        if (readOnly || isGlobalSearch) return;
+        if (state.selectedFiles.length !== 1) return;
+        const file = state.files.find((f) => f.name === state.selectedFiles[0]);
+        if (!file) return;
+        e.preventDefault();
+        handlers.initiateRename(file);
+        return;
+      }
+
+      // Single-letter shortcuts (no modifier)
+      if (ctrl || alt || shift) return;
+
+      switch (e.key) {
+        case 'n':
+        case 'N':
+          if (readOnly || isGlobalSearch || state.creatingFolder) return;
+          e.preventDefault();
+          handlers.initiateCreateFolder();
+          return;
+        case 'm':
+        case 'M':
+          if (readOnly || isGlobalSearch) return;
+          if (!state.selectionMode || state.selectedFiles.length === 0) return;
+          e.preventDefault();
+          setMoveModalOpen(true);
+          return;
+        case 'g':
+        case 'G':
+          e.preventDefault();
+          state.setViewMode('grid');
+          return;
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          state.setViewMode('list');
+          return;
+        default:
+          return;
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [state.selectionMode, state.setSelectionMode, state.setSelectedFiles]);
+  }, [
+    state,
+    navigation,
+    handlers,
+    isGlobalSearch,
+    selectableFiles,
+    allSelected,
+    moveModalOpen,
+    pendingLock,
+    bulkDeleteConfirming,
+    bulkDeleting,
+    handleBulkDelete,
+  ]);
 
   const toggleSelection = useCallback(
     (file, mods = {}) => {

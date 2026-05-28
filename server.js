@@ -249,8 +249,19 @@ loadEsModules().then(() => {
       wss.handleUpgrade(request, socket, head, (ws) => {
         ws.isAlive = true;
         ws.userId = authResult.userId || null;
+        ws.userRole = null;
         wsClients.add(ws);
         addUserWs(ws.userId, ws);
+
+        // Resolve the user's role once per socket so the storage-scan
+        // subscribe handler can gate non-admins without a per-message DB hit.
+        if (ws.userId) {
+          import('./lib/prisma.js').then(({ prisma }) =>
+            prisma.user.findUnique({ where: { id: ws.userId }, select: { role: true } }),
+          ).then((u) => {
+            ws.userRole = u?.role || null;
+          }).catch(() => {});
+        }
 
         ws.send(JSON.stringify({
           type: 'update-status',
@@ -308,6 +319,19 @@ loadEsModules().then(() => {
                 logSubscribers.delete(ws);
                 if (logSubscribers.size === 0) stopLogStream();
               }
+            } else if (msg.channel === 'storage-scan') {
+              if (msg.type === 'subscribe') {
+                if (ws.userRole !== 'admin') {
+                  ws.send(JSON.stringify({
+                    type: 'storage-scan',
+                    payload: { event: 'denied', reason: 'not-admin' },
+                  }));
+                } else {
+                  import('./lib/storageScanManager.js').then(({ addSubscriber }) => addSubscriber(ws));
+                }
+              } else if (msg.type === 'unsubscribe') {
+                import('./lib/storageScanManager.js').then(({ removeSubscriber }) => removeSubscriber(ws));
+              }
             }
           } catch {}
         });
@@ -321,6 +345,7 @@ loadEsModules().then(() => {
           if (logSubscribers.delete(ws) && logSubscribers.size === 0) {
             stopLogStream();
           }
+          import('./lib/storageScanManager.js').then(({ removeSubscriber }) => removeSubscriber(ws)).catch(() => {});
         });
 
         ws.on('error', () => {
@@ -332,6 +357,7 @@ loadEsModules().then(() => {
           if (logSubscribers.delete(ws) && logSubscribers.size === 0) {
             stopLogStream();
           }
+          import('./lib/storageScanManager.js').then(({ removeSubscriber }) => removeSubscriber(ws)).catch(() => {});
         });
       });
     }).catch(() => {

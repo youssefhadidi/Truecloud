@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap, FiShield } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap, FiShield, FiPieChart } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 
@@ -59,6 +59,7 @@ export default function AdminLayout({ children }) {
     {
       label: 'Storage',
       items: [
+        { href: '/admin/storage', icon: FiPieChart, label: 'Storage Usage' },
         components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
         components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
       ].filter(Boolean),
