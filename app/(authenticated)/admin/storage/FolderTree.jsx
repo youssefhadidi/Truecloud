@@ -5,6 +5,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef, useDeferredValue } from 'react';
 import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiLock, FiChevronDown, FiChevronRight } from 'react-icons/fi';
+import { prettifyTopSegment } from './userNames';
 
 const ROW_HEIGHT = 44;
 // Cap the panel; the List sizes to min(rows × ROW_HEIGHT, MAX_PANEL_HEIGHT).
@@ -55,7 +56,7 @@ function flattenVisible(byParent, expanded) {
   return out;
 }
 
-export default function FolderTree({ folders, lockedPaths }) {
+export default function FolderTree({ folders, lockedPaths, usernames }) {
   // Empty set = all collapsed. New folders discovered mid-scan default to
   // collapsed too, since they only appear in the rendered tree when their
   // ancestor is in this set.
@@ -76,7 +77,7 @@ export default function FolderTree({ folders, lockedPaths }) {
   // Same pattern as components/files/ListView.jsx.
   useEffect(() => {
     listRef.current?.forceUpdateGrid();
-  }, [rows, lockedPaths]);
+  }, [rows, lockedPaths, usernames]);
 
   const toggle = useCallback((path) => {
     setExpanded((prev) => {
@@ -105,6 +106,9 @@ export default function FolderTree({ folders, lockedPaths }) {
       const pct = r.parentMax > 0 ? (r.bytes / r.parentMax) * 100 : 0;
       const indent = r.depth * 16;
       const interactive = r.hasChildren;
+      // Only top-level rows can carry a `user_<id>` segment.
+      const displayName = r.depth === 0 ? prettifyTopSegment(r.name, usernames) : r.name;
+      const isUserFolder = r.depth === 0 && r.name !== displayName;
       const content = (
         <>
           <div className="shrink-0 flex items-center" style={{ paddingLeft: indent }}>
@@ -123,7 +127,10 @@ export default function FolderTree({ folders, lockedPaths }) {
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-200 truncate">{r.name}</span>
+              <span className="text-sm text-gray-200 truncate" title={isUserFolder ? r.name : undefined}>
+                {displayName}
+                {isUserFolder && <span className="ml-1.5 text-[10px] text-gray-500 uppercase tracking-wider">user</span>}
+              </span>
               <span className="text-xs text-gray-400 tabular-nums shrink-0">{formatBytes(r.bytes)}</span>
             </div>
             <div className="mt-1 h-1 rounded bg-gray-800 overflow-hidden">
@@ -153,7 +160,7 @@ export default function FolderTree({ folders, lockedPaths }) {
         </div>
       );
     },
-    [rows, lockedPaths, toggle],
+    [rows, lockedPaths, toggle, usernames],
   );
 
   if (totalFolders === 0) {

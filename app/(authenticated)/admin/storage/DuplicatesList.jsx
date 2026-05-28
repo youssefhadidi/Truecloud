@@ -4,6 +4,7 @@
 
 import { useMemo, useState, useDeferredValue } from 'react';
 import { FiCopy, FiTrash2, FiLoader, FiAlertCircle } from 'react-icons/fi';
+import { prettifyPath } from './userNames';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -19,7 +20,7 @@ function splitPath(rel) {
   return [rel.slice(0, idx), rel.slice(idx + 1)];
 }
 
-export default function DuplicatesList({ duplicates }) {
+export default function DuplicatesList({ duplicates, usernames }) {
   // Paths the admin has chosen to delete. Hidden from the view immediately;
   // we keep them in a Set rather than mutating `duplicates` because that prop
   // is replaced on every progress snapshot from the server.
@@ -114,6 +115,7 @@ export default function DuplicatesList({ duplicates }) {
             busy={busy}
             errors={errors}
             onDelete={handleDelete}
+            usernames={usernames}
           />
         ))}
       </ul>
@@ -121,7 +123,7 @@ export default function DuplicatesList({ duplicates }) {
   );
 }
 
-function DuplicateGroup({ group, busy, errors, onDelete }) {
+function DuplicateGroup({ group, busy, errors, onDelete, usernames }) {
   return (
     <li className="px-4 py-3">
       <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -137,9 +139,10 @@ function DuplicateGroup({ group, busy, errors, onDelete }) {
         {group.paths.map((p) => {
           const isBusy = busy.has(p);
           const err = errors.get(p);
+          const pretty = prettifyPath(p, usernames);
           return (
             <li key={p} className="flex items-center gap-3 text-xs">
-              <span className="flex-1 min-w-0 truncate text-gray-400 font-mono" title={p}>{p}</span>
+              <span className="flex-1 min-w-0 truncate text-gray-400 font-mono" title={p}>{pretty}</span>
               {err && (
                 <span className="flex items-center gap-1 text-red-400 shrink-0" title={err}>
                   <FiAlertCircle size={12} />

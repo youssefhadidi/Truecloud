@@ -45,6 +45,7 @@ export default function StorageClient() {
   const [scanningPath, setScanningPath] = useState('');
   const [doneInfo, setDoneInfo] = useState(null);
   const [lockedPaths, setLockedPaths] = useState(new Set());
+  const [usernames, setUsernames] = useState(() => new Map());
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -98,6 +99,22 @@ export default function StorageClient() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/users')
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const m = new Map();
+        for (const u of data.users || []) {
+          m.set(u.id, u.username || u.email || u.name || u.id);
+        }
+        setUsernames(m);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -139,7 +156,7 @@ export default function StorageClient() {
               <h2 className="text-sm font-semibold text-white">Folder tree</h2>
               <span className="text-xs text-gray-400 tabular-nums">{formatBytes(totalBytes)} total</span>
             </div>
-            <FolderTree folders={folders} lockedPaths={lockedPaths} />
+            <FolderTree folders={folders} lockedPaths={lockedPaths} usernames={usernames} />
           </div>
 
           <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden self-start">
@@ -161,7 +178,7 @@ export default function StorageClient() {
             <h2 className="text-sm font-semibold text-white">Duplicates</h2>
             <span className="text-xs text-gray-500">matched by name + size</span>
           </div>
-          <DuplicatesList duplicates={duplicates} />
+          <DuplicatesList duplicates={duplicates} usernames={usernames} />
         </div>
       )}
     </div>
