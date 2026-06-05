@@ -10,6 +10,7 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extens
 import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
+import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -75,9 +76,11 @@ export async function GET(req, { params }) {
 
     let filePath = join(uploadsDir, pathCheck.fullPath);
 
-    // Check file exists
+    // Check file exists and capture its size for the (path-independent)
+    // thumbnail key — before any .mp4 stream-cache reassignment below.
+    let fileStats;
     try {
-      await fsPromises.access(filePath);
+      fileStats = await fsPromises.stat(filePath);
     } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -110,12 +113,11 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail not supported for this file type' }, { status: 404 });
     }
 
-    // Use the same naming scheme as the authenticated thumbnail route
-    // so both routes share cached thumbnails for the same file
+    // Use the same name+size key as the authenticated thumbnail route so both
+    // routes share cached thumbnails for the same file (and survive renames).
     const lastSlash = pathCheck.fullPath.lastIndexOf('/');
-    const relativePath = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
     const fileBaseName = lastSlash >= 0 ? pathCheck.fullPath.substring(lastSlash + 1) : pathCheck.fullPath;
-    const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileBaseName}.webp`;
+    const thumbnailFileName = `${thumbnailKey(fileBaseName, fileStats.size)}.webp`;
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     await fsPromises.mkdir(thumbnailsDir, { recursive: true });

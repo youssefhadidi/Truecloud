@@ -14,6 +14,7 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extens
 import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
+import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -81,9 +82,12 @@ export async function GET(req, { params }) {
 
     let filePath = join(uploadsDir, relativePath, fileId);
 
-    // Check if file exists
+    // Check if file exists and capture its size for the (path-independent)
+    // thumbnail key. Done before any .mp4 stream-cache reassignment below so the
+    // key reflects the original file, not the cache copy.
+    let fileStats;
     try {
-      await fsPromises.access(filePath);
+      fileStats = await fsPromises.stat(filePath);
     } catch {
       logger.warn('GET /api/files/thumbnail - File not found', { filePath });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -116,8 +120,9 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
 
-    // Create thumbnail filename - always use WebP format
-    const thumbnailFileName = `${relativePath.replace(/[/\\]/g, '_')}_${fileId}.webp`;
+    // Create thumbnail filename - always use WebP format. Keyed on name+size
+    // (not path) so it survives folder rename/move.
+    const thumbnailFileName = `${thumbnailKey(fileId, fileStats.size)}.webp`;
     const thumbnailPath = join(thumbnailsDir, thumbnailFileName);
 
     // Fast path: check memory cache first
@@ -139,28 +144,16 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Check if thumbnail already exists
+    // Check if thumbnail already exists. The name+size key is identical whether
+    // the file sits in trash/ or its original folder, so no trash fallback is
+    // needed — the same thumbnail is found automatically.
     let thumbnailExists = false;
-    let actualThumbnailPath = thumbnailPath;
+    const actualThumbnailPath = thumbnailPath;
     try {
       await fsPromises.stat(thumbnailPath);
       thumbnailExists = true;
     } catch {
-      // If in trash, check if thumbnail exists for the original path (without trash/)
-      const isTrashPath = relativePath === 'trash' || relativePath.startsWith('trash/') || relativePath.startsWith('trash\\');
-      if (isTrashPath) {
-        const originalPath = relativePath.replace(/^trash[/\\]?/, '');
-        const originalThumbnailFileName = `${originalPath.replace(/[/\\]/g, '_')}_${fileId}.webp`;
-        const originalThumbnailPath = join(thumbnailsDir, originalThumbnailFileName);
-        try {
-          await fsPromises.stat(originalThumbnailPath);
-          thumbnailExists = true;
-          actualThumbnailPath = originalThumbnailPath;
-          logger.debug('GET /api/files/thumbnail - Found thumbnail from original path', { fileId, originalPath });
-        } catch {
-          // Doesn't exist yet
-        }
-      }
+      // Doesn't exist yet — generate below.
     }
 
     // If thumbnail doesn't exist, generate it now (synchronously)
