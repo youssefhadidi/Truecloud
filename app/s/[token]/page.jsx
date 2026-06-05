@@ -103,7 +103,7 @@ export default function SharePage({ params }) {
     setSelectedContextFile: shareState.setSelectedContextFile,
     setUploadingFiles: shareState.setUploadingFiles,
     addNotification: shareState.addNotification,
-    allowUploads: shareResponse?.allowUploads ?? false,
+    allowEditing: shareResponse?.allowEditing ?? false,
     setIsDragging: shareState.setIsDragging,
   });
 
@@ -350,7 +350,7 @@ export default function SharePage({ params }) {
         onDrop={operations.handleDropEvent}
       >
         {/* Drag overlay */}
-        {shareState.isDragging && shareResponse.allowUploads && (
+        {shareState.isDragging && shareResponse.allowEditing && (
           <div className="tc-drag-overlay">
             <div style={{ textAlign: 'center', color: 'var(--accent)' }}>
               <FiUpload size={40} style={{ marginBottom: 12 }} />
@@ -397,7 +397,7 @@ export default function SharePage({ params }) {
 
           <Divider vertical />
 
-          {shareResponse.allowUploads && (
+          {shareResponse.allowEditing && (
             <>
               <Btn variant="primary" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <FiUpload size={13} />
@@ -601,7 +601,7 @@ export default function SharePage({ params }) {
                       token={token}
                       submittedPassword={submittedPassword}
                       currentSubPath={shareState.currentSubPath}
-                      allowUploads={shareResponse.allowUploads}
+                      allowEditing={shareResponse.allowEditing}
                       deletingFile={shareState.deletingFile}
                       renamingFile={shareState.renamingFile}
                       newFileName={shareState.newFileName}
@@ -631,7 +631,7 @@ export default function SharePage({ params }) {
                   ) : (
                     <ShareList
                       files={shareState.sortedFilteredFiles || []}
-                      allowUploads={shareResponse.allowUploads}
+                      allowEditing={shareResponse.allowEditing}
                       deletingFile={shareState.deletingFile}
                       renamingFile={shareState.renamingFile}
                       newFileName={shareState.newFileName}
@@ -707,7 +707,7 @@ export default function SharePage({ params }) {
                 operations.closeContextMenu();
               }}
               onRename={
-                shareResponse.allowUploads
+                shareResponse.allowEditing
                   ? () => {
                       if (shareState.selectedContextFile) {
                         operations.initiateRename(shareState.selectedContextFile);
@@ -717,7 +717,7 @@ export default function SharePage({ params }) {
                   : undefined
               }
               onDelete={
-                shareResponse.allowUploads
+                shareResponse.allowEditing
                   ? () => {
                       if (shareState.selectedContextFile) {
                         operations.initiateDelete(shareState.selectedContextFile);

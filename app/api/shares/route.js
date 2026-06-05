@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { generateShareToken } from '@/lib/shareAuth';
 import bcrypt from 'bcryptjs';
 import { join, resolve, sep } from 'node:path';
 import { stat } from 'fs/promises';
@@ -52,7 +53,7 @@ export async function POST(req) {
     const { session, error } = await requireAuth();
     if (error) return error;
 
-    const { path, fileName, isDirectory, password, expiresAt, allowUploads } = await req.json();
+    const { path, fileName, isDirectory, password, expiresAt, allowEditing } = await req.json();
 
     if (!fileName) {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
@@ -119,13 +120,14 @@ export async function POST(req) {
     // Create share
     const share = await prisma.share.create({
       data: {
+        token: generateShareToken(),
         path: normalizedPath,
         fileName,
         isDirectory: isDirectory || false,
         ownerId: session.user.id,
         passwordHash,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        allowUploads: isDirectory ? (allowUploads || false) : false,
+        allowEditing: isDirectory ? (allowEditing || false) : false,
       },
     });
 

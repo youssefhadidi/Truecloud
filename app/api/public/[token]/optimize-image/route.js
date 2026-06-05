@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, mkdir } from 'fs/promises';
 import { join, resolve, sep, extname } from 'node:path';
@@ -28,9 +28,15 @@ export async function GET(req, { params }) {
     const password = req.headers.get('x-share-password') || url.searchParams.get('pwd');
 
     // Verify share
-    const verification = await verifyShare(token, password);
+    const verification = await verifyShare(token, password, clientIpFromHeaders(req));
 
     if (!verification.valid) {
+      if (verification.rateLimited) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: 429, headers: { 'Retry-After': String(verification.retryAfter || 60) } }
+        );
+      }
       if (verification.requiresPassword) {
         return NextResponse.json({ error: 'Password required' }, { status: 401 });
       }

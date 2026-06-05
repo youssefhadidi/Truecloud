@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'fs';
 import { stat, rename } from 'fs/promises';
@@ -33,8 +33,14 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'No items provided' }, { status: 400 });
     }
 
-    const verification = await verifyShare(token, password);
+    const verification = await verifyShare(token, password, clientIpFromHeaders(req));
     if (!verification.valid) {
+      if (verification.rateLimited) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: 429, headers: { 'Retry-After': String(verification.retryAfter || 60) } }
+        );
+      }
       if (verification.requiresPassword) {
         return NextResponse.json({ error: 'Password required' }, { status: 401 });
       }
@@ -42,7 +48,7 @@ export async function POST(req, { params }) {
     }
 
     const share = verification.share;
-    if (!share.allowUploads) {
+    if (!share.allowEditing) {
       return NextResponse.json({ error: 'Moves not allowed for this share' }, { status: 403 });
     }
     if (!share.isDirectory) {

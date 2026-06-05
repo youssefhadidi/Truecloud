@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
+import { invalidateShareCache } from '@/lib/shareAuth';
 import bcrypt from 'bcryptjs';
 
 // GET - Get share details
@@ -74,6 +75,10 @@ export async function PATCH(req, { params }) {
       data: updateData,
     });
 
+    // Drop any cached verification so password/expiration changes take effect
+    // immediately instead of after the cache TTL.
+    invalidateShareCache(share.token);
+
     return NextResponse.json({ share: updatedShare });
   } catch (error) {
     console.error('PATCH /api/shares/[id] - Error:', error);
@@ -105,6 +110,10 @@ export async function DELETE(req, { params }) {
     await prisma.share.delete({
       where: { id },
     });
+
+    // Revoke immediately — clear any cached verification for this token so the
+    // share stops resolving right away instead of after the cache TTL.
+    invalidateShareCache(share.token);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -3,7 +3,7 @@
 import { mkdir, unlink, rename } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { buildTempName } from '@/lib/uploadTemp';
 
 export const config = {
@@ -28,9 +28,13 @@ export default async function handler(req, res) {
     const password = req.headers['x-share-password'] || req.query.pwd;
     const subPath = req.query.path || '';
 
-    const verification = await verifyShare(token, password);
+    const verification = await verifyShare(token, password, clientIpFromHeaders(req));
 
     if (!verification.valid) {
+      if (verification.rateLimited) {
+        res.setHeader('Retry-After', String(verification.retryAfter || 60));
+        return res.status(429).json({ error: verification.error });
+      }
       if (verification.requiresPassword) {
         return res.status(401).json({ error: 'Password required' });
       }
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
 
     const share = verification.share;
 
-    if (!share.allowUploads) {
+    if (!share.allowEditing) {
       return res.status(403).json({ error: 'Uploads not allowed for this share' });
     }
 

@@ -155,7 +155,7 @@ const GridItem = memo(
     token,
     currentSubPath,
     submittedPassword,
-    allowUploads,
+    allowEditing,
     isDeletingFile,
     isRenamingFile,
     newFileName,
@@ -480,7 +480,7 @@ const GridItem = memo(
                   : <FiFile size={14} />}
                 </button>
               )}
-              {allowUploads && (
+              {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateRename(item); }}
                   title="Rename"
@@ -498,7 +498,7 @@ const GridItem = memo(
               >
                 <FiDownload size={14} />
               </button>
-              {allowUploads && (
+              {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateDelete(item); }}
                   title="Delete"
@@ -523,7 +523,7 @@ function ShareGrid({
   token,
   submittedPassword = '',
   currentSubPath = '',
-  allowUploads = false,
+  allowEditing = false,
   deletingFile,
   renamingFile,
   newFileName,
@@ -594,7 +594,7 @@ function ShareGrid({
           token={token}
           currentSubPath={currentSubPath}
           submittedPassword={submittedPassword}
-          allowUploads={allowUploads}
+          allowEditing={allowEditing}
           isDeletingFile={deletingFile?.name === item.name}
           isRenamingFile={renamingFile?.name === item.name}
           newFileName={newFileName}
@@ -622,7 +622,7 @@ function ShareGrid({
       );
     },
     [
-      files, token, currentSubPath, submittedPassword, allowUploads,
+      files, token, currentSubPath, submittedPassword, allowEditing,
       deletingFile, renamingFile, newFileName, onNewFileNameChange,
       onCancelRename, onConfirmRename, onCancelDelete, onConfirmDelete,
       processingFile, onFileClick, onContextMenu, onDownload, onInitiateRename,
@@ -701,7 +701,7 @@ function ShareGrid({
                 <span>View</span>
               </button>
             )}
-            {allowUploads && (
+            {allowEditing && (
               <button onClick={() => { setShowingActionsFor(null); onInitiateRename(activeItem); }} style={sheetRowStyle()}>
                 <FiEdit size={18} /><span>Rename</span>
               </button>
@@ -709,7 +709,7 @@ function ShareGrid({
             <button onClick={() => { setShowingActionsFor(null); onDownload(activeItem); }} style={sheetRowStyle()}>
               <FiDownload size={18} /><span>Download</span>
             </button>
-            {allowUploads && (
+            {allowEditing && (
               <button onClick={() => { setShowingActionsFor(null); onInitiateDelete(activeItem); }} style={sheetRowStyle('var(--danger)')}>
                 <FiTrash2 size={18} /><span>Delete</span>
               </button>

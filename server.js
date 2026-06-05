@@ -20,6 +20,7 @@ const CURRENT_APP_VERSION = require('./package.json').version;
 // Dynamic imports for ES modules
 let getToken;
 let verifyShare;
+let clientIpFromHeaders;
 
 async function loadEsModules() {
   const nextAuth = await import('next-auth/jwt');
@@ -27,6 +28,7 @@ async function loadEsModules() {
 
   const shareAuth = await import('./lib/shareAuth.mjs');
   verifyShare = shareAuth.verifyShare;
+  clientIpFromHeaders = shareAuth.clientIpFromHeaders;
 
 }
 
@@ -219,7 +221,7 @@ loadEsModules().then(() => {
 
     if (shareToken && sharePassword) {
       try {
-        const result = await verifyShare(shareToken, sharePassword);
+        const result = await verifyShare(shareToken, sharePassword, clientIpFromHeaders(request));
         if (result.valid) return { userId: null };
       } catch {
         // Share verification failed

@@ -88,7 +88,7 @@ model Share {
   ownerId      String
   passwordHash String?   // Optional bcrypt hash
   expiresAt    DateTime?
-  allowUploads Boolean   @default(false) // Allow public uploads to this share
+  allowEditing Boolean   @default(false) // Allow public edits (upload, rename, move, delete, mkdir) to this share
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   accessCount  Int       @default(0)

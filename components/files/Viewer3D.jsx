@@ -160,12 +160,15 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
 
         // Use public routes for share mode
         if (shareToken) {
-          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+          // Server-side conversion isn't available for shared files — only
+          // formats the browser can load directly (glb/gltf/obj) are supported.
           if (needsConversion) {
-            conversionUrl = `/api/public/${shareToken}/convert-3d?file=${encodeURIComponent(filePath)}`;
-          } else {
-            conversionUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
+            setError(`Unsupported file format: ${fileExt}`);
+            setLoading(false);
+            return;
           }
+          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+          conversionUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
         } else {
           // GLTFLoader fetches the URL directly (no axios), so embed the
           // folder PIN as a query param for passcode-locked folders.

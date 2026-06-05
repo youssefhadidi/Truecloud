@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, incrementShareAccess } from '@/lib/shareAuth';
+import { verifyShare, incrementShareAccess, clientIpFromHeaders } from '@/lib/shareAuth';
 import { join, resolve, sep } from 'node:path';
 import { stat } from 'fs/promises';
 import { lookup } from 'mime-types';
@@ -15,9 +15,15 @@ export async function GET(req, { params }) {
     const { token } = await params;
     const password = req.headers.get('x-share-password');
 
-    const verification = await verifyShare(token, password);
+    const verification = await verifyShare(token, password, clientIpFromHeaders(req));
 
     if (!verification.valid) {
+      if (verification.rateLimited) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: 429, headers: { 'Retry-After': String(verification.retryAfter || 60) } }
+        );
+      }
       // Return 401 if password required
       if (verification.requiresPassword) {
         return NextResponse.json(
@@ -61,7 +67,7 @@ export async function GET(req, { params }) {
       mimeType: lookup(share.fileName) || 'application/octet-stream',
       ownerUsername: share.owner.username,
       createdAt: share.createdAt,
-      allowUploads: share.allowUploads || false,
+      allowEditing: share.allowEditing || false,
     });
   } catch (error) {
     console.error('GET /api/public/[token] - Error:', error);

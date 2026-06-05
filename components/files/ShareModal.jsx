@@ -40,7 +40,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const [password, setPassword] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [expiresIn, setExpiresIn] = useState('never');
-  const [allowUploads, setAllowUploads] = useState(false);
+  const [allowEditing, setAllowEditing] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -66,7 +66,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
         isDirectory: file.isDirectory,
         password: usePassword ? password : null,
         expiresAt: calculateExpiry(expiresIn),
-        allowUploads: file.isDirectory ? allowUploads : false,
+        allowEditing: file.isDirectory ? allowEditing : false,
       });
       setShareUrl(result.shareUrl);
       addNotification('success', 'Share created successfully');
@@ -213,10 +213,10 @@ export default function ShareModal({ file, currentPath, onClose }) {
                     </span>
                     <Badge color="accent">{existingShare.accessCount} views</Badge>
                   </div>
-                  {existingShare.allowUploads && (
+                  {existingShare.allowEditing && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}>
                       <FiUpload size={13} />
-                      Uploads enabled
+                      Editing enabled
                     </div>
                   )}
                 </div>
@@ -276,19 +276,19 @@ export default function ShareModal({ file, currentPath, onClose }) {
                 </div>
               </div>
 
-              {/* Allow uploads (folders only) */}
+              {/* Allow editing (folders only) */}
               {file.isDirectory && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <FiUpload size={14} color="var(--text-2)" />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Allow uploads</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Allow editing</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                      Anyone with the link can upload to this folder.
+                      Anyone with the link can upload, rename, move, and delete files in this folder.
                     </div>
                   </div>
-                  <Toggle value={allowUploads} onChange={setAllowUploads} />
+                  <Toggle value={allowEditing} onChange={setAllowEditing} />
                 </div>
               )}
             </>

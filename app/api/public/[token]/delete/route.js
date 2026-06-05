@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { unlink, rm } from 'fs/promises';
 import { stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath } from '@/lib/shareAuth';
+import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 
@@ -32,8 +32,14 @@ export async function DELETE(req, { params }) {
     }
 
     // Verify share and password
-    const verification = await verifyShare(token, password);
+    const verification = await verifyShare(token, password, clientIpFromHeaders(req));
     if (!verification.valid) {
+      if (verification.rateLimited) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: 429, headers: { 'Retry-After': String(verification.retryAfter || 60) } }
+        );
+      }
       if (verification.requiresPassword) {
         return NextResponse.json({ error: 'Password required' }, { status: 401 });
       }
@@ -43,7 +49,7 @@ export async function DELETE(req, { params }) {
     const share = verification.share;
 
     // Check if deletions are allowed
-    if (!share.allowUploads) {
+    if (!share.allowEditing) {
       return NextResponse.json({ error: 'Deletions not allowed for this share' }, { status: 403 });
     }
 

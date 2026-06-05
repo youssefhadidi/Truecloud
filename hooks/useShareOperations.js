@@ -34,7 +34,7 @@ export function useShareOperations({
   setSelectedContextFile,
   setUploadingFiles,
   addNotification,
-  allowUploads,
+  allowEditing,
   setIsDragging,
 }) {
   const queryClient = useQueryClient();
@@ -54,13 +54,13 @@ export function useShareOperations({
 
   // ============ Folder Creation ============
   const initiateCreateFolder = useCallback(() => {
-    if (!allowUploads) {
+    if (!allowEditing) {
       addNotification('error', 'Uploads are not allowed for this share');
       return;
     }
     setCreatingFolder(true);
     setNewFolderName('New Folder');
-  }, [allowUploads, setCreatingFolder, setNewFolderName, addNotification]);
+  }, [allowEditing, setCreatingFolder, setNewFolderName, addNotification]);
 
   const cancelCreateFolder = useCallback(() => {
     setCreatingFolder(false);
@@ -206,7 +206,7 @@ export function useShareOperations({
   // ============ Move Files/Folders ============
   const moveFiles = useCallback(
     async (items, destinationPath) => {
-      if (!allowUploads) {
+      if (!allowEditing) {
         addNotification('error', 'Uploads are not allowed for this share');
         return false;
       }
@@ -237,13 +237,13 @@ export function useShareOperations({
         );
       });
     },
-    [token, sharePassword, currentSubPath, allowUploads, setProcessingFile, addNotification, refreshListing],
+    [token, sharePassword, currentSubPath, allowEditing, setProcessingFile, addNotification, refreshListing],
   );
 
   // ============ File Upload ============
   const handleUpload = useCallback(
     async (files) => {
-      if (!allowUploads) {
+      if (!allowEditing) {
         addNotification('error', 'Uploads are not allowed for this share');
         return;
       }
@@ -283,7 +283,7 @@ export function useShareOperations({
         );
       }
     },
-    [token, sharePassword, currentSubPath, allowUploads, setUploadingFiles, addNotification, refreshListing],
+    [token, sharePassword, currentSubPath, allowEditing, setUploadingFiles, addNotification, refreshListing],
   );
 
   const handleUploadFromInput = useCallback(
@@ -415,22 +415,22 @@ export function useShareOperations({
     (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!allowUploads) return;
+      if (!allowEditing) return;
       setIsDragging(true);
     },
-    [allowUploads, setIsDragging],
+    [allowEditing, setIsDragging],
   );
 
   const handleDragLeave = useCallback(
     (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!allowUploads) return;
+      if (!allowEditing) return;
       if (e.currentTarget === e.target) {
         setIsDragging(false);
       }
     },
-    [allowUploads, setIsDragging],
+    [allowEditing, setIsDragging],
   );
 
   const handleDropEvent = useCallback(
@@ -438,14 +438,14 @@ export function useShareOperations({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      if (!allowUploads) return;
+      if (!allowEditing) return;
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
       handleUpload(files);
     },
-    [handleUpload, allowUploads, setIsDragging],
+    [handleUpload, allowEditing, setIsDragging],
   );
 
   // ============ Context Menu ============

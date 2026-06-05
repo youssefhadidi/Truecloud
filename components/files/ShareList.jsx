@@ -82,7 +82,7 @@ function miniBtn(variant) {
 
 function ShareList({
   files = [],
-  allowUploads = false,
+  allowEditing = false,
   deletingFile,
   renamingFile,
   newFileName,
@@ -325,7 +325,7 @@ function ShareList({
                    : <FiFile size={15} />}
                 </button>
               )}
-              {allowUploads && (
+              {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(file); }}
                   title="Rename"
@@ -339,7 +339,7 @@ function ShareList({
                 disabled={processingFile === file.name}
                 style={actionBtn({ color: 'var(--text-2)' })}
               ><FiDownload size={15} /></button>
-              {allowUploads && (
+              {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(file); }}
                   title="Delete"
@@ -361,7 +361,7 @@ function ShareList({
       );
     },
     [
-      files, deletingFile, renamingFile, newFileName, isMobile, allowUploads,
+      files, deletingFile, renamingFile, newFileName, isMobile, allowEditing,
       selectionMode, selectedFiles, processingFile, shouldShowActions,
       onFileClick, onOpenMediaViewer, onInitiateRename, setNewFileName, cancelRename, confirmRename,
       onDownload, onInitiateDelete, cancelDelete, confirmDelete, onToggleSelect,
