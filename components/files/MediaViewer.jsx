@@ -4,7 +4,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { FiX, FiDownload, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
+import { FiX, FiDownload, FiTrash2, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
+import Confirm from '@/components/Confirm';
 import { getFileType } from '@/lib/getFileType';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
@@ -12,6 +13,7 @@ import { AudioPlayer } from './viewers/AudioPlayer';
 import { isAiSupported } from '@/lib/ai/fileTypes';
 import { useComponentsConfig } from '@/lib/api/system';
 import AiChatPanel from './AiChatPanel';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const VideoPlayer = dynamic(
   () => import('./viewers/VideoPlayer').then((m) => ({ default: m.VideoPlayer })),
@@ -59,14 +61,15 @@ function PDFViewer({ file, getFileUrl, onClick }) {
 }
 
 function UnsupportedViewer({ file, getFileUrl }) {
+  const { t } = useTranslation();
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="mv-loader-card" style={{ flexDirection: 'column', gap: 12, padding: '28px 36px', textAlign: 'center' }}>
         <span className="mv-loader-card__text" style={{ fontWeight: 600, color: 'var(--text)' }}>
-          Preview unavailable
+          {t('viewer.previewUnavailable')}
         </span>
         <span className="mv-loader-card__text" style={{ fontSize: 12 }}>
-          This file type can&apos;t be previewed in the browser.
+          {t('viewer.cannotPreview')}
         </span>
         <a
           href={getFileUrl(file, 'download')}
@@ -84,16 +87,23 @@ function UnsupportedViewer({ file, getFileUrl }) {
             textDecoration: 'none',
           }}
         >
-          <FiDownload size={13} /> Download file
+          <FiDownload size={13} /> {t('viewer.downloadFile')}
         </a>
       </div>
     </div>
   );
 }
 
-export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, shareToken, sharePassword }) {
+export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, onDelete, shareToken, sharePassword }) {
+  const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Deleting is only offered to authenticated users (never share visitors)
+  // and only when the host page wires up an onDelete handler.
+  const canDelete = !shareToken && typeof onDelete === 'function';
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
 
@@ -213,6 +223,22 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     setContextMenu(null);
   }, [viewerFile, currentPath, shareToken, sharePassword, handleShareOrDownload]);
 
+  const handleConfirmDelete = useCallback(async () => {
+    if (!viewerFile || !canDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(viewerFile);
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  }, [viewerFile, canDelete, onDelete]);
+
+  // Drop the delete confirmation when switching to another file.
+  useEffect(() => {
+    setConfirmingDelete(false);
+  }, [viewerFile?.id]);
+
   const handleTouchStart = useCallback((e) => {
     if (e.target.tagName !== 'IMG' && e.target.tagName !== 'CANVAS') return;
     const touch = e.touches[0];
@@ -241,6 +267,23 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const stopProp = (e) => e.stopPropagation();
   const total = viewableFiles?.length || 0;
   const multi = total > 1;
+
+  const deleteConfirmOverlay = canDelete && confirmingDelete ? (
+    <div
+      className="mv-backdrop"
+      style={{ zIndex: 9100, padding: 20 }}
+      onClick={() => !deleting && setConfirmingDelete(false)}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%' }}>
+        <Confirm
+          message={t('viewer.confirmDelete', { name: viewerFile.name })}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={handleConfirmDelete}
+          isLoading={deleting}
+        />
+      </div>
+    </div>
+  ) : null;
 
   function renderMedia() {
     switch (fileType) {
@@ -281,24 +324,35 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 <button
                   type="button"
                   className="mv-icon-btn"
-                  title={aiOpen ? 'Hide Claude' : 'Ask Claude about this file'}
+                  title={aiOpen ? t('viewer.hideClaude') : t('viewer.askClaude')}
                   onClick={() => setAiOpen((v) => !v)}
                   style={aiOpen ? { color: 'var(--accent)' } : undefined}
                 >
                   <FiMessageSquare size={16} />
                 </button>
               )}
-              <button type="button" className="mv-icon-btn" title="Download" onClick={handleDownload}>
+              <button type="button" className="mv-icon-btn" title={t('common.download')} onClick={handleDownload}>
                 <FiDownload size={16} />
               </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  className="mv-icon-btn"
+                  title={t('common.delete')}
+                  onClick={() => setConfirmingDelete(true)}
+                  style={{ color: 'var(--danger)' }}
+                >
+                  <FiTrash2 size={16} />
+                </button>
+              )}
               {!isMobile && (
-                <button type="button" className="mv-icon-btn" title="Fullscreen" onClick={toggleFullscreen}>
+                <button type="button" className="mv-icon-btn" title={t('viewer.fullscreen')} onClick={toggleFullscreen}>
                   <FiMaximize2 size={16} />
                 </button>
               )}
             </div>
             <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
-            <button type="button" className="mv-icon-btn" title="Close" onClick={onClose}>
+            <button type="button" className="mv-icon-btn" title={t('common.close')} onClick={onClose}>
               <FiX size={16} />
             </button>
           </div>
@@ -320,7 +374,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                   <button
                     type="button"
                     className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
-                    aria-label="Previous"
+                    aria-label={t('common.previous')}
                     disabled={!canGoPrev}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -332,7 +386,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                   <button
                     type="button"
                     className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
-                    aria-label="Next"
+                    aria-label={t('common.next')}
                     disabled={!canGoNext}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -370,6 +424,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           )}
 
           <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
+          {deleteConfirmOverlay}
         </div>
       </div>
     );
@@ -393,24 +448,24 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
             <button
               type="button"
               className="mv-icon-btn"
-              title={aiOpen ? 'Hide Claude' : 'Ask Claude about this file'}
+              title={aiOpen ? t('viewer.hideClaude') : t('viewer.askClaude')}
               onClick={() => setAiOpen((v) => !v)}
               style={aiOpen ? { color: 'var(--accent)' } : undefined}
             >
               <FiMessageSquare size={16} />
             </button>
           )}
-          <button type="button" className="mv-icon-btn" title="Download" onClick={handleDownload}>
+          <button type="button" className="mv-icon-btn" title={t('common.download')} onClick={handleDownload}>
             <FiDownload size={16} />
           </button>
           {!isMobile && (
-            <button type="button" className="mv-icon-btn" title="Exit fullscreen" onClick={toggleFullscreen}>
+            <button type="button" className="mv-icon-btn" title={t('viewer.exitFullscreen')} onClick={toggleFullscreen}>
               <FiMinimize2 size={16} />
             </button>
           )}
         </div>
         <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
-        <button type="button" className="mv-icon-btn" title="Close" onClick={onClose}>
+        <button type="button" className="mv-icon-btn" title={t('common.close')} onClick={onClose}>
           <FiX size={16} />
         </button>
       </div>
@@ -430,7 +485,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
               <button
                 type="button"
                 className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
-                aria-label="Previous"
+                aria-label={t('common.previous')}
                 disabled={!canGoPrev}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -442,7 +497,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
               <button
                 type="button"
                 className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
-                aria-label="Next"
+                aria-label={t('common.next')}
                 disabled={!canGoNext}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -480,6 +535,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       )}
 
       <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
+      {deleteConfirmOverlay}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
 import Spinner from '@/components/ui/Spinner';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
@@ -46,6 +47,7 @@ function EmptyState({ label }) {
 
 export default function SharePage({ params }) {
   const { token } = use(params);
+  const { t } = useTranslation();
   const fileInputRef = useRef(null);
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
@@ -128,7 +130,7 @@ export default function SharePage({ params }) {
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === shareState.currentSubPath) {
-      shareState.addNotification('error', 'Select a different destination');
+      shareState.addNotification('error', t('notify.selectDifferentDestination'));
       return;
     }
     const ok = await operations.moveFiles(shareState.selectedFiles, destinationPath);
@@ -179,7 +181,7 @@ export default function SharePage({ params }) {
           >
             <FiFile color="var(--danger)" size={32} />
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Share Not Found</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{t('sharePage.notFound')}</h2>
           <p style={{ color: 'var(--text-2)', fontSize: 13 }}>{shareError.message}</p>
         </div>
       </div>
@@ -213,9 +215,9 @@ export default function SharePage({ params }) {
             >
               <FiLock color="var(--accent)" size={32} />
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Password Protected</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{t('sharePage.passwordProtected')}</h2>
             <p style={{ color: 'var(--text-2)', fontSize: 13 }}>
-              This {shareResponse?.isDirectory ? 'folder' : 'file'} is password protected.
+              {shareResponse?.isDirectory ? t('sharePage.passwordBodyFolder') : t('sharePage.passwordBodyFile')}
             </p>
             {shareResponse?.fileName && (
               <p style={{ fontSize: 13, color: 'var(--text)', marginTop: 8, fontWeight: 500 }}>{shareResponse.fileName}</p>
@@ -228,14 +230,14 @@ export default function SharePage({ params }) {
                 htmlFor="password"
                 style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 6 }}
               >
-                Password
+                {t('share.password')}
               </label>
               <input
                 type="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t('share.enterPassword')}
                 autoFocus
                 style={{
                   width: '100%',
@@ -251,7 +253,7 @@ export default function SharePage({ params }) {
               />
             </div>
             <Btn type="submit" variant="primary" size="lg" style={{ width: '100%' }}>
-              Unlock
+              {t('sharePage.unlock')}
             </Btn>
           </form>
         </div>
@@ -277,7 +279,7 @@ export default function SharePage({ params }) {
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{shareResponse.fileName}</h2>
             <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 20 }}>
-              {shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : 'Unknown size'}
+              {shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : t('sharePage.unknownSize')}
             </p>
 
             {isImage(shareResponse.fileName) && (
@@ -292,12 +294,12 @@ export default function SharePage({ params }) {
               <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
                 {isVideo(shareResponse.fileName) && (
                   <video controls style={{ width: '100%', maxHeight: 500 }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
-                    Your browser does not support video playback.
+                    {t('sharePage.videoNotSupported')}
                   </video>
                 )}
                 {isAudio(shareResponse.fileName) && (
                   <audio controls style={{ width: '100%' }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
-                    Your browser does not support audio playback.
+                    {t('sharePage.audioNotSupported')}
                   </audio>
                 )}
                 {isPdf(shareResponse.fileName) && (
@@ -329,7 +331,7 @@ export default function SharePage({ params }) {
               style={{ width: '100%' }}
             >
               <FiDownload size={16} />
-              Download
+              {t('common.download')}
             </Btn>
           </div>
         </div>
@@ -354,9 +356,9 @@ export default function SharePage({ params }) {
           <div className="tc-drag-overlay">
             <div style={{ textAlign: 'center', color: 'var(--accent)' }}>
               <FiUpload size={40} style={{ marginBottom: 12 }} />
-              <div style={{ fontSize: 18, fontWeight: 700 }}>Drop files to upload</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{t('files.dropToUpload')}</div>
               <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
-                Files will be uploaded to current folder
+                {t('files.filesUploadedToCurrent')}
               </div>
             </div>
           </div>
@@ -392,7 +394,7 @@ export default function SharePage({ params }) {
             <span className="tc-truncate" style={{ maxWidth: 220 }}>{shareResponse.fileName}</span>
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-3)' }} className="tc-share-owner">
-            · Shared by {shareResponse.ownerUsername}
+            {t('sharePage.sharedBy', { owner: shareResponse.ownerUsername })}
           </span>
 
           <Divider vertical />
@@ -401,7 +403,7 @@ export default function SharePage({ params }) {
             <>
               <Btn variant="primary" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <FiUpload size={13} />
-                Upload
+                {t('common.upload')}
               </Btn>
               <input
                 ref={fileInputRef}
@@ -416,17 +418,17 @@ export default function SharePage({ params }) {
                 onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
               >
                 <FiCheckSquare size={13} />
-                {shareState.selectionMode ? 'Selecting' : 'Select'}
+                {shareState.selectionMode ? t('files.selecting') : t('common.select')}
               </Btn>
               {shareState.selectionMode && (
                 <>
                   <Divider vertical />
                   <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
-                    {shareState.selectedFiles.length} selected
+                    {t('files.nSelected', { count: shareState.selectedFiles.length })}
                   </span>
                   <IconBtn
                     icon={FiFolder}
-                    title="Move selected"
+                    title={t('files.moveSelected')}
                     disabled={shareState.selectedFiles.length === 0}
                     onClick={() => setMoveModalOpen(true)}
                   />
@@ -451,12 +453,12 @@ export default function SharePage({ params }) {
               cursor: 'pointer',
             }}
           >
-            <option value="name-asc">Name (A–Z)</option>
-            <option value="name-desc">Name (Z–A)</option>
-            <option value="date-desc">Date (New)</option>
-            <option value="date-asc">Date (Old)</option>
-            <option value="size-desc">Size (Big)</option>
-            <option value="size-asc">Size (Small)</option>
+            <option value="name-asc">{t('files.sortNameAsc')}</option>
+            <option value="name-desc">{t('files.sortNameDesc')}</option>
+            <option value="date-desc">{t('files.sortDateNew')}</option>
+            <option value="date-asc">{t('files.sortDateOld')}</option>
+            <option value="size-desc">{t('files.sortSizeBig')}</option>
+            <option value="size-asc">{t('files.sortSizeSmall')}</option>
           </select>
 
           <Divider vertical />
@@ -472,7 +474,7 @@ export default function SharePage({ params }) {
           >
             <IconBtn
               icon={FiGrid}
-              title="Grid view"
+              title={t('files.gridView')}
               onClick={() => shareState.setViewMode('grid')}
               active={shareState.viewMode === 'grid'}
               width={26}
@@ -481,7 +483,7 @@ export default function SharePage({ params }) {
             />
             <IconBtn
               icon={FiList}
-              title="List view"
+              title={t('files.listView')}
               onClick={() => shareState.setViewMode('list')}
               active={shareState.viewMode === 'list'}
               width={26}
@@ -567,7 +569,7 @@ export default function SharePage({ params }) {
             }}
           >
             {(shareState.sortedFilteredFiles || []).length === 0 ? (
-              <EmptyState label="This folder is empty" />
+              <EmptyState label={t('sharePage.thisFolderEmpty')} />
             ) : (
               <Suspense fallback={<LoadingPanel />}>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -588,10 +590,10 @@ export default function SharePage({ params }) {
                           padding: '10px 24px',
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Name</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Size</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Modified</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.name')}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.size')}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.modified')}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>{t('common.actions')}</div>
                       </div>
                     </div>
                   )}
@@ -735,7 +737,7 @@ export default function SharePage({ params }) {
           <Suspense fallback={null}>
             <MoveModal
               open={moveModalOpen}
-              title={`Move ${shareState.selectedFiles.length} item(s)`}
+              title={t('sharePage.moveNItems', { count: shareState.selectedFiles.length })}
               initialPath={shareState.currentSubPath}
               fetchFolders={fetchShareFolders}
               onConfirm={handleConfirmMove}
@@ -761,7 +763,7 @@ export default function SharePage({ params }) {
             }}
           >
             <h3 style={{ fontWeight: 600, marginBottom: 12, color: 'var(--text)', fontSize: 14 }}>
-              Uploading ({shareState.uploadingFiles.length})
+              {t('sharePage.uploadingN', { count: shareState.uploadingFiles.length })}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 192, overflow: 'auto' }}>
               {shareState.uploadingFiles.map((file) => (

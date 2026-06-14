@@ -8,6 +8,7 @@ import {
   FiRotateCcw, FiStar, FiMusic, FiFileText,
 } from 'react-icons/fi';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
 
@@ -62,6 +63,7 @@ export default function ContextMenu({
   onClose,
 }) {
   const ref = useRef(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!contextMenu) return undefined;
@@ -71,12 +73,12 @@ export default function ContextMenu({
     function escHandler(e) {
       if (e.key === 'Escape') onClose?.();
     }
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       document.addEventListener('mousedown', handler);
       document.addEventListener('keydown', escHandler);
     }, 0);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('keydown', escHandler);
     };
@@ -117,19 +119,19 @@ export default function ContextMenu({
     >
       {file.isDirectory ? (
         <>
-          <MenuItem icon={FiFolder} label="Open Folder" onClick={onNavigateToFolder} />
+          <MenuItem icon={FiFolder} label={t('menu.openFolder')} onClick={onNavigateToFolder} />
           {!inTrash && (
             <>
-              {onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
-              {onDownload && <MenuItem icon={FiDownload} label="Download as ZIP" onClick={onDownload} />}
+              {onRename && <MenuItem icon={FiEdit} label={t('common.rename')} onClick={onRename} />}
+              {onDownload && <MenuItem icon={FiDownload} label={t('menu.downloadAsZip')} onClick={onDownload} />}
             </>
           )}
         </>
       ) : (
         <>
-          {onDownload && <MenuItem icon={FiDownload} label="Download" onClick={onDownload} />}
-          {!inTrash && onRename && <MenuItem icon={FiEdit} label="Rename" onClick={onRename} />}
-          {viewIcon && onView && <MenuItem icon={viewIcon} label="View" onClick={onView} accent />}
+          {onDownload && <MenuItem icon={FiDownload} label={t('common.download')} onClick={onDownload} />}
+          {!inTrash && onRename && <MenuItem icon={FiEdit} label={t('common.rename')} onClick={onRename} />}
+          {viewIcon && onView && <MenuItem icon={viewIcon} label={t('menu.view')} onClick={onView} accent />}
         </>
       )}
 
@@ -138,11 +140,11 @@ export default function ContextMenu({
           {onToggleFavorite && (
             <MenuItem
               icon={FiStar}
-              label={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+              label={isFavorite ? t('menu.removeFromFavorites') : t('menu.addToFavorites')}
               onClick={onToggleFavorite}
             />
           )}
-          {onShare && <MenuItem icon={FiShare2} label="Share" onClick={onShare} />}
+          {onShare && <MenuItem icon={FiShare2} label={t('common.share')} onClick={onShare} />}
         </>
       )}
 
@@ -151,11 +153,11 @@ export default function ContextMenu({
           <MenuDivider />
           {inTrash ? (
             <>
-              <MenuItem icon={FiRotateCcw} label="Restore" onClick={onRestore} accent />
-              <MenuItem icon={FiTrash2} label="Delete Permanently" onClick={onDelete} danger />
+              <MenuItem icon={FiRotateCcw} label={t('menu.restore')} onClick={onRestore} accent />
+              <MenuItem icon={FiTrash2} label={t('menu.deletePermanently')} onClick={onDelete} danger />
             </>
           ) : (
-            <MenuItem icon={FiTrash2} label="Delete" onClick={onDelete} danger />
+            <MenuItem icon={FiTrash2} label={t('common.delete')} onClick={onDelete} danger />
           )}
         </>
       )}

@@ -13,6 +13,7 @@ import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import DownloadCard from '@/components/files/DownloadCard';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const BREAKPOINT = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 
@@ -87,6 +88,7 @@ const GridItem = memo(
     isGlobalSearch,
     isFavorite,
   }) => {
+    const { t } = useTranslation();
     const kind = fileKind(item);
     const isFolder = item.isDirectory;
     const showThumbnail = !isFolder && (isImage(item.name) || isVideo(item.name) || isPdf(item.name));
@@ -253,7 +255,7 @@ const GridItem = memo(
 
             {sharedPath && (
               <div
-                title="Shared"
+                title={t('fileItem.shared')}
                 style={{
                   position: 'absolute',
                   top: 8,
@@ -276,7 +278,7 @@ const GridItem = memo(
 
             {isFavorite && (
               <div
-                title="Favorite"
+                title={t('fileItem.favorite')}
                 style={{
                   position: 'absolute',
                   top: 8,
@@ -315,7 +317,7 @@ const GridItem = memo(
                 }}
               >
                 <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--danger)', textAlign: 'center' }}>
-                  Delete {item.isDirectory ? 'folder' : 'file'}?
+                  {item.isDirectory ? t('fileItem.deleteFolderQ') : t('fileItem.deleteFileQ')}
                 </p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
@@ -330,7 +332,7 @@ const GridItem = memo(
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
-                  >Cancel</button>
+                  >{t('common.cancel')}</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onConfirmDelete(); }}
                     style={{
@@ -344,7 +346,7 @@ const GridItem = memo(
                       fontFamily: 'inherit',
                       fontWeight: 600,
                     }}
-                  >Delete</button>
+                  >{t('common.delete')}</button>
                 </div>
               </div>
             ) : isRenamingFile ? (
@@ -398,7 +400,7 @@ const GridItem = memo(
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
-                  >Cancel</button>
+                  >{t('common.cancel')}</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onConfirmRename(); }}
                     style={{
@@ -412,7 +414,7 @@ const GridItem = memo(
                       fontFamily: 'inherit',
                       fontWeight: 600,
                     }}
-                  >Rename</button>
+                  >{t('common.rename')}</button>
                 </div>
               </div>
             ) : null}
@@ -526,7 +528,7 @@ const GridItem = memo(
                 className="tc-truncate"
                 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                {item.locked && <FiLock size={12} color="var(--warning)" title="Passcode-locked" />}
+                {item.locked && <FiLock size={12} color="var(--warning)" title={t('fileItem.passcodeLocked')} />}
                 <span className="tc-truncate">{item.displayName || item.name}</span>
               </div>
               {isGlobalSearch && item._parentPath != null && (
@@ -535,7 +537,7 @@ const GridItem = memo(
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 'auto' }}>
-                {item.isDirectory ? 'Folder' : formatFileSize(item.size)}
+                {item.isDirectory ? t('fileItem.folder') : formatFileSize(item.size)}
               </div>
             </div>
 
@@ -566,7 +568,7 @@ const GridItem = memo(
                 {isViewableFile(item) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onOpenMediaViewer(item); }}
-                    title="View"
+                    title={t('menu.view')}
                     disabled={isProcessing}
                     style={iconBtnStyle('var(--accent)')}
                   >
@@ -581,7 +583,7 @@ const GridItem = memo(
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateRename(item); }}
-                  title="Rename"
+                  title={t('common.rename')}
                   disabled={isProcessing}
                   style={iconBtnStyle('var(--accent)')}
                 >
@@ -589,7 +591,7 @@ const GridItem = memo(
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onHandleDownload(item.id, item.name); }}
-                  title="Download"
+                  title={t('common.download')}
                   disabled={isProcessing}
                   style={iconBtnStyle('var(--accent)')}
                 >
@@ -597,7 +599,7 @@ const GridItem = memo(
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateDelete(item); }}
-                  title="Delete"
+                  title={t('common.delete')}
                   disabled={isProcessing}
                   style={iconBtnStyle('var(--danger)')}
                 >
@@ -606,7 +608,7 @@ const GridItem = memo(
                 {onInitiateShare && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onInitiateShare(item); }}
-                    title="Share"
+                    title={t('common.share')}
                     disabled={isProcessing}
                     style={iconBtnStyle('var(--success)')}
                   >
@@ -699,6 +701,7 @@ const GridView = forwardRef(
     },
     ref,
   ) => {
+    const { t } = useTranslation();
     const gridRef = useRef(null);
     const containerWidthRef = useRef(0);
     const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -930,22 +933,22 @@ const GridView = forwardRef(
               {isViewableFile(activeItem) && (
                 <button onClick={() => { setShowingActionsFor(null); onOpenMediaViewer(activeItem); }} style={sheetRowStyle()}>
                   {is3dFile(activeItem.name) ? <FiBox size={18} /> : isVideo(activeItem.name) ? <FiVideo size={18} /> : isImage(activeItem.name) ? <FiImage size={18} /> : isAudio(activeItem.name) ? <FiMusic size={18} /> : <FiFileText size={18} />}
-                  <span>View</span>
+                  <span>{t('menu.view')}</span>
                 </button>
               )}
               <button onClick={() => { setShowingActionsFor(null); onInitiateRename(activeItem); }} style={sheetRowStyle()}>
-                <FiEdit size={18} /><span>Rename</span>
+                <FiEdit size={18} /><span>{t('common.rename')}</span>
               </button>
               <button onClick={() => { setShowingActionsFor(null); onHandleDownload(activeItem.id, activeItem.name); }} style={sheetRowStyle()}>
-                <FiDownload size={18} /><span>Download</span>
+                <FiDownload size={18} /><span>{t('common.download')}</span>
               </button>
               {onInitiateShare && (
                 <button onClick={() => { setShowingActionsFor(null); onInitiateShare(activeItem); }} style={sheetRowStyle()}>
-                  <FiShare2 size={18} /><span>Share</span>
+                  <FiShare2 size={18} /><span>{t('common.share')}</span>
                 </button>
               )}
               <button onClick={() => { setShowingActionsFor(null); onInitiateDelete(activeItem); }} style={sheetRowStyle('var(--danger)')}>
-                <FiTrash2 size={18} /><span>Delete</span>
+                <FiTrash2 size={18} /><span>{t('common.delete')}</span>
               </button>
             </div>
           </>

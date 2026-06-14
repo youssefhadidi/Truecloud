@@ -12,6 +12,7 @@ import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { ListDownloadRow } from '@/components/files/ListDownloadRow';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -94,6 +95,7 @@ const ListRow = memo(function ListRow({
   onInitiateShare,
   onClearActions,
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="tc-list-row"
@@ -158,7 +160,7 @@ const ListRow = memo(function ListRow({
             <ThumbBadge file={file} />
             {isShared && (
               <div
-                title="Shared"
+                title={t('fileItem.shared')}
                 style={{
                   position: 'absolute',
                   top: -4,
@@ -179,7 +181,7 @@ const ListRow = memo(function ListRow({
             )}
             {isFavorite && (
               <div
-                title="Favorite"
+                title={t('fileItem.favorite')}
                 style={{
                   position: 'absolute',
                   top: -4,
@@ -212,7 +214,7 @@ const ListRow = memo(function ListRow({
           }}
           title={file.displayName || file.name}
         >
-          {file.locked && <FiLock size={12} color="var(--warning)" title="Passcode-locked" />}
+          {file.locked && <FiLock size={12} color="var(--warning)" title={t('fileItem.passcodeLocked')} />}
           {file.displayName || file.name}
         </span>
       </div>
@@ -239,7 +241,7 @@ const ListRow = memo(function ListRow({
           {isViewableFile(file) && (
             <button
               onClick={(e) => { e.stopPropagation(); onClearActions(); onOpenMediaViewer(file); }}
-              title="View"
+              title={t('menu.view')}
               disabled={isProcessing}
               style={actionBtn({ color: 'var(--accent)' })}
             >
@@ -254,26 +256,26 @@ const ListRow = memo(function ListRow({
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateRename(file); }}
-            title="Rename"
+            title={t('common.rename')}
             disabled={isProcessing}
             style={actionBtn({ color: 'var(--text-2)' })}
           ><FiEdit size={15} /></button>
           <button
             onClick={(e) => { e.stopPropagation(); onClearActions(); onHandleDownload(file.id, file.name); }}
-            title="Download"
+            title={t('common.download')}
             disabled={isProcessing}
             style={actionBtn({ color: 'var(--text-2)' })}
           ><FiDownload size={15} /></button>
           <button
             onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateDelete(file); }}
-            title="Delete"
+            title={t('common.delete')}
             disabled={isProcessing}
             style={actionBtn({ color: 'var(--danger)' })}
           ><FiTrash2 size={15} /></button>
           {onInitiateShare && (
             <button
               onClick={(e) => { e.stopPropagation(); onClearActions(); onInitiateShare(file); }}
-              title="Share"
+              title={t('common.share')}
               disabled={isProcessing}
               style={actionBtn({ color: 'var(--success)' })}
             ><FiShare2 size={15} /></button>
@@ -327,6 +329,7 @@ const ListView = forwardRef(({
   onRemoveDownload,
   isGlobalSearch,
 }, ref) => {
+  const { t } = useTranslation();
   const listRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -432,7 +435,7 @@ const ListView = forwardRef(({
                 if (e.key === 'Escape') onCancelCreateFolder();
               }}
               autoFocus
-              placeholder="Folder name…"
+              placeholder={t('files.folderNamePlaceholder')}
               style={{
                 flex: 1,
                 padding: '6px 10px',
@@ -445,8 +448,8 @@ const ListView = forwardRef(({
                 outline: 'none',
               }}
             />
-            <button onClick={onCancelCreateFolder} style={miniBtn('ghost')}>Cancel</button>
-            <button onClick={onConfirmCreateFolder} style={miniBtn('primary')}>Create</button>
+            <button onClick={onCancelCreateFolder} style={miniBtn('ghost')}>{t('common.cancel')}</button>
+            <button onClick={onConfirmCreateFolder} style={miniBtn('primary')}>{t('common.create')}</button>
           </div>
         );
       }
@@ -467,11 +470,13 @@ const ListView = forwardRef(({
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--danger)' }}>
-              Delete {file.isDirectory ? 'folder' : 'file'} "{file.name}"?
+              {file.isDirectory
+                ? t('fileItem.deleteFolderNamedQ', { name: file.name })
+                : t('fileItem.deleteFileNamedQ', { name: file.name })}
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={cancelDelete} style={miniBtn('ghost')}>Cancel</button>
-              <button onClick={confirmDelete} style={miniBtn('danger')}>Delete</button>
+              <button onClick={cancelDelete} style={miniBtn('ghost')}>{t('common.cancel')}</button>
+              <button onClick={confirmDelete} style={miniBtn('danger')}>{t('common.delete')}</button>
             </div>
           </div>
         );
@@ -513,8 +518,8 @@ const ListView = forwardRef(({
                 outline: 'none',
               }}
             />
-            <button onClick={cancelRename} style={miniBtn('ghost')}>Cancel</button>
-            <button onClick={confirmRename} style={miniBtn('primary')}>Rename</button>
+            <button onClick={cancelRename} style={miniBtn('ghost')}>{t('common.cancel')}</button>
+            <button onClick={confirmRename} style={miniBtn('primary')}>{t('common.rename')}</button>
           </div>
         );
       }

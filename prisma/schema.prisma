@@ -16,6 +16,7 @@ model User {
   password              String
   name                  String?
   role                  String   @default("user") // user, admin
+  language              String   @default("en") // UI language: "en" | "fr"
   hasRootAccess         Boolean  @default(false) // Allow access to root/all files or only personal folder
   sessionLockEnabled    Boolean  @default(false)
   sessionLockPin        String?  // bcrypt-hashed 4-digit PIN

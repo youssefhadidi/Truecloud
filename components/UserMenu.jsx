@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi';
 import { useSessionLock } from '@/contexts/SessionLockContext';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTranslation } from '@/components/LanguageProvider';
 import { useLogout } from '@/hooks/useLogout';
 import Badge from '@/components/ui/Badge';
 import Divider from '@/components/ui/Divider';
@@ -59,6 +60,7 @@ export default function UserMenu({ email, isAdmin = false }) {
   const pathname = usePathname();
   const { settings, lockNow } = useSessionLock();
   const { theme, toggle } = useTheme();
+  const { t } = useTranslation();
   const logout = useLogout();
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function UserMenu({ email, isAdmin = false }) {
   }, []);
 
   const initial = (email || '?').trim().charAt(0).toUpperCase();
-  const displayName = email ? email.split('@')[0] : 'Account';
+  const displayName = email ? email.split('@')[0] : t('shell.account');
 
   const close = () => setIsOpen(false);
   const go = (path) => {
@@ -148,11 +150,11 @@ export default function UserMenu({ email, isAdmin = false }) {
         >
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
             <div className="tc-truncate" style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>
-              {email || 'Not signed in'}
+              {email || t('shell.notSignedIn')}
             </div>
             {isAdmin && (
               <div style={{ marginTop: 6 }}>
-                <Badge color="accent">Administrator</Badge>
+                <Badge color="accent">{t('shell.administrator')}</Badge>
               </div>
             )}
           </div>
@@ -160,28 +162,28 @@ export default function UserMenu({ email, isAdmin = false }) {
           <div style={{ padding: '4px 0' }}>
             {isAdmin && (
               <>
-                <MenuItem icon={FiSettings} label="Admin Panel" onClick={() => go('/admin/monitoring')} />
+                <MenuItem icon={FiSettings} label={t('shell.adminPanel')} onClick={() => go('/admin/monitoring')} />
                 <Divider />
               </>
             )}
-            <MenuItem icon={FiShare2}    label="My Shares"     onClick={() => go('/files/shares')} />
-            <MenuItem icon={FiDownload}  label="Downloads"     onClick={() => go('/files/downloads')} />
-            <MenuItem icon={FiTrash2}    label="Trash"         onClick={() => go('/files/list?path=trash')} />
+            <MenuItem icon={FiShare2}    label={t('shell.myShares')}  onClick={() => go('/files/shares')} />
+            <MenuItem icon={FiDownload}  label={t('shell.downloads')} onClick={() => go('/files/downloads')} />
+            <MenuItem icon={FiTrash2}    label={t('shell.trash')}     onClick={() => go('/files/list?path=trash')} />
             <Divider />
-            <MenuItem icon={FiSettings} label="Account Settings" onClick={() => go('/account')} />
+            <MenuItem icon={FiSettings} label={t('shell.accountSettings')} onClick={() => go('/account')} />
             <MenuItem
               icon={theme === 'dark' ? FiMoon : FiSun}
-              label={theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              label={theme === 'dark' ? t('shell.darkMode') : t('shell.lightMode')}
               onClick={() => toggle()}
               right={<Toggle value={theme === 'dark'} onChange={() => toggle()} />}
             />
             {settings?.sessionLockEnabled && (
-              <MenuItem icon={FiLock} label="Lock Now" onClick={() => { lockNow(); close(); }} />
+              <MenuItem icon={FiLock} label={t('shell.lockNow')} onClick={() => { lockNow(); close(); }} />
             )}
             <Divider />
             <MenuItem
               icon={FiLogOut}
-              label="Sign Out"
+              label={t('shell.signOut')}
               danger
               onClick={async () => {
                 close();

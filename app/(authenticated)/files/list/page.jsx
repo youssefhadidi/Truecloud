@@ -30,6 +30,7 @@ import Divider from '@/components/ui/Divider';
 import Spinner from '@/components/ui/Spinner';
 import FolderPinModal from '@/components/FolderPinModal';
 import { setFolderPin, clearAllFolderPins, useFolderPins, appendFolderPinToUrl } from '@/lib/folderPinStore';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const GridView = lazy(() => import('@/components/files/GridView'));
@@ -58,6 +59,7 @@ function EmptyState({ label }) {
 function FilesPageContent() {
   const { status } = useStableSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const state = useFilesPage(status);
 
   const { searchQuery: globalSearchQuery, setSearchQuery: setGlobalSearchQuery } = useFilesContext();
@@ -193,9 +195,9 @@ function FilesPageContent() {
     setBulkDeleting(false);
     state.setSelectionMode(false);
     state.setSelectedFiles([]);
-    if (failed === 0) state.addNotification('success', `Deleted ${succeeded} item(s)`);
-    else state.addNotification('warning', `Deleted ${succeeded}, failed to delete ${failed}`);
-  }, [bulkDeleting, bulkDeleteMutation, state]);
+    if (failed === 0) state.addNotification('success', t('notify.deletedItems', { count: succeeded }));
+    else state.addNotification('warning', t('notify.deletedSomeFailed', { succeeded, failed }));
+  }, [bulkDeleting, bulkDeleteMutation, state, t]);
 
   const selectedFileSet = useMemo(() => new Set(state.selectedFiles), [state.selectedFiles]);
 
@@ -252,11 +254,11 @@ function FilesPageContent() {
     state.setSelectionMode(false);
     state.setSelectedFiles([]);
     if (failed.length === 0) {
-      state.addNotification('success', `Downloaded ${state.selectedFiles.length} file(s) as JPEG`);
+      state.addNotification('success', t('notify.downloadedAsJpeg', { count: state.selectedFiles.length }));
     } else {
-      state.addNotification('warning', `Failed ${failed.length} file(s): ${failed.join(', ')}`);
+      state.addNotification('warning', t('notify.failedFiles', { count: failed.length, names: failed.join(', ') }));
     }
-  }, [state, handleShareOrDownload]);
+  }, [state, handleShareOrDownload, t]);
 
   const selectableFiles = useMemo(
     () => state.files.filter((f) => !f.isDownloading),
@@ -531,7 +533,7 @@ function FilesPageContent() {
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === state.currentPath) {
-      state.addNotification('error', 'Select a different destination');
+      state.addNotification('error', t('notify.selectDifferentDestination'));
       return;
     }
     try {
@@ -540,12 +542,12 @@ function FilesPageContent() {
         sourcePath: state.currentPath,
         destinationPath,
       });
-      state.addNotification('success', `Moved ${state.selectedFiles.length} item(s)`);
+      state.addNotification('success', t('notify.movedItems', { count: state.selectedFiles.length }));
       state.setSelectionMode(false);
       setMoveModalOpen(false);
     } catch (error) {
-      const message = error?.response?.data?.error || error.message || 'Failed to move items';
-      state.addNotification('error', message, 'Move Error');
+      const message = error?.response?.data?.error || error.message || t('notify.failedMoveItems');
+      state.addNotification('error', message, t('notify.titles.moveError'));
     }
   };
 
@@ -562,10 +564,10 @@ function FilesPageContent() {
       );
       const folderName = (state.currentPath || '').split('/').filter(Boolean).pop() || 'heic-to-jpeg';
       await handleShareOrDownload(zipUrl, `${folderName}-jpeg.zip`);
-      state.addNotification('success', `Preparing ZIP of ${heicFiles.length} HEIC file(s) — download will start shortly`);
+      state.addNotification('success', t('notify.preparingHeicZip', { count: heicFiles.length }));
     } catch (error) {
       console.error('HEIC to JPEG zip failed:', error);
-      state.addNotification('error', 'Failed to start HEIC to JPEG conversion');
+      state.addNotification('error', t('notify.heicConversionFailed'));
     } finally {
       setTimeout(() => setConvertingHeic(false), 1500);
     }
@@ -574,7 +576,7 @@ function FilesPageContent() {
   if (status === 'loading') {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <LoadingPanel label="Loading…" />
+        <LoadingPanel label={t('common.loading')} />
       </div>
     );
   }
@@ -613,9 +615,9 @@ function FilesPageContent() {
           <div className="tc-drag-overlay">
             <div style={{ textAlign: 'center', color: 'var(--accent)' }}>
               <FiUpload size={40} style={{ marginBottom: 12 }} />
-              <div style={{ fontSize: 18, fontWeight: 700 }}>Drop files to upload</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{t('files.dropToUpload')}</div>
               <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
-                Files will be uploaded to current folder
+                {t('files.filesUploadedToCurrent')}
               </div>
             </div>
           </div>
@@ -639,7 +641,7 @@ function FilesPageContent() {
             <>
               <Btn variant="primary" size="sm" disabled={state.uploading} onClick={() => uploadInputRef.current?.click()}>
                 <FiUpload size={13} />
-                {state.uploading ? 'Uploading…' : 'Upload'}
+                {state.uploading ? t('files.uploading') : t('common.upload')}
               </Btn>
               <input
                 ref={uploadInputRef}
@@ -656,7 +658,7 @@ function FilesPageContent() {
                 disabled={state.creatingFolder}
               >
                 <FiPlus size={13} />
-                New Folder
+                {t('files.newFolder')}
               </Btn>
               <Btn
                 variant={state.selectionMode ? 'primary' : 'surface'}
@@ -664,14 +666,14 @@ function FilesPageContent() {
                 onClick={() => state.setSelectionMode(!state.selectionMode)}
               >
                 <FiCheckSquare size={13} />
-                {state.selectionMode ? 'Selecting' : 'Select'}
+                {state.selectionMode ? t('files.selecting') : t('common.select')}
               </Btn>
 
               {state.selectionMode && (
                 <>
                   <Divider vertical />
                   <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
-                    {state.selectedFiles.length} selected
+                    {t('files.nSelected', { count: state.selectedFiles.length })}
                   </span>
                   <Btn
                     variant="surface"
@@ -680,11 +682,11 @@ function FilesPageContent() {
                     disabled={selectableFiles.length === 0 || bulkDeleting}
                   >
                     {allSelected ? <FiSquare size={13} /> : <FiCheckSquare size={13} />}
-                    {allSelected ? 'Deselect all' : 'Select all'}
+                    {allSelected ? t('files.deselectAll') : t('files.selectAll')}
                   </Btn>
                   <IconBtn
                     icon={FiDownload}
-                    title="Download selected"
+                    title={t('files.downloadSelected')}
                     disabled={state.selectedFiles.length === 0 || bulkDeleting}
                     onClick={handleBulkDownload}
                   />
@@ -697,32 +699,32 @@ function FilesPageContent() {
                     >
                       <FiImage size={13} />
                       {downloadingHeicAsJpeg
-                        ? 'Downloading…'
-                        : `Download as JPEG (${state.selectedFiles.length})`}
+                        ? t('files.downloading')
+                        : t('files.downloadAsJpegN', { count: state.selectedFiles.length })}
                     </Btn>
                   )}
                   <IconBtn
                     icon={FiFolder}
-                    title="Move selected"
+                    title={t('files.moveSelected')}
                     disabled={state.selectedFiles.length === 0 || moveMutation.isPending}
                     onClick={() => setMoveModalOpen(true)}
                   />
                   {bulkDeleteConfirming ? (
                     <>
                       <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
-                        Delete {state.selectedFiles.length}?
+                        {t('files.deleteN', { count: state.selectedFiles.length })}
                       </span>
                       <Btn variant="danger" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>
-                        {bulkDeleting ? 'Deleting…' : 'Confirm'}
+                        {bulkDeleting ? t('files.deleting') : t('common.confirm')}
                       </Btn>
                       <Btn variant="ghost" size="sm" onClick={() => setBulkDeleteConfirming(false)} disabled={bulkDeleting}>
-                        Cancel
+                        {t('common.cancel')}
                       </Btn>
                     </>
                   ) : (
                     <IconBtn
                       icon={FiTrash2}
-                      title="Delete selected"
+                      title={t('files.deleteSelected')}
                       danger
                       disabled={state.selectedFiles.length === 0 || bulkDeleting}
                       onClick={() => setBulkDeleteConfirming(true)}
@@ -735,8 +737,8 @@ function FilesPageContent() {
                 <Btn variant="surface" size="sm" onClick={handleConvertHeicToJpeg} disabled={convertingHeic}>
                   <FiImage size={13} />
                   {convertingHeic
-                    ? `Preparing ZIP…`
-                    : `HEIC → JPEG ZIP (${heicFiles.length})`}
+                    ? t('files.preparingZip')
+                    : t('files.heicToJpegZipN', { count: heicFiles.length })}
                 </Btn>
               )}
             </>
@@ -745,13 +747,13 @@ function FilesPageContent() {
           {isGlobalSearch && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>
               <FiSearch size={14} />
-              Search Results ({searchFiles.length})
+              {t('files.searchResultsN', { count: searchFiles.length })}
             </span>
           )}
 
           {readOnly && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-              USB Drive (read-only)
+              {t('files.usbReadOnly')}
             </span>
           )}
 
@@ -774,7 +776,7 @@ function FilesPageContent() {
               type="text"
               value={state.searchQuery}
               onChange={(e) => state.setSearchQuery(e.target.value)}
-              placeholder="Filter…"
+              placeholder={t('files.filter')}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -812,12 +814,12 @@ function FilesPageContent() {
               cursor: 'pointer',
             }}
           >
-            <option value="name-asc">Name (A–Z)</option>
-            <option value="name-desc">Name (Z–A)</option>
-            <option value="date-desc">Date (New)</option>
-            <option value="date-asc">Date (Old)</option>
-            <option value="size-desc">Size (Big)</option>
-            <option value="size-asc">Size (Small)</option>
+            <option value="name-asc">{t('files.sortNameAsc')}</option>
+            <option value="name-desc">{t('files.sortNameDesc')}</option>
+            <option value="date-desc">{t('files.sortDateNew')}</option>
+            <option value="date-asc">{t('files.sortDateOld')}</option>
+            <option value="size-desc">{t('files.sortSizeBig')}</option>
+            <option value="size-asc">{t('files.sortSizeSmall')}</option>
           </select>
 
           <Divider vertical />
@@ -831,8 +833,8 @@ function FilesPageContent() {
               gap: 2,
             }}
           >
-            <IconBtn icon={FiGrid} title="Grid view" onClick={() => state.setViewMode('grid')} active={state.viewMode === 'grid'} width={26} height={26} size={14} />
-            <IconBtn icon={FiList} title="List view" onClick={() => state.setViewMode('list')} active={state.viewMode === 'list'} width={26} height={26} size={14} />
+            <IconBtn icon={FiGrid} title={t('files.gridView')} onClick={() => state.setViewMode('grid')} active={state.viewMode === 'grid'} width={26} height={26} size={14} />
+            <IconBtn icon={FiList} title={t('files.listView')} onClick={() => state.setViewMode('list')} active={state.viewMode === 'list'} width={26} height={26} size={14} />
           </div>
         </div>
 
@@ -900,13 +902,13 @@ function FilesPageContent() {
               }}
             >
               <FiHome size={13} />
-              Home
+              {t('files.home')}
             </button>
             {isGlobalSearch ? (
               <>
                 <FiChevronRight size={13} color="var(--text-3)" style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', flexShrink: 0 }}>
-                  Search: &quot;{globalSearchQuery}&quot;
+                  {t('files.searchColon')} &quot;{globalSearchQuery}&quot;
                 </span>
               </>
             ) : usbMode ? (
@@ -985,11 +987,11 @@ function FilesPageContent() {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-            <IconBtn icon={FiArrowLeft} title="Back" onClick={navigation.goBack} disabled={!navigation.canGoBack} />
-            <IconBtn icon={FiArrowRight} title="Forward" onClick={navigation.goForward} disabled={!navigation.canGoForward} />
+            <IconBtn icon={FiArrowLeft} title={t('common.back')} onClick={navigation.goBack} disabled={!navigation.canGoBack} />
+            <IconBtn icon={FiArrowRight} title={t('files.forward')} onClick={navigation.goForward} disabled={!navigation.canGoForward} />
             <IconBtn
               icon={FiRefreshCw}
-              title="Refresh"
+              title={t('common.refresh')}
               onClick={() => state.queryClient.invalidateQueries({ queryKey: ['files', state.currentPath] })}
             />
           </div>
@@ -1013,9 +1015,9 @@ function FilesPageContent() {
             {state.viewMode === 'list' ? (
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {!isGlobalSearch && state.isLoading ? (
-                  <LoadingPanel label="Loading files…" />
+                  <LoadingPanel label={t('files.loadingFiles')} />
                 ) : displayFiles.length === 0 && !state.creatingFolder ? (
-                  <EmptyState label={isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'} />
+                  <EmptyState label={isGlobalSearch ? t('files.noSearchResults') : t('files.noFilesYet')} />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                     <div
@@ -1033,11 +1035,11 @@ function FilesPageContent() {
                           padding: '10px 24px',
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Name</div>
-                        {isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Path</div>}
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Size</div>
-                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Modified</div>}
-                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.name')}</div>
+                        {isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('files.colPath')}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.size')}</div>
+                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{t('common.modified')}</div>}
+                        {!isGlobalSearch && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'right' }}>{t('common.actions')}</div>}
                       </div>
                     </div>
                     <Suspense fallback={<LoadingPanel />}>
@@ -1108,9 +1110,9 @@ function FilesPageContent() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {state.isLoading ? (
-                  <LoadingPanel label="Loading files…" />
+                  <LoadingPanel label={t('files.loadingFiles')} />
                 ) : displayFiles.length === 0 && !state.creatingFolder ? (
-                  <EmptyState label={isGlobalSearch ? 'No search results' : 'No files yet. Upload your first file!'} />
+                  <EmptyState label={isGlobalSearch ? t('files.noSearchResults') : t('files.noFilesYet')} />
                 ) : (
                   <Suspense fallback={<LoadingPanel />}>
                     <GridView
@@ -1197,7 +1199,7 @@ function FilesPageContent() {
               type="text"
               value={state.searchQuery}
               onChange={(e) => state.setSearchQuery(e.target.value)}
-              placeholder="Search files…"
+              placeholder={t('files.searchFiles')}
               style={{
                 flex: 1,
                 border: 'none',
@@ -1255,10 +1257,10 @@ function FilesPageContent() {
               });
               state.addNotification(
                 'success',
-                favorites.some((f) => f.path === fullPath) ? 'Removed from favorites' : 'Added to favorites',
+                favorites.some((f) => f.path === fullPath) ? t('notify.removedFromFavorites') : t('files.addedToFavorites'),
               );
             } catch {
-              state.addNotification('error', 'Failed to update favorites');
+              state.addNotification('error', t('notify.favoritesUpdateFailed'));
             }
           }
           contextMenu.closeContextMenu();
@@ -1282,6 +1284,21 @@ function FilesPageContent() {
           onClose={mediaViewer.closeMediaViewer}
           onNavigate={mediaViewer.navigateViewer}
           onSelectFile={mediaViewer.selectViewerFile}
+          onDelete={
+            readOnly
+              ? undefined
+              : (file) => {
+                  // Move to an adjacent file before the list refetches so the
+                  // viewer stays open; the delete invalidation then refreshes
+                  // the list and the thumbnail strip (dropping this file).
+                  const list = state.viewableFiles;
+                  const idx = list.findIndex((f) => f.id === file.id);
+                  const next = list[idx + 1] || list[idx - 1] || null;
+                  handlers.confirmDelete(file);
+                  if (next) mediaViewer.selectViewerFile(next);
+                  else mediaViewer.closeMediaViewer();
+                }
+          }
         />
       </Suspense>
 

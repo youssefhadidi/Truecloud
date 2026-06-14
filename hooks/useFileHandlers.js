@@ -3,6 +3,7 @@
 import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
 import { useStartDownload } from '@/lib/api/downloads';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
@@ -24,6 +25,7 @@ export function useFileHandlers({
   removeDownload,
 }) {
   const { addTransfer, updateTransfer, removeTransfer, setTransferring } = useTransfersDispatch();
+  const { t } = useTranslation();
 
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
@@ -38,7 +40,7 @@ export function useFileHandlers({
   // Folder operations
   const initiateCreateFolder = () => {
     setCreatingFolder(true);
-    setNewFolderName('New Folder');
+    setNewFolderName(t('files.newFolder'));
   };
 
   const cancelCreateFolder = () => {
@@ -56,11 +58,11 @@ export function useFileHandlers({
       onSuccess: () => {
         setCreatingFolder(false);
         setNewFolderName('');
-        addNotification('success', 'Folder created successfully');
+        addNotification('success', t('notify.folderCreated'));
       },
       onError: (error) => {
         console.error('Create folder error:', error);
-        addNotification('error', error.message || 'Failed to create folder', 'Error');
+        addNotification('error', error.message || t('notify.folderCreateFailed'), t('notify.titles.error'));
         setCreatingFolder(false);
       },
     });
@@ -92,7 +94,7 @@ export function useFileHandlers({
           onError: (error) => {
             console.error('Upload error:', error);
             updateTransfer(uploadId, { status: 'error', error: error.message });
-            addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
+            addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
             resolve();
           },
         },
@@ -108,10 +110,10 @@ export function useFileHandlers({
 
       await startDownloadMutation.mutateAsync({ formData, path: currentPath });
 
-      addNotification('success', `Started downloading: ${torrentFile.name}`);
+      addNotification('success', t('notify.startedDownloading', { name: torrentFile.name }));
     } catch (error) {
       console.error('Torrent download error:', error);
-      addNotification('error', `Failed to start download: ${error.message}`, 'Download Error');
+      addNotification('error', t('notify.failedStartDownload', { message: error.message }), t('notify.titles.downloadError'));
     }
   };
 
@@ -154,7 +156,7 @@ export function useFileHandlers({
   const initiateDelete = (file, closeContextMenu) => {
     if (!file || !file.id) {
       console.error('initiateDelete: Invalid file object', file);
-      addNotification('error', 'Cannot delete: Invalid file data');
+      addNotification('error', t('notify.cannotDeleteInvalid'));
       return;
     }
     setDeletingFile(file);
@@ -168,7 +170,7 @@ export function useFileHandlers({
   const confirmDelete = (deletingFile) => {
     if (!deletingFile || !deletingFile.id) {
       console.error('confirmDelete: Invalid file object', deletingFile);
-      addNotification('error', 'Cannot delete file: Invalid file data');
+      addNotification('error', t('notify.cannotDeleteFileInvalid'));
       setDeletingFile(null);
       return;
     }
@@ -178,14 +180,14 @@ export function useFileHandlers({
         setDeletingFile(null);
         setProcessingFile(null);
         if (data.movedToTrash) {
-          addNotification('success', 'Moved to trash');
+          addNotification('success', t('notify.movedToTrash'));
         } else {
-          addNotification('success', 'Permanently deleted');
+          addNotification('success', t('notify.permanentlyDeleted'));
         }
       },
       onError: (error) => {
         console.error('Delete error:', error);
-        addNotification('error', error.message || 'Failed to delete file', 'Delete Error');
+        addNotification('error', error.message || t('notify.deleteFailed'), t('notify.titles.deleteError'));
         setDeletingFile(null);
         setProcessingFile(null);
       },
@@ -196,7 +198,7 @@ export function useFileHandlers({
   const initiateRename = (file, closeContextMenu) => {
     if (!file || !file.id || !file.name) {
       console.error('initiateRename: Invalid file object', file);
-      addNotification('error', 'Cannot rename: Invalid file data');
+      addNotification('error', t('notify.cannotRenameInvalid'));
       return;
     }
     setRenamingFile(file);
@@ -212,7 +214,7 @@ export function useFileHandlers({
   const confirmRename = (renamingFile, newFileName) => {
     if (!renamingFile || !renamingFile.id) {
       console.error('confirmRename: Invalid file object', renamingFile);
-      addNotification('error', 'Cannot rename file: Invalid file data');
+      addNotification('error', t('notify.cannotRenameFileInvalid'));
       setRenamingFile(null);
       setNewFileName('');
       return;
@@ -229,11 +231,11 @@ export function useFileHandlers({
           setRenamingFile(null);
           setNewFileName('');
           setProcessingFile(null);
-          addNotification('success', 'File renamed successfully');
+          addNotification('success', t('notify.fileRenamed'));
         },
         onError: (error) => {
           console.error('Rename error:', error);
-          addNotification('error', error.message || 'Failed to rename file', 'Rename Error');
+          addNotification('error', error.message || t('notify.renameFailed'), t('notify.titles.renameError'));
           setRenamingFile(null);
           setProcessingFile(null);
         },
@@ -245,7 +247,7 @@ export function useFileHandlers({
   const initiateShare = (file, closeContextMenu) => {
     if (!file || !file.id || !file.name) {
       console.error('initiateShare: Invalid file object', file);
-      addNotification('error', 'Cannot share: Invalid file data');
+      addNotification('error', t('notify.cannotShareInvalid'));
       return;
     }
     setSharingFile(file);
@@ -260,7 +262,7 @@ export function useFileHandlers({
   const initiateRestore = (file, closeContextMenu) => {
     if (!file || !file.id) {
       console.error('initiateRestore: Invalid file object', file);
-      addNotification('error', 'Cannot restore: Invalid file data');
+      addNotification('error', t('notify.cannotRestoreInvalid'));
       return;
     }
     if (setRestoringFile) {
@@ -278,7 +280,7 @@ export function useFileHandlers({
   const confirmRestore = (restoringFile) => {
     if (!restoringFile || !restoringFile.id) {
       console.error('confirmRestore: Invalid file object', restoringFile);
-      addNotification('error', 'Cannot restore file: Invalid file data');
+      addNotification('error', t('notify.cannotRestoreFileInvalid'));
       if (setRestoringFile) setRestoringFile(null);
       return;
     }
@@ -287,11 +289,11 @@ export function useFileHandlers({
       onSuccess: (data) => {
         if (setRestoringFile) setRestoringFile(null);
         setProcessingFile(null);
-        addNotification('success', `Restored to ${data.restoredTo || 'original location'}`);
+        addNotification('success', t('notify.restoredTo', { location: data.restoredTo || t('notify.originalLocation') }));
       },
       onError: (error) => {
         console.error('Restore error:', error);
-        addNotification('error', error.message || 'Failed to restore file', 'Restore Error');
+        addNotification('error', error.message || t('notify.restoreFailed'), t('notify.titles.restoreError'));
         if (setRestoringFile) setRestoringFile(null);
         setProcessingFile(null);
       },

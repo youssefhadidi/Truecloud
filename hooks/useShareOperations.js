@@ -6,6 +6,7 @@ import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useCreateShareFolder, useDeleteShareFile, useRenameShareFile, useMoveShareFiles, useUploadShareFile } from '@/lib/api/publicShares';
+import { useTranslation } from '@/components/LanguageProvider';
 
 /**
  * useShareOperations - File and folder operations for public shares
@@ -38,6 +39,7 @@ export function useShareOperations({
   setIsDragging,
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const { handleShareOrDownload } = useShareOrDownload();
 
   // React Query mutations for share operations
@@ -55,12 +57,12 @@ export function useShareOperations({
   // ============ Folder Creation ============
   const initiateCreateFolder = useCallback(() => {
     if (!allowEditing) {
-      addNotification('error', 'Uploads are not allowed for this share');
+      addNotification('error', t('notify.uploadsNotAllowed'));
       return;
     }
     setCreatingFolder(true);
-    setNewFolderName('New Folder');
-  }, [allowEditing, setCreatingFolder, setNewFolderName, addNotification]);
+    setNewFolderName(t('files.newFolder'));
+  }, [allowEditing, setCreatingFolder, setNewFolderName, addNotification, t]);
 
   const cancelCreateFolder = useCallback(() => {
     setCreatingFolder(false);
@@ -83,18 +85,18 @@ export function useShareOperations({
             setCreatingFolder(false);
             setNewFolderName('');
             setProcessingFile(null);
-            addNotification('success', 'Folder created successfully');
+            addNotification('success', t('notify.folderCreated'));
             refreshListing();
           },
           onError: (error) => {
             console.error('Create folder error:', error);
-            addNotification('error', error.response?.data?.error || error.message || 'Failed to create folder', 'Error');
+            addNotification('error', error.response?.data?.error || error.message || t('notify.folderCreateFailed'), t('notify.titles.error'));
             setProcessingFile(null);
           },
         }
       );
     },
-    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder, refreshListing],
+    [token, sharePassword, currentSubPath, newFolderName, setCreatingFolder, setNewFolderName, setProcessingFile, addNotification, cancelCreateFolder, refreshListing, t],
   );
 
   // ============ File Deletion ============
@@ -102,13 +104,13 @@ export function useShareOperations({
     (file, closeContextMenu) => {
       if (!file || !file.name) {
         console.error('initiateDelete: Invalid file object', file);
-        addNotification('error', 'Cannot delete: Invalid file data');
+        addNotification('error', t('notify.cannotDeleteInvalid'));
         return;
       }
       setDeletingFile(file);
       if (closeContextMenu) closeContextMenu();
     },
-    [setDeletingFile, addNotification],
+    [setDeletingFile, addNotification, t],
   );
 
   const cancelDelete = useCallback(() => {
@@ -119,7 +121,7 @@ export function useShareOperations({
     async (deletingFile) => {
       if (!deletingFile || !deletingFile.name) {
         console.error('confirmDelete: Invalid file object', deletingFile);
-        addNotification('error', 'Cannot delete file: Invalid file data');
+        addNotification('error', t('notify.cannotDeleteFileInvalid'));
         setDeletingFile(null);
         return;
       }
@@ -131,19 +133,19 @@ export function useShareOperations({
           onSuccess: () => {
             setDeletingFile(null);
             setProcessingFile(null);
-            addNotification('success', deletingFile.isDirectory ? 'Folder deleted' : 'File deleted');
+            addNotification('success', deletingFile.isDirectory ? t('notify.folderDeleted') : t('notify.fileDeleted'));
             refreshListing();
           },
           onError: (error) => {
             console.error('Delete error:', error);
-            addNotification('error', error.response?.data?.error || error.message || 'Failed to delete file', 'Delete Error');
+            addNotification('error', error.response?.data?.error || error.message || t('notify.deleteFailed'), t('notify.titles.deleteError'));
             setDeletingFile(null);
             setProcessingFile(null);
           },
         }
       );
     },
-    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification, refreshListing],
+    [token, sharePassword, currentSubPath, setDeletingFile, setProcessingFile, addNotification, refreshListing, t],
   );
 
   // ============ File Rename ============
@@ -151,14 +153,14 @@ export function useShareOperations({
     (file, closeContextMenu) => {
       if (!file || !file.name) {
         console.error('initiateRename: Invalid file object', file);
-        addNotification('error', 'Cannot rename: Invalid file data');
+        addNotification('error', t('notify.cannotRenameInvalid'));
         return;
       }
       setRenamingFile(file);
       setNewFileName(file.name);
       if (closeContextMenu) closeContextMenu();
     },
-    [setRenamingFile, setNewFileName, addNotification],
+    [setRenamingFile, setNewFileName, addNotification, t],
   );
 
   const cancelRename = useCallback(() => {
@@ -170,7 +172,7 @@ export function useShareOperations({
     async (renamingFile, newFileName) => {
       if (!renamingFile || !renamingFile.name) {
         console.error('confirmRename: Invalid file object', renamingFile);
-        addNotification('error', 'Cannot rename file: Invalid file data');
+        addNotification('error', t('notify.cannotRenameFileInvalid'));
         setRenamingFile(null);
         setNewFileName('');
         return;
@@ -188,31 +190,31 @@ export function useShareOperations({
             setRenamingFile(null);
             setNewFileName('');
             setProcessingFile(null);
-            addNotification('success', 'File renamed successfully');
+            addNotification('success', t('notify.fileRenamed'));
             refreshListing();
           },
           onError: (error) => {
             console.error('Rename error:', error);
-            addNotification('error', error.response?.data?.error || error.message || 'Failed to rename file', 'Rename Error');
+            addNotification('error', error.response?.data?.error || error.message || t('notify.renameFailed'), t('notify.titles.renameError'));
             setRenamingFile(null);
             setProcessingFile(null);
           },
         }
       );
     },
-    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename, refreshListing],
+    [token, sharePassword, currentSubPath, setRenamingFile, setNewFileName, setProcessingFile, addNotification, cancelRename, refreshListing, t],
   );
 
   // ============ Move Files/Folders ============
   const moveFiles = useCallback(
     async (items, destinationPath) => {
       if (!allowEditing) {
-        addNotification('error', 'Uploads are not allowed for this share');
+        addNotification('error', t('notify.uploadsNotAllowed'));
         return false;
       }
 
       if (!items || items.length === 0) {
-        addNotification('error', 'No items selected');
+        addNotification('error', t('notify.noItemsSelected'));
         return false;
       }
 
@@ -223,13 +225,13 @@ export function useShareOperations({
           {
             onSuccess: () => {
               setProcessingFile(null);
-              addNotification('success', `Moved ${items.length} item(s)`);
+              addNotification('success', t('notify.movedItems', { count: items.length }));
               refreshListing();
               resolve(true);
             },
             onError: (error) => {
               console.error('Move error:', error);
-              addNotification('error', error.response?.data?.error || error.message || 'Failed to move items', 'Move Error');
+              addNotification('error', error.response?.data?.error || error.message || t('notify.failedMoveItems'), t('notify.titles.moveError'));
               setProcessingFile(null);
               resolve(false);
             },
@@ -237,14 +239,14 @@ export function useShareOperations({
         );
       });
     },
-    [token, sharePassword, currentSubPath, allowEditing, setProcessingFile, addNotification, refreshListing],
+    [token, sharePassword, currentSubPath, allowEditing, setProcessingFile, addNotification, refreshListing, t],
   );
 
   // ============ File Upload ============
   const handleUpload = useCallback(
     async (files) => {
       if (!allowEditing) {
-        addNotification('error', 'Uploads are not allowed for this share');
+        addNotification('error', t('notify.uploadsNotAllowed'));
         return;
       }
 
@@ -271,19 +273,19 @@ export function useShareOperations({
                 setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
               }, 2000);
 
-              addNotification('success', `${file.name} uploaded`);
+              addNotification('success', t('notify.fileUploaded', { name: file.name }));
               refreshListing();
             },
             onError: (error) => {
               console.error('Upload error:', error);
               setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
-              addNotification('error', `Upload failed for ${file.name}`, 'Upload Error');
+              addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
             },
           }
         );
       }
     },
-    [token, sharePassword, currentSubPath, allowEditing, setUploadingFiles, addNotification, refreshListing],
+    [token, sharePassword, currentSubPath, allowEditing, setUploadingFiles, addNotification, refreshListing, t],
   );
 
   const handleUploadFromInput = useCallback(

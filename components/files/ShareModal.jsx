@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fi';
 import { useCreateShare, useDeleteShare, useFileShare } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 import Overlay from '@/components/ui/Overlay';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
@@ -46,6 +47,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const [loading, setLoading] = useState(false);
 
   const { addNotification } = useNotifications();
+  const { t } = useTranslation();
   const createShareMutation = useCreateShare();
   const deleteShareMutation = useDeleteShare();
   const { data: existingShare, isLoading: checkingShare } = useFileShare(currentPath, file?.name);
@@ -69,9 +71,9 @@ export default function ShareModal({ file, currentPath, onClose }) {
         allowEditing: file.isDirectory ? allowEditing : false,
       });
       setShareUrl(result.shareUrl);
-      addNotification('success', 'Share created successfully');
+      addNotification('success', t('notify.shareCreated'));
     } catch {
-      addNotification('error', 'Failed to create share');
+      addNotification('error', t('notify.shareCreateFailed'));
     } finally {
       setLoading(false);
     }
@@ -79,14 +81,14 @@ export default function ShareModal({ file, currentPath, onClose }) {
 
   const deleteShare = async () => {
     if (!existingShare) return;
-    if (!confirm('Are you sure you want to delete this share?')) return;
+    if (!confirm(t('share.confirmDelete'))) return;
     try {
       await deleteShareMutation.mutateAsync(existingShare.id);
       setShareUrl(null);
-      addNotification('success', 'Share deleted');
+      addNotification('success', t('notify.shareDeleted'));
       onClose();
     } catch {
-      addNotification('error', 'Failed to delete share');
+      addNotification('error', t('notify.shareDeleteFailed'));
     }
   };
 
@@ -95,10 +97,10 @@ export default function ShareModal({ file, currentPath, onClose }) {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      addNotification('success', 'Link copied to clipboard');
+      addNotification('success', t('notify.linkCopied'));
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      addNotification('error', 'Failed to copy link');
+      addNotification('error', t('notify.copyLinkFailed'));
     }
   };
 
@@ -147,14 +149,14 @@ export default function ShareModal({ file, currentPath, onClose }) {
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>
-                Share {file.isDirectory ? 'Folder' : 'File'}
+                {file.isDirectory ? t('share.shareFolder') : t('share.shareFile')}
               </div>
               <div className="tc-truncate" style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
                 {file.name}
               </div>
             </div>
           </div>
-          <IconBtn icon={FiX} onClick={onClose} title="Close" />
+          <IconBtn icon={FiX} onClick={onClose} title={t('common.close')} />
         </div>
 
         {/* Content */}
@@ -167,7 +169,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
             <>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
-                  SHARE LINK
+                  {t('share.shareLink')}
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div
@@ -190,7 +192,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
                   </div>
                   <Btn variant={copied ? 'surface' : 'primary'} size="sm" onClick={copyLink}>
                     {copied ? <FiCheck size={13} /> : <FiCopy size={13} />}
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? t('common.copied') : t('common.copy')}
                   </Btn>
                 </div>
               </div>
@@ -202,21 +204,21 @@ export default function ShareModal({ file, currentPath, onClose }) {
                       {existingShare.passwordHash ? (
                         <>
                           <FiLock size={13} color="var(--success)" />
-                          Password protected
+                          {t('share.passwordProtected')}
                         </>
                       ) : (
                         <>
                           <FiLink size={13} />
-                          Anyone with the link
+                          {t('share.anyoneWithLink')}
                         </>
                       )}
                     </span>
-                    <Badge color="accent">{existingShare.accessCount} views</Badge>
+                    <Badge color="accent">{t('share.nViews', { count: existingShare.accessCount })}</Badge>
                   </div>
                   {existingShare.allowEditing && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}>
                       <FiUpload size={13} />
-                      Editing enabled
+                      {t('share.editingEnabled')}
                     </div>
                   )}
                 </div>
@@ -228,17 +230,17 @@ export default function ShareModal({ file, currentPath, onClose }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <FiLock size={14} color="var(--text-2)" />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Password protection</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t('share.passwordProtection')}</span>
                 </div>
                 <Toggle value={usePassword} onChange={setUsePassword} />
               </div>
               {usePassword && (
                 <Field
-                  label="Password"
+                  label={t('share.password')}
                   type="password"
                   value={password}
                   onChange={setPassword}
-                  placeholder="Enter password"
+                  placeholder={t('share.enterPassword')}
                   autoComplete="new-password"
                 />
               )}
@@ -246,7 +248,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
               {/* Expiration */}
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
-                  EXPIRES
+                  {t('share.expires')}
                 </label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {EXPIRY_OPTIONS.map((o) => {
@@ -269,7 +271,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
                           fontFamily: 'inherit',
                         }}
                       >
-                        {o.label}
+                        {o.value === 'never' ? t('share.never') : o.label}
                       </button>
                     );
                   })}
@@ -282,10 +284,10 @@ export default function ShareModal({ file, currentPath, onClose }) {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <FiUpload size={14} color="var(--text-2)" />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Allow editing</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t('share.allowEditing')}</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                      Anyone with the link can upload, rename, move, and delete files in this folder.
+                      {t('share.allowEditingHint')}
                     </div>
                   </div>
                   <Toggle value={allowEditing} onChange={setAllowEditing} />
@@ -309,13 +311,13 @@ export default function ShareModal({ file, currentPath, onClose }) {
             <>
               <Btn variant="danger" size="sm" onClick={deleteShare}>
                 <FiTrash2 size={13} />
-                Delete Share
+                {t('share.deleteShare')}
               </Btn>
-              <Btn variant="outline" size="sm" onClick={onClose}>Close</Btn>
+              <Btn variant="outline" size="sm" onClick={onClose}>{t('common.close')}</Btn>
             </>
           ) : (
             <>
-              <Btn variant="outline" size="sm" onClick={onClose}>Cancel</Btn>
+              <Btn variant="outline" size="sm" onClick={onClose}>{t('common.cancel')}</Btn>
               <Btn
                 variant="primary"
                 size="sm"
@@ -325,12 +327,12 @@ export default function ShareModal({ file, currentPath, onClose }) {
                 {loading ? (
                   <>
                     <Spinner size={12} />
-                    Creating…
+                    {t('share.creating')}
                   </>
                 ) : (
                   <>
                     <FiShare2 size={13} />
-                    Create Share
+                    {t('share.createShare')}
                   </>
                 )}
               </Btn>

@@ -7,6 +7,7 @@ import { FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 /**
  * Downloads management page.
@@ -17,22 +18,23 @@ import { useNotifications } from '@/contexts/NotificationsContext';
 export default function DownloadsPage() {
   const { downloads: downloadsMap, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
   const { addNotification } = useNotifications();
+  const { t } = useTranslation();
   const [actionLoading, setActionLoading] = useState(null); // gid of item currently being acted on
 
   // Convert downloads map to array (show ALL downloads, not filtered by path)
   const downloads = Object.values(downloadsMap);
 
   const handleDownloadStart = (downloadInfo) => {
-    addNotification('success', `Download started: ${downloadInfo.name}`);
+    addNotification('success', t('notify.downloadStarted', { name: downloadInfo.name }));
   };
 
   const handlePause = async (download) => {
     try {
       setActionLoading(download.gid);
       await pauseDownload(download.gid);
-      addNotification('success', `Paused: ${download.name}`);
+      addNotification('success', t('notify.paused', { name: download.name }));
     } catch (error) {
-      addNotification('error', `Failed to pause: ${error.message}`);
+      addNotification('error', t('notify.pauseFailed', { message: error.message }));
     } finally {
       setActionLoading(null);
     }
@@ -42,9 +44,9 @@ export default function DownloadsPage() {
     try {
       setActionLoading(download.gid);
       await resumeDownload(download.gid);
-      addNotification('success', `Resumed: ${download.name}`);
+      addNotification('success', t('notify.resumed', { name: download.name }));
     } catch (error) {
-      addNotification('error', `Failed to resume: ${error.message}`);
+      addNotification('error', t('notify.resumeFailed', { message: error.message }));
     } finally {
       setActionLoading(null);
     }
@@ -54,9 +56,9 @@ export default function DownloadsPage() {
     try {
       setActionLoading(download.gid);
       await removeDownload(download.gid);
-      addNotification('success', `Removed: ${download.name}`);
+      addNotification('success', t('notify.removed', { name: download.name }));
     } catch (error) {
-      addNotification('error', `Failed to remove: ${error.message}`);
+      addNotification('error', t('notify.removeFailed', { message: error.message }));
     } finally {
       setActionLoading(null);
     }
@@ -68,8 +70,8 @@ export default function DownloadsPage() {
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Downloads</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Active and recent transfers</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('downloads.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('downloads.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-lg font-semibold text-gray-900 dark:text-white">{downloads.length}</span>
@@ -90,12 +92,12 @@ export default function DownloadsPage() {
             <div className="lg:col-span-2">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Active Downloads</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('downloads.activeDownloads')}</h2>
                 </div>
 
                 {downloads.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                    <p>No active downloads</p>
+                    <p>{t('downloads.noActiveDownloads')}</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -112,7 +114,7 @@ export default function DownloadsPage() {
                                   : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
                             }`}
                           >
-                            {download.status}
+                            {t(`downloads.status.${download.status}`)}
                           </span>
                         </div>
 
@@ -126,19 +128,19 @@ export default function DownloadsPage() {
                         {/* Download Info */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4">
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">Progress</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.progress')}</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.progress}%</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">{download.isTorrent ? 'Download' : 'Speed'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">{download.isTorrent ? t('common.download') : t('downloads.speed')}</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.downloadSpeed}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">Downloaded</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.downloaded')}</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.downloaded}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">Total Size</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.totalSize')}</p>
                             <p className="font-medium text-gray-900 dark:text-white">{download.totalSize}</p>
                           </div>
                         </div>
@@ -147,15 +149,15 @@ export default function DownloadsPage() {
                         {download.isTorrent && (
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
                             <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-500">Upload Speed</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.uploadSpeed')}</p>
                               <p className="font-medium text-gray-900 dark:text-white">{download.uploadSpeed}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-500">Peers</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.peers')}</p>
                               <p className="font-medium text-gray-900 dark:text-white">{download.peers}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-500">Seeders</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-500">{t('downloads.seeders')}</p>
                               <p className="font-medium text-gray-900 dark:text-white">{download.seeders}</p>
                             </div>
                           </div>
@@ -164,7 +166,7 @@ export default function DownloadsPage() {
                         {/* Action Buttons */}
                         {download.error && (
                           <div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-600 dark:text-red-400 text-xs">
-                            Error: {download.error}
+                            {t('common.error')}: {download.error}
                           </div>
                         )}
                         <div className="flex items-center gap-2">
@@ -175,7 +177,7 @@ export default function DownloadsPage() {
                               className="flex items-center gap-1 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50 disabled:opacity-50 text-sm"
                             >
                               <FiPause size={14} />
-                              Pause
+                              {t('downloads.pause')}
                             </button>
                           )}
                           {download.status === 'paused' && (
@@ -185,12 +187,12 @@ export default function DownloadsPage() {
                               className="flex items-center gap-1 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 text-sm"
                             >
                               <FiPlay size={14} />
-                              Resume
+                              {t('downloads.resume')}
                             </button>
                           )}
                           {(download.status === 'complete' || download.status === 'error' || download.status === 'removed') && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {download.status === 'complete' ? 'Download completed' : download.status === 'error' ? 'Download failed' : 'Download removed'}
+                              {download.status === 'complete' ? t('downloads.completed') : download.status === 'error' ? t('downloads.failed') : t('downloads.removedLabel')}
                             </span>
                           )}
                           <button
@@ -199,7 +201,7 @@ export default function DownloadsPage() {
                             className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 text-sm ml-auto"
                           >
                             <FiTrash2 size={14} />
-                            Remove
+                            {t('common.remove')}
                           </button>
                         </div>
                       </div>

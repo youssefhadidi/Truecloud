@@ -3,8 +3,10 @@
 'use client';
 
 import Btn from '@/components/ui/Btn';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function Confirm({ message, onCancel, onConfirm, isLoading = false }) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -20,9 +22,9 @@ export default function Confirm({ message, onCancel, onConfirm, isLoading = fals
     >
       <p style={{ fontSize: 13, color: 'var(--text)', margin: 0 }}>{message}</p>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-        <Btn variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>Cancel</Btn>
+        <Btn variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>{t('common.cancel')}</Btn>
         <Btn variant="primary" size="sm" onClick={onConfirm} disabled={isLoading}>
-          {isLoading ? 'Loading…' : 'Confirm'}
+          {isLoading ? t('common.loading') : t('common.confirm')}
         </Btn>
       </div>
     </div>

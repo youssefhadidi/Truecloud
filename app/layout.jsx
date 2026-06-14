@@ -7,6 +7,8 @@ import ReduxProvider from '@/components/ReduxProvider';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import Notifications from '@/components/Notifications';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { LanguageProvider } from '@/components/LanguageProvider';
+import { getServerLang } from '@/lib/i18n/server';
 
 const jakarta = Plus_Jakarta_Sans({
   variable: '--font-jakarta',
@@ -24,25 +26,28 @@ export const metadata = {
   description: 'Self-hosted cloud — private, secure, fast.',
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const lang = await getServerLang();
   return (
     <html
-      lang="en"
+      lang={lang}
       data-theme="dark"
       style={{ height: '100dvh', overflow: 'hidden' }}
       suppressHydrationWarning
     >
       <body className={`${jakarta.variable} ${geistMono.variable} antialiased h-dvh overflow-hidden`}>
-        <ThemeProvider defaultTheme="dark">
-          <ReduxProvider>
-            <QueryProvider>
-              <NotificationsProvider>
-                <Notifications />
-                {children}
-              </NotificationsProvider>
-            </QueryProvider>
-          </ReduxProvider>
-        </ThemeProvider>
+        <LanguageProvider initialLang={lang}>
+          <ThemeProvider defaultTheme="dark">
+            <ReduxProvider>
+              <QueryProvider>
+                <NotificationsProvider>
+                  <Notifications />
+                  {children}
+                </NotificationsProvider>
+              </QueryProvider>
+            </ReduxProvider>
+          </ThemeProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

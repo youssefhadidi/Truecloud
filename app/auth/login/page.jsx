@@ -9,8 +9,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FiCloud, FiEye, FiEyeOff, FiLock, FiAlertCircle } from 'react-icons/fi';
 import Field from '@/components/ui/Field';
 import Spinner from '@/components/ui/Spinner';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -23,20 +25,20 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     if (!email || !password) {
-      setError('Please fill in all fields.');
+      setError(t('login.fillAllFields'));
       return;
     }
     setLoading(true);
     try {
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
-        setError('Invalid email or password');
+        setError(t('login.invalidCredentials'));
       } else {
         await queryClient.invalidateQueries({ queryKey: ['session'] });
         router.push('/files/list');
       }
     } catch {
-      setError('An error occurred. Please try again.');
+      setError(t('login.genericError'));
     } finally {
       setLoading(false);
     }
@@ -112,13 +114,13 @@ export default function LoginPage() {
               Truecloud
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>
-              Sign in to your self-hosted cloud
+              {t('login.tagline')}
             </div>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Field
-              label="Email address"
+              label={t('login.emailLabel')}
               type="email"
               value={email}
               onChange={setEmail}
@@ -128,7 +130,7 @@ export default function LoginPage() {
               required
             />
             <Field
-              label="Password"
+              label={t('login.passwordLabel')}
               type={showPass ? 'text' : 'password'}
               value={password}
               onChange={setPassword}
@@ -147,7 +149,7 @@ export default function LoginPage() {
                     display: 'flex',
                     padding: 0,
                   }}
-                  title={showPass ? 'Hide password' : 'Show password'}
+                  title={showPass ? t('login.hidePassword') : t('login.showPassword')}
                 >
                   {showPass ? <FiEyeOff size={15} /> : <FiEye size={15} />}
                 </button>
@@ -202,12 +204,12 @@ export default function LoginPage() {
                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(99,102,241,.35)';
               }}
             >
-              {loading ? <Spinner /> : <><FiLock size={15} />Sign in</>}
+              {loading ? <Spinner /> : <><FiLock size={15} />{t('login.signIn')}</>}
             </button>
           </form>
         </div>
         <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-3)' }}>
-          Self-hosted · Private · Secure
+          {t('login.footer')}
         </div>
       </div>
     </div>

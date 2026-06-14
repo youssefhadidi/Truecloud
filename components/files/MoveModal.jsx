@@ -8,15 +8,17 @@ import Overlay from '@/components/ui/Overlay';
 import IconBtn from '@/components/ui/IconBtn';
 import Btn from '@/components/ui/Btn';
 import Spinner from '@/components/ui/Spinner';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function MoveModal({
   open,
-  title = 'Move items',
+  title,
   initialPath = '',
   fetchFolders,
   onConfirm,
   onClose,
 }) {
+  const { t } = useTranslation();
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,7 @@ export default function MoveModal({
         setFolders(results || []);
       } catch (err) {
         if (!isActive) return;
-        setError(err?.message || 'Failed to load folders');
+        setError(err?.message || t('moveModal.loadFailed'));
         setFolders([]);
       } finally {
         if (isActive) setLoading(false);
@@ -47,7 +49,7 @@ export default function MoveModal({
     };
     loadFolders();
     return () => { isActive = false; };
-  }, [open, currentPath, fetchFolders]);
+  }, [open, currentPath, fetchFolders, t]);
 
   const breadcrumbParts = useMemo(() => (currentPath ? currentPath.split('/') : []), [currentPath]);
 
@@ -83,8 +85,8 @@ export default function MoveModal({
             justifyContent: 'space-between',
           }}
         >
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{title}</h3>
-          <IconBtn icon={FiX} onClick={onClose} title="Close" />
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{title || t('moveModal.title')}</h3>
+          <IconBtn icon={FiX} onClick={onClose} title={t('common.close')} />
         </div>
 
         <div style={{ padding: '16px 20px' }}>
@@ -108,7 +110,7 @@ export default function MoveModal({
               }}
             >
               <FiHome size={13} />
-              Root
+              {t('moveModal.root')}
             </button>
             {breadcrumbParts.map((part, index) => {
               const isLast = index === breadcrumbParts.length - 1;
@@ -140,10 +142,10 @@ export default function MoveModal({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <Btn variant="surface" size="sm" onClick={goUp} disabled={!currentPath}>
               <FiArrowUp size={13} />
-              Up one level
+              {t('moveModal.upOneLevel')}
             </Btn>
             <Btn variant="primary" size="sm" onClick={() => onConfirm(currentPath)}>
-              Move here
+              {t('moveModal.moveHere')}
             </Btn>
           </div>
 
@@ -155,7 +157,7 @@ export default function MoveModal({
           ) : error ? (
             <p style={{ fontSize: 13, color: 'var(--danger)', margin: 0 }}>{error}</p>
           ) : folders.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>No folders here.</p>
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>{t('moveModal.noFolders')}</p>
           ) : (
             <div
               style={{

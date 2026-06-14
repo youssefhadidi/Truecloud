@@ -4,10 +4,20 @@
 
 import { FiCheckCircle, FiXCircle, FiUpload, FiDownload } from 'react-icons/fi';
 import Spinner from '@/components/ui/Spinner';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function UploadStatus({ uploads, transfers }) {
+  const { t } = useTranslation();
   const items = transfers || uploads || [];
   if (items.length === 0) return null;
+
+  // Upload progress counter (e.g. "3 / 10"): how many uploads have finished
+  // out of the total, so the current file being uploaded is doneUploads + 1.
+  const uploadItems = items.filter((i) => i.type !== 'download');
+  const totalUploads = uploadItems.length;
+  const doneUploads = uploadItems.filter((i) => i.status === 'success' || i.status === 'error').length;
+  const allUploadsDone = totalUploads > 0 && doneUploads === totalUploads;
+  const currentUpload = allUploadsDone ? totalUploads : Math.min(doneUploads + 1, totalUploads);
 
   return (
     <div
@@ -33,9 +43,25 @@ export default function UploadStatus({ uploads, transfers }) {
           fontWeight: 700,
           fontSize: 13,
           color: 'var(--text)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
         }}
       >
-        Transfers
+        <span>{t('transfers.title')}</span>
+        {totalUploads > 1 && (
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: allUploadsDone ? 'var(--success)' : 'var(--text-3)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {allUploadsDone ? t('transfers.uploaded') : t('transfers.uploading')} {currentUpload} / {totalUploads}
+          </span>
+        )}
       </div>
 
       {items.map((item) => {
@@ -93,12 +119,12 @@ export default function UploadStatus({ uploads, transfers }) {
                 )}
                 {item.status === 'success' && (
                   <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>
-                    {isDownload ? 'Download complete' : 'Upload complete'}
+                    {isDownload ? t('transfers.downloadComplete') : t('transfers.uploadComplete')}
                   </div>
                 )}
                 {item.status === 'error' && (
                   <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>
-                    {item.error || 'Transfer failed'}
+                    {item.error || t('transfers.transferFailed')}
                   </div>
                 )}
               </div>

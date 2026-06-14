@@ -8,12 +8,14 @@ import { useEffect, useState } from 'react';
 import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap, FiShield, FiPieChart } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function AdminLayout({ children }) {
   const { data: session, status } = useStableSession();
   const router = useRouter();
   const pathname = usePathname();
   const { data: componentsData } = useComponentsConfig();
+  const { t } = useTranslation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const components = componentsData?.config ?? { zfs: true, smb: true };
@@ -34,7 +36,7 @@ export default function AdminLayout({ children }) {
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
+        <div className="text-gray-400">{t('common.loading')}</div>
       </div>
     );
   }
@@ -45,44 +47,44 @@ export default function AdminLayout({ children }) {
 
   const navSections = [
     {
-      label: 'Overview',
-      items: [{ href: '/admin/monitoring', icon: FiMonitor, label: 'Monitoring' }],
+      label: t('admin.nav.overview'),
+      items: [{ href: '/admin/monitoring', icon: FiMonitor, label: t('admin.nav.monitoring') }],
     },
     {
-      label: 'Users',
-      items: [{ href: '/admin/accounts', icon: FiUsers, label: 'Accounts' }],
+      label: t('admin.nav.users'),
+      items: [{ href: '/admin/accounts', icon: FiUsers, label: t('admin.nav.accounts') }],
     },
     {
-      label: 'Security',
-      items: [{ href: '/admin/security', icon: FiShield, label: 'Folder Locks' }],
+      label: t('admin.nav.security'),
+      items: [{ href: '/admin/security', icon: FiShield, label: t('admin.nav.folderLocks') }],
     },
     {
-      label: 'Storage',
+      label: t('admin.nav.storage'),
       items: [
-        { href: '/admin/storage', icon: FiPieChart, label: 'Storage Usage' },
-        components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: 'ZFS Pools' },
-        components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: 'SMB Shares' },
+        { href: '/admin/storage', icon: FiPieChart, label: t('admin.nav.storageUsage') },
+        components.zfs && { href: '/admin/zfs-pools', icon: FiDatabase, label: t('admin.nav.zfsPools') },
+        components.smb && { href: '/admin/smb-shares', icon: FiShare2, label: t('admin.nav.smbShares') },
       ].filter(Boolean),
     },
     {
-      label: 'Media',
+      label: t('admin.nav.media'),
       items: [
-        { href: '/admin/media-processing', icon: FiImage, label: 'Media Processing' },
-        { href: '/admin/cache', icon: FiHardDrive, label: 'Cache' },
+        { href: '/admin/media-processing', icon: FiImage, label: t('admin.nav.mediaProcessing') },
+        { href: '/admin/cache', icon: FiHardDrive, label: t('admin.nav.cache') },
       ],
     },
     components.minecraft && {
-      label: 'Services',
-      items: [{ href: '/admin/minecraft', icon: FiServer, label: 'Minecraft' }],
+      label: t('admin.nav.services'),
+      items: [{ href: '/admin/minecraft', icon: FiServer, label: t('admin.nav.minecraft') }],
     },
     {
-      label: 'System',
+      label: t('admin.nav.system'),
       items: [
-        { href: '/admin/activity', icon: FiActivity, label: 'Activity' },
-        { href: '/admin/indexation', icon: FiSearch, label: 'Indexation' },
-        { href: '/admin/system-health', icon: FiCheckSquare, label: 'System Health' },
-        { href: '/admin/power-management', icon: FiZap, label: 'Power Management' },
-        { href: '/admin/extensions', icon: FiPackage, label: 'Extensions' },
+        { href: '/admin/activity', icon: FiActivity, label: t('admin.nav.activity') },
+        { href: '/admin/indexation', icon: FiSearch, label: t('admin.nav.indexation') },
+        { href: '/admin/system-health', icon: FiCheckSquare, label: t('admin.nav.systemHealth') },
+        { href: '/admin/power-management', icon: FiZap, label: t('admin.nav.powerManagement') },
+        { href: '/admin/extensions', icon: FiPackage, label: t('admin.nav.extensions') },
       ],
     },
   ].filter((s) => s && s.items.length > 0);
@@ -126,10 +128,10 @@ export default function AdminLayout({ children }) {
         <div className="lg:hidden bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
           <Link href="/files/list" className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors">
             <FiArrowLeft size={20} />
-            <span className="text-sm">Back</span>
+            <span className="text-sm">{t('common.back')}</span>
           </Link>
-          <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-          <button type="button" onClick={() => setMobileNavOpen(true)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label="Open admin menu">
+          <h1 className="text-lg font-bold text-white">{t('admin.adminPanel')}</h1>
+          <button type="button" onClick={() => setMobileNavOpen(true)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label={t('admin.openMenu')}>
             <FiMenu size={22} />
           </button>
         </div>
@@ -145,8 +147,8 @@ export default function AdminLayout({ children }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
           <div className="relative w-72 max-w-[85%] bg-gray-800 border-r border-gray-700 flex flex-col shadow-xl">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <h1 className="text-lg font-bold text-white">Admin Panel</h1>
-              <button type="button" onClick={() => setMobileNavOpen(false)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label="Close admin menu">
+              <h1 className="text-lg font-bold text-white">{t('admin.adminPanel')}</h1>
+              <button type="button" onClick={() => setMobileNavOpen(false)} className="text-gray-300 hover:text-white transition-colors p-1 -m-1" aria-label={t('admin.closeMenu')}>
                 <FiX size={22} />
               </button>
             </div>

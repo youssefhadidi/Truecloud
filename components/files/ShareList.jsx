@@ -11,6 +11,7 @@ import {
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -103,6 +104,7 @@ function ShareList({
   selectedFiles,
   onToggleSelect,
 }) {
+  const { t } = useTranslation();
   const listRef = useRef(null);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -162,11 +164,13 @@ function ShareList({
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--danger)' }}>
-              Delete {file.isDirectory ? 'folder' : 'file'} "{file.name}"?
+              {file.isDirectory
+                ? t('fileItem.deleteFolderNamedQ', { name: file.name })
+                : t('fileItem.deleteFileNamedQ', { name: file.name })}
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={cancelDelete} style={miniBtn('ghost')}>Cancel</button>
-              <button onClick={confirmDelete} style={miniBtn('danger')}>Delete</button>
+              <button onClick={cancelDelete} style={miniBtn('ghost')}>{t('common.cancel')}</button>
+              <button onClick={confirmDelete} style={miniBtn('danger')}>{t('common.delete')}</button>
             </div>
           </div>
         );
@@ -208,8 +212,8 @@ function ShareList({
                 outline: 'none',
               }}
             />
-            <button onClick={cancelRename} style={miniBtn('ghost')}>Cancel</button>
-            <button onClick={confirmRename} style={miniBtn('primary')}>Rename</button>
+            <button onClick={cancelRename} style={miniBtn('ghost')}>{t('common.cancel')}</button>
+            <button onClick={confirmRename} style={miniBtn('primary')}>{t('common.rename')}</button>
           </div>
         );
       }
@@ -312,7 +316,7 @@ function ShareList({
               {isViewableFile(file) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onOpenMediaViewer(file); }}
-                  title="View"
+                  title={t('menu.view')}
                   disabled={processingFile === file.name}
                   style={actionBtn({ color: 'var(--accent)' })}
                 >
@@ -328,21 +332,21 @@ function ShareList({
               {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateRename(file); }}
-                  title="Rename"
+                  title={t('common.rename')}
                   disabled={processingFile === file.name}
                   style={actionBtn({ color: 'var(--text-2)' })}
                 ><FiEdit size={15} /></button>
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onDownload(file); }}
-                title="Download"
+                title={t('common.download')}
                 disabled={processingFile === file.name}
                 style={actionBtn({ color: 'var(--text-2)' })}
               ><FiDownload size={15} /></button>
               {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowingActionsFor(null); onInitiateDelete(file); }}
-                  title="Delete"
+                  title={t('common.delete')}
                   disabled={processingFile === file.name}
                   style={actionBtn({ color: 'var(--danger)' })}
                 ><FiTrash2 size={15} /></button>

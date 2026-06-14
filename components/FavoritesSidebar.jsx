@@ -14,6 +14,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { makeUsbPath } from '@/lib/usbPath';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function StorageBar() {
   return undefined;
@@ -90,6 +91,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
   const { data: favorites = [], isLoading } = useFavorites();
   const removeFavorite = useRemoveFavorite();
   const { addNotification } = useNotifications();
+  const { t } = useTranslation();
   const router = useRouter();
   const { subscribe } = useWebSocket();
   const [usbDrives, setUsbDrives] = useState([]);
@@ -123,9 +125,9 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
     e.stopPropagation();
     try {
       await removeFavorite.mutateAsync({ id: favorite.id });
-      addNotification('success', 'Removed from favorites');
+      addNotification('success', t('notify.removedFromFavorites'));
     } catch {
-      addNotification('error', 'Failed to remove favorite');
+      addNotification('error', t('notify.removeFavoriteFailed'));
     }
   };
 
@@ -148,7 +150,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
       >
         <IconBtn
           icon={FiChevronRight}
-          title="Expand favorites"
+          title={t('sidebar.expandFavorites')}
           onClick={() => setIsCollapsed(false)}
           style={{ margin: 6 }}
         />
@@ -173,7 +175,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         </div>
         <IconBtn
           icon={FiTrash2}
-          title="Trash"
+          title={t('shell.trash')}
           danger={isInTrash}
           active={isInTrash}
           onClick={() => onNavigate('trash')}
@@ -214,7 +216,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
             type="text"
             value={searchQuery || ''}
             onChange={(e) => onSearchQueryChange?.(e.target.value)}
-            placeholder="Search files…"
+            placeholder={t('files.searchFiles')}
             style={{
               border: 'none',
               background: 'transparent',
@@ -247,11 +249,11 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
       {/* Header */}
       <div style={{ padding: '4px 12px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '.08em', padding: '0 4px' }}>
-          FAVORITES
+          {t('sidebar.favorites')}
         </div>
         <button
           onClick={() => setIsCollapsed(true)}
-          title="Collapse"
+          title={t('sidebar.collapse')}
           style={{
             width: 22,
             height: 22,
@@ -286,8 +288,8 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         ) : favorites.length === 0 ? (
           <div style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--text-3)' }}>
             <FiStar size={20} style={{ opacity: 0.5, marginBottom: 6 }} />
-            <div style={{ fontSize: 12, fontWeight: 600 }}>No favorites yet</div>
-            <div style={{ fontSize: 11, marginTop: 2 }}>Right-click files to add</div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{t('sidebar.noFavorites')}</div>
+            <div style={{ fontSize: 11, marginTop: 2 }}>{t('sidebar.rightClickToAdd')}</div>
           </div>
         ) : (
           favorites.map((fav) => {
@@ -302,7 +304,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
                 right={
                   <button
                     onClick={(e) => handleRemove(e, fav)}
-                    title="Remove favorite"
+                    title={t('sidebar.removeFavorite')}
                     style={{
                       border: 'none',
                       background: 'transparent',
@@ -333,7 +335,7 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
                 padding: '6px 4px 4px',
               }}
             >
-              USB DRIVES
+              {t('sidebar.usbDrives')}
             </div>
             {mountedPartitions.map((part) => (
               <NavRow
@@ -350,19 +352,19 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
         <Divider />
         <NavRow
           icon={FiDownload}
-          label="Downloads"
+          label={t('shell.downloads')}
           active={currentPath === '__downloads__'}
           onClick={() => router.push('/files/downloads')}
         />
         <NavRow
           icon={FiShare2}
-          label="Shares"
+          label={t('sidebar.shares')}
           active={currentPath === '__shares__'}
           onClick={() => router.push('/files/shares')}
         />
         <NavRow
           icon={FiTrash2}
-          label="Trash"
+          label={t('shell.trash')}
           active={isInTrash}
           onClick={() => onNavigate('trash')}
         />

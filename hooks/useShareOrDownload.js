@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
 import { useDownloadFileBlob } from '@/lib/api/publicShares';
+import { useTranslation } from '@/components/LanguageProvider';
 
 /**
  * Hook for handling file downloads with Web Share API fallback
@@ -13,6 +14,7 @@ import { useDownloadFileBlob } from '@/lib/api/publicShares';
  */
 export function useShareOrDownload() {
   const { addNotification } = useNotifications();
+  const { t } = useTranslation();
   const { addTransfer, updateTransfer, removeTransfer } = useTransfersDispatch();
   const downloadMutation = useDownloadFileBlob();
 
@@ -75,7 +77,7 @@ export function useShareOrDownload() {
                 // fall back to direct download.
                 if (shareError && shareError.name === 'AbortError') {
                   updateTransfer(downloadId, { status: 'cancelled' });
-                  addNotification('info', `Download cancelled ${fileName ? `: ${fileName}` : ''}`);
+                  addNotification('info', fileName ? t('notify.downloadCancelledNamed', { name: fileName }) : t('notify.downloadCancelled'));
                   setTimeout(() => removeTransfer(downloadId), 3000);
                   return;
                 }
@@ -88,7 +90,7 @@ export function useShareOrDownload() {
             }
           } catch (fetchError) {
             console.error('Failed to fetch file for sharing:', fetchError);
-            addNotification('error', `Failed to download ${fileName}`);
+            addNotification('error', t('notify.failedDownloadNamed', { name: fileName }));
             updateTransfer(downloadId, { status: 'error', error: fetchError.message });
           }
         } else {
@@ -99,11 +101,11 @@ export function useShareOrDownload() {
         }
       } catch (error) {
         console.error('Download/share error:', error);
-        addNotification('error', `Failed to download ${fileName}`);
+        addNotification('error', t('notify.failedDownloadNamed', { name: fileName }));
         updateTransfer(downloadId, { status: 'error', error: error.message });
       }
     },
-    [addNotification, addTransfer, updateTransfer, removeTransfer, downloadMutation],
+    [addNotification, addTransfer, updateTransfer, removeTransfer, downloadMutation, t],
   );
 
   return { handleShareOrDownload };

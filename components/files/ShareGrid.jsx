@@ -12,6 +12,7 @@ import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { getShareThumbnailUrl } from '@/lib/api/files';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const BREAKPOINT = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 
@@ -180,6 +181,7 @@ const GridItem = memo(
     onTouchEnd,
     onTouchMove,
   }) => {
+    const { t } = useTranslation();
     const kind = fileKind(item);
     const isFolder = item.isDirectory;
     const showThumbnail = !isFolder && (isImage(item.name) || isVideo(item.name) || isPdf(item.name));
@@ -263,7 +265,7 @@ const GridItem = memo(
                 }}
               >
                 <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--danger)', textAlign: 'center' }}>
-                  Delete {item.isDirectory ? 'folder' : 'file'}?
+                  {item.isDirectory ? t('fileItem.deleteFolderQ') : t('fileItem.deleteFileQ')}
                 </p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
@@ -278,7 +280,7 @@ const GridItem = memo(
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
-                  >Cancel</button>
+                  >{t('common.cancel')}</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onConfirmDelete(); }}
                     style={{
@@ -292,7 +294,7 @@ const GridItem = memo(
                       fontFamily: 'inherit',
                       fontWeight: 600,
                     }}
-                  >Delete</button>
+                  >{t('common.delete')}</button>
                 </div>
               </div>
             ) : isRenamingFile ? (
@@ -346,7 +348,7 @@ const GridItem = memo(
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
-                  >Cancel</button>
+                  >{t('common.cancel')}</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onConfirmRename(); }}
                     style={{
@@ -360,7 +362,7 @@ const GridItem = memo(
                       fontFamily: 'inherit',
                       fontWeight: 600,
                     }}
-                  >Rename</button>
+                  >{t('common.rename')}</button>
                 </div>
               </div>
             ) : null}
@@ -438,7 +440,7 @@ const GridItem = memo(
                 {item.name}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 'auto' }}>
-                {item.isDirectory ? 'Folder' : formatFileSize(item.size)}
+                {item.isDirectory ? t('fileItem.folder') : formatFileSize(item.size)}
               </div>
             </div>
           </div>
@@ -467,7 +469,7 @@ const GridItem = memo(
               {isViewableFile(item) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenMediaViewer(item); }}
-                  title="View"
+                  title={t('menu.view')}
                   disabled={processingFile === item.name}
                   style={iconBtnStyle('var(--accent)')}
                 >
@@ -483,7 +485,7 @@ const GridItem = memo(
               {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateRename(item); }}
-                  title="Rename"
+                  title={t('common.rename')}
                   disabled={processingFile === item.name}
                   style={iconBtnStyle('var(--accent)')}
                 >
@@ -492,7 +494,7 @@ const GridItem = memo(
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); onDownload(item); }}
-                title="Download"
+                title={t('common.download')}
                 disabled={processingFile === item.name}
                 style={iconBtnStyle('var(--accent)')}
               >
@@ -501,7 +503,7 @@ const GridItem = memo(
               {allowEditing && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onInitiateDelete(item); }}
-                  title="Delete"
+                  title={t('common.delete')}
                   disabled={processingFile === item.name}
                   style={iconBtnStyle('var(--danger)')}
                 >
@@ -544,6 +546,7 @@ function ShareGrid({
   selectedFiles,
   onToggleSelect,
 }) {
+  const { t } = useTranslation();
   const gridRef = useRef(null);
   const containerWidthRef = useRef(0);
   const [showingActionsFor, setShowingActionsFor] = useState(null);
@@ -698,20 +701,20 @@ function ShareGrid({
             {isViewableFile(activeItem) && (
               <button onClick={() => { setShowingActionsFor(null); onOpenMediaViewer(activeItem); }} style={sheetRowStyle()}>
                 {is3dFile(activeItem.name) ? <FiBox size={18} /> : isVideo(activeItem.name) ? <FiVideo size={18} /> : isImage(activeItem.name) ? <FiImage size={18} /> : isAudio(activeItem.name) ? <FiMusic size={18} /> : <FiFileText size={18} />}
-                <span>View</span>
+                <span>{t('menu.view')}</span>
               </button>
             )}
             {allowEditing && (
               <button onClick={() => { setShowingActionsFor(null); onInitiateRename(activeItem); }} style={sheetRowStyle()}>
-                <FiEdit size={18} /><span>Rename</span>
+                <FiEdit size={18} /><span>{t('common.rename')}</span>
               </button>
             )}
             <button onClick={() => { setShowingActionsFor(null); onDownload(activeItem); }} style={sheetRowStyle()}>
-              <FiDownload size={18} /><span>Download</span>
+              <FiDownload size={18} /><span>{t('common.download')}</span>
             </button>
             {allowEditing && (
               <button onClick={() => { setShowingActionsFor(null); onInitiateDelete(activeItem); }} style={sheetRowStyle('var(--danger)')}>
-                <FiTrash2 size={18} /><span>Delete</span>
+                <FiTrash2 size={18} /><span>{t('common.delete')}</span>
               </button>
             )}
           </div>

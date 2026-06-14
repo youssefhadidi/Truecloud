@@ -10,6 +10,7 @@ import UpdateChecker from '@/components/UpdateChecker';
 import PendingReloadBanner from '@/components/PendingReloadBanner';
 import JobsBadge from '@/components/JobsBadge';
 import { useStableSession } from '@/lib/api/session';
+import { useTranslation } from '@/components/LanguageProvider';
 import AuthProvider from '@/components/AuthProvider';
 import { SessionLockProvider } from '@/contexts/SessionLockContext';
 import SessionLockScreen from '@/components/SessionLockScreen';
@@ -18,12 +19,23 @@ import { WebSocketProvider } from '@/contexts/WebSocketContext';
 function AuthenticatedLayoutContent({ children }) {
   const { data: session, status } = useStableSession();
   const router = useRouter();
+  const { lang, setLanguage } = useTranslation();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
     }
   }, [status, router]);
+
+  // Reconcile the language cookie/UI to the logged-in user's stored preference
+  // (covers a fresh device where the cookie is absent or belongs to another
+  // user). Cookie/state only — the DB already holds this value.
+  const sessionLang = session?.user?.language;
+  useEffect(() => {
+    if (sessionLang && sessionLang !== lang) {
+      setLanguage(sessionLang, { persist: false });
+    }
+  }, [sessionLang, lang, setLanguage]);
 
   return (
     <div

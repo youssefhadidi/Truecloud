@@ -7,10 +7,12 @@ import { FiX, FiRefreshCw } from 'react-icons/fi';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function PendingReloadBanner() {
   const [pending, setPending] = useState(false);
   const { subscribe } = useWebSocket();
+  const { t } = useTranslation();
 
   useEffect(() => {
     return subscribe('app-updated', () => setPending(true));
@@ -39,7 +41,7 @@ export default function PendingReloadBanner() {
       <div style={{ position: 'absolute', top: 6, right: 6 }}>
         <IconBtn
           icon={FiX}
-          title="Dismiss"
+          title={t('common.dismiss')}
           onClick={() => setPending(false)}
           width={26}
           height={26}
@@ -65,14 +67,14 @@ export default function PendingReloadBanner() {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-            Update applied
+            {t('banner.updateApplied')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-            A new version is running on the server. Refresh to load it.
+            {t('banner.updateMessage')}
           </div>
           <div style={{ marginTop: 10 }}>
             <Btn variant="primary" size="sm" onClick={() => window.location.reload()}>
-              Refresh now
+              {t('banner.refreshNow')}
             </Btn>
           </div>
         </div>

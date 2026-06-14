@@ -7,6 +7,7 @@ import { FiShare2, FiCopy, FiTrash2, FiLock, FiUnlock, FiFolder, FiFile, FiCheck
 import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useShares, useUpdateShare, useDeleteShare } from '@/lib/api/files';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // Format file size
 function formatFileSize(bytes) {
@@ -32,6 +33,7 @@ function formatDate(dateString) {
 export default function SharesPage() {
   const router = useRouter();
   const { addNotification } = useNotifications();
+  const { t } = useTranslation();
 
   // React Query hooks
   const { data: shares = [], isLoading, error } = useShares();
@@ -51,22 +53,22 @@ export default function SharesPage() {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedId(share.id);
-      addNotification('success', 'Link copied to clipboard');
+      addNotification('success', t('notify.linkCopied'));
       setTimeout(() => setCopiedId(null), 2000);
     } catch (e) {
-      addNotification('error', 'Failed to copy link');
+      addNotification('error', t('notify.copyLinkFailed'));
     }
   };
 
   const deleteShare = async (shareId) => {
-    if (!confirm('Are you sure you want to delete this share?')) return;
+    if (!confirm(t('share.confirmDelete'))) return;
 
     deleteMutation.mutate(shareId, {
       onSuccess: () => {
-        addNotification('success', 'Share deleted');
+        addNotification('success', t('notify.shareDeleted'));
       },
       onError: () => {
-        addNotification('error', 'Failed to delete share');
+        addNotification('error', t('notify.shareDeleteFailed'));
       },
     });
   };
@@ -85,13 +87,13 @@ export default function SharesPage() {
       { shareId: editingShare.id, data: body },
       {
         onSuccess: () => {
-          addNotification('success', 'Share updated');
+          addNotification('success', t('notify.shareUpdated'));
           setEditingShare(null);
           setEditPassword('');
           setRemovePassword(false);
         },
         onError: () => {
-          addNotification('error', 'Failed to update share');
+          addNotification('error', t('notify.shareUpdateFailed'));
         },
       }
     );
@@ -103,8 +105,8 @@ export default function SharesPage() {
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Shares</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Manage your shared files and folders</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('sharesPage.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('sharesPage.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <FiShare2 className="text-indigo-500" size={24} />
@@ -130,21 +132,21 @@ export default function SharesPage() {
         {!isLoading && shares.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
             <FiShare2 className="mx-auto text-gray-400" size={48} />
-            <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No shares yet</h3>
-            <p className="mt-2 text-gray-500 dark:text-gray-400">Share files or folders from the file browser to see them here.</p>
+            <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">{t('sharesPage.noShares')}</h3>
+            <p className="mt-2 text-gray-500 dark:text-gray-400">{t('sharesPage.noSharesHint')}</p>
             <button onClick={() => router.push('/files/list')} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-              Go to Files
+              {t('sharesPage.goToFiles')}
             </button>
           </div>
         ) : !isLoading && shares.length > 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             {/* Table Header */}
             <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400">
-              <div className="col-span-4">Name</div>
-              <div className="col-span-2">Created</div>
-              <div className="col-span-2">Password</div>
-              <div className="col-span-2">Views</div>
-              <div className="col-span-2">Actions</div>
+              <div className="col-span-4">{t('common.name')}</div>
+              <div className="col-span-2">{t('sharesPage.colCreated')}</div>
+              <div className="col-span-2">{t('sharesPage.colPassword')}</div>
+              <div className="col-span-2">{t('sharesPage.colViews')}</div>
+              <div className="col-span-2">{t('common.actions')}</div>
             </div>
 
             {/* Table Body */}
@@ -162,29 +164,29 @@ export default function SharesPage() {
 
                   {/* Created */}
                   <div className="md:col-span-2 text-sm text-gray-500 dark:text-gray-400">
-                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">Created:</span>
+                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">{t('sharesPage.createdLabel')}</span>
                     {formatDate(share.createdAt)}
                   </div>
 
                   {/* Password */}
                   <div className="md:col-span-2 flex items-center gap-2">
-                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">Password:</span>
+                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">{t('sharesPage.passwordLabel')}</span>
                     {share.passwordHash ? (
                       <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
                         <FiLock size={14} />
-                        Protected
+                        {t('sharesPage.protected')}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-gray-400 text-sm">
                         <FiUnlock size={14} />
-                        None
+                        {t('common.none')}
                       </span>
                     )}
                   </div>
 
                   {/* Views */}
                   <div className="md:col-span-2 text-sm text-gray-500 dark:text-gray-400">
-                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">Views:</span>
+                    <span className="md:hidden font-medium text-gray-700 dark:text-gray-300 mr-2">{t('sharesPage.viewsLabel')}</span>
                     {share.accessCount}
                   </div>
 
@@ -197,7 +199,7 @@ export default function SharesPage() {
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                           : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
                       }`}
-                      title="Copy link"
+                      title={t('common.copyLink')}
                     >
                       {copiedId === share.id ? <FiCheck size={18} /> : <FiCopy size={18} />}
                     </button>
@@ -208,14 +210,14 @@ export default function SharesPage() {
                         setRemovePassword(false);
                       }}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg transition-colors"
-                      title="Edit"
+                      title={t('common.edit')}
                     >
                       <FiEdit2 size={18} />
                     </button>
                     <button
                       onClick={() => deleteShare(share.id)}
                       className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                      title="Delete"
+                      title={t('common.delete')}
                     >
                       <FiTrash2 size={18} />
                     </button>
@@ -232,7 +234,7 @@ export default function SharesPage() {
       {editingShare && (
         <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4" onClick={() => setEditingShare(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Edit Share</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('sharesPage.editShare')}</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editingShare.fileName}</p>
 
             <div className="space-y-4">
@@ -240,7 +242,7 @@ export default function SharesPage() {
                 <div>
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={removePassword} onChange={(e) => setRemovePassword(e.target.checked)} className="rounded" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Remove password protection</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{t('sharesPage.removePassword')}</span>
                   </label>
                 </div>
               ) : null}
@@ -248,14 +250,14 @@ export default function SharesPage() {
               {!removePassword && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {editingShare.passwordHash ? 'Change password' : 'Add password'}
+                    {editingShare.passwordHash ? t('sharesPage.changePassword') : t('sharesPage.addPassword')}
                   </label>
                   <input
                     type="password"
                     value={editPassword}
                     onChange={(e) => setEditPassword(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Enter new password"
+                    placeholder={t('sharesPage.enterNewPassword')}
                   />
                 </div>
               )}
@@ -266,14 +268,14 @@ export default function SharesPage() {
                 onClick={() => setEditingShare(null)}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={updateShare}
                 disabled={!removePassword && !editPassword}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>
