@@ -4,18 +4,19 @@
 
 import { CATEGORY_ORDER } from '@/lib/storageCategories';
 import { useMemo } from 'react';
+import { useTranslation } from '@/components/LanguageProvider';
 
-const LABELS = {
-  video: 'Video',
-  image: 'Image',
-  audio: 'Audio',
-  pdf: 'PDF',
-  xlsx: 'Spreadsheet',
-  documents: 'Documents',
-  '3d': '3D',
-  archives: 'Archives',
-  code: 'Code / Text',
-  other: 'Other',
+const LABEL_KEYS = {
+  video: 'adminStorage.catVideo',
+  image: 'adminStorage.catImage',
+  audio: 'adminStorage.catAudio',
+  pdf: 'adminStorage.catPdf',
+  xlsx: 'adminStorage.catXlsx',
+  documents: 'adminStorage.catDocuments',
+  '3d': 'adminStorage.cat3d',
+  archives: 'adminStorage.catArchives',
+  code: 'adminStorage.catCode',
+  other: 'adminStorage.catOther',
 };
 
 const COLORS = {
@@ -39,6 +40,7 @@ function formatBytes(bytes) {
 }
 
 export default function CategoryBreakdown({ categories, totalBytes }) {
+  const { t } = useTranslation();
   const rows = useMemo(() => {
     const out = CATEGORY_ORDER.map((name) => {
       const c = categories[name] || { bytes: 0, count: 0 };
@@ -49,7 +51,7 @@ export default function CategoryBreakdown({ categories, totalBytes }) {
   }, [categories]);
 
   if (rows.length === 0) {
-    return <div className="text-sm text-gray-500">No files scanned yet.</div>;
+    return <div className="text-sm text-gray-500">{t('adminStorage.noFilesScanned')}</div>;
   }
 
   const max = Math.max(...rows.map((r) => r.bytes), 1);
@@ -62,7 +64,7 @@ export default function CategoryBreakdown({ categories, totalBytes }) {
         return (
           <li key={r.name}>
             <div className="flex items-baseline justify-between text-xs text-gray-300 mb-1">
-              <span className="font-medium">{LABELS[r.name]}</span>
+              <span className="font-medium">{t(LABEL_KEYS[r.name])}</span>
               <span className="tabular-nums text-gray-400">
                 {formatBytes(r.bytes)} <span className="text-gray-500">· {r.count.toLocaleString()}</span>
               </span>

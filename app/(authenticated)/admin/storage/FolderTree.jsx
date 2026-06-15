@@ -6,6 +6,7 @@ import { useMemo, useState, useCallback, useEffect, useRef, useDeferredValue } f
 import { List, AutoSizer } from 'react-virtualized';
 import { FiFolder, FiLock, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import { prettifyTopSegment } from './userNames';
+import { useTranslation } from '@/components/LanguageProvider';
 
 const ROW_HEIGHT = 44;
 // Cap the panel; the List sizes to min(rows × ROW_HEIGHT, MAX_PANEL_HEIGHT).
@@ -57,6 +58,7 @@ function flattenVisible(byParent, expanded) {
 }
 
 export default function FolderTree({ folders, lockedPaths, usernames }) {
+  const { t } = useTranslation();
   // Empty set = all collapsed. New folders discovered mid-scan default to
   // collapsed too, since they only appear in the rendered tree when their
   // ancestor is in this set.
@@ -129,7 +131,7 @@ export default function FolderTree({ folders, lockedPaths, usernames }) {
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-200 truncate" title={isUserFolder ? r.name : undefined}>
                 {displayName}
-                {isUserFolder && <span className="ml-1.5 text-[10px] text-gray-500 uppercase tracking-wider">user</span>}
+                {isUserFolder && <span className="ml-1.5 text-[10px] text-gray-500 uppercase tracking-wider">{t('adminStorage.userBadge')}</span>}
               </span>
               <span className="text-xs text-gray-400 tabular-nums shrink-0">{formatBytes(r.bytes)}</span>
             </div>
@@ -160,13 +162,13 @@ export default function FolderTree({ folders, lockedPaths, usernames }) {
         </div>
       );
     },
-    [rows, lockedPaths, toggle, usernames],
+    [rows, lockedPaths, toggle, usernames, t],
   );
 
   if (totalFolders === 0) {
     return (
       <div className="text-sm text-gray-500 px-3 py-6 text-center">
-        Waiting for the scan to discover folders…
+        {t('adminStorage.waitingForFolders')}
       </div>
     );
   }
@@ -175,7 +177,7 @@ export default function FolderTree({ folders, lockedPaths, usernames }) {
     <div>
       <div className="px-3 py-2 border-b border-gray-700/60 flex items-center justify-between text-xs">
         <span className="text-gray-400 tabular-nums">
-          {totalFolders.toLocaleString()} folders · {rows.length.toLocaleString()} visible
+          {t('adminStorage.foldersVisible', { total: totalFolders.toLocaleString(), visible: rows.length.toLocaleString() })}
         </span>
         <div className="flex items-center gap-1">
           <button
@@ -183,14 +185,14 @@ export default function FolderTree({ folders, lockedPaths, usernames }) {
             onClick={expandAll}
             className="text-gray-400 hover:text-white transition-colors px-2 py-0.5 rounded hover:bg-gray-700/50"
           >
-            Expand all
+            {t('adminStorage.expandAll')}
           </button>
           <button
             type="button"
             onClick={collapseAll}
             className="text-gray-400 hover:text-white transition-colors px-2 py-0.5 rounded hover:bg-gray-700/50"
           >
-            Collapse all
+            {t('adminStorage.collapseAll')}
           </button>
         </div>
       </div>

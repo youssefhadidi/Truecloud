@@ -14,8 +14,10 @@ import {
   useRemoveFromLibrary,
 } from '@/lib/api/modules';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function ModulesPanel() {
+  const { t } = useTranslation();
   const { data: modules, isLoading } = useModules();
   const { data: library, isLoading: libraryLoading } = useModuleLibrary();
   const addModule = useAddModule();
@@ -37,9 +39,9 @@ export default function ModulesPanel() {
     setInstallingRepo(repository);
     try {
       await addModule.mutateAsync(repository);
-      addNotification('success', 'Module installed successfully. Rebuild required.');
+      addNotification('success', t('adminExtensions.installSuccess'));
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to install module');
+      addNotification('error', err.response?.data?.error || t('adminExtensions.installFailed'));
     } finally {
       setInstallingRepo(null);
     }
@@ -49,20 +51,20 @@ export default function ModulesPanel() {
     if (!deletingModule) return;
     try {
       await removeModule.mutateAsync({ name: deletingModule, deleteDatabase });
-      addNotification('success', `Module "${deletingModule}" removed. Rebuild required.`);
+      addNotification('success', t('adminExtensions.removeSuccess', { name: deletingModule }));
       setDeletingModule(null);
       setDeleteDatabase(false);
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to remove module');
+      addNotification('error', err.response?.data?.error || t('adminExtensions.removeFailed'));
     }
   };
 
   const handleUpdate = async (name) => {
     try {
       await updateModule.mutateAsync(name);
-      addNotification('success', `Module "${name}" updated. Rebuild required.`);
+      addNotification('success', t('adminExtensions.updateSuccess', { name }));
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to update module');
+      addNotification('error', err.response?.data?.error || t('adminExtensions.updateFailed'));
     }
   };
 
@@ -71,20 +73,20 @@ export default function ModulesPanel() {
     if (!libraryForm.name.trim() || !libraryForm.repository.trim()) return;
     try {
       await addToLibrary.mutateAsync(libraryForm);
-      addNotification('success', 'Module added to library.');
+      addNotification('success', t('adminExtensions.addedToLibrary'));
       setLibraryForm({ name: '', description: '', repository: '' });
       setShowAddToLibrary(false);
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to add to library');
+      addNotification('error', err.response?.data?.error || t('adminExtensions.addToLibraryFailed'));
     }
   };
 
   const handleRemoveFromLibrary = async (repository) => {
     try {
       await removeFromLibrary.mutateAsync(repository);
-      addNotification('success', 'Module removed from library.');
+      addNotification('success', t('adminExtensions.removedFromLibrary'));
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to remove from library');
+      addNotification('error', err.response?.data?.error || t('adminExtensions.removeFromLibraryFailed'));
     }
   };
 
@@ -93,20 +95,20 @@ export default function ModulesPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
           <FiPackage size={24} />
-          Modules
+          {t('adminExtensions.modules')}
         </h2>
       </div>
 
       {/* Module Library */}
       <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Module Library</h3>
+          <h3 className="text-lg font-semibold text-white">{t('adminExtensions.moduleLibrary')}</h3>
           <button
             onClick={() => setShowAddToLibrary(!showAddToLibrary)}
             className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded-lg flex items-center gap-1.5 transition-colors"
           >
             <FiPlus size={14} />
-            Add to Library
+            {t('adminExtensions.addToLibrary')}
           </button>
         </div>
 
@@ -118,14 +120,14 @@ export default function ModulesPanel() {
                 type="text"
                 value={libraryForm.name}
                 onChange={(e) => setLibraryForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Module name"
+                placeholder={t('adminExtensions.moduleNamePlaceholder')}
                 className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-800 text-white placeholder-gray-400"
               />
               <input
                 type="text"
                 value={libraryForm.description}
                 onChange={(e) => setLibraryForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Description (optional)"
+                placeholder={t('adminExtensions.descriptionPlaceholder')}
                 className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-800 text-white placeholder-gray-400"
               />
             </div>
@@ -133,7 +135,7 @@ export default function ModulesPanel() {
               type="text"
               value={libraryForm.repository}
               onChange={(e) => setLibraryForm((f) => ({ ...f, repository: e.target.value }))}
-              placeholder="Git repository URL (e.g. https://github.com/user/truecloud-module-example.git)"
+              placeholder={t('adminExtensions.repoPlaceholder')}
               className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-800 text-white placeholder-gray-400"
             />
             <div className="flex justify-end gap-2">
@@ -145,14 +147,14 @@ export default function ModulesPanel() {
                 }}
                 className="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors"
               >
-                Cancel
+                {t('adminExtensions.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={addToLibrary.isPending || !libraryForm.name.trim() || !libraryForm.repository.trim()}
                 className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
-                {addToLibrary.isPending ? 'Adding...' : 'Add'}
+                {addToLibrary.isPending ? t('adminExtensions.adding') : t('adminExtensions.add')}
               </button>
             </div>
           </form>
@@ -160,10 +162,10 @@ export default function ModulesPanel() {
 
         {/* Library Grid */}
         {libraryLoading ? (
-          <div className="text-gray-400 text-sm">Loading library...</div>
+          <div className="text-gray-400 text-sm">{t('adminExtensions.loadingLibrary')}</div>
         ) : !library || library.length === 0 ? (
           <div className="text-gray-400 text-sm py-8 text-center">
-            No modules in library. Click "Add to Library" to register a module's git repository.
+            {t('adminExtensions.noLibrary')}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -179,7 +181,7 @@ export default function ModulesPanel() {
                       <button
                         onClick={() => handleRemoveFromLibrary(entry.repository)}
                         className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Remove from library"
+                        title={t('adminExtensions.removeFromLibrary')}
                       >
                         <FiX size={14} />
                       </button>
@@ -194,7 +196,7 @@ export default function ModulesPanel() {
                   </div>
                   <div className="mt-3">
                     {isInstalled ? (
-                      <span className="text-xs text-green-400 font-medium">Installed</span>
+                      <span className="text-xs text-green-400 font-medium">{t('adminExtensions.installed')}</span>
                     ) : (
                       <button
                         onClick={() => handleInstall(entry.repository)}
@@ -204,12 +206,12 @@ export default function ModulesPanel() {
                         {isInstalling ? (
                           <>
                             <FiRefreshCw className="animate-spin" size={14} />
-                            Installing...
+                            {t('adminExtensions.installing')}
                           </>
                         ) : (
                           <>
                             <FiDownload size={14} />
-                            Install
+                            {t('adminExtensions.install')}
                           </>
                         )}
                       </button>
@@ -222,19 +224,19 @@ export default function ModulesPanel() {
         )}
 
         <p className="text-xs text-gray-400 mt-3">
-          A rebuild is required after installing or removing modules.
+          {t('adminExtensions.rebuildNote')}
         </p>
       </div>
 
       {/* Installed Modules */}
       <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Installed Modules</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">{t('adminExtensions.installedModules')}</h3>
 
         {isLoading ? (
-          <div className="text-gray-400 text-sm">Loading...</div>
+          <div className="text-gray-400 text-sm">{t('adminExtensions.loading')}</div>
         ) : !modules || modules.length === 0 ? (
           <div className="text-gray-400 text-sm py-8 text-center">
-            No modules installed. Pick a module from the library above to install it.
+            {t('adminExtensions.noModules')}
           </div>
         ) : (
           <div className="space-y-3">
@@ -260,7 +262,7 @@ export default function ModulesPanel() {
                       <FiGitBranch size={12} />
                       {mod.repository}
                     </span>
-                    <span>Installed {new Date(mod.installedAt).toLocaleDateString()}</span>
+                    <span>{t('adminExtensions.installedOn', { date: new Date(mod.installedAt).toLocaleDateString() })}</span>
                   </div>
                 </div>
 
@@ -269,19 +271,19 @@ export default function ModulesPanel() {
                     onClick={() => handleUpdate(mod.name)}
                     disabled={updateModule.isPending}
                     className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5 transition-colors"
-                    title="Update to latest"
+                    title={t('adminExtensions.updateToLatest')}
                   >
                     <FiRefreshCw size={14} className={updateModule.isPending ? 'animate-spin' : ''} />
-                    Update
+                    {t('adminExtensions.update')}
                   </button>
                   <button
                     onClick={() => setDeletingModule(mod.name)}
                     disabled={removeModule.isPending}
                     className="px-3 py-1.5 text-sm bg-red-600/20 hover:bg-red-600/40 disabled:opacity-50 text-red-400 rounded-lg flex items-center gap-1.5 transition-colors"
-                    title="Remove module"
+                    title={t('adminExtensions.removeModuleTitle')}
                   >
                     <FiTrash2 size={14} />
-                    Remove
+                    {t('adminExtensions.remove')}
                   </button>
                 </div>
               </div>
@@ -294,10 +296,9 @@ export default function ModulesPanel() {
       {deletingModule && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-white mb-2">Remove Module</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">{t('adminExtensions.removeModule')}</h3>
             <p className="text-gray-300 text-sm mb-4">
-              Are you sure you want to remove <strong>{deletingModule}</strong>? This will delete all module files. A
-              rebuild will be required.
+              {t('adminExtensions.removeConfirmPrefix')}<strong>{deletingModule}</strong>{t('adminExtensions.removeConfirmSuffix')}
             </p>
 
             <label className="flex items-center gap-2 text-sm text-gray-300 mb-4 cursor-pointer">
@@ -308,7 +309,7 @@ export default function ModulesPanel() {
                 className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
               />
               <FiDatabase size={14} />
-              Also delete module database
+              {t('adminExtensions.alsoDeleteDb')}
             </label>
 
             <div className="flex justify-end gap-3">
@@ -319,14 +320,14 @@ export default function ModulesPanel() {
                 }}
                 className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
               >
-                Cancel
+                {t('adminExtensions.cancel')}
               </button>
               <button
                 onClick={handleRemove}
                 disabled={removeModule.isPending}
                 className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
-                {removeModule.isPending ? 'Removing...' : 'Remove'}
+                {removeModule.isPending ? t('adminExtensions.removing') : t('adminExtensions.remove')}
               </button>
             </div>
           </div>

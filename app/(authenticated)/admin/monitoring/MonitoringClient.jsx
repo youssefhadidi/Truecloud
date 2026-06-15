@@ -9,6 +9,7 @@ import {
   FiXCircle, FiClock,
 } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ function CoreGrid({ cores }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MonitoringClient() {
+  const { t } = useTranslation();
   const { subscribe, connected } = useWebSocket();
 
   // Rolling history arrays, keyed by metric path
@@ -254,16 +256,16 @@ export default function MonitoringClient() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FiActivity className="text-blue-400" />
-            System Monitoring
+            {t('adminMonitoring.title')}
           </h1>
           {latest && (
             <p className="text-sm text-gray-400 mt-1 flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <FiClock size={13} />
-                Uptime: {formatUptime(latest.uptime)}
+                {t('adminMonitoring.uptime', { value: formatUptime(latest.uptime) })}
               </span>
               <span>
-                Load: {latest.cpu.loadAvg.map((v) => v.toFixed(2)).join('  ')}
+                {t('adminMonitoring.load', { value: latest.cpu.loadAvg.map((v) => v.toFixed(2)).join('  ') })}
               </span>
             </p>
           )}
@@ -274,12 +276,12 @@ export default function MonitoringClient() {
             : 'bg-gray-700/50 border-gray-600 text-gray-400'
         }`}>
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
-          {connected ? 'Live' : 'Connecting…'}
+          {connected ? t('adminMonitoring.live') : t('adminMonitoring.connecting')}
         </div>
       </div>
 
       {!latest && (
-        <div className="text-center text-gray-500 py-16">Waiting for metrics…</div>
+        <div className="text-center text-gray-500 py-16">{t('adminMonitoring.waitingForMetrics')}</div>
       )}
 
       {latest && (
@@ -288,7 +290,7 @@ export default function MonitoringClient() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* CPU */}
-            <Card title="CPU" icon={FiCpu}>
+            <Card title={t('adminMonitoring.cpu')} icon={FiCpu}>
               <div className="flex items-end justify-between mb-2">
                 <span className={`text-3xl font-bold font-mono ${usageTextColor(latest.cpu.overall)}`}>
                   {latest.cpu.overall.toFixed(1)}%
@@ -296,7 +298,7 @@ export default function MonitoringClient() {
                 <div className="text-right">
                   {latest.cpu.freq > 0 && (
                     <div className="text-lg font-mono text-blue-300 leading-tight">
-                      {(latest.cpu.freq / 1000).toFixed(2)} GHz
+                      {t('adminMonitoring.ghz', { value: (latest.cpu.freq / 1000).toFixed(2) })}
                     </div>
                   )}
                   <div className="text-xs text-gray-500 flex items-center justify-end gap-2">
@@ -305,7 +307,7 @@ export default function MonitoringClient() {
                         {latest.cpuTemp.packageTemp.toFixed(0)}°C
                       </span>
                     )}
-                    <span>{latest.cpu.cores.length} cores</span>
+                    <span>{t('adminMonitoring.coresN', { count: latest.cpu.cores.length })}</span>
                   </div>
                 </div>
               </div>
@@ -314,20 +316,20 @@ export default function MonitoringClient() {
             </Card>
 
             {/* Memory */}
-            <Card title="Memory" icon={FiHardDrive}>
+            <Card title={t('adminMonitoring.memory')} icon={FiHardDrive}>
               <div className="flex items-end justify-between mb-3">
                 <span className={`text-3xl font-bold font-mono ${usageTextColor(pct(latest.ram.used, latest.ram.total))}`}>
                   {pct(latest.ram.used, latest.ram.total)}%
                 </span>
                 <span className="text-xs text-gray-500">
-                  {formatBytes(latest.ram.free)} free
+                  {t('adminMonitoring.freeSuffix', { size: formatBytes(latest.ram.free) })}
                 </span>
               </div>
               <Sparkline data={h.ram} color="#8b5cf6" max={100} height={48} />
               <div className="mt-3 space-y-2">
-                <UsageBar label="RAM" used={latest.ram.used} total={latest.ram.total} />
+                <UsageBar label={t('adminMonitoring.ram')} used={latest.ram.used} total={latest.ram.total} />
                 {latest.ram.swapTotal > 0 && (
-                  <UsageBar label="Swap" used={latest.ram.swapUsed} total={latest.ram.swapTotal} color="bg-purple-500" />
+                  <UsageBar label={t('adminMonitoring.swap')} used={latest.ram.swapUsed} total={latest.ram.swapTotal} color="bg-purple-500" />
                 )}
               </div>
             </Card>
@@ -335,7 +337,7 @@ export default function MonitoringClient() {
 
           {/* Network */}
           {Object.keys(latest.network.interfaces).length > 0 && (
-            <Card title="Network" icon={FiWifi}>
+            <Card title={t('adminMonitoring.network')} icon={FiWifi}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {Object.entries(latest.network.interfaces).map(([iface, stats]) => (
                   <div key={iface}>
@@ -359,10 +361,10 @@ export default function MonitoringClient() {
                     />
                     <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
                       <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-0.5 bg-blue-400 rounded" /> RX
+                        <span className="inline-block w-2 h-0.5 bg-blue-400 rounded" /> {t('adminMonitoring.rx')}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-0.5 bg-green-400 rounded" /> TX
+                        <span className="inline-block w-2 h-0.5 bg-green-400 rounded" /> {t('adminMonitoring.tx')}
                       </span>
                     </div>
                   </div>
@@ -376,7 +378,7 @@ export default function MonitoringClient() {
 
             {/* Disk I/O */}
             {Object.keys(latest.disks).length > 0 && (
-              <Card title="Disk I/O" icon={FiHardDrive}>
+              <Card title={t('adminMonitoring.diskIo')} icon={FiHardDrive}>
                 <div className="space-y-4">
                   {Object.entries(latest.disks).map(([disk, stats]) => {
                     const driveTemp = latest.driveTemps?.[disk];
@@ -409,10 +411,10 @@ export default function MonitoringClient() {
                       />
                       <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
                         <span className="flex items-center gap-1">
-                          <span className="inline-block w-2 h-0.5 bg-orange-400 rounded" /> Read
+                          <span className="inline-block w-2 h-0.5 bg-orange-400 rounded" /> {t('adminMonitoring.read')}
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="inline-block w-2 h-0.5 bg-pink-400 rounded" /> Write
+                          <span className="inline-block w-2 h-0.5 bg-pink-400 rounded" /> {t('adminMonitoring.write')}
                         </span>
                       </div>
                     </div>
@@ -424,7 +426,7 @@ export default function MonitoringClient() {
 
             {/* ZFS Pools */}
             {latest.zfs.pools.length > 0 && (
-              <Card title="ZFS Pools" icon={FiDatabase}>
+              <Card title={t('adminMonitoring.zfsPools')} icon={FiDatabase}>
                 <div className="space-y-3">
                   {latest.zfs.pools.map((pool) => {
                     const usedPct = pct(pool.allocBytes, pool.sizeBytes);
@@ -445,9 +447,9 @@ export default function MonitoringClient() {
                           />
                         </div>
                         <div className="flex justify-between text-[11px] text-gray-400">
-                          <span>{pool.alloc} used</span>
+                          <span>{t('adminMonitoring.usedSuffix', { size: pool.alloc })}</span>
                           <span>{usedPct}%</span>
-                          <span>{pool.free} free / {pool.size}</span>
+                          <span>{t('adminMonitoring.freeOfTotal', { free: pool.free, total: pool.size })}</span>
                         </div>
                       </div>
                     );

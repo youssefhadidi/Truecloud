@@ -15,6 +15,7 @@ import {
   useBrowseLockableFolders,
 } from '@/lib/api/folderLocks';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function PinInput({ value, onChange, autoFocus }) {
   const ref = useRef(null);
@@ -37,14 +38,15 @@ function PinInput({ value, onChange, autoFocus }) {
 }
 
 function PinSetModal({ title, subtitle, submitLabel, onSubmit, onClose, busy }) {
+  const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (pin.length !== 4) return setError('PIN must be 4 digits');
-    if (pin !== confirm) return setError('PINs do not match');
+    if (pin.length !== 4) return setError(t('adminSecurity.pinMustBe4'));
+    if (pin !== confirm) return setError(t('adminSecurity.pinsDoNotMatch'));
     setError('');
     onSubmit(pin);
   };
@@ -61,28 +63,28 @@ function PinSetModal({ title, subtitle, submitLabel, onSubmit, onClose, busy }) 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {subtitle && (
             <div className="text-sm text-gray-400 break-all">
-              Folder: <span className="font-mono text-gray-200">{subtitle}</span>
+              {t('adminSecurity.folderLabel')} <span className="font-mono text-gray-200">{subtitle}</span>
             </div>
           )}
           <div>
-            <label className="block text-sm text-gray-300 mb-2">New 4-digit PIN</label>
+            <label className="block text-sm text-gray-300 mb-2">{t('adminSecurity.newPin')}</label>
             <PinInput value={pin} onChange={setPin} autoFocus />
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-2">Confirm PIN</label>
+            <label className="block text-sm text-gray-300 mb-2">{t('adminSecurity.confirmPin')}</label>
             <PinInput value={confirm} onChange={setConfirm} />
           </div>
           {error && <div className="text-red-400 text-sm">{error}</div>}
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700">
-              Cancel
+              {t('adminSecurity.cancel')}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {busy ? 'Saving…' : submitLabel}
+              {busy ? t('adminSecurity.saving') : submitLabel}
             </button>
           </div>
         </form>
@@ -92,30 +94,33 @@ function PinSetModal({ title, subtitle, submitLabel, onSubmit, onClose, busy }) 
 }
 
 function ConfirmRemoveModal({ folder, onConfirm, onClose, busy }) {
+  const { t } = useTranslation();
+  const bodyParts = t('adminSecurity.removeLockBody').split('{folder}');
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Remove folder lock?</h3>
+          <h3 className="text-lg font-semibold text-white">{t('adminSecurity.removeLockTitle')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200">
             <FiX size={20} />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-300">
-            <span className="font-mono text-white break-all">{folder}</span> will be openable
-            without a PIN by anyone with access. You'll need to set a new PIN to re-lock it.
+            {bodyParts[0]}
+            <span className="font-mono text-white break-all">{folder}</span>
+            {bodyParts[1]}
           </p>
           <div className="flex gap-2">
             <button onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700">
-              Cancel
+              {t('adminSecurity.cancel')}
             </button>
             <button
               onClick={onConfirm}
               disabled={busy}
               className="flex-1 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
-              {busy ? 'Removing…' : 'Remove Lock'}
+              {busy ? t('adminSecurity.removing') : t('adminSecurity.removeLock')}
             </button>
           </div>
         </div>
@@ -129,6 +134,7 @@ function ConfirmRemoveModal({ folder, onConfirm, onClose, busy }) {
 // (with a reason) instead of hidden — admins should see why a path is
 // off-limits rather than have it silently missing.
 function PickFolderModal({ onPicked, onClose }) {
+  const { t } = useTranslation();
   const [path, setPath] = useState('');
   const { data, isFetching } = useBrowseLockableFolders(path);
 
@@ -143,22 +149,22 @@ function PickFolderModal({ onPicked, onClose }) {
     path.length > 0;
 
   const lockHereReason = !path
-    ? 'Pick a folder first — the root cannot be locked'
+    ? t('adminSecurity.reasonPickFirst')
     : !current?.isLockable
-      ? 'This path is not lockable (trash or private user folder)'
+      ? t('adminSecurity.reasonNotLockable')
       : current?.isLocked
-        ? 'Already locked'
+        ? t('adminSecurity.reasonAlreadyLocked')
         : current?.hasAncestorLock
-          ? `Inside an already-locked folder ("${current.ancestorLockPath}")`
+          ? t('adminSecurity.reasonHasAncestor', { path: current.ancestorLockPath })
           : current?.hasDescendantLock
-            ? `Contains a locked folder ("${current.descendantLockPath}")`
+            ? t('adminSecurity.reasonHasDescendant', { path: current.descendantLockPath })
             : null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-xl">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Pick a folder to lock</h3>
+          <h3 className="text-lg font-semibold text-white">{t('adminSecurity.pickFolderTitle')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200">
             <FiX size={20} />
           </button>
@@ -170,7 +176,7 @@ function PickFolderModal({ onPicked, onClose }) {
               onClick={() => setPath('')}
               className={`inline-flex items-center gap-1 px-2 py-1 rounded ${path === '' ? 'text-white bg-gray-700' : 'text-gray-400 hover:text-white'}`}
             >
-              <FiHome size={13} /> Root
+              <FiHome size={13} /> {t('adminSecurity.root')}
             </button>
             {breadcrumb.map((part, i) => {
               const subPath = breadcrumb.slice(0, i + 1).join('/');
@@ -196,7 +202,7 @@ function PickFolderModal({ onPicked, onClose }) {
               disabled={!path}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-600 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40"
             >
-              <FiArrowUp size={13} /> Up one level
+              <FiArrowUp size={13} /> {t('adminSecurity.upOneLevel')}
             </button>
             <button
               onClick={() => onPicked(path)}
@@ -204,7 +210,7 @@ function PickFolderModal({ onPicked, onClose }) {
               title={lockHereReason || ''}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Lock this folder
+              {t('adminSecurity.lockThisFolder')}
             </button>
           </div>
           {lockHereReason && path && (
@@ -217,13 +223,13 @@ function PickFolderModal({ onPicked, onClose }) {
           {/* Folder list */}
           <div className="border border-gray-700 rounded bg-gray-900/40 max-h-80 overflow-y-auto">
             {isFetching ? (
-              <div className="p-6 text-center text-sm text-gray-400">Loading…</div>
+              <div className="p-6 text-center text-sm text-gray-400">{t('adminSecurity.pickerLoading')}</div>
             ) : !data?.folders?.length ? (
-              <div className="p-6 text-center text-sm text-gray-400">No sub-folders here.</div>
+              <div className="p-6 text-center text-sm text-gray-400">{t('adminSecurity.noSubFolders')}</div>
             ) : (
               data.folders.map((f) => {
                 const disabledReason = f.hasAncestorLock
-                  ? 'Inside a locked folder'
+                  ? t('adminSecurity.insideLockedFolder')
                   : null;
                 // Folders WITH ancestor locks can't be navigated (admin would
                 // need the PIN to see their contents). All others are navigable;
@@ -244,12 +250,12 @@ function PickFolderModal({ onPicked, onClose }) {
                     <span className="text-sm text-white flex-1 truncate">{f.name}</span>
                     {f.isLocked && (
                       <span className="text-xs bg-amber-900/50 text-amber-200 px-2 py-0.5 rounded">
-                        Locked
+                        {t('adminSecurity.lockedBadge')}
                       </span>
                     )}
                     {f.hasDescendantLock && !f.isLocked && (
                       <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">
-                        Contains locks
+                        {t('adminSecurity.containsLocks')}
                       </span>
                     )}
                     {disabledReason ? (
@@ -271,6 +277,7 @@ function PickFolderModal({ onPicked, onClose }) {
 }
 
 export default function SecurityPage() {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const { data: locks = [], isLoading: locksLoading } = useFolderLocks();
   const setLock = useSetFolderLock();
@@ -291,42 +298,42 @@ export default function SecurityPage() {
     async (pin) => {
       try {
         await setLock.mutateAsync({ path: pendingNewLock, pin });
-        addNotification('success', `${pendingNewLock} is now locked`);
+        addNotification('success', t('adminSecurity.nowLocked', { path: pendingNewLock }));
         setPendingNewLock(null);
       } catch (err) {
-        addNotification('error', err.response?.data?.error || 'Failed to set lock');
+        addNotification('error', err.response?.data?.error || t('adminSecurity.setLockFailed'));
       }
     },
-    [pendingNewLock, setLock, addNotification],
+    [pendingNewLock, setLock, addNotification, t],
   );
 
   const handleSubmitChangePin = useCallback(
     async (pin) => {
       try {
         await changePin.mutateAsync({ path: changingPinFor, pin });
-        addNotification('success', `PIN updated for ${changingPinFor}`);
+        addNotification('success', t('adminSecurity.pinUpdatedFor', { path: changingPinFor }));
         setChangingPinFor(null);
       } catch (err) {
-        addNotification('error', err.response?.data?.error || 'Failed to change PIN');
+        addNotification('error', err.response?.data?.error || t('adminSecurity.changePinFailed'));
       }
     },
-    [changingPinFor, changePin, addNotification],
+    [changingPinFor, changePin, addNotification, t],
   );
 
   const handleRemove = useCallback(async () => {
     try {
       await deleteLock.mutateAsync(removing);
-      addNotification('success', `Lock removed from ${removing}`);
+      addNotification('success', t('adminSecurity.lockRemovedFrom', { path: removing }));
       setRemoving(null);
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to remove lock');
+      addNotification('error', err.response?.data?.error || t('adminSecurity.removeLockFailed'));
     }
-  }, [removing, deleteLock, addNotification]);
+  }, [removing, deleteLock, addNotification, t]);
 
   if (locksLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400">Loading…</div>
+        <div className="text-gray-400">{t('adminSecurity.loading')}</div>
       </div>
     );
   }
@@ -336,30 +343,31 @@ export default function SecurityPage() {
       <div className="flex items-center justify-between mb-2 gap-4">
         <div className="flex items-center gap-3">
           <FiShield className="text-blue-400" size={28} />
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Folder Locks</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{t('adminSecurity.title')}</h1>
         </div>
         <button
           onClick={() => setPickingPath(true)}
           className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          <FiPlus size={16} /> Add Lock
+          <FiPlus size={16} /> {t('adminSecurity.addLock')}
         </button>
       </div>
       <p className="text-sm text-gray-400 mb-6 max-w-2xl">
-        Lock any folder behind a 4-digit PIN. Every user — including admins — must enter the PIN to
-        view its contents. Locks can't nest, and private user folders or the trash can't be locked.
+        {t('adminSecurity.intro')}
       </p>
 
       <div className="bg-gray-800 rounded-lg shadow">
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
           <h2 className="text-base sm:text-lg font-semibold text-white">
-            Active locks ({locks.length})
+            {t('adminSecurity.activeLocksN', { count: locks.length })}
           </h2>
         </div>
 
         {locks.length === 0 ? (
           <div className="px-4 sm:px-6 py-8 text-sm text-gray-400 text-center">
-            No folders are locked. Use <span className="text-blue-400">Add Lock</span> to gate one.
+            {t('adminSecurity.noLocks').split('{addLock}').flatMap((part, i) =>
+              i === 0 ? [part] : [<span key={i} className="text-blue-400">{t('adminSecurity.addLock')}</span>, part],
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-700">
@@ -372,13 +380,13 @@ export default function SecurityPage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-white text-sm break-all">{lock.path}</div>
                   <div className="text-xs text-gray-400">
-                    Locked
-                    {lock.createdByUsername && <> by {lock.createdByUsername}</>}
+                    {t('adminSecurity.locked')}
+                    {lock.createdByUsername && <>{t('adminSecurity.lockedBy', { user: lock.createdByUsername })}</>}
                     {lock.updatedAt && (
-                      <> · updated {new Date(lock.updatedAt).toLocaleDateString()}</>
+                      <>{t('adminSecurity.updatedOn', { date: new Date(lock.updatedAt).toLocaleDateString() })}</>
                     )}
                     {lock.pinFailures > 0 && (
-                      <> · <span className="text-amber-400">{lock.pinFailures} recent miss(es)</span></>
+                      <> · <span className="text-amber-400">{t('adminSecurity.recentMisses', { count: lock.pinFailures })}</span></>
                     )}
                   </div>
                 </div>
@@ -387,13 +395,13 @@ export default function SecurityPage() {
                     onClick={() => setChangingPinFor(lock.path)}
                     className="px-3 py-1.5 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700"
                   >
-                    Change PIN
+                    {t('adminSecurity.changePin')}
                   </button>
                   <button
                     onClick={() => setRemoving(lock.path)}
                     className="px-3 py-1.5 text-sm bg-red-900/40 text-red-300 border border-red-900 rounded-lg hover:bg-red-900/60"
                   >
-                    Remove
+                    {t('adminSecurity.remove')}
                   </button>
                 </div>
               </div>
@@ -407,9 +415,9 @@ export default function SecurityPage() {
       )}
       {pendingNewLock && (
         <PinSetModal
-          title="Set PIN for new lock"
+          title={t('adminSecurity.setPinTitle')}
           subtitle={pendingNewLock}
-          submitLabel="Lock Folder"
+          submitLabel={t('adminSecurity.lockFolder')}
           busy={setLock.isPending}
           onClose={() => setPendingNewLock(null)}
           onSubmit={handleSubmitNewLock}
@@ -417,9 +425,9 @@ export default function SecurityPage() {
       )}
       {changingPinFor && (
         <PinSetModal
-          title="Change PIN"
+          title={t('adminSecurity.changePinTitle')}
           subtitle={changingPinFor}
-          submitLabel="Update PIN"
+          submitLabel={t('adminSecurity.updatePin')}
           busy={changePin.isPending}
           onClose={() => setChangingPinFor(null)}
           onSubmit={handleSubmitChangePin}

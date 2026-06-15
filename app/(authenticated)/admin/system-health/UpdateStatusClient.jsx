@@ -7,8 +7,10 @@ import { formatDistanceToNow } from '@/lib/timeAgo';
 import { FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function UpdateStatusClient() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [error, setError] = useState(null);
@@ -64,20 +66,20 @@ export default function UpdateStatusClient() {
   }
 
   if (!status) {
-    return <div className="p-4 text-center text-gray-400">No status available</div>;
+    return <div className="p-4 text-center text-gray-400">{t('adminHealth.noStatus')}</div>;
   }
 
   const headlineLabel = (() => {
     if (runningStep) return runningStep.label;
-    if (failedStep) return `${failedStep.label} — failed`;
-    if (status.success === true) return 'All steps complete';
-    return 'Idle';
+    if (failedStep) return t('adminHealth.failedSuffix', { label: failedStep.label });
+    if (status.success === true) return t('adminHealth.allStepsComplete');
+    return t('adminHealth.idle');
   })();
   const headlineSub = (() => {
-    if (runningStep) return 'Currently executing…';
-    if (failedStep) return 'Expand the failed step below to see logs.';
+    if (runningStep) return t('adminHealth.currentlyExecuting');
+    if (failedStep) return t('adminHealth.expandFailedStep');
     if (status.success === true) return null;
-    if (status.startTime && !status.isRunning) return 'Run an update to begin.';
+    if (status.startTime && !status.isRunning) return t('adminHealth.runUpdateToBegin');
     return null;
   })();
 
@@ -94,26 +96,26 @@ export default function UpdateStatusClient() {
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white mb-2">System Update</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">{t('adminHealth.systemUpdate')}</h2>
             <div className="flex items-center gap-2">
               {connected ? (
                 <>
                   <FiWifi className="text-green-500" size={16} />
-                  <span className="text-sm text-green-400">Connected</span>
+                  <span className="text-sm text-green-400">{t('adminHealth.connected')}</span>
                 </>
               ) : (
                 <>
                   <FiWifiOff className="text-red-500" size={16} />
-                  <span className="text-sm text-red-400">Disconnected</span>
+                  <span className="text-sm text-red-400">{t('adminHealth.disconnected')}</span>
                 </>
               )}
             </div>
             {status.startTime && (
               <div className="text-sm text-gray-400 mt-2">
-                <p>Started {formatDistanceToNow(new Date(status.startTime), { addSuffix: true })}</p>
+                <p>{t('adminHealth.startedAgo', { time: formatDistanceToNow(new Date(status.startTime), { addSuffix: true }) })}</p>
                 {status.endTime && (
                   <p>
-                    Duration: {Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000)}s
+                    {t('adminHealth.duration', { seconds: Math.round((new Date(status.endTime) - new Date(status.startTime)) / 1000) })}
                   </p>
                 )}
               </div>
@@ -123,17 +125,17 @@ export default function UpdateStatusClient() {
           <div className="flex-shrink-0">
             {status.isRunning && (
               <div className="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2">
-                <p className="text-sm font-medium text-blue-300">In Progress</p>
+                <p className="text-sm font-medium text-blue-300">{t('adminHealth.inProgress')}</p>
               </div>
             )}
             {!status.isRunning && status.success === true && (
               <div className="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2">
-                <p className="text-sm font-medium text-green-300">✓ Completed</p>
+                <p className="text-sm font-medium text-green-300">{t('adminHealth.completed')}</p>
               </div>
             )}
             {!status.isRunning && status.success === false && (
               <div className="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2">
-                <p className="text-sm font-medium text-red-300">✕ Failed</p>
+                <p className="text-sm font-medium text-red-300">{t('adminHealth.failed')}</p>
               </div>
             )}
           </div>
@@ -179,7 +181,7 @@ export default function UpdateStatusClient() {
 
         {/* Current step text */}
         <div className="text-center mt-6 min-w-0">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Step</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{t('adminHealth.currentStep')}</p>
           <p className="text-xl font-semibold text-white break-words">{headlineLabel}</p>
           {headlineSub && (
             <p
@@ -197,8 +199,8 @@ export default function UpdateStatusClient() {
       {visibleStep && visibleStep.logs && visibleStep.logs.length > 0 && (
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <p className="text-sm text-white font-medium">{visibleStep.label} — Logs</p>
-            <StatusBadge status={visibleStep.status} />
+            <p className="text-sm text-white font-medium">{t('adminHealth.logsSuffix', { label: visibleStep.label })}</p>
+            <StatusBadge status={visibleStep.status} t={t} />
           </div>
           <div
             ref={logsContainerRef}
@@ -234,13 +236,13 @@ export default function UpdateStatusClient() {
                 setError(null);
                 await runUpdateMutation.mutateAsync();
               } catch (err) {
-                setError(err.response?.data?.error || err.message || 'Failed to start update');
+                setError(err.response?.data?.error || err.message || t('adminHealth.startUpdateFailed'));
               }
             }}
             disabled={runUpdateMutation.isPending}
             className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
           >
-            {runUpdateMutation.isPending ? 'Starting...' : 'Start Update'}
+            {runUpdateMutation.isPending ? t('adminHealth.starting') : t('adminHealth.startUpdate')}
           </button>
         </div>
       )}
@@ -281,17 +283,23 @@ function StepCircle({ status, index, active }) {
   return <div className={`${base} ${style} ${ring}`}>{content}</div>;
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
   const styles = {
     completed: 'bg-green-500/20 text-green-400 border border-green-500/50',
     failed: 'bg-red-500/20 text-red-400 border border-red-500/50',
     running: 'bg-blue-500/20 text-blue-400 border border-blue-500/50',
     pending: 'bg-gray-500/20 text-gray-400 border border-gray-500/50',
   };
+  const labels = {
+    completed: t('adminHealth.statusCompleted'),
+    failed: t('adminHealth.statusFailed'),
+    running: t('adminHealth.statusRunning'),
+    pending: t('adminHealth.statusPending'),
+  };
 
   return (
     <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status] || styles.pending}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {labels[status] || labels.pending}
     </span>
   );
 }

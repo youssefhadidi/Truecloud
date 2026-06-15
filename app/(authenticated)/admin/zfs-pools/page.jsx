@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { FiPlus, FiX, FiChevronDown, FiChevronUp, FiAlertCircle, FiZap } from 'react-icons/fi';
 import { useZfsPools, useZfsPoolDetail, useAvailableDisks, useCreateZfsPool, useAddCacheDevice } from '@/lib/api/zfsPools';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function getHealthColor(health) {
   switch (health?.toUpperCase()) {
@@ -22,6 +23,7 @@ function getHealthColor(health) {
 }
 
 function PoolCard({ pool, isSelected, onSelect, onAddCache }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`p-4 border rounded-lg cursor-pointer transition-colors ${
@@ -40,25 +42,25 @@ function PoolCard({ pool, isSelected, onSelect, onAddCache }) {
           <button
             onClick={(e) => { e.stopPropagation(); onAddCache(pool); }}
             className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 rounded transition-colors"
-            title="Add cache (L2ARC) device"
+            title={t('adminZfs.addCacheTitle')}
           >
             <FiZap size={11} />
-            Add Cache
+            {t('adminZfs.addCache')}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-sm">
         <div>
-          <p className="text-gray-400 text-xs">Total</p>
+          <p className="text-gray-400 text-xs">{t('adminZfs.total')}</p>
           <p className="text-white font-medium">{pool.size}</p>
         </div>
         <div>
-          <p className="text-gray-400 text-xs">Used</p>
+          <p className="text-gray-400 text-xs">{t('adminZfs.used')}</p>
           <p className="text-white font-medium">{pool.alloc}</p>
         </div>
         <div>
-          <p className="text-gray-400 text-xs">Free</p>
+          <p className="text-gray-400 text-xs">{t('adminZfs.free')}</p>
           <p className="text-white font-medium">{pool.free}</p>
         </div>
       </div>
@@ -77,8 +79,9 @@ function PoolCard({ pool, isSelected, onSelect, onAddCache }) {
 }
 
 function DatasetsList({ datasets }) {
+  const { t } = useTranslation();
   if (!datasets || datasets.length === 0) {
-    return <div className="text-gray-400 text-sm p-4">No datasets found</div>;
+    return <div className="text-gray-400 text-sm p-4">{t('adminZfs.noDatasets')}</div>;
   }
 
   return (
@@ -86,11 +89,11 @@ function DatasetsList({ datasets }) {
       <table className="w-full text-sm">
         <thead className="bg-gray-700 border-b border-gray-600">
           <tr>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">Name</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">Type</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">Used</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">Available</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">Mountpoint</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">{t('adminZfs.colName')}</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">{t('adminZfs.colType')}</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">{t('adminZfs.colUsed')}</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">{t('adminZfs.colAvailable')}</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-300">{t('adminZfs.colMountpoint')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-700">
@@ -110,6 +113,7 @@ function DatasetsList({ datasets }) {
 }
 
 export default function ZfsPoolsPage() {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [selectedPool, setSelectedPool] = useState(null);
   const [expandedDatasets, setExpandedDatasets] = useState(false);
@@ -135,11 +139,11 @@ export default function ZfsPoolsPage() {
     if (!addCacheTarget || !selectedCacheDisk) return;
     try {
       await addCacheMutation.mutateAsync({ poolName: addCacheTarget.name, device: selectedCacheDisk });
-      addNotification('success', `Cache device '${selectedCacheDisk}' added to pool '${addCacheTarget.name}'`);
+      addNotification('success', t('adminZfs.cacheAdded', { device: selectedCacheDisk, pool: addCacheTarget.name }));
       setAddCacheTarget(null);
       setSelectedCacheDisk('');
     } catch (error) {
-      addNotification('error', error.response?.data?.error || 'Failed to add cache device');
+      addNotification('error', error.response?.data?.error || t('adminZfs.addCacheFailed'));
     }
   };
 
@@ -147,12 +151,12 @@ export default function ZfsPoolsPage() {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      addNotification('error', 'Pool name is required');
+      addNotification('error', t('adminZfs.poolNameRequired'));
       return;
     }
 
     if (formData.devices.length === 0) {
-      addNotification('error', 'At least one device must be selected');
+      addNotification('error', t('adminZfs.deviceRequired'));
       return;
     }
 
@@ -164,14 +168,14 @@ export default function ZfsPoolsPage() {
       });
       setShowForm(false);
       setFormData({ name: '', vdevType: 'stripe', devices: [] });
-      addNotification('success', `ZFS pool '${formData.name}' created successfully`);
+      addNotification('success', t('adminZfs.poolCreated', { name: formData.name }));
     } catch (error) {
       if (error.response?.status === 409 && error.response?.data?.code === 'EXISTING_FILESYSTEM') {
         setForceConfirm({ name: formData.name, vdevType: formData.vdevType, devices: formData.devices });
         return;
       }
       console.error('Error creating pool:', error);
-      addNotification('error', error.response?.data?.error || 'Failed to create ZFS pool');
+      addNotification('error', error.response?.data?.error || t('adminZfs.poolCreateFailed'));
     }
   };
 
@@ -182,10 +186,10 @@ export default function ZfsPoolsPage() {
       setForceConfirm(null);
       setShowForm(false);
       setFormData({ name: '', vdevType: 'stripe', devices: [] });
-      addNotification('success', `ZFS pool '${forceConfirm.name}' created successfully`);
+      addNotification('success', t('adminZfs.poolCreated', { name: forceConfirm.name }));
     } catch (error) {
       console.error('Error force creating pool:', error);
-      addNotification('error', error.response?.data?.error || 'Failed to create ZFS pool');
+      addNotification('error', error.response?.data?.error || t('adminZfs.poolCreateFailed'));
       setForceConfirm(null);
     }
   };
@@ -215,7 +219,7 @@ export default function ZfsPoolsPage() {
   if (loadingPools) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400">Loading ZFS pools...</div>
+        <div className="text-gray-400">{t('adminZfs.loading')}</div>
       </div>
     );
   }
@@ -229,22 +233,22 @@ export default function ZfsPoolsPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <FiZap className="text-yellow-400" />
-                Add Cache Device
+                {t('adminZfs.addCacheDevice')}
               </h3>
               <button onClick={() => { setAddCacheTarget(null); setSelectedCacheDisk(''); }} className="text-gray-400 hover:text-gray-300">
                 <FiX size={20} />
               </button>
             </div>
             <p className="text-sm text-gray-400 mb-4">
-              Adding an L2ARC cache device to pool <span className="text-white font-mono">{addCacheTarget.name}</span> will use the selected disk as a read cache. The disk will be formatted and all existing data on it will be lost.
+              {t('adminZfs.addCacheBodyPrefix')}<span className="text-white font-mono">{addCacheTarget.name}</span>{t('adminZfs.addCacheBodySuffix')}
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Select Cache Device *</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">{t('adminZfs.selectCacheDevice')}</label>
               {loadingDisks ? (
-                <div className="text-gray-400 text-xs">Loading available disks...</div>
+                <div className="text-gray-400 text-xs">{t('adminZfs.loadingDisks')}</div>
               ) : disks.length === 0 ? (
                 <div className="text-gray-400 text-xs p-3 bg-gray-700 rounded">
-                  No available disks found. All devices may be in use.
+                  {t('adminZfs.noDisks')}
                 </div>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -272,14 +276,14 @@ export default function ZfsPoolsPage() {
                 onClick={() => { setAddCacheTarget(null); setSelectedCacheDisk(''); }}
                 className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
               >
-                Cancel
+                {t('adminZfs.cancel')}
               </button>
               <button
                 onClick={handleAddCache}
                 disabled={!selectedCacheDisk || addCacheMutation.isPending}
                 className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
-                {addCacheMutation.isPending ? 'Adding...' : 'Add Cache'}
+                {addCacheMutation.isPending ? t('adminZfs.adding') : t('adminZfs.addCache')}
               </button>
             </div>
           </div>
@@ -290,44 +294,44 @@ export default function ZfsPoolsPage() {
       {forceConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 border border-red-700 rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-red-400 mb-2">Existing Filesystem Detected</h3>
+            <h3 className="text-lg font-bold text-red-400 mb-2">{t('adminZfs.existingFsTitle')}</h3>
             <p className="text-gray-300 text-sm mb-4">
-              One or more selected devices already contain a filesystem. Creating the pool will <span className="text-red-400 font-semibold">permanently destroy all existing data</span> on these devices.
+              {t('adminZfs.existingFsBodyPrefix')}<span className="text-red-400 font-semibold">{t('adminZfs.existingFsBodyStrong')}</span>{t('adminZfs.existingFsBodySuffix')}
             </p>
-            <p className="text-gray-400 text-sm mb-6">Are you sure you want to continue?</p>
+            <p className="text-gray-400 text-sm mb-6">{t('adminZfs.areYouSure')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setForceConfirm(null)}
                 className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
               >
-                Cancel
+                {t('adminZfs.cancel')}
               </button>
               <button
                 onClick={handleForceCreate}
                 disabled={createPoolMutation.isPending}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
               >
-                {createPoolMutation.isPending ? 'Creating...' : 'Yes, overwrite and create'}
+                {createPoolMutation.isPending ? t('adminZfs.creating') : t('adminZfs.overwriteAndCreate')}
               </button>
             </div>
           </div>
         </div>
       )}
-      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-4 sm:mb-6 lg:mb-8">ZFS Pools</h1>
+      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-4 sm:mb-6 lg:mb-8">{t('adminZfs.title')}</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="lg:col-span-2">
           {/* Pools List */}
           <div className="bg-gray-800 rounded-lg shadow mb-4">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
-              <h2 className="text-base sm:text-lg font-semibold text-white">Pools ({pools.length})</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-white">{t('adminZfs.poolsN', { count: pools.length })}</h2>
             </div>
 
             <div className="p-4 sm:p-6 space-y-3">
               {pools.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">
                   <FiAlertCircle className="mx-auto mb-2 text-gray-500" size={32} />
-                  <p>No ZFS pools found. Create one to get started.</p>
+                  <p>{t('adminZfs.noPools')}</p>
                 </div>
               ) : (
                 pools.map((pool) => (
@@ -354,7 +358,7 @@ export default function ZfsPoolsPage() {
                 onClick={() => setExpandedDatasets(!expandedDatasets)}
               >
                 <div className="flex items-center justify-between">
-                  <h2 className="text-base sm:text-lg font-semibold text-white">Datasets</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-white">{t('adminZfs.datasets')}</h2>
                   {expandedDatasets ? <FiChevronUp /> : <FiChevronDown />}
                 </div>
               </div>
@@ -362,18 +366,18 @@ export default function ZfsPoolsPage() {
               {expandedDatasets && (
                 <div className="px-4 sm:px-6 py-4">
                   {loadingDetail ? (
-                    <div className="text-gray-400 text-sm">Loading datasets...</div>
+                    <div className="text-gray-400 text-sm">{t('adminZfs.loadingDatasets')}</div>
                   ) : (
                     <>
                       {poolDetail?.status && (
                         <div className="mb-4">
-                          <h3 className="text-sm font-semibold text-gray-300 mb-2">Pool Status</h3>
+                          <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('adminZfs.poolStatus')}</h3>
                           <pre className="bg-gray-700 p-3 rounded text-xs text-gray-300 overflow-auto max-h-48 font-mono">
                             {poolDetail.status}
                           </pre>
                         </div>
                       )}
-                      <h3 className="text-sm font-semibold text-gray-300 mb-3">Datasets</h3>
+                      <h3 className="text-sm font-semibold text-gray-300 mb-3">{t('adminZfs.datasets')}</h3>
                       <DatasetsList datasets={poolDetail?.datasets} />
                     </>
                   )}
@@ -387,7 +391,7 @@ export default function ZfsPoolsPage() {
         <div className="lg:col-span-1">
           <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base sm:text-lg font-semibold text-white">Create Pool</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-white">{t('adminZfs.createPool')}</h2>
               {showForm && (
                 <button onClick={closeForm} className="text-gray-400 hover:text-gray-300">
                   <FiX size={20} />
@@ -401,45 +405,45 @@ export default function ZfsPoolsPage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base"
               >
                 <FiPlus />
-                Create Pool
+                {t('adminZfs.createPool')}
               </button>
             ) : (
               <form onSubmit={handleCreatePool} className="space-y-3 sm:space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Pool Name *</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('adminZfs.poolName')}</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white placeholder-gray-400"
-                    placeholder="e.g., tank"
+                    placeholder={t('adminZfs.poolNamePlaceholder')}
                     required
                   />
-                  <p className="text-xs text-gray-400 mt-1">Alphanumeric, hyphens, underscores only</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('adminZfs.poolNameHint')}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Virtual Device Type *</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('adminZfs.vdevType')}</label>
                   <select
                     value={formData.vdevType}
                     onChange={(e) => setFormData({ ...formData, vdevType: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white"
                   >
-                    <option value="stripe">Single Disk (Stripe)</option>
-                    <option value="mirror">Mirror (2+ disks)</option>
-                    <option value="raidz">RAID-Z (3+ disks)</option>
-                    <option value="raidz2">RAID-Z2 (4+ disks)</option>
+                    <option value="stripe">{t('adminZfs.vdevStripe')}</option>
+                    <option value="mirror">{t('adminZfs.vdevMirror')}</option>
+                    <option value="raidz">{t('adminZfs.vdevRaidz')}</option>
+                    <option value="raidz2">{t('adminZfs.vdevRaidz2')}</option>
                   </select>
-                  <p className="text-xs text-gray-400 mt-1">Determines redundancy level</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('adminZfs.vdevHint')}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Select Devices *</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">{t('adminZfs.selectDevices')}</label>
                   {loadingDisks ? (
-                    <div className="text-gray-400 text-xs">Loading available disks...</div>
+                    <div className="text-gray-400 text-xs">{t('adminZfs.loadingDisks')}</div>
                   ) : disks.length === 0 ? (
                     <div className="text-gray-400 text-xs p-3 bg-gray-700 rounded">
-                      No available disks found. All devices may be in use.
+                      {t('adminZfs.noDisks')}
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -468,7 +472,7 @@ export default function ZfsPoolsPage() {
                   disabled={createPoolMutation.isPending || formData.devices.length === 0}
                   className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
-                  {createPoolMutation.isPending ? 'Creating...' : 'Create Pool'}
+                  {createPoolMutation.isPending ? t('adminZfs.creating') : t('adminZfs.createPool')}
                 </button>
               </form>
             )}

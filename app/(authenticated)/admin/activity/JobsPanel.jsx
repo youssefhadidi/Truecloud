@@ -8,17 +8,26 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useJobs, useCancelJob } from '@/lib/api/jobs';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from '@/lib/timeAgo';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FILTERS = ['all', 'running', 'completed', 'failed', 'cancelled'];
 
+const FILTER_LABEL_KEYS = {
+  all: 'extra.activity.filterAll',
+  running: 'extra.activity.filterRunning',
+  completed: 'extra.activity.filterCompleted',
+  failed: 'extra.activity.filterFailed',
+  cancelled: 'extra.activity.filterCancelled',
+};
+
 const STATUS_CONFIG = {
-  running:   { icon: FiLoader,      color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',  label: 'Running',   spin: true },
-  pending:   { icon: FiClock,       color: 'text-gray-400',   bg: 'bg-gray-500/10 border-gray-500/30',  label: 'Pending',   spin: false },
-  completed: { icon: FiCheckCircle, color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30', label: 'Completed', spin: false },
-  failed:    { icon: FiXCircle,     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/30',    label: 'Failed',    spin: false },
-  cancelled: { icon: FiAlertCircle, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', label: 'Cancelled', spin: false },
+  running:   { icon: FiLoader,      color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',  labelKey: 'extra.activity.statusRunning',   spin: true },
+  pending:   { icon: FiClock,       color: 'text-gray-400',   bg: 'bg-gray-500/10 border-gray-500/30',  labelKey: 'extra.activity.statusPending',   spin: false },
+  completed: { icon: FiCheckCircle, color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30', labelKey: 'extra.activity.statusCompleted', spin: false },
+  failed:    { icon: FiXCircle,     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/30',    labelKey: 'extra.activity.statusFailed',    spin: false },
+  cancelled: { icon: FiAlertCircle, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', labelKey: 'extra.activity.statusCancelled', spin: false },
 };
 
 const TYPE_COLORS = {
@@ -46,6 +55,7 @@ function typeLabel(type) {
 // ─── JobCard ──────────────────────────────────────────────────────────────────
 
 function JobCard({ job }) {
+  const { t } = useTranslation();
   const cancelJob = useCancelJob();
   const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.pending;
   const Icon = cfg.icon;
@@ -66,16 +76,16 @@ function JobCard({ job }) {
             <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${TYPE_COLORS[job.type] ?? 'bg-gray-500/20 text-gray-300'}`}>
               {typeLabel(job.type)}
             </span>
-            <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+            <span className={`text-xs font-medium ${cfg.color}`}>{t(cfg.labelKey)}</span>
           </div>
 
           <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
             {job.startTime && (
               <span title={new Date(job.startTime).toLocaleString()}>
-                Started {formatDistanceToNow(new Date(job.startTime), { addSuffix: true })}
+                {t('extra.activity.startedAgo', { time: formatDistanceToNow(new Date(job.startTime), { addSuffix: true }) })}
               </span>
             )}
-            <span>Duration: {formatDuration(job.startTime, job.endTime)}</span>
+            <span>{t('extra.activity.durationLabel', { value: formatDuration(job.startTime, job.endTime) })}</span>
             {job.progress > 0 && job.status === 'running' && (
               <span className="text-blue-400">{job.progress}%</span>
             )}
@@ -107,7 +117,7 @@ function JobCard({ job }) {
               onClick={() => cancelJob.mutate(job.id)}
               disabled={cancelJob.isPending}
               className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-red-400 transition-colors"
-              title="Cancel job"
+              title={t('extra.activity.cancelJob')}
             >
               <FiSlash size={14} />
             </button>
@@ -121,6 +131,7 @@ function JobCard({ job }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function JobsPanel() {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState([]);
   const [filter, setFilter] = useState('all');
   const queryClient = useQueryClient();
@@ -165,8 +176,8 @@ export default function JobsPanel() {
       <div className="flex items-center gap-3">
         <FiActivity size={24} className="text-blue-400" />
         <div>
-          <h1 className="text-2xl font-bold text-white">Jobs</h1>
-          <p className="text-sm text-gray-400">{jobs.length} total · {counts.running ?? 0} running</p>
+          <h1 className="text-2xl font-bold text-white">{t('extra.activity.jobs')}</h1>
+          <p className="text-sm text-gray-400">{t('extra.activity.totalRunning', { total: jobs.length, running: counts.running ?? 0 })}</p>
         </div>
       </div>
 
@@ -182,7 +193,7 @@ export default function JobsPanel() {
                 : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
           >
-            {f}
+            {t(FILTER_LABEL_KEYS[f])}
             {f !== 'all' && counts[f] > 0 && (
               <span className="ml-1.5 text-xs opacity-70">{counts[f]}</span>
             )}
@@ -197,7 +208,7 @@ export default function JobsPanel() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          {filter === 'all' ? 'No jobs have run yet.' : `No ${filter} jobs.`}
+          {filter === 'all' ? t('extra.activity.noJobsYet') : t('extra.activity.noJobsFiltered', { filter: t(FILTER_LABEL_KEYS[filter]) })}
         </div>
       ) : (
         <div className="space-y-3">

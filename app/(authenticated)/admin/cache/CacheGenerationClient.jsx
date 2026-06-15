@@ -5,8 +5,10 @@ import { FiPlay, FiX, FiFolder } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGenerateCache, useStopCacheGeneration } from '@/lib/api/cache';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function CacheGenerationClient() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState(null);
   const [generatePath, setGeneratePath] = useState('');
   const [generateType, setGenerateType] = useState('thumbnails');
@@ -28,10 +30,10 @@ export default function CacheGenerationClient() {
         if (payload.success === true) {
           addNotification(
             'success',
-            `Generated ${payload.successful} items, ${payload.skipped} skipped, ${payload.failed} failed in ${payload.duration}s`
+            t('extra.cacheGen.resultSummary', { successful: payload.successful, skipped: payload.skipped, failed: payload.failed, duration: payload.duration })
           );
         } else if (payload.success === false) {
-          addNotification('error', payload.error || 'Cache generation failed');
+          addNotification('error', payload.error || t('extra.cacheGen.failed'));
         }
       } catch (err) {
         console.error('Error processing cache-generation message:', err);
@@ -39,12 +41,12 @@ export default function CacheGenerationClient() {
     });
 
     return unsubscribe;
-  }, [subscribe, addNotification]);
+  }, [subscribe, addNotification, t]);
 
   const handleGenerate = async () => {
     try {
       await generateMutation.mutateAsync({ path: generatePath, type: generateType });
-      addNotification('info', 'Cache generation started');
+      addNotification('info', t('extra.cacheGen.started'));
     } catch (error) {
       addNotification('error', error.response?.data?.error || error.message);
     }
@@ -53,7 +55,7 @@ export default function CacheGenerationClient() {
   const handleStop = async () => {
     try {
       await stopMutation.mutateAsync();
-      addNotification('info', 'Cache generation cancelled');
+      addNotification('info', t('extra.cacheGen.cancelled'));
     } catch (error) {
       addNotification('error', error.response?.data?.error || error.message);
     }
@@ -62,24 +64,24 @@ export default function CacheGenerationClient() {
   return (
     <div className="bg-gray-800 rounded-lg shadow p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">Generate Cache</h2>
+        <h2 className="text-lg font-semibold text-white">{t('extra.cacheGen.generateCache')}</h2>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-xs text-gray-500">{connected ? 'Connected' : 'Disconnected'}</span>
+          <span className="text-xs text-gray-500">{connected ? t('extra.cacheGen.connected') : t('extra.cacheGen.disconnected')}</span>
         </div>
       </div>
 
       <div className="space-y-4">
         {/* Path Input */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Target Path (leave empty for all files)</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('extra.cacheGen.targetPath')}</label>
           <div className="flex items-center gap-2">
             <FiFolder className="text-gray-500" />
             <input
               type="text"
               value={generatePath}
               onChange={(e) => setGeneratePath(e.target.value)}
-              placeholder="e.g., user_abc123/photos"
+              placeholder={t('extra.cacheGen.targetPathPlaceholder')}
               disabled={generating}
               className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 disabled:opacity-50"
             />
@@ -88,13 +90,13 @@ export default function CacheGenerationClient() {
 
         {/* Type Selection */}
         <div>
-          <label className="block text-sm text-gray-400 mb-2">Generate Type</label>
+          <label className="block text-sm text-gray-400 mb-2">{t('extra.cacheGen.generateType')}</label>
           <div className="flex flex-wrap gap-3">
             {[
-              { value: 'thumbnails', label: 'Thumbnails' },
-              { value: 'optimized', label: 'Optimized Images' },
-              { value: 'stream', label: 'Video Streaming' },
-              { value: 'all', label: 'All' },
+              { value: 'thumbnails', label: t('extra.cacheGen.typeThumbnails') },
+              { value: 'optimized', label: t('extra.cacheGen.typeOptimized') },
+              { value: 'stream', label: t('extra.cacheGen.typeStream') },
+              { value: 'all', label: t('extra.cacheGen.typeAll') },
             ].map((option) => (
               <label
                 key={option.value}
@@ -128,7 +130,7 @@ export default function CacheGenerationClient() {
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
             >
               <FiX />
-              Cancel
+              {t('extra.cacheGen.cancel')}
             </button>
           ) : (
             <button
@@ -137,7 +139,7 @@ export default function CacheGenerationClient() {
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
             >
               <FiPlay />
-              Generate
+              {t('extra.cacheGen.generate')}
             </button>
           )}
         </div>
@@ -158,7 +160,7 @@ export default function CacheGenerationClient() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-300">
-                      {status.processed} / {status.total} files
+                      {t('extra.cacheGen.filesProgress', { processed: status.processed, total: status.total })}
                     </span>
                     <span className="text-sm text-gray-400">
                       {Math.round((status.processed / status.total) * 100)}%
@@ -176,19 +178,19 @@ export default function CacheGenerationClient() {
                 <div className="grid grid-cols-4 gap-2 text-xs">
                   <div className="bg-green-900/30 p-2 rounded text-green-400 text-center">
                     <p className="font-bold">{status.successful}</p>
-                    <p>Generated</p>
+                    <p>{t('extra.cacheGen.statGenerated')}</p>
                   </div>
                   <div className="bg-yellow-900/30 p-2 rounded text-yellow-400 text-center">
                     <p className="font-bold">{status.skipped}</p>
-                    <p>Skipped</p>
+                    <p>{t('extra.cacheGen.statSkipped')}</p>
                   </div>
                   <div className="bg-red-900/30 p-2 rounded text-red-400 text-center">
                     <p className="font-bold">{status.failed}</p>
-                    <p>Failed</p>
+                    <p>{t('extra.cacheGen.statFailed')}</p>
                   </div>
                   <div className="bg-gray-700 p-2 rounded text-gray-300 text-center">
                     <p className="font-bold">{status.duration || '—'}</p>
-                    <p>Seconds</p>
+                    <p>{t('extra.cacheGen.statSeconds')}</p>
                   </div>
                 </div>
               </>
@@ -197,19 +199,19 @@ export default function CacheGenerationClient() {
             {/* Status Messages */}
             {status.success === true && (
               <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 text-green-400 text-sm">
-                ✓ Cache generation completed successfully!
+                {t('extra.cacheGen.completedSuccess')}
               </div>
             )}
 
             {status.success === false && (
               <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-400 text-sm">
-                ✗ {status.error || 'Cache generation failed'}
+                ✗ {status.error || t('extra.cacheGen.failed')}
               </div>
             )}
 
             {status.isRunning && !status.total && (
               <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3 text-blue-400 text-sm">
-                🔍 Scanning files...
+                {t('extra.cacheGen.scanningFiles')}
               </div>
             )}
           </div>

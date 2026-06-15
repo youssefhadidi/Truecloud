@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FiCheck, FiX, FiAlertTriangle, FiInfo, FiSave, FiRefreshCw } from 'react-icons/fi';
 import { usePowerManagement, useApplyPowerManagement } from '@/lib/api/powerManagement';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function formatBytes(n) {
   if (!Number.isFinite(n) || n <= 0) return '—';
@@ -45,6 +46,7 @@ function SectionCard({ title, children, footer }) {
 }
 
 export default function PowerManagementPage() {
+  const { t } = useTranslation();
   const { data, isLoading, refetch, isFetching } = usePowerManagement();
   const applyMutation = useApplyPowerManagement();
   const { addNotification } = useNotifications();
@@ -107,9 +109,9 @@ export default function PowerManagementPage() {
     try {
       const result = await applyMutation.mutateAsync({ hdIdle: buildHdIdlePayload() });
       if (result.errors?.length) throw new Error(result.errors[0].message);
-      addNotification('success', 'HDD spindown settings applied');
+      addNotification('success', t('adminPower.hdIdleApplied'));
     } catch (e) {
-      addNotification('error', e.response?.data?.error || e.message || 'Failed to apply spindown settings');
+      addNotification('error', e.response?.data?.error || e.message || t('adminPower.hdIdleApplyFailed'));
     }
   };
 
@@ -119,9 +121,9 @@ export default function PowerManagementPage() {
         governor: { value: governorValue, persist: governorPersist },
       });
       if (result.errors?.length) throw new Error(result.errors[0].message);
-      addNotification('success', `CPU governor set to "${governorValue}"`);
+      addNotification('success', t('adminPower.governorSet', { value: governorValue }));
     } catch (e) {
-      addNotification('error', e.response?.data?.error || e.message || 'Failed to set CPU governor');
+      addNotification('error', e.response?.data?.error || e.message || t('adminPower.governorSetFailed'));
     }
   };
 
@@ -129,48 +131,48 @@ export default function PowerManagementPage() {
     try {
       const result = await applyMutation.mutateAsync({ powertop: { enabled: powertopEnabled } });
       if (result.errors?.length) throw new Error(result.errors[0].message);
-      addNotification('success', powertopEnabled ? 'PowerTOP auto-tune enabled' : 'PowerTOP auto-tune disabled');
+      addNotification('success', powertopEnabled ? t('adminPower.powertopEnabled') : t('adminPower.powertopDisabledMsg'));
     } catch (e) {
-      addNotification('error', e.response?.data?.error || e.message || 'Failed to apply PowerTOP setting');
+      addNotification('error', e.response?.data?.error || e.message || t('adminPower.powertopApplyFailed'));
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400">Loading...</div>
+        <div className="text-gray-400">{t('adminPower.loading')}</div>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-red-200">Failed to load power management status.</div>
+      <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-red-200">{t('adminPower.loadFailed')}</div>
     );
   }
 
   return (
     <>
       <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-2 flex-wrap">
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Power Management</h1>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{t('adminPower.title')}</h1>
         <button
           onClick={() => refetch()}
           disabled={isFetching}
           className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50"
         >
           <FiRefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-          Refresh
+          {t('adminPower.refresh')}
         </button>
       </div>
 
       <p className="text-sm text-gray-400 mb-4 sm:mb-6">
-        Reduce idle power draw on a 24/7 NAS. Settings persist across reboots via systemd units that this app manages.
+        {t('adminPower.intro')}
       </p>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* ---------------- HDD spindown ---------------- */}
         <SectionCard
-          title="HDD Spindown (hd-idle)"
+          title={t('adminPower.hdIdleTitle')}
           footer={
             <button
               onClick={applyHdIdle}
@@ -178,7 +180,7 @@ export default function PowerManagementPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
             >
               <FiSave size={14} />
-              {applyMutation.isPending ? 'Applying...' : 'Apply'}
+              {applyMutation.isPending ? t('adminPower.applying') : t('adminPower.apply')}
             </button>
           }
         >
@@ -186,14 +188,14 @@ export default function PowerManagementPage() {
             <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-200 flex items-start gap-2">
               <FiAlertTriangle className="mt-0.5 flex-shrink-0" />
               <span>
-                <code className="bg-gray-900 px-1.5 py-0.5 rounded">hd-idle</code> is not installed. Install it from{' '}
-                <strong>System Health → Requirements</strong>.
+                <code className="bg-gray-900 px-1.5 py-0.5 rounded">hd-idle</code>{t('adminPower.notInstalledPrefix')}
+                <strong>{t('adminPower.systemHealthRequirements')}</strong>{t('adminPower.notInstalledSuffix')}
               </span>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <StatusPill ok={data.hdIdle.active} okLabel="Service active" badLabel="Service inactive" />
-              <StatusPill ok={data.hdIdle.enabledAtBoot} okLabel="Enabled at boot" badLabel="Not at boot" />
+              <StatusPill ok={data.hdIdle.active} okLabel={t('adminPower.serviceActive')} badLabel={t('adminPower.serviceInactive')} />
+              <StatusPill ok={data.hdIdle.enabledAtBoot} okLabel={t('adminPower.enabledAtBoot')} badLabel={t('adminPower.notAtBoot')} />
             </div>
           )}
 
@@ -205,11 +207,11 @@ export default function PowerManagementPage() {
               disabled={!data.hdIdle.installed}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            <span>Enable hd-idle service</span>
+            <span>{t('adminPower.enableHdIdle')}</span>
           </label>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Default idle time (minutes)</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">{t('adminPower.defaultIdle')}</label>
             <input
               type="number"
               min="0"
@@ -219,24 +221,24 @@ export default function PowerManagementPage() {
               disabled={!data.hdIdle.installed}
               className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white disabled:opacity-50"
             />
-            <p className="text-xs text-gray-400 mt-1">0 = never spin down. 5–15 minutes is typical; lower values cause excessive load/unload cycles.</p>
+            <p className="text-xs text-gray-400 mt-1">{t('adminPower.defaultIdleHint')}</p>
           </div>
 
           {rotationalDisks.length > 0 && (
             <div>
-              <div className="text-sm font-medium text-gray-300 mb-2">Per-disk overrides ({rotationalDisks.length} HDD{rotationalDisks.length === 1 ? '' : 's'})</div>
+              <div className="text-sm font-medium text-gray-300 mb-2">{rotationalDisks.length === 1 ? t('adminPower.perDiskOverrides', { count: rotationalDisks.length }) : t('adminPower.perDiskOverridesPlural', { count: rotationalDisks.length })}</div>
               <div className="space-y-2">
                 {rotationalDisks.map((d) => (
                   <div key={d.name} className="flex items-center gap-3 p-2 bg-gray-900 rounded">
                     <div className="flex-1 min-w-0">
                       <div className="font-mono text-sm text-white">/dev/{d.name}</div>
-                      <div className="text-xs text-gray-400 truncate">{d.model || 'Unknown'} · {formatBytes(d.sizeBytes)}</div>
+                      <div className="text-xs text-gray-400 truncate">{d.model || t('adminPower.unknown')} · {formatBytes(d.sizeBytes)}</div>
                     </div>
                     <input
                       type="number"
                       min="0"
                       max="1440"
-                      placeholder="default"
+                      placeholder={t('adminPower.defaultPlaceholder')}
                       value={overrides[d.name] ?? ''}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -250,24 +252,24 @@ export default function PowerManagementPage() {
                       disabled={!data.hdIdle.installed}
                       className="w-24 px-2 py-1 text-sm border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white disabled:opacity-50"
                     />
-                    <span className="text-xs text-gray-400 w-8">min</span>
+                    <span className="text-xs text-gray-400 w-8">{t('adminPower.min')}</span>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2">Leave blank to use the default. Set 0 to never spin down this drive.</p>
+              <p className="text-xs text-gray-400 mt-2">{t('adminPower.overridesHint')}</p>
             </div>
           )}
 
           {ssdDisks.length > 0 && (
             <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-              Non-rotational devices (no spindown needed): {ssdDisks.map((d) => `/dev/${d.name}`).join(', ')}
+              {t('adminPower.nonRotational', { list: ssdDisks.map((d) => `/dev/${d.name}`).join(', ') })}
             </div>
           )}
         </SectionCard>
 
         {/* ---------------- CPU governor ---------------- */}
         <SectionCard
-          title="CPU Frequency Governor"
+          title={t('adminPower.governorTitle')}
           footer={
             <button
               onClick={applyGovernorSettings}
@@ -275,25 +277,25 @@ export default function PowerManagementPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
             >
               <FiSave size={14} />
-              {applyMutation.isPending ? 'Applying...' : 'Apply'}
+              {applyMutation.isPending ? t('adminPower.applying') : t('adminPower.apply')}
             </button>
           }
         >
           {!data.governor.supported ? (
             <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-200 flex items-start gap-2">
               <FiAlertTriangle className="mt-0.5 flex-shrink-0" />
-              <span>This CPU does not expose frequency scaling via sysfs.</span>
+              <span>{t('adminPower.governorNotSupported')}</span>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-400">Current:</span>
-                <code className="text-sm bg-gray-900 px-2 py-1 rounded text-white">{data.governor.current ?? 'unknown'}</code>
-                <StatusPill ok={data.governor.persistedAtBoot} okLabel="Persisted at boot" badLabel="Not persisted" />
+                <span className="text-sm text-gray-400">{t('adminPower.current')}</span>
+                <code className="text-sm bg-gray-900 px-2 py-1 rounded text-white">{data.governor.current ?? t('adminPower.unknownLower')}</code>
+                <StatusPill ok={data.governor.persistedAtBoot} okLabel={t('adminPower.persistedAtBoot')} badLabel={t('adminPower.notPersisted')} />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Governor</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">{t('adminPower.governor')}</label>
                 <select
                   value={governorValue}
                   onChange={(e) => setGovernorValue(e.target.value)}
@@ -306,8 +308,9 @@ export default function PowerManagementPage() {
                   ))}
                 </select>
                 <p className="text-xs text-gray-400 mt-1">
-                  <strong>schedutil</strong> / <strong>ondemand</strong> = balanced (recommended for a NAS).{' '}
-                  <strong>powersave</strong> = lowest power, slower bursts. <strong>performance</strong> = max clocks always (highest draw).
+                  {t('adminPower.governorHint').split(/\{(schedutil|ondemand|powersave|performance)\}/).map((part, i) =>
+                    i % 2 === 1 ? <strong key={i}>{part}</strong> : part,
+                  )}
                 </p>
               </div>
 
@@ -318,7 +321,7 @@ export default function PowerManagementPage() {
                   onChange={(e) => setGovernorPersist(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span>Persist at boot (creates truecloud-cpu-governor.service)</span>
+                <span>{t('adminPower.persistGovernor')}</span>
               </label>
             </>
           )}
@@ -326,7 +329,7 @@ export default function PowerManagementPage() {
 
         {/* ---------------- PowerTOP ---------------- */}
         <SectionCard
-          title="PowerTOP Auto-Tune"
+          title={t('adminPower.powertopTitle')}
           footer={
             <button
               onClick={applyPowertop}
@@ -334,7 +337,7 @@ export default function PowerManagementPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
             >
               <FiSave size={14} />
-              {applyMutation.isPending ? 'Applying...' : 'Apply'}
+              {applyMutation.isPending ? t('adminPower.applying') : t('adminPower.apply')}
             </button>
           }
         >
@@ -342,17 +345,16 @@ export default function PowerManagementPage() {
             <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-200 flex items-start gap-2">
               <FiAlertTriangle className="mt-0.5 flex-shrink-0" />
               <span>
-                <code className="bg-gray-900 px-1.5 py-0.5 rounded">powertop</code> is not installed. Install it from{' '}
-                <strong>System Health → Requirements</strong>.
+                <code className="bg-gray-900 px-1.5 py-0.5 rounded">powertop</code>{t('adminPower.notInstalledPrefix')}
+                <strong>{t('adminPower.systemHealthRequirements')}</strong>{t('adminPower.notInstalledSuffix')}
               </span>
             </div>
           ) : (
-            <StatusPill ok={data.powertop.enabledAtBoot} okLabel="Enabled at boot" badLabel="Disabled" />
+            <StatusPill ok={data.powertop.enabledAtBoot} okLabel={t('adminPower.enabledAtBoot')} badLabel={t('adminPower.powertopDisabled')} />
           )}
 
           <p className="text-sm text-gray-400">
-            Runs <code className="bg-gray-900 px-1 rounded">powertop --auto-tune</code> at boot to enable SATA ALPM, PCIe ASPM,
-            NVMe APST, and USB autosuspend. Typically saves 3–10W.
+            {t('adminPower.powertopInfoPrefix')}<code className="bg-gray-900 px-1 rounded">powertop --auto-tune</code>{t('adminPower.powertopInfoSuffix')}
           </p>
 
           <label className="flex items-center gap-2 text-sm text-gray-300">
@@ -363,26 +365,24 @@ export default function PowerManagementPage() {
               disabled={!data.powertop.installed}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            <span>Enable PowerTOP auto-tune at boot</span>
+            <span>{t('adminPower.enablePowertop')}</span>
           </label>
         </SectionCard>
 
         {/* ---------------- Mount audit ---------------- */}
-        <SectionCard title="Mount Options Audit">
+        <SectionCard title={t('adminPower.mountAuditTitle')}>
           <p className="text-sm text-gray-400">
-            For HDDs to actually spin down, their mount must use <code className="bg-gray-900 px-1 rounded">noatime</code> — otherwise every
-            read writes an access timestamp and wakes the disk. Edit <code className="bg-gray-900 px-1 rounded">/etc/fstab</code> to add the
-            flag.
+            {t('adminPower.mountAuditInfoPrefix')}<code className="bg-gray-900 px-1 rounded">noatime</code>{t('adminPower.mountAuditInfoMid')}<code className="bg-gray-900 px-1 rounded">/etc/fstab</code>{t('adminPower.mountAuditInfoSuffix')}
           </p>
 
           {nonAtimeMounts.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-green-300">
-              <FiCheck /> All mounted block devices use noatime.
+              <FiCheck /> {t('adminPower.allNoatime')}
             </div>
           ) : (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-yellow-300">
-                <FiInfo /> {nonAtimeMounts.length} mount{nonAtimeMounts.length === 1 ? '' : 's'} missing <code>noatime</code>:
+                <FiInfo /> {nonAtimeMounts.length === 1 ? t('adminPower.mountsMissingNoatime', { count: nonAtimeMounts.length }) : t('adminPower.mountsMissingNoatimePlural', { count: nonAtimeMounts.length })} <code>noatime</code>:
               </div>
               <div className="space-y-1">
                 {nonAtimeMounts.map((m) => (

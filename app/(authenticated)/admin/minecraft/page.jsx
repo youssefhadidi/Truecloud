@@ -30,19 +30,27 @@ import {
   useMinecraftLogs,
   usePaperVersions,
 } from '@/lib/api/minecraft';
+import { useTranslation } from '@/components/LanguageProvider';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
+  const { t } = useTranslation();
   const colors = {
     running: 'bg-green-900 text-green-300',
     starting: 'bg-yellow-900 text-yellow-300',
     stopping: 'bg-orange-900 text-orange-300',
     stopped: 'bg-gray-700 text-gray-400',
   };
+  const labels = {
+    running: t('adminMinecraft.statusRunning'),
+    starting: t('adminMinecraft.statusStarting'),
+    stopping: t('adminMinecraft.statusStopping'),
+    stopped: t('adminMinecraft.statusStopped'),
+  };
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[status] ?? colors.stopped}`}>
-      {status}
+      {labels[status] ?? labels.stopped}
     </span>
   );
 }
@@ -50,6 +58,7 @@ function StatusBadge({ status }) {
 // ─── Create Server Form ───────────────────────────────────────────────────────
 
 function CreateServerForm({ onClose }) {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const createMutation = useCreateMinecraftServer();
   const { data: paperVersions, isPending: versionsLoading } = usePaperVersions();
@@ -65,10 +74,10 @@ function CreateServerForm({ onClose }) {
     e.preventDefault();
     try {
       await createMutation.mutateAsync(form);
-      addNotification('success', `Server "${form.name}" created`);
+      addNotification('success', t('adminMinecraft.serverCreated', { name: form.name }));
       onClose();
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to create server');
+      addNotification('error', err.response?.data?.error || t('adminMinecraft.createFailed'));
     }
   };
 
@@ -78,14 +87,14 @@ function CreateServerForm({ onClose }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Server name</label>
+        <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.serverName')}</label>
         <input
           type="text"
-          placeholder="e.g. survival"
+          placeholder={t('adminMinecraft.serverNamePlaceholder')}
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           pattern="[a-zA-Z0-9\-_]+"
-          title="Letters, numbers, hyphens and underscores only"
+          title={t('adminMinecraft.serverNameTitle')}
           required
           className={inputClass}
         />
@@ -93,7 +102,7 @@ function CreateServerForm({ onClose }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Port</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.port')}</label>
           <input
             type="number"
             min="1024"
@@ -105,7 +114,7 @@ function CreateServerForm({ onClose }) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">PaperMC version</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.paperVersion')}</label>
           <select
             value={form.paperVersion}
             onChange={(e) => setForm({ ...form, paperVersion: e.target.value })}
@@ -122,7 +131,7 @@ function CreateServerForm({ onClose }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Min RAM (MB)</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.minRam')}</label>
           <input
             type="number"
             min="256"
@@ -133,7 +142,7 @@ function CreateServerForm({ onClose }) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Max RAM (MB)</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.maxRam')}</label>
           <input
             type="number"
             min="512"
@@ -146,7 +155,7 @@ function CreateServerForm({ onClose }) {
       </div>
 
       <p className="text-xs text-gray-500">
-        The PaperMC JAR will be downloaded automatically. Java 21 must be installed on the host.
+        {t('adminMinecraft.jarNote')}
       </p>
 
       <div className="flex gap-2 pt-1">
@@ -155,14 +164,14 @@ function CreateServerForm({ onClose }) {
           disabled={createMutation.isPending}
           className="flex-1 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
         >
-          {createMutation.isPending ? 'Creating…' : 'Create Server'}
+          {createMutation.isPending ? t('adminMinecraft.creating') : t('adminMinecraft.createServer')}
         </button>
         <button
           type="button"
           onClick={onClose}
           className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
         >
-          Cancel
+          {t('adminMinecraft.cancel')}
         </button>
       </div>
     </form>
@@ -172,6 +181,7 @@ function CreateServerForm({ onClose }) {
 // ─── Console Tab ──────────────────────────────────────────────────────────────
 
 function ConsoleTab({ server, wsConsoleLines }) {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const { data: initialLogs } = useMinecraftLogs(server.id);
   const sendCommand = useSendMinecraftCommand(server.id);
@@ -211,7 +221,7 @@ function ConsoleTab({ server, wsConsoleLines }) {
       await sendCommand.mutateAsync(input.trim());
       setInput('');
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to send command');
+      addNotification('error', err.response?.data?.error || t('adminMinecraft.sendCommandFailed'));
     }
   };
 
@@ -219,7 +229,7 @@ function ConsoleTab({ server, wsConsoleLines }) {
     <div className="flex flex-col h-96">
       <div className="flex-1 bg-gray-950 rounded-lg p-3 overflow-y-auto font-mono text-xs text-gray-300 space-y-0.5">
         {lines.length === 0 ? (
-          <p className="text-gray-600 italic">No output yet. Start the server to see logs.</p>
+          <p className="text-gray-600 italic">{t('adminMinecraft.consoleEmpty')}</p>
         ) : (
           lines.map((line, i) => (
             <div key={i} className="leading-5 whitespace-pre-wrap break-all">
@@ -236,7 +246,7 @@ function ConsoleTab({ server, wsConsoleLines }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={server.isRunning ? 'Type a command…' : 'Server is stopped'}
+          placeholder={server.isRunning ? t('adminMinecraft.typeCommand') : t('adminMinecraft.serverStopped')}
           disabled={!server.isRunning}
           className="flex-1 px-3 py-2 text-sm bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 font-mono"
         />
@@ -245,7 +255,7 @@ function ConsoleTab({ server, wsConsoleLines }) {
           disabled={!server.isRunning || !input.trim()}
           className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg transition-colors"
         >
-          Send
+          {t('adminMinecraft.send')}
         </button>
       </form>
     </div>
@@ -255,6 +265,7 @@ function ConsoleTab({ server, wsConsoleLines }) {
 // ─── Config Tab ───────────────────────────────────────────────────────────────
 
 function ConfigTab({ server }) {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const { data } = useMinecraftServer(server.id);
   const updateMutation = useUpdateMinecraftServer(server.id);
@@ -288,9 +299,9 @@ function ConfigTab({ server }) {
     e.preventDefault();
     try {
       await updateMutation.mutateAsync({ ...form, properties: propsForm });
-      addNotification('success', 'Configuration saved (restart server to apply)');
+      addNotification('success', t('adminMinecraft.configSaved'));
     } catch {
-      addNotification('error', 'Failed to save configuration');
+      addNotification('error', t('adminMinecraft.configSaveFailed'));
     }
   };
 
@@ -298,7 +309,7 @@ function ConfigTab({ server }) {
     <form onSubmit={handleSave} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Min RAM (MB)</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.minRam')}</label>
           <input
             type="number"
             min="256"
@@ -308,7 +319,7 @@ function ConfigTab({ server }) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Max RAM (MB)</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.maxRam')}</label>
           <input
             type="number"
             min="512"
@@ -335,15 +346,15 @@ function ConfigTab({ server }) {
             }`}
           />
         </button>
-        <span className="text-sm text-gray-300">Auto-start on server boot</span>
+        <span className="text-sm text-gray-300">{t('adminMinecraft.autoStart')}</span>
       </div>
 
       <hr className="border-gray-700" />
 
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">server.properties</p>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{t('adminMinecraft.serverProperties')}</p>
 
       <div>
-        <label className="block text-xs text-gray-400 mb-1">MOTD</label>
+        <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.motd')}</label>
         <input
           type="text"
           value={propsForm.motd ?? ''}
@@ -354,7 +365,7 @@ function ConfigTab({ server }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Max players</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.maxPlayers')}</label>
           <input
             type="number"
             min="1"
@@ -364,32 +375,32 @@ function ConfigTab({ server }) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Difficulty</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.difficulty')}</label>
           <select
             value={propsForm.difficulty ?? 'normal'}
             onChange={(e) => setPropsForm({ ...propsForm, difficulty: e.target.value })}
             className={inputClass}
           >
-            <option value="peaceful">Peaceful</option>
-            <option value="easy">Easy</option>
-            <option value="normal">Normal</option>
-            <option value="hard">Hard</option>
+            <option value="peaceful">{t('adminMinecraft.diffPeaceful')}</option>
+            <option value="easy">{t('adminMinecraft.diffEasy')}</option>
+            <option value="normal">{t('adminMinecraft.diffNormal')}</option>
+            <option value="hard">{t('adminMinecraft.diffHard')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Gamemode</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('adminMinecraft.gamemode')}</label>
           <select
             value={propsForm.gamemode ?? 'survival'}
             onChange={(e) => setPropsForm({ ...propsForm, gamemode: e.target.value })}
             className={inputClass}
           >
-            <option value="survival">Survival</option>
-            <option value="creative">Creative</option>
-            <option value="adventure">Adventure</option>
-            <option value="spectator">Spectator</option>
+            <option value="survival">{t('adminMinecraft.gmSurvival')}</option>
+            <option value="creative">{t('adminMinecraft.gmCreative')}</option>
+            <option value="adventure">{t('adminMinecraft.gmAdventure')}</option>
+            <option value="spectator">{t('adminMinecraft.gmSpectator')}</option>
           </select>
         </div>
         <div className="flex items-end pb-1 gap-3">
@@ -400,7 +411,7 @@ function ConfigTab({ server }) {
               onChange={(e) => setPropsForm({ ...propsForm, pvp: e.target.checked ? 'true' : 'false' })}
               className="w-4 h-4 rounded accent-blue-600"
             />
-            <span className="text-sm text-gray-300">PvP</span>
+            <span className="text-sm text-gray-300">{t('adminMinecraft.pvp')}</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -411,7 +422,7 @@ function ConfigTab({ server }) {
               }
               className="w-4 h-4 rounded accent-blue-600"
             />
-            <span className="text-sm text-gray-300">Online mode</span>
+            <span className="text-sm text-gray-300">{t('adminMinecraft.onlineMode')}</span>
           </label>
         </div>
       </div>
@@ -421,7 +432,7 @@ function ConfigTab({ server }) {
         disabled={updateMutation.isPending}
         className="w-full py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
       >
-        {updateMutation.isPending ? 'Saving…' : 'Save Configuration'}
+        {updateMutation.isPending ? t('adminMinecraft.savingConfig') : t('adminMinecraft.saveConfig')}
       </button>
     </form>
   );
@@ -430,6 +441,7 @@ function ConfigTab({ server }) {
 // ─── World Tab ────────────────────────────────────────────────────────────────
 
 function WorldTab({ server }) {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const importMutation = useImportMinecraftWorld(server.id);
   const [dragging, setDragging] = useState(false);
@@ -438,17 +450,17 @@ function WorldTab({ server }) {
   const handleFile = useCallback(
     async (file) => {
       if (!file || !file.name.endsWith('.zip')) {
-        addNotification('error', 'Please select a .zip file');
+        addNotification('error', t('adminMinecraft.selectZip'));
         return;
       }
       try {
         await importMutation.mutateAsync(file);
-        addNotification('success', 'World imported successfully. Start the server to load it.');
+        addNotification('success', t('adminMinecraft.worldImported'));
       } catch (err) {
-        addNotification('error', err.response?.data?.error || 'Failed to import world');
+        addNotification('error', err.response?.data?.error || t('adminMinecraft.importFailed'));
       }
     },
-    [importMutation, addNotification]
+    [importMutation, addNotification, t]
   );
 
   const handleDrop = (e) => {
@@ -462,14 +474,14 @@ function WorldTab({ server }) {
     <div className="space-y-4">
       {server.isRunning && (
         <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded-lg text-yellow-300 text-sm">
-          Stop the server before importing a world.
+          {t('adminMinecraft.stopBeforeImport')}
         </div>
       )}
 
       <p className="text-sm text-gray-400">
-        Import a world by uploading a ZIP file. The ZIP should contain a{' '}
-        <code className="bg-gray-700 px-1 rounded text-xs">world</code> folder at its root. Existing
-        world data will be replaced.
+        {t('adminMinecraft.worldImportInfoPrefix')}
+        <code className="bg-gray-700 px-1 rounded text-xs">{t('adminMinecraft.worldFolder')}</code>
+        {t('adminMinecraft.worldImportInfoSuffix')}
       </p>
 
       <div
@@ -483,7 +495,7 @@ function WorldTab({ server }) {
       >
         <FiUploadCloud size={32} className="mx-auto mb-2 text-gray-500" />
         <p className="text-sm text-gray-400">
-          {importMutation.isPending ? 'Importing…' : 'Drop world.zip here or click to browse'}
+          {importMutation.isPending ? t('adminMinecraft.importing') : t('adminMinecraft.dropWorldZip')}
         </p>
         <input
           ref={fileInputRef}
@@ -500,6 +512,7 @@ function WorldTab({ server }) {
 // ─── Server Detail Panel ──────────────────────────────────────────────────────
 
 function ServerDetail({ server, wsConsoleLines, onDeleted }) {
+  const { t } = useTranslation();
   const { addNotification } = useNotifications();
   const startMutation = useStartMinecraftServer();
   const stopMutation = useStopMinecraftServer();
@@ -511,7 +524,7 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
     try {
       await startMutation.mutateAsync(server.id);
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to start server');
+      addNotification('error', err.response?.data?.error || t('adminMinecraft.startFailed'));
     }
   };
 
@@ -519,24 +532,24 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
     try {
       await stopMutation.mutateAsync(server.id);
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to stop server');
+      addNotification('error', err.response?.data?.error || t('adminMinecraft.stopFailed'));
     }
   };
 
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(server.id);
-      addNotification('success', `Server "${server.name}" deleted`);
+      addNotification('success', t('adminMinecraft.serverDeleted', { name: server.name }));
       onDeleted();
     } catch (err) {
-      addNotification('error', err.response?.data?.error || 'Failed to delete server');
+      addNotification('error', err.response?.data?.error || t('adminMinecraft.deleteFailed'));
     }
   };
 
   const tabs = [
-    { id: 'console', label: 'Console', icon: FiTerminal },
-    { id: 'config', label: 'Config', icon: FiSettings },
-    { id: 'world', label: 'World', icon: FiUploadCloud },
+    { id: 'console', label: t('adminMinecraft.tabConsole'), icon: FiTerminal },
+    { id: 'config', label: t('adminMinecraft.tabConfig'), icon: FiSettings },
+    { id: 'world', label: t('adminMinecraft.tabWorld'), icon: FiUploadCloud },
   ];
 
   const isTransitioning = server.status === 'starting' || server.status === 'stopping';
@@ -548,7 +561,7 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
         <div>
           <h2 className="text-lg font-bold text-white">{server.name}</h2>
           <p className="text-sm text-gray-400">
-            Port {server.port} · PaperMC {server.paperVersion} · {server.maxRam} MB
+            {t('adminMinecraft.serverInfo', { port: server.port, version: server.paperVersion, ram: server.maxRam })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -560,7 +573,7 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white rounded-lg transition-colors"
             >
               <FiSquare size={14} />
-              Stop
+              {t('adminMinecraft.stop')}
             </button>
           ) : (
             <button
@@ -569,13 +582,13 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg transition-colors"
             >
               <FiPlay size={14} />
-              Start
+              {t('adminMinecraft.start')}
             </button>
           )}
           <button
             onClick={() => setConfirmDelete(true)}
             className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-            title="Delete server"
+            title={t('adminMinecraft.deleteServer')}
           >
             <FiTrash2 size={16} />
           </button>
@@ -611,9 +624,9 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-white">Delete {server.name}?</h3>
+            <h3 className="text-lg font-bold text-white">{t('adminMinecraft.deleteConfirmTitle', { name: server.name })}</h3>
             <p className="text-sm text-gray-400">
-              This will permanently delete the server directory and all world data. This cannot be undone.
+              {t('adminMinecraft.deleteConfirmBody')}
             </p>
             <div className="flex gap-3">
               <button
@@ -621,13 +634,13 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
                 disabled={deleteMutation.isPending}
                 className="flex-1 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
               >
-                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                {deleteMutation.isPending ? t('adminMinecraft.deleting') : t('adminMinecraft.delete')}
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="flex-1 py-2 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
               >
-                Cancel
+                {t('adminMinecraft.cancel')}
               </button>
             </div>
           </div>
@@ -640,6 +653,7 @@ function ServerDetail({ server, wsConsoleLines, onDeleted }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MinecraftPage() {
+  const { t } = useTranslation();
   const { data: servers = [], isLoading, refetch } = useMinecraftServers();
   const [selectedId, setSelectedId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -689,7 +703,7 @@ export default function MinecraftPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Minecraft Servers</h1>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{t('adminMinecraft.title')}</h1>
         <div className="flex gap-2">
           <button
             onClick={() => refetch()}
@@ -697,14 +711,14 @@ export default function MinecraftPage() {
             className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 disabled:opacity-50"
           >
             <FiRefreshCw className={isLoading ? 'animate-spin' : ''} size={16} />
-            <span className="hidden sm:inline text-sm">Refresh</span>
+            <span className="hidden sm:inline text-sm">{t('adminMinecraft.refresh')}</span>
           </button>
           <button
             onClick={() => setShowCreate((v) => !v)}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
           >
             {showCreate ? <FiX size={16} /> : <FiPlus size={16} />}
-            <span className="hidden sm:inline">{showCreate ? 'Cancel' : 'New Server'}</span>
+            <span className="hidden sm:inline">{showCreate ? t('adminMinecraft.cancel') : t('adminMinecraft.newServer')}</span>
           </button>
         </div>
       </div>
@@ -712,18 +726,18 @@ export default function MinecraftPage() {
       {/* Create form */}
       {showCreate && (
         <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mb-6">
-          <h2 className="text-base font-semibold text-white mb-4">New Minecraft Server</h2>
+          <h2 className="text-base font-semibold text-white mb-4">{t('adminMinecraft.newServerHeading')}</h2>
           <CreateServerForm onClose={() => setShowCreate(false)} />
         </div>
       )}
 
       {isLoading ? (
-        <div className="text-gray-400 text-sm">Loading servers…</div>
+        <div className="text-gray-400 text-sm">{t('adminMinecraft.loadingServers')}</div>
       ) : enrichedServers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <FiServer size={40} className="text-gray-600 mb-3" />
-          <p className="text-gray-400">No servers yet.</p>
-          <p className="text-gray-500 text-sm mt-1">Click "New Server" to create your first Minecraft server.</p>
+          <p className="text-gray-400">{t('adminMinecraft.noServers')}</p>
+          <p className="text-gray-500 text-sm mt-1">{t('adminMinecraft.noServersHint')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -743,7 +757,7 @@ export default function MinecraftPage() {
                   <span className="font-medium text-white">{server.name}</span>
                   <StatusBadge status={server.status} />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Port {server.port}</p>
+                <p className="text-xs text-gray-400 mt-1">{t('adminMinecraft.portLabel', { port: server.port })}</p>
               </button>
             ))}
           </div>
@@ -758,7 +772,7 @@ export default function MinecraftPage() {
               />
             ) : (
               <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-500 text-sm">
-                Select a server to manage it.
+                {t('adminMinecraft.selectServer')}
               </div>
             )}
           </div>

@@ -7,8 +7,10 @@ import { FiCheck, FiX, FiDownload } from 'react-icons/fi';
 import Confirm from '@/components/Confirm';
 import { useSystemRequirements, useInstallRequirement } from '@/lib/api/system';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function SystemRequirementsCheck() {
+  const { t } = useTranslation();
   const { data: requirements, isLoading, refetch } = useSystemRequirements();
   const installMutation = useInstallRequirement();
   const [installing, setInstalling] = useState(null);
@@ -24,11 +26,11 @@ export default function SystemRequirementsCheck() {
     try {
       setInstalling(showConfirm);
       const result = await installMutation.mutateAsync(showConfirm);
-      addNotification('success', result.message || `${showConfirm} installation started`);
+      addNotification('success', result.message || t('adminHealth.installStarted', { name: showConfirm }));
       // Recheck requirements after a delay
       setTimeout(refetch, 2000);
     } catch (error) {
-      addNotification('error', error.response?.data?.message || error.message || `Failed to install ${showConfirm}`);
+      addNotification('error', error.response?.data?.message || error.message || t('adminHealth.installFailed', { name: showConfirm }));
     } finally {
       setInstalling(null);
       setShowConfirm(null);
@@ -49,14 +51,14 @@ export default function SystemRequirementsCheck() {
   return (
     <>
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-white mb-2">System Requirements</h2>
+        <h2 className="text-lg font-semibold text-white mb-2">{t('adminHealth.systemRequirements')}</h2>
         <p className="text-sm text-gray-400">
-          {installedCount}/{totalCount} required programs installed
+          {t('adminHealth.programsInstalled', { installed: installedCount, total: totalCount })}
         </p>
       </div>
 
       {totalCount === 0 ? (
-        <p className="text-sm text-gray-500">No system requirements found</p>
+        <p className="text-sm text-gray-500">{t('adminHealth.noRequirements')}</p>
       ) : (
         <div className="space-y-3">
           {requirements.map((req) => (
@@ -84,22 +86,22 @@ export default function SystemRequirementsCheck() {
                       }`}
                     >
                       <FiDownload size={16} />
-                      {installing === req.name ? 'Installing...' : 'Install'}
+                      {installing === req.name ? t('adminHealth.installing') : t('adminHealth.install')}
                     </button>
                   ) : (
-                    <Confirm message={`Install ${req.name}?`} onCancel={() => setShowConfirm(null)} onConfirm={handleConfirmInstall} isLoading={installing === req.name} />
+                    <Confirm message={t('adminHealth.installQuestion', { name: req.name })} onCancel={() => setShowConfirm(null)} onConfirm={handleConfirmInstall} isLoading={installing === req.name} />
                   )}
                 </div>
               )}
 
-              {!req.installed && !req.installable && <p className="text-sm text-red-400 font-medium">Cannot auto-install</p>}
+              {!req.installed && !req.installable && <p className="text-sm text-red-400 font-medium">{t('adminHealth.cannotAutoInstall')}</p>}
             </div>
           ))}
         </div>
       )}
 
       <button onClick={() => refetch()} className="mt-4 w-full px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 font-medium">
-        Refresh
+        {t('adminHealth.refresh')}
       </button>
     </>
   );

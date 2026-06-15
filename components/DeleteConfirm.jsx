@@ -3,8 +3,10 @@
 'use client';
 
 import Btn from '@/components/ui/Btn';
+import { useTranslation } from '@/components/LanguageProvider';
 
 export default function DeleteConfirm({ username, onCancel, onConfirm, isLoading = false }) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -18,11 +20,13 @@ export default function DeleteConfirm({ username, onCancel, onConfirm, isLoading
       }}
     >
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Delete User</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{t('adminAccounts.deleteUser')}</h3>
       </div>
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
-          Are you sure you want to delete <strong style={{ color: 'var(--text)' }}>{username}</strong>?
+          {t('adminAccounts.deleteConfirmQuestion').split('{username}').flatMap((part, i) =>
+            i === 0 ? [part] : [<strong key={i} style={{ color: 'var(--text)' }}>{username}</strong>, part],
+          )}
         </p>
         <div
           style={{
@@ -34,17 +38,17 @@ export default function DeleteConfirm({ username, onCancel, onConfirm, isLoading
             color: 'var(--danger)',
           }}
         >
-          <p style={{ fontWeight: 700, margin: '0 0 4px' }}>This action will:</p>
+          <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{t('adminAccounts.deleteActionTitle')}</p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>Permanently delete this user account</li>
-            <li>Delete all files in their personal folder</li>
-            <li>Remove all associated permissions and sessions</li>
+            <li>{t('adminAccounts.deleteAction1')}</li>
+            <li>{t('adminAccounts.deleteAction2')}</li>
+            <li>{t('adminAccounts.deleteAction3')}</li>
           </ul>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>This action cannot be undone.</p>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>{t('adminAccounts.deleteCannotUndo')}</p>
       </div>
       <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-        <Btn variant="outline" size="md" onClick={onCancel} disabled={isLoading} style={{ flex: 1, justifyContent: 'center' }}>Cancel</Btn>
+        <Btn variant="outline" size="md" onClick={onCancel} disabled={isLoading} style={{ flex: 1, justifyContent: 'center' }}>{t('adminAccounts.cancel')}</Btn>
         <Btn
           variant="danger"
           size="md"
@@ -52,7 +56,7 @@ export default function DeleteConfirm({ username, onCancel, onConfirm, isLoading
           disabled={isLoading}
           style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
         >
-          {isLoading ? 'Deleting…' : 'Delete User'}
+          {isLoading ? t('adminAccounts.deleting') : t('adminAccounts.deleteUser')}
         </Btn>
       </div>
     </div>

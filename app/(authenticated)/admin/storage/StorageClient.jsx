@@ -9,6 +9,7 @@ import Tabs from '@/components/ui/Tabs';
 import FolderTree from './FolderTree';
 import CategoryBreakdown from './CategoryBreakdown';
 import DuplicatesList from './DuplicatesList';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -33,6 +34,7 @@ function formatDuration(ms) {
 }
 
 export default function StorageClient() {
+  const { t } = useTranslation();
   const { subscribe, connected } = useWebSocket();
 
   const [status, setStatus] = useState('idle');
@@ -75,18 +77,18 @@ export default function StorageClient() {
           break;
         case 'error':
           setStatus('error');
-          setError(p.message || 'Scan failed');
+          setError(p.message || t('adminStorage.scanFailed'));
           break;
         case 'denied':
           setStatus('denied');
-          setError(p.reason || 'Access denied');
+          setError(p.reason || t('adminStorage.accessDenied'));
           break;
         default:
           break;
       }
     });
     return unsub;
-  }, [subscribe]);
+  }, [subscribe, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,9 +121,9 @@ export default function StorageClient() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Storage Usage</h1>
+          <h1 className="text-2xl font-bold text-white">{t('adminStorage.title')}</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Live recursive scan of the upload directory. The tree grows as folders are measured. Leaving the page aborts the scan.
+            {t('adminStorage.intro')}
           </p>
         </div>
         <StatusPill
@@ -131,19 +133,22 @@ export default function StorageClient() {
           totalBytes={totalBytes}
           doneInfo={doneInfo}
           error={error}
+          t={t}
         />
       </div>
 
       {status === 'scanning' && scanningPath && (
         <div className="text-xs text-gray-500 truncate">
-          Scanning <span className="text-gray-400 font-mono">{scanningPath}</span>…
+          {t('adminStorage.scanningPath').split('{path}').flatMap((part, i) =>
+            i === 0 ? [part] : [<span key={i} className="text-gray-400 font-mono">{scanningPath}</span>, part],
+          )}
         </div>
       )}
 
       <Tabs
         tabs={[
-          { key: 'overview', label: 'Folders & types', icon: FiFolder },
-          { key: 'duplicates', label: 'Duplicates', icon: FiCopy, badge: duplicates.length },
+          { key: 'overview', label: t('adminStorage.tabFoldersTypes'), icon: FiFolder },
+          { key: 'duplicates', label: t('adminStorage.tabDuplicates'), icon: FiCopy, badge: duplicates.length },
         ]}
         active={activeTab}
         onChange={setActiveTab}
@@ -153,8 +158,8 @@ export default function StorageClient() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Folder tree</h2>
-              <span className="text-xs text-gray-400 tabular-nums">{formatBytes(totalBytes)} total</span>
+              <h2 className="text-sm font-semibold text-white">{t('adminStorage.folderTree')}</h2>
+              <span className="text-xs text-gray-400 tabular-nums">{t('adminStorage.totalSuffix', { size: formatBytes(totalBytes) })}</span>
             </div>
             <FolderTree folders={folders} lockedPaths={lockedPaths} usernames={usernames} />
           </div>
@@ -162,7 +167,7 @@ export default function StorageClient() {
           <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden self-start">
             <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
               <FiPieChart className="text-gray-400" size={16} />
-              <h2 className="text-sm font-semibold text-white">By file type</h2>
+              <h2 className="text-sm font-semibold text-white">{t('adminStorage.byFileType')}</h2>
             </div>
             <div className="p-4">
               <CategoryBreakdown categories={categories} totalBytes={totalBytes} />
@@ -175,8 +180,8 @@ export default function StorageClient() {
         <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
             <FiCopy className="text-amber-400" size={16} />
-            <h2 className="text-sm font-semibold text-white">Duplicates</h2>
-            <span className="text-xs text-gray-500">matched by name + size</span>
+            <h2 className="text-sm font-semibold text-white">{t('adminStorage.duplicates')}</h2>
+            <span className="text-xs text-gray-500">{t('adminStorage.matchedByNameSize')}</span>
           </div>
           <DuplicatesList duplicates={duplicates} usernames={usernames} />
         </div>
@@ -185,31 +190,31 @@ export default function StorageClient() {
   );
 }
 
-const StatusPill = memo(function StatusPill({ status, connected, filesScanned, totalBytes, doneInfo, error }) {
+const StatusPill = memo(function StatusPill({ status, connected, filesScanned, totalBytes, doneInfo, error, t }) {
   let icon = null;
   let label = '';
   let color = 'bg-gray-700 text-gray-300';
 
   if (!connected) {
     icon = <FiAlertTriangle size={14} />;
-    label = 'Disconnected';
+    label = t('adminStorage.disconnected');
     color = 'bg-red-900/40 text-red-300 border border-red-700/50';
   } else if (status === 'scanning') {
     icon = <FiActivity size={14} className="animate-pulse" />;
-    label = `Scanning · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}`;
+    label = t('adminStorage.scanningStatus', { files: filesScanned.toLocaleString(), size: formatBytesShort(totalBytes) });
     color = 'bg-blue-900/40 text-blue-200 border border-blue-700/50';
   } else if (status === 'done') {
     icon = <FiCheckCircle size={14} />;
-    label = `Done · ${filesScanned.toLocaleString()} files · ${formatBytesShort(totalBytes)}${
-      doneInfo ? ` · ${formatDuration(doneInfo.durationMs)}` : ''
-    }`;
+    label = doneInfo
+      ? t('adminStorage.doneStatusDuration', { files: filesScanned.toLocaleString(), size: formatBytesShort(totalBytes), duration: formatDuration(doneInfo.durationMs) })
+      : t('adminStorage.doneStatus', { files: filesScanned.toLocaleString(), size: formatBytesShort(totalBytes) });
     color = 'bg-green-900/40 text-green-200 border border-green-700/50';
   } else if (status === 'error' || status === 'denied') {
     icon = <FiAlertTriangle size={14} />;
-    label = error || 'Error';
+    label = error || t('adminStorage.error');
     color = 'bg-red-900/40 text-red-300 border border-red-700/50';
   } else {
-    label = 'Idle';
+    label = t('adminStorage.idle');
   }
 
   return (
