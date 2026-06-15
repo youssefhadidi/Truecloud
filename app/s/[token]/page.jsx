@@ -6,12 +6,12 @@ import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState 
 import dynamic from 'next/dynamic';
 import {
   FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList,
-  FiHome, FiChevronRight, FiCheckSquare,
+  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2,
 } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
-import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicShares';
+import { useShare, useShareFiles, useGetShareFolders, useDeleteShareFile } from '@/lib/api/publicShares';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
@@ -53,6 +53,8 @@ export default function SharePage({ params }) {
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [shareFiles, setShareFiles] = useState([]);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Fetch share metadata
   const {
     data: shareResponse,
@@ -119,6 +121,63 @@ export default function SharePage({ params }) {
   }, [shareState.selectedFiles, shareState.setSelectedFiles]);
 
   const getShareFoldersMutation = useGetShareFolders();
+  const deleteShareFileMutation = useDeleteShareFile();
+
+  // Reset bulk-delete confirmation whenever selection mode is toggled off
+  useEffect(() => {
+    if (!shareState.selectionMode) setBulkDeleteConfirming(false);
+  }, [shareState.selectionMode]);
+
+  const selectableFiles = useMemo(
+    () => shareState.sortedFilteredFiles || [],
+    [shareState.sortedFilteredFiles],
+  );
+  const allSelected =
+    selectableFiles.length > 0 && shareState.selectedFiles.length >= selectableFiles.length;
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      shareState.setSelectedFiles([]);
+    } else {
+      shareState.setSelectedFiles(selectableFiles.map((f) => f.name));
+    }
+  }, [allSelected, selectableFiles, shareState]);
+
+  const handleBulkDownload = useCallback(async () => {
+    const filesToDownload = selectableFiles.filter((f) => shareState.selectedFiles.includes(f.name));
+    for (let i = 0; i < filesToDownload.length; i++) {
+      await operations.handleDownload(filesToDownload[i]);
+      if (i < filesToDownload.length - 1) await new Promise((r) => setTimeout(r, 300));
+    }
+    shareState.setSelectionMode(false);
+    shareState.setSelectedFiles([]);
+  }, [selectableFiles, operations, shareState]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (bulkDeleting) return;
+    setBulkDeleting(true);
+    setBulkDeleteConfirming(false);
+    let succeeded = 0;
+    let failed = 0;
+    for (const name of shareState.selectedFiles) {
+      try {
+        await deleteShareFileMutation.mutateAsync({
+          token,
+          sharePassword: submittedPassword,
+          fileName: name,
+          currentSubPath: shareState.currentSubPath,
+        });
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkDeleting(false);
+    shareState.setSelectionMode(false);
+    shareState.setSelectedFiles([]);
+    if (failed === 0) shareState.addNotification('success', t('notify.deletedItems', { count: succeeded }));
+    else shareState.addNotification('warning', t('notify.deletedSomeFailed', { succeeded, failed }));
+  }, [bulkDeleting, deleteShareFileMutation, token, submittedPassword, shareState, t]);
 
   const fetchShareFolders = useCallback(async (path) => {
     return getShareFoldersMutation.mutateAsync({
@@ -412,26 +471,68 @@ export default function SharePage({ params }) {
                 multiple
                 onChange={operations.handleUploadFromInput}
               />
+            </>
+          )}
+
+          <Btn
+            variant={shareState.selectionMode ? 'primary' : 'surface'}
+            size="sm"
+            onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+          >
+            <FiCheckSquare size={13} />
+            {shareState.selectionMode ? t('files.selecting') : t('common.select')}
+          </Btn>
+
+          {shareState.selectionMode && (
+            <>
+              <Divider vertical />
+              <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
+                {t('files.nSelected', { count: shareState.selectedFiles.length })}
+              </span>
               <Btn
-                variant={shareState.selectionMode ? 'primary' : 'surface'}
+                variant="surface"
                 size="sm"
-                onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+                onClick={handleToggleSelectAll}
+                disabled={selectableFiles.length === 0 || bulkDeleting}
               >
-                <FiCheckSquare size={13} />
-                {shareState.selectionMode ? t('files.selecting') : t('common.select')}
+                {allSelected ? <FiSquare size={13} /> : <FiCheckSquare size={13} />}
+                {allSelected ? t('files.deselectAll') : t('files.selectAll')}
               </Btn>
-              {shareState.selectionMode && (
+              <IconBtn
+                icon={FiDownload}
+                title={t('files.downloadSelected')}
+                disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
+                onClick={handleBulkDownload}
+              />
+              {shareResponse.allowEditing && (
                 <>
-                  <Divider vertical />
-                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
-                    {t('files.nSelected', { count: shareState.selectedFiles.length })}
-                  </span>
                   <IconBtn
                     icon={FiFolder}
                     title={t('files.moveSelected')}
-                    disabled={shareState.selectedFiles.length === 0}
+                    disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
                     onClick={() => setMoveModalOpen(true)}
                   />
+                  {bulkDeleteConfirming ? (
+                    <>
+                      <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
+                        {t('files.deleteN', { count: shareState.selectedFiles.length })}
+                      </span>
+                      <Btn variant="danger" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                        {bulkDeleting ? t('files.deleting') : t('common.confirm')}
+                      </Btn>
+                      <Btn variant="ghost" size="sm" onClick={() => setBulkDeleteConfirming(false)} disabled={bulkDeleting}>
+                        {t('common.cancel')}
+                      </Btn>
+                    </>
+                  ) : (
+                    <IconBtn
+                      icon={FiTrash2}
+                      title={t('files.deleteSelected')}
+                      danger
+                      disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
+                      onClick={() => setBulkDeleteConfirming(true)}
+                    />
+                  )}
                 </>
               )}
             </>
