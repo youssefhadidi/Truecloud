@@ -11,7 +11,7 @@ import {
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
-import { useShare, useShareFiles, useGetShareFolders, useDeleteShareFile } from '@/lib/api/publicShares';
+import { useShare, useShareFiles, useDeleteShareFile } from '@/lib/api/publicShares';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
@@ -25,7 +25,6 @@ const Viewer3D = dynamic(() => import('@/components/files/Viewer3D'), { ssr: fal
 const XlsxViewer = dynamic(() => import('@/components/files/XlsxViewer'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div> });
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
-const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 function LoadingPanel({ label = 'Loading…' }) {
   return (
@@ -52,7 +51,6 @@ export default function SharePage({ params }) {
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [shareFiles, setShareFiles] = useState([]);
-  const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // Fetch share metadata
@@ -120,7 +118,6 @@ export default function SharePage({ params }) {
     shareState.setSelectedFiles(newSelected);
   }, [shareState.selectedFiles, shareState.setSelectedFiles]);
 
-  const getShareFoldersMutation = useGetShareFolders();
   const deleteShareFileMutation = useDeleteShareFile();
 
   // Reset bulk-delete confirmation whenever selection mode is toggled off
@@ -178,26 +175,6 @@ export default function SharePage({ params }) {
     if (failed === 0) shareState.addNotification('success', t('notify.deletedItems', { count: succeeded }));
     else shareState.addNotification('warning', t('notify.deletedSomeFailed', { succeeded, failed }));
   }, [bulkDeleting, deleteShareFileMutation, token, submittedPassword, shareState, t]);
-
-  const fetchShareFolders = useCallback(async (path) => {
-    return getShareFoldersMutation.mutateAsync({
-      token,
-      submittedPassword,
-      path,
-    });
-  }, [getShareFoldersMutation, token, submittedPassword]);
-
-  const handleConfirmMove = async (destinationPath) => {
-    if (destinationPath === shareState.currentSubPath) {
-      shareState.addNotification('error', t('notify.selectDifferentDestination'));
-      return;
-    }
-    const ok = await operations.moveFiles(shareState.selectedFiles, destinationPath);
-    if (ok) {
-      shareState.setSelectionMode(false);
-      setMoveModalOpen(false);
-    }
-  };
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -506,12 +483,6 @@ export default function SharePage({ params }) {
               />
               {shareResponse.allowEditing && (
                 <>
-                  <IconBtn
-                    icon={FiFolder}
-                    title={t('files.moveSelected')}
-                    disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
-                    onClick={() => setMoveModalOpen(true)}
-                  />
                   {bulkDeleteConfirming ? (
                     <>
                       <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
@@ -829,20 +800,6 @@ export default function SharePage({ params }) {
                     }
                   : undefined
               }
-            />
-          </Suspense>
-        )}
-
-        {/* Move Modal */}
-        {moveModalOpen && (
-          <Suspense fallback={null}>
-            <MoveModal
-              open={moveModalOpen}
-              title={t('sharePage.moveNItems', { count: shareState.selectedFiles.length })}
-              initialPath={shareState.currentSubPath}
-              fetchFolders={fetchShareFolders}
-              onConfirm={handleConfirmMove}
-              onClose={() => setMoveModalOpen(false)}
             />
           </Suspense>
         )}
