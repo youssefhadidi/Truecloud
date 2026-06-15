@@ -110,19 +110,16 @@ export default function SharePage({ params }) {
   });
 
   const selectedFileSet = useMemo(() => new Set(shareState.selectedFiles), [shareState.selectedFiles]);
-
-  const toggleSelection = useCallback((file) => {
-    const newSelected = shareState.selectedFiles.includes(file.name)
-      ? shareState.selectedFiles.filter((name) => name !== file.name)
-      : [...shareState.selectedFiles, file.name];
-    shareState.setSelectedFiles(newSelected);
-  }, [shareState.selectedFiles, shareState.setSelectedFiles]);
+  const lastSelectedRef = useRef(null);
 
   const deleteShareFileMutation = useDeleteShareFile();
 
-  // Reset bulk-delete confirmation whenever selection mode is toggled off
+  // Reset bulk-delete confirmation and selection anchor when selection mode is toggled off
   useEffect(() => {
-    if (!shareState.selectionMode) setBulkDeleteConfirming(false);
+    if (!shareState.selectionMode) {
+      setBulkDeleteConfirming(false);
+      lastSelectedRef.current = null;
+    }
   }, [shareState.selectionMode]);
 
   const selectableFiles = useMemo(
@@ -131,6 +128,36 @@ export default function SharePage({ params }) {
   );
   const allSelected =
     selectableFiles.length > 0 && shareState.selectedFiles.length >= selectableFiles.length;
+
+  // Ctrl/Cmd-click toggles a single item; Shift-click selects a contiguous range.
+  // Any selection auto-enters selection mode (mirrors the authenticated files view).
+  const toggleSelection = useCallback((file, mods = {}) => {
+    const { ctrl = false, shift = false } = mods;
+    const names = shareState.selectedFiles;
+
+    if (shift && lastSelectedRef.current && lastSelectedRef.current !== file.name) {
+      const fromIdx = selectableFiles.findIndex((f) => f.name === lastSelectedRef.current);
+      const toIdx = selectableFiles.findIndex((f) => f.name === file.name);
+      if (fromIdx >= 0 && toIdx >= 0) {
+        const [a, b] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+        const rangeNames = selectableFiles.slice(a, b + 1).map((f) => f.name);
+        const merged = Array.from(new Set([...names, ...rangeNames]));
+        shareState.setSelectedFiles(merged);
+        lastSelectedRef.current = file.name;
+        if (merged.length > 0 && !shareState.selectionMode) shareState.setSelectionMode(true);
+        return;
+      }
+    }
+
+    const next = names.includes(file.name)
+      ? names.filter((n) => n !== file.name)
+      : [...names, file.name];
+    shareState.setSelectedFiles(next);
+    lastSelectedRef.current = next.includes(file.name) ? file.name : null;
+
+    if (next.length > 0 && !shareState.selectionMode) shareState.setSelectionMode(true);
+    else if (next.length === 0 && shareState.selectionMode && ctrl) shareState.setSelectionMode(false);
+  }, [shareState, selectableFiles]);
 
   const handleToggleSelectAll = useCallback(() => {
     if (allSelected) {
@@ -175,6 +202,100 @@ export default function SharePage({ params }) {
     if (failed === 0) shareState.addNotification('success', t('notify.deletedItems', { count: succeeded }));
     else shareState.addNotification('warning', t('notify.deletedSomeFailed', { succeeded, failed }));
   }, [bulkDeleting, deleteShareFileMutation, token, submittedPassword, shareState, t]);
+
+  const allowEditing = shareResponse?.allowEditing ?? false;
+
+  // Keyboard shortcuts, mirroring the authenticated files view. Skips when typing
+  // in an input or when an inline editor / media viewer owns the keystroke.
+  useEffect(() => {
+    const isTyping = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+
+    const inlineEditing = () =>
+      Boolean(shareState.creatingFolder || shareState.renamingFile || shareState.deletingFile);
+
+    const onKey = (e) => {
+      if (e.defaultPrevented) return;
+      if (isTyping(e.target)) return;
+
+      // Escape — exit selection mode (defer to media viewer / inline editors)
+      if (e.key === 'Escape') {
+        if (shareState.viewerFile || inlineEditing()) return;
+        if (shareState.selectionMode) {
+          e.preventDefault();
+          shareState.setSelectionMode(false);
+          shareState.setSelectedFiles([]);
+        }
+        return;
+      }
+
+      if (shareState.viewerFile) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+      const { altKey: alt, shiftKey: shift } = e;
+
+      // Ctrl/Cmd+A — select all / deselect all in current folder
+      if (ctrl && !alt && !shift && (e.key === 'a' || e.key === 'A')) {
+        if (selectableFiles.length === 0 || inlineEditing()) return;
+        e.preventDefault();
+        if (!shareState.selectionMode) shareState.setSelectionMode(true);
+        if (allSelected) shareState.setSelectedFiles([]);
+        else shareState.setSelectedFiles(selectableFiles.map((f) => f.name));
+        return;
+      }
+
+      if (inlineEditing()) return;
+
+      // Delete — two-step bulk delete (first press confirms, second deletes)
+      if (!ctrl && !alt && !shift && e.key === 'Delete') {
+        if (!allowEditing) return;
+        if (!shareState.selectionMode || shareState.selectedFiles.length === 0 || bulkDeleting) return;
+        e.preventDefault();
+        if (bulkDeleteConfirming) handleBulkDelete();
+        else setBulkDeleteConfirming(true);
+        return;
+      }
+
+      // F2 — rename the single selected file
+      if (!ctrl && !alt && !shift && e.key === 'F2') {
+        if (!allowEditing) return;
+        if (shareState.selectedFiles.length !== 1) return;
+        const file = selectableFiles.find((f) => f.name === shareState.selectedFiles[0]);
+        if (!file) return;
+        e.preventDefault();
+        operations.initiateRename(file);
+        return;
+      }
+
+      if (ctrl || alt || shift) return;
+
+      // g / l — switch grid / list view
+      if (e.key === 'g' || e.key === 'G') {
+        e.preventDefault();
+        shareState.setViewMode('grid');
+        return;
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        shareState.setViewMode('list');
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    shareState,
+    operations,
+    allowEditing,
+    selectableFiles,
+    allSelected,
+    bulkDeleteConfirming,
+    bulkDeleting,
+    handleBulkDelete,
+  ]);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();

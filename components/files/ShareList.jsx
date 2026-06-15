@@ -240,7 +240,10 @@ function ShareList({
             WebkitTapHighlightColor: 'transparent',
             transition: 'background 120ms',
           }}
-          onClick={() => {
+          onClick={(e) => {
+            const ctrl = e.ctrlKey || e.metaKey;
+            const shift = e.shiftKey;
+            if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
             if (selectionMode) { onToggleSelect?.(file); return; }
             if (shouldShowActions(file.name)) return;
             onFileClick(file);

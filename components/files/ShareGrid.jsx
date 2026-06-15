@@ -213,7 +213,10 @@ const GridItem = memo(
           <div
             className="tc-grid-card"
             style={cardBase}
-            onClick={() => {
+            onClick={(e) => {
+              const ctrl = e.ctrlKey || e.metaKey;
+              const shift = e.shiftKey;
+              if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(item, { ctrl, shift }); return; }
               if (selectionMode) { onToggleSelect?.(item); return; }
               if (isDeletingFile || isRenamingFile || shouldShowActions(item.name)) return;
               onFileClick(item);
@@ -381,6 +384,9 @@ const GridItem = memo(
                 cursor: selectionMode || isViewableFile(item) ? 'pointer' : 'default',
               }}
               onClick={(e) => {
+                const ctrl = e.ctrlKey || e.metaKey;
+                const shift = e.shiftKey;
+                if (ctrl || shift) { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(item, { ctrl, shift }); return; }
                 if (selectionMode) {
                   e.stopPropagation();
                   onToggleSelect?.(item);
