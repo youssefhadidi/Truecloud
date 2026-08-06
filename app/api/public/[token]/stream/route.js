@@ -14,6 +14,7 @@ import {
   remuxMkvToMp4,
 } from '@/lib/ffmpegUtils';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { parseRangeHeader } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -167,10 +168,20 @@ export async function GET(req, { params }) {
     const fileSize = fileStats.size;
     const mimeType = mime.lookup(streamPath) || 'application/octet-stream';
 
-    // Parse range header
-    const range = req.headers.get('range');
+    // Parse range header. Handles suffix ranges (`bytes=-N`), which browsers use
+    // to locate the `moov` atom of a non-faststart MP4 — see lib/httpRange.js.
+    const parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
 
-    if (!range) {
+    if (parsedRange?.unsatisfiable) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${fileSize}`,
+        },
+      });
+    }
+
+    if (!parsedRange) {
       return new NextResponse(
         nodeToWebStream(fs.createReadStream(streamPath)),
         {
@@ -183,24 +194,7 @@ export async function GET(req, { params }) {
       );
     }
 
-    // Parse range and clamp to valid bounds
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10) || 0;
-    const end = Math.min(
-      parts[1] ? parseInt(parts[1], 10) : fileSize - 1,
-      fileSize - 1
-    );
-
-    // Reject unsatisfiable ranges (includes 0-byte files with any range request)
-    if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
-      return new NextResponse(null, {
-        status: 416,
-        headers: {
-          'Content-Range': `bytes */${fileSize}`,
-        },
-      });
-    }
-
+    const { start, end } = parsedRange;
     const chunkSize = end - start + 1;
 
     return new NextResponse(

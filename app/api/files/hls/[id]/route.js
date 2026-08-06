@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { getHlsOutputDir } from '@/lib/hlsManager';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { parseRangeHeader } from '@/lib/httpRange';
 import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -129,12 +130,17 @@ export async function GET(req, { params }) {
       }
 
       const fileSize = segmentStat.size;
-      const range = req.headers.get('range');
+      const parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
 
-      if (range) {
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10) || 0;
-        const end = Math.min(parts[1] ? parseInt(parts[1], 10) : fileSize - 1, fileSize - 1);
+      if (parsedRange?.unsatisfiable) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${fileSize}` },
+        });
+      }
+
+      if (parsedRange) {
+        const { start, end } = parsedRange;
         const chunkSize = end - start + 1;
 
         return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { start, end })), {
