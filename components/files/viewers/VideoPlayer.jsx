@@ -2,14 +2,32 @@
 
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { FiClock, FiAlertTriangle, FiDownload } from 'react-icons/fi';
+import { FiClock, FiAlertTriangle, FiDownload, FiMessageSquare } from 'react-icons/fi';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
+import { useTranslation } from '@/components/LanguageProvider';
 
 function getExt(filename) {
   const dot = filename.lastIndexOf('.');
   return dot >= 0 ? filename.slice(dot).toLowerCase() : '';
+}
+
+/**
+ * Name a subtitle track for the menu. Prefers the embedded title ("English
+ * (SDH)"), then the language rendered in the *viewer's* locale — so a French UI
+ * shows "Anglais", not "English".
+ */
+function subtitleLabel(track, uiLang) {
+  if (track.title) return track.title;
+  if (track.lang) {
+    try {
+      return new Intl.DisplayNames([uiLang], { type: 'language' }).of(track.lang) || track.lang.toUpperCase();
+    } catch {
+      return track.lang.toUpperCase();
+    }
+  }
+  return `Track ${track.id + 1}`;
 }
 
 /* ─── Visual atoms (token-aware) ────────────────────────── */
@@ -197,12 +215,119 @@ function StateFailed({ onDownload, onRetry }) {
   );
 }
 
+/**
+ * Subtitle menu. The browser's own CC menu would work, but it is unstyled and
+ * looks different in every engine, which sits badly next to the player's own
+ * badges — so the <track> elements stay hidden from it and this drives them
+ * through the TextTrack API instead.
+ */
+function SubtitlePicker({ tracks, selected, onSelect, uiLang }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocClick = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  if (!tracks.length) return null;
+
+  const rowStyle = (active) => ({
+    display: 'block',
+    width: '100%',
+    textAlign: 'left',
+    padding: '7px 14px',
+    fontSize: 12,
+    fontWeight: active ? 600 : 500,
+    color: active ? 'var(--accent)' : 'rgba(255,255,255,0.88)',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
+  });
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Subtitles"
+        aria-label="Subtitles"
+        aria-expanded={open}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: selected >= 0 ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.18)',
+          borderRadius: 8,
+          padding: '5px 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: '0.04em',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          backdropFilter: 'blur(6px)',
+        }}
+      >
+        <FiMessageSquare size={12} /> CC
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            minWidth: 168,
+            maxHeight: 260,
+            overflowY: 'auto',
+            background: 'rgba(18,18,20,0.96)',
+            border: '1px solid rgba(255,255,255,0.14)',
+            borderRadius: 10,
+            padding: '5px 0',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 5,
+          }}
+        >
+          <button style={rowStyle(selected < 0)} onClick={() => { onSelect(-1); setOpen(false); }}>
+            Off
+          </button>
+          {tracks.map((track) => (
+            <button
+              key={track.id}
+              style={rowStyle(selected === track.id)}
+              onClick={() => { onSelect(track.id); setOpen(false); }}
+            >
+              {subtitleLabel(track, uiLang)}
+              {track.source === 'sidecar' && (
+                <span style={{ opacity: 0.5, fontWeight: 500 }}> · file</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Player ─────────────────────────────────────────────── */
 
 export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const [status, setStatus] = useState(null); // null | 'pending' | 'transcoding' | 'ready' | 'native' | 'disabled' | 'failed'
   const [progress, setProgress] = useState(0);
   const [hlsUrl, setHlsUrl] = useState(null);
+  const [subtitles, setSubtitles] = useState([]);
+  // null means "not chosen yet", which resolves to the locale default below.
+  // -1 is an explicit Off. Keeping them distinct is what lets the default apply
+  // without an effect that would fight the viewer's own choice.
+  const [selectedSub, setSelectedSub] = useState(null);
   const pollRef = useRef(null);
   const triggeredRef = useRef(false);
   const mountedRef = useRef(true);
@@ -210,14 +335,84 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const hlsRef = useRef(null);
   const triggerAbortRef = useRef(null);
 
+  const { lang } = useTranslation();
   const fileExt = getExt(file.name);
   const streamUrl = getFileUrl(file, 'video');
+
+  // The path the folder-lock PIN is keyed on — the file itself, not its folder.
+  const targetPath = currentPath ? `${currentPath}/${file.name || file.id}` : file.name || file.id;
 
   useLayoutEffect(() => {
     setStatus(null);
     setProgress(0);
     setHlsUrl(null);
+    setSubtitles([]);
+    setSelectedSub(null);
   }, [file.id]);
+
+  // Discover subtitle tracks. Independent of the transcode state machine: the
+  // list comes from the source file, so it is valid whether playback ends up
+  // native or HLS, and it costs one ffprobe.
+  useEffect(() => {
+    if (shareToken) return undefined; // share links don't expose the subtitle API
+
+    const ac = new AbortController();
+    const params = new URLSearchParams({ path: currentPath || '' });
+    const listUrl = appendFolderPinToUrl(
+      `/api/files/subtitles/${encodeURIComponent(file.id)}?${params}`,
+      targetPath,
+    );
+
+    fetch(listUrl, { signal: ac.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (ac.signal.aborted || !data) return;
+        setSubtitles((data.tracks || []).filter((t) => t.available));
+      })
+      .catch(() => {}); // no subtitles is a normal outcome, not an error
+
+    return () => ac.abort();
+  }, [file.id, currentPath, shareToken, targetPath]);
+
+  // Until the viewer picks, default to the track matching the UI language —
+  // a French UI opens on the French subtitles. Derived rather than stored, so
+  // it can't overwrite an explicit choice.
+  const effectiveSub = useMemo(
+    () => selectedSub ?? (subtitles.find((t) => t.lang === lang)?.id ?? -1),
+    [selectedSub, subtitles, lang],
+  );
+
+  // Drive the TextTracks. Matching on the element id rather than array position
+  // keeps this correct if hls.js ever adds text tracks of its own.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    for (const textTrack of video.textTracks) {
+      const id = Number(String(textTrack.id).replace('sub-', ''));
+      textTrack.mode = id === effectiveSub ? 'showing' : 'disabled';
+    }
+  }, [effectiveSub, subtitles, hlsUrl, status]);
+
+  const subtitleTrackEls = useMemo(
+    () =>
+      subtitles.map((track) => (
+        <track
+          key={track.id}
+          id={`sub-${track.id}`}
+          kind="subtitles"
+          label={subtitleLabel(track, lang)}
+          srcLang={track.lang || undefined}
+          src={appendFolderPinToUrl(
+            `/api/files/subtitles/${encodeURIComponent(file.id)}?${new URLSearchParams({
+              path: currentPath || '',
+              track: String(track.id),
+            })}`,
+            targetPath,
+          )}
+        />
+      )),
+    [subtitles, lang, file.id, currentPath, targetPath],
+  );
 
   useEffect(() => {
     if (!hlsUrl || !videoRef.current) return undefined;
@@ -247,6 +442,16 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     let repeatedFragErrors = 0;
     let lastErrorSn = -1;
 
+    // Tearing down has to be idempotent: giving up inside the ERROR handler and
+    // the effect cleanup can both run, and destroying hls.js twice throws.
+    let destroyed = false;
+    const teardown = () => {
+      if (destroyed) return;
+      destroyed = true;
+      hls.destroy();
+      if (hlsRef.current === hls) hlsRef.current = null;
+    };
+
     hls.on(Hls.Events.ERROR, (_event, data) => {
       const { type, details, fatal, frag, sourceBufferName } = data;
       // Error/DOMException properties are non-enumerable, so `data.error` prints
@@ -271,8 +476,14 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         lastErrorSn = sn;
         if (repeatedFragErrors >= 5) {
           console.error(`[hls] segment ${sn} failed ${repeatedFragErrors}x (${details}) — stopping retry loop`);
-          hls.destroy();
-          hlsRef.current = null;
+          // Clearing hlsUrl unmounts the <video>, which is what lets the failure
+          // card render — the hlsUrl branch returns the player before any status
+          // is consulted, so without this the user just gets a dead black frame.
+          teardown();
+          if (mountedRef.current) {
+            setHlsUrl(null);
+            setStatus('failed');
+          }
         }
         return;
       }
@@ -282,8 +493,11 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       // into the request storm it was meant to fix.
       if (recoveries >= 3) {
         console.error('[hls] giving up after 3 recovery attempts', { details });
-        hls.destroy();
-        hlsRef.current = null;
+        teardown();
+        if (mountedRef.current) {
+          setHlsUrl(null);
+          setStatus('failed');
+        }
         return;
       }
       recoveries++;
@@ -293,8 +507,11 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       } else if (type === Hls.ErrorTypes.MEDIA_ERROR) {
         hls.recoverMediaError();
       } else {
-        hls.destroy();
-        hlsRef.current = null;
+        teardown();
+        if (mountedRef.current) {
+          setHlsUrl(null);
+          setStatus('failed');
+        }
       }
     });
 
@@ -302,10 +519,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     hls.attachMedia(videoRef.current);
     hlsRef.current = hls;
 
-    return () => {
-      hls.destroy();
-      hlsRef.current = null;
-    };
+    return teardown;
   }, [hlsUrl]);
 
   const checkStatus = useCallback(
@@ -316,7 +530,6 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         // folder PIN (if any) needs to be appended manually. The server
         // returns a bare hlsUrl too — re-append the PIN before handing it
         // to hls.js, otherwise the manifest fetch will 423.
-        const targetPath = currentPath ? `${currentPath}/${file.name || file.id}` : (file.name || file.id);
         const statusUrl = appendFolderPinToUrl(
           `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`,
           targetPath,
@@ -334,7 +547,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         return null;
       }
     },
-    [file.id, file.name, currentPath],
+    [file.id, currentPath, targetPath],
   );
 
   const triggerTranscode = useCallback(() => {
@@ -391,6 +604,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     const url = getFileUrl(file, 'download');
     window.open(url, '_blank');
   };
+  const onSelectSub = (id) => setSelectedSub(id);
   const onRetry = () => {
     setStatus(null);
     setProgress(0);
@@ -411,7 +625,9 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           playsInline
           style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
           onClick={(e) => e.stopPropagation()}
-        />
+        >
+          {subtitleTrackEls}
+        </video>
         {status === 'transcoding' && progress < 99 && (
           <div className="mv-video-transcoding-pill">
             <div className="mv-spinner mv-spinner--glass" style={{ width: 14, height: 14, borderWidth: 2 }} />
@@ -431,7 +647,8 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
             </div>
           </div>
         )}
-        <div style={{ position: 'absolute', top: 12, right: 12 }}>
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
           <div className="mv-video-badge mv-video-badge--hls">HLS</div>
         </div>
       </div>
@@ -443,13 +660,17 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
         <video
           key={file.id}
+          ref={videoRef}
           src={streamUrl}
           controls
           playsInline
           style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
           onClick={(e) => e.stopPropagation()}
-        />
-        <div style={{ position: 'absolute', top: 12, right: 12 }}>
+        >
+          {subtitleTrackEls}
+        </video>
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
           <div className="mv-video-badge mv-video-badge--mp4">MP4</div>
         </div>
       </div>
@@ -484,12 +705,20 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
       <video
         key={file.id}
+        ref={videoRef}
         src={streamUrl}
         controls
         playsInline
         style={{ width: '100%', height: '100%', flex: 1, objectFit: 'contain' }}
         onClick={(e) => e.stopPropagation()}
-      />
+      >
+        {subtitleTrackEls}
+      </video>
+      {subtitles.length > 0 && (
+        <div style={{ position: 'absolute', top: 12, right: 12 }}>
+          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
+        </div>
+      )}
     </div>
   );
 }
