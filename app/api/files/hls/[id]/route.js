@@ -178,6 +178,15 @@ export async function GET(req, { params }) {
       }
     }
 
+    // Cache dirs written before -hls_playlist_type=event shipped still have a
+    // bare in-progress manifest, which hls.js reads as LIVE and drives back to
+    // seg000 forever (see buildHlsArgs). Declare EVENT for them too so existing
+    // caches don't have to be wiped. Safe by construction: -hls_list_size 0
+    // means segments are only ever appended, which is what EVENT asserts.
+    if (!m3u8Raw.includes('#EXT-X-PLAYLIST-TYPE') && !m3u8Raw.includes('#EXT-X-ENDLIST')) {
+      m3u8Raw = m3u8Raw.replace(/^#EXTM3U[^\n]*\n/, (line) => `${line}#EXT-X-PLAYLIST-TYPE:EVENT\n`);
+    }
+
     // Rewrite segment URIs so they point back to this endpoint
     // This is necessary because FFmpeg writes bare "seg000.ts" lines in the manifest,
     // but the browser needs full API URLs with auth.

@@ -238,6 +238,38 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       manifestLoadingMaxRetry: 6,
       manifestLoadingRetryDelay: 1000,
     });
+
+    // Without this the player fails silently: a stalled or unparseable segment
+    // shows up only as the same .ts being refetched forever in the network tab,
+    // with nothing naming the cause. `details` is the useful field — e.g.
+    // bufferStalledError, fragParsingError, levelLoadTimeOut.
+    let recoveries = 0;
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      const { type, details, fatal } = data;
+      console[fatal ? 'error' : 'warn'](`[hls] ${fatal ? 'fatal' : 'non-fatal'} ${type}: ${details}`, data);
+      if (!fatal) return;
+
+      // Cap recovery attempts. hls.startLoad()/recoverMediaError() re-enter the
+      // same failing fragment, so an unbounded handler turns one bad segment
+      // into the request storm it was meant to fix.
+      if (recoveries >= 3) {
+        console.error('[hls] giving up after 3 recovery attempts', { details });
+        hls.destroy();
+        hlsRef.current = null;
+        return;
+      }
+      recoveries++;
+
+      if (type === Hls.ErrorTypes.NETWORK_ERROR) {
+        hls.startLoad();
+      } else if (type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError();
+      } else {
+        hls.destroy();
+        hlsRef.current = null;
+      }
+    });
+
     hls.loadSource(hlsUrl);
     hls.attachMedia(videoRef.current);
     hlsRef.current = hls;
