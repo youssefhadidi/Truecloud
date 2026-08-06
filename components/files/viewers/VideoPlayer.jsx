@@ -239,15 +239,43 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       manifestLoadingRetryDelay: 1000,
     });
 
-    // Without this the player fails silently: a stalled or unparseable segment
+    // Without this the player fails silently: a stalled or undecodable segment
     // shows up only as the same .ts being refetched forever in the network tab,
     // with nothing naming the cause. `details` is the useful field — e.g.
-    // bufferStalledError, fragParsingError, levelLoadTimeOut.
+    // bufferAppendError, fragParsingError, levelLoadTimeOut.
     let recoveries = 0;
+    let repeatedFragErrors = 0;
+    let lastErrorSn = -1;
+
     hls.on(Hls.Events.ERROR, (_event, data) => {
-      const { type, details, fatal } = data;
-      console[fatal ? 'error' : 'warn'](`[hls] ${fatal ? 'fatal' : 'non-fatal'} ${type}: ${details}`, data);
-      if (!fatal) return;
+      const { type, details, fatal, frag, sourceBufferName } = data;
+      // Error/DOMException properties are non-enumerable, so `data.error` prints
+      // as `{}` when the event object is logged or serialised — the one field
+      // that says *why* an append was rejected. Pull it out by hand.
+      const cause = data.error ? `${data.error.name}: ${data.error.message}` : '';
+      console[fatal ? 'error' : 'warn'](
+        `[hls] ${fatal ? 'fatal' : 'non-fatal'} ${type}: ${details}` +
+          (sourceBufferName ? ` [${sourceBufferName}]` : '') +
+          (frag ? ` sn=${frag.sn}` : '') +
+          (cause ? ` — ${cause}` : ''),
+        data,
+      );
+
+      if (!fatal) {
+        // hls.js retries non-fatal errors itself, with no cap when the retry
+        // keeps failing the same way. A segment the browser cannot decode
+        // therefore loops forever, and that loop — not the server — is what
+        // floods the network tab with identical requests. Break it.
+        const sn = frag?.sn ?? -1;
+        repeatedFragErrors = sn === lastErrorSn ? repeatedFragErrors + 1 : 1;
+        lastErrorSn = sn;
+        if (repeatedFragErrors >= 5) {
+          console.error(`[hls] segment ${sn} failed ${repeatedFragErrors}x (${details}) — stopping retry loop`);
+          hls.destroy();
+          hlsRef.current = null;
+        }
+        return;
+      }
 
       // Cap recovery attempts. hls.startLoad()/recoverMediaError() re-enter the
       // same failing fragment, so an unbounded handler turns one bad segment
