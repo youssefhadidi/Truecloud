@@ -6,12 +6,12 @@ import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState 
 import dynamic from 'next/dynamic';
 import {
   FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList,
-  FiHome, FiChevronRight, FiCheckSquare,
+  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2,
 } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
-import { useShare, useShareFiles, useGetShareFolders } from '@/lib/api/publicShares';
+import { useShare, useShareFiles, useDeleteShareFile } from '@/lib/api/publicShares';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
@@ -25,7 +25,6 @@ const Viewer3D = dynamic(() => import('@/components/files/Viewer3D'), { ssr: fal
 const XlsxViewer = dynamic(() => import('@/components/files/XlsxViewer'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div> });
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
-const MoveModal = lazy(() => import('@/components/files/MoveModal'));
 
 function LoadingPanel({ label = 'Loading…' }) {
   return (
@@ -52,7 +51,8 @@ export default function SharePage({ params }) {
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [shareFiles, setShareFiles] = useState([]);
-  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Fetch share metadata
   const {
     data: shareResponse,
@@ -110,35 +110,192 @@ export default function SharePage({ params }) {
   });
 
   const selectedFileSet = useMemo(() => new Set(shareState.selectedFiles), [shareState.selectedFiles]);
+  const lastSelectedRef = useRef(null);
 
-  const toggleSelection = useCallback((file) => {
-    const newSelected = shareState.selectedFiles.includes(file.name)
-      ? shareState.selectedFiles.filter((name) => name !== file.name)
-      : [...shareState.selectedFiles, file.name];
-    shareState.setSelectedFiles(newSelected);
-  }, [shareState.selectedFiles, shareState.setSelectedFiles]);
+  const deleteShareFileMutation = useDeleteShareFile();
 
-  const getShareFoldersMutation = useGetShareFolders();
-
-  const fetchShareFolders = useCallback(async (path) => {
-    return getShareFoldersMutation.mutateAsync({
-      token,
-      submittedPassword,
-      path,
-    });
-  }, [getShareFoldersMutation, token, submittedPassword]);
-
-  const handleConfirmMove = async (destinationPath) => {
-    if (destinationPath === shareState.currentSubPath) {
-      shareState.addNotification('error', t('notify.selectDifferentDestination'));
-      return;
+  // Reset bulk-delete confirmation and selection anchor when selection mode is toggled off
+  useEffect(() => {
+    if (!shareState.selectionMode) {
+      setBulkDeleteConfirming(false);
+      lastSelectedRef.current = null;
     }
-    const ok = await operations.moveFiles(shareState.selectedFiles, destinationPath);
-    if (ok) {
-      shareState.setSelectionMode(false);
-      setMoveModalOpen(false);
+  }, [shareState.selectionMode]);
+
+  const selectableFiles = useMemo(
+    () => shareState.sortedFilteredFiles || [],
+    [shareState.sortedFilteredFiles],
+  );
+  const allSelected =
+    selectableFiles.length > 0 && shareState.selectedFiles.length >= selectableFiles.length;
+
+  // Ctrl/Cmd-click toggles a single item; Shift-click selects a contiguous range.
+  // Any selection auto-enters selection mode (mirrors the authenticated files view).
+  const toggleSelection = useCallback((file, mods = {}) => {
+    const { ctrl = false, shift = false } = mods;
+    const names = shareState.selectedFiles;
+
+    if (shift && lastSelectedRef.current && lastSelectedRef.current !== file.name) {
+      const fromIdx = selectableFiles.findIndex((f) => f.name === lastSelectedRef.current);
+      const toIdx = selectableFiles.findIndex((f) => f.name === file.name);
+      if (fromIdx >= 0 && toIdx >= 0) {
+        const [a, b] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+        const rangeNames = selectableFiles.slice(a, b + 1).map((f) => f.name);
+        const merged = Array.from(new Set([...names, ...rangeNames]));
+        shareState.setSelectedFiles(merged);
+        lastSelectedRef.current = file.name;
+        if (merged.length > 0 && !shareState.selectionMode) shareState.setSelectionMode(true);
+        return;
+      }
     }
-  };
+
+    const next = names.includes(file.name)
+      ? names.filter((n) => n !== file.name)
+      : [...names, file.name];
+    shareState.setSelectedFiles(next);
+    lastSelectedRef.current = next.includes(file.name) ? file.name : null;
+
+    if (next.length > 0 && !shareState.selectionMode) shareState.setSelectionMode(true);
+    else if (next.length === 0 && shareState.selectionMode && ctrl) shareState.setSelectionMode(false);
+  }, [shareState, selectableFiles]);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      shareState.setSelectedFiles([]);
+    } else {
+      shareState.setSelectedFiles(selectableFiles.map((f) => f.name));
+    }
+  }, [allSelected, selectableFiles, shareState]);
+
+  const handleBulkDownload = useCallback(async () => {
+    const filesToDownload = selectableFiles.filter((f) => shareState.selectedFiles.includes(f.name));
+    for (let i = 0; i < filesToDownload.length; i++) {
+      await operations.handleDownload(filesToDownload[i]);
+      if (i < filesToDownload.length - 1) await new Promise((r) => setTimeout(r, 300));
+    }
+    shareState.setSelectionMode(false);
+    shareState.setSelectedFiles([]);
+  }, [selectableFiles, operations, shareState]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (bulkDeleting) return;
+    setBulkDeleting(true);
+    setBulkDeleteConfirming(false);
+    let succeeded = 0;
+    let failed = 0;
+    for (const name of shareState.selectedFiles) {
+      try {
+        await deleteShareFileMutation.mutateAsync({
+          token,
+          sharePassword: submittedPassword,
+          fileName: name,
+          currentSubPath: shareState.currentSubPath,
+        });
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkDeleting(false);
+    shareState.setSelectionMode(false);
+    shareState.setSelectedFiles([]);
+    if (failed === 0) shareState.addNotification('success', t('notify.deletedItems', { count: succeeded }));
+    else shareState.addNotification('warning', t('notify.deletedSomeFailed', { succeeded, failed }));
+  }, [bulkDeleting, deleteShareFileMutation, token, submittedPassword, shareState, t]);
+
+  const allowEditing = shareResponse?.allowEditing ?? false;
+
+  // Keyboard shortcuts, mirroring the authenticated files view. Skips when typing
+  // in an input or when an inline editor / media viewer owns the keystroke.
+  useEffect(() => {
+    const isTyping = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+
+    const inlineEditing = () =>
+      Boolean(shareState.creatingFolder || shareState.renamingFile || shareState.deletingFile);
+
+    const onKey = (e) => {
+      if (e.defaultPrevented) return;
+      if (isTyping(e.target)) return;
+
+      // Escape — exit selection mode (defer to media viewer / inline editors)
+      if (e.key === 'Escape') {
+        if (shareState.viewerFile || inlineEditing()) return;
+        if (shareState.selectionMode) {
+          e.preventDefault();
+          shareState.setSelectionMode(false);
+          shareState.setSelectedFiles([]);
+        }
+        return;
+      }
+
+      if (shareState.viewerFile) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+      const { altKey: alt, shiftKey: shift } = e;
+
+      // Ctrl/Cmd+A — select all / deselect all in current folder
+      if (ctrl && !alt && !shift && (e.key === 'a' || e.key === 'A')) {
+        if (selectableFiles.length === 0 || inlineEditing()) return;
+        e.preventDefault();
+        if (!shareState.selectionMode) shareState.setSelectionMode(true);
+        if (allSelected) shareState.setSelectedFiles([]);
+        else shareState.setSelectedFiles(selectableFiles.map((f) => f.name));
+        return;
+      }
+
+      if (inlineEditing()) return;
+
+      // Delete — two-step bulk delete (first press confirms, second deletes)
+      if (!ctrl && !alt && !shift && e.key === 'Delete') {
+        if (!allowEditing) return;
+        if (!shareState.selectionMode || shareState.selectedFiles.length === 0 || bulkDeleting) return;
+        e.preventDefault();
+        if (bulkDeleteConfirming) handleBulkDelete();
+        else setBulkDeleteConfirming(true);
+        return;
+      }
+
+      // F2 — rename the single selected file
+      if (!ctrl && !alt && !shift && e.key === 'F2') {
+        if (!allowEditing) return;
+        if (shareState.selectedFiles.length !== 1) return;
+        const file = selectableFiles.find((f) => f.name === shareState.selectedFiles[0]);
+        if (!file) return;
+        e.preventDefault();
+        operations.initiateRename(file);
+        return;
+      }
+
+      if (ctrl || alt || shift) return;
+
+      // g / l — switch grid / list view
+      if (e.key === 'g' || e.key === 'G') {
+        e.preventDefault();
+        shareState.setViewMode('grid');
+        return;
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        shareState.setViewMode('list');
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    shareState,
+    operations,
+    allowEditing,
+    selectableFiles,
+    allSelected,
+    bulkDeleteConfirming,
+    bulkDeleting,
+    handleBulkDelete,
+  ]);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -412,26 +569,62 @@ export default function SharePage({ params }) {
                 multiple
                 onChange={operations.handleUploadFromInput}
               />
+            </>
+          )}
+
+          <Btn
+            variant={shareState.selectionMode ? 'primary' : 'surface'}
+            size="sm"
+            onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+          >
+            <FiCheckSquare size={13} />
+            {shareState.selectionMode ? t('files.selecting') : t('common.select')}
+          </Btn>
+
+          {shareState.selectionMode && (
+            <>
+              <Divider vertical />
+              <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
+                {t('files.nSelected', { count: shareState.selectedFiles.length })}
+              </span>
               <Btn
-                variant={shareState.selectionMode ? 'primary' : 'surface'}
+                variant="surface"
                 size="sm"
-                onClick={() => shareState.setSelectionMode(!shareState.selectionMode)}
+                onClick={handleToggleSelectAll}
+                disabled={selectableFiles.length === 0 || bulkDeleting}
               >
-                <FiCheckSquare size={13} />
-                {shareState.selectionMode ? t('files.selecting') : t('common.select')}
+                {allSelected ? <FiSquare size={13} /> : <FiCheckSquare size={13} />}
+                {allSelected ? t('files.deselectAll') : t('files.selectAll')}
               </Btn>
-              {shareState.selectionMode && (
+              <IconBtn
+                icon={FiDownload}
+                title={t('files.downloadSelected')}
+                disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
+                onClick={handleBulkDownload}
+              />
+              {shareResponse.allowEditing && (
                 <>
-                  <Divider vertical />
-                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
-                    {t('files.nSelected', { count: shareState.selectedFiles.length })}
-                  </span>
-                  <IconBtn
-                    icon={FiFolder}
-                    title={t('files.moveSelected')}
-                    disabled={shareState.selectedFiles.length === 0}
-                    onClick={() => setMoveModalOpen(true)}
-                  />
+                  {bulkDeleteConfirming ? (
+                    <>
+                      <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
+                        {t('files.deleteN', { count: shareState.selectedFiles.length })}
+                      </span>
+                      <Btn variant="danger" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                        {bulkDeleting ? t('files.deleting') : t('common.confirm')}
+                      </Btn>
+                      <Btn variant="ghost" size="sm" onClick={() => setBulkDeleteConfirming(false)} disabled={bulkDeleting}>
+                        {t('common.cancel')}
+                      </Btn>
+                    </>
+                  ) : (
+                    <IconBtn
+                      icon={FiTrash2}
+                      title={t('files.deleteSelected')}
+                      danger
+                      disabled={shareState.selectedFiles.length === 0 || bulkDeleting}
+                      onClick={() => setBulkDeleteConfirming(true)}
+                    />
+                  )}
                 </>
               )}
             </>
@@ -728,20 +921,6 @@ export default function SharePage({ params }) {
                     }
                   : undefined
               }
-            />
-          </Suspense>
-        )}
-
-        {/* Move Modal */}
-        {moveModalOpen && (
-          <Suspense fallback={null}>
-            <MoveModal
-              open={moveModalOpen}
-              title={t('sharePage.moveNItems', { count: shareState.selectedFiles.length })}
-              initialPath={shareState.currentSubPath}
-              fetchFolders={fetchShareFolders}
-              onConfirm={handleConfirmMove}
-              onClose={() => setMoveModalOpen(false)}
             />
           </Suspense>
         )}

@@ -59,18 +59,28 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
 }
 
 export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile) {
-  // Auto-center the active thumbnail in the strip
+  // Auto-center the active thumbnail in the strip.
+  //
+  // We scroll the strip element directly rather than using
+  // active.scrollIntoView(): scrollIntoView also scrolls every scrollable
+  // ancestor (e.g. the public share page's document-level gallery), which
+  // would yank the background to a different image. The authenticated viewer
+  // happens to lock body scroll so it never showed the bug, but the
+  // element-scoped scroll below is correct for both.
   useEffect(() => {
-    if (!stripRef.current || !viewerFile) return;
+    const strip = stripRef.current;
+    if (!strip || !viewerFile) return undefined;
+    const active = strip.querySelector('[data-active="true"]');
+    if (!active) return undefined;
     programmaticScrollRef.current = true;
-    const active = stripRef.current.querySelector('[data-active="true"]');
-    if (active) {
-      active.scrollIntoView({ inline: 'center', behavior: 'instant', block: 'nearest' });
-    }
-    setTimeout(() => {
+    // Same coordinate space as getCenteredFile (offsetLeft vs scrollLeft).
+    const target = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+    strip.scrollTo({ left: target, behavior: 'instant' });
+    const id = setTimeout(() => {
       programmaticScrollRef.current = false;
-    }, 500);
-  }, [viewerFile?.id, stripRef, programmaticScrollRef, onSelectFile]);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [viewerFile?.id, viewableFiles, stripRef, programmaticScrollRef]);
 
   // Find the file whose thumbnail is closest to the strip center
   const getCenteredFile = useCallback(() => {

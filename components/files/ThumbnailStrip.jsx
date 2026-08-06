@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import ThumbnailItem from './ThumbnailItem';
 
 export default function ThumbnailStrip({
@@ -19,16 +19,9 @@ export default function ThumbnailStrip({
   const internalRef = useRef(null);
   const stripRef = externalRef || internalRef;
 
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const active = strip.querySelector('[data-active="true"]');
-    if (!active) return;
-    const stripRect = strip.getBoundingClientRect();
-    const childRect = active.getBoundingClientRect();
-    const offset = childRect.left - stripRect.left - (stripRect.width - childRect.width) / 2;
-    strip.scrollBy({ left: offset, behavior: 'smooth' });
-  }, [activeId, files, stripRef]);
+  // Auto-centering of the active thumbnail is owned by useMediaViewerScroll
+  // (in MediaViewer), which guards against the scroll re-triggering selection.
+  // A second centering effect here would race with it.
 
   return (
     <div className={`mv-strip${glass ? ' mv-strip--glass' : ''}`}>

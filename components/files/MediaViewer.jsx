@@ -107,7 +107,10 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   const touchTimerRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
 
-  const { data: componentsData } = useComponentsConfig();
+  // Share visitors are unauthenticated, so skip the admin-only components
+  // request — a 403 there trips the global axios interceptor and force-logs
+  // them out. AI chat is gated on !shareToken anyway, so we never need it.
+  const { data: componentsData } = useComponentsConfig(!shareToken);
   const aiChatEnabled = componentsData?.config?.aiChat ?? false;
 
   // The AI chat is only available for authenticated users (not share visitors),
