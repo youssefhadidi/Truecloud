@@ -17,6 +17,9 @@ export default function MoveModal({
   fetchFolders,
   onConfirm,
   onClose,
+  // Callers that browse for a destination without moving anything (the
+  // downloads page) relabel the confirm button.
+  confirmLabel,
 }) {
   const { t } = useTranslation();
   const [currentPath, setCurrentPath] = useState(initialPath);
@@ -145,7 +148,7 @@ export default function MoveModal({
               {t('moveModal.upOneLevel')}
             </Btn>
             <Btn variant="primary" size="sm" onClick={() => onConfirm(currentPath)}>
-              {t('moveModal.moveHere')}
+              {confirmLabel || t('moveModal.moveHere')}
             </Btn>
           </div>
 

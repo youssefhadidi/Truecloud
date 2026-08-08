@@ -5,15 +5,20 @@
 import { useState, useRef } from 'react';
 import { FiUpload, FiLink, FiPlay, FiDownload } from 'react-icons/fi';
 import { useStartDownload } from '@/lib/api/downloads';
+import { useDownloadDestination } from '@/lib/redux/hooks';
+import DestinationPicker from '@/components/files/DestinationPicker';
 
 export default function TorrentDownloadComponent({ onDownloadStart, currentPath = '' }) {
   const [url, setUrl] = useState('');
   const [torrentFile, setTorrentFile] = useState(null);
   const [downloadType, setDownloadType] = useState('http'); // 'http' or 'torrent'
-  const [downloadPath, setDownloadPath] = useState(currentPath);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
   const startDownloadMutation = useStartDownload();
+
+  // Shared with the torrent search panel and kept across navigation; the field
+  // itself (and its folder browser) lives in DestinationPicker.
+  const downloadPath = useDownloadDestination();
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -71,11 +76,11 @@ export default function TorrentDownloadComponent({ onDownloadStart, currentPath 
       const data = await startDownloadMutation.mutateAsync(formData);
       onDownloadStart?.(data);
 
-      // Reset form
+      // Reset form — the destination is kept on purpose, so consecutive
+      // downloads land in the same folder without retyping it.
       setUrl('');
       setTorrentFile(null);
       setDownloadType('http');
-      setDownloadPath(currentPath);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -96,22 +101,13 @@ export default function TorrentDownloadComponent({ onDownloadStart, currentPath 
 
         <div className="space-y-6">
         {/* Download Path */}
-        <div>
-          <label htmlFor="path" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Download Path (Optional)
-          </label>
-          <input
-            id="path"
-            type="text"
-            value={downloadPath}
-            onChange={(e) => setDownloadPath(e.target.value)}
-            placeholder="Leave empty for root directory"
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            e.g., my-folder, subfolder/downloads
-          </p>
-        </div>
+        <DestinationPicker
+          id="path"
+          label="Download Path (Optional)"
+          placeholder="Leave empty for root directory"
+          hint="e.g., my-folder, subfolder/downloads"
+          currentPath={currentPath}
+        />
 
         {/* URL Input - HTTP/HTTPS or Magnet Link */}
         <div>

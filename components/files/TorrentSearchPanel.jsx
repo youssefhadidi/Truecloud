@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { FiSearch, FiDownload, FiUsers, FiAlertTriangle, FiArrowUp, FiArrowDown, FiCheckCircle } from 'react-icons/fi';
 import { useTorrentSearch } from '@/lib/api/torrentSearch';
 import { useStartDownload } from '@/lib/api/downloads';
+import { useDownloadDestination } from '@/lib/redux/hooks';
+import DestinationPicker from '@/components/files/DestinationPicker';
 import { SEARCH_CATEGORIES } from '@/lib/torrentSearchConstants';
 import { useTranslation } from '@/components/LanguageProvider';
 
@@ -36,9 +38,12 @@ export default function TorrentSearchPanel({ currentPath = '', onDownloadStart }
   const [category, setCategory] = useState(0);
   const [sort, setSort] = useState('seeders');
   const [order, setOrder] = useState('desc');
-  const [downloadPath, setDownloadPath] = useState(currentPath);
   const [startedIds, setStartedIds] = useState([]);
   const [startError, setStartError] = useState('');
+
+  // Shared with the manual download form and kept across navigation; the field
+  // itself (and its folder browser) lives in DestinationPicker.
+  const downloadPath = useDownloadDestination();
 
   const search = useTorrentSearch({ query: submitted, category, sort, order, enabled: !!submitted });
   const startDownloadMutation = useStartDownload();
@@ -125,16 +130,12 @@ export default function TorrentSearchPanel({ currentPath = '', onDownloadStart }
 
         {/* Destination folder for anything started from this panel */}
         <div className="mt-3">
-          <label htmlFor="torrent-search-path" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            {t('torrentSearch.savePath')}
-          </label>
-          <input
+          <DestinationPicker
             id="torrent-search-path"
-            type="text"
-            value={downloadPath}
-            onChange={(e) => setDownloadPath(e.target.value)}
+            label={t('torrentSearch.savePath')}
             placeholder={t('torrentSearch.savePathPlaceholder')}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+            currentPath={currentPath}
+            compact
           />
         </div>
 

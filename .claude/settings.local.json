@@ -64,7 +64,11 @@
       "Bash(node verify-app-flow.mjs)",
       "Bash(rm -rf dictfull)",
       "Bash(mkdir -p dictfull)",
-      "Bash(cp -r \"c:/Users/youssef/Desktop/Truecloud/lib/i18n/dictionaries/.\" dictfull/)"
+      "Bash(cp -r \"c:/Users/youssef/Desktop/Truecloud/lib/i18n/dictionaries/.\" dictfull/)",
+      "PowerShell(npx next lint --file components/files/TorrentSearchPanel.jsx --file components/files/TorrentDownloadComponent.jsx --file lib/redux/hooks.js --file lib/redux/store.js --file lib/redux/slices/downloadsSlice.js --file hooks/useLogout.js)",
+      "PowerShell(npx eslint components/files/TorrentSearchPanel.jsx components/files/TorrentDownloadComponent.jsx lib/redux/hooks.js lib/redux/store.js lib/redux/slices/downloadsSlice.js hooks/useLogout.js)",
+      "PowerShell(npx eslint components/files/DestinationPicker.jsx components/files/TorrentSearchPanel.jsx components/files/TorrentDownloadComponent.jsx components/files/MoveModal.jsx lib/i18n/dictionaries/en.js lib/i18n/dictionaries/fr.js)",
+      "PowerShell(npx next build 2>&1)"
     ],
     "additionalDirectories": [
       "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks",
