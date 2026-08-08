@@ -322,6 +322,10 @@ function SubtitlePicker({ tracks, selected, onSelect, uiLang }) {
 export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const [status, setStatus] = useState(null); // null | 'pending' | 'transcoding' | 'ready' | 'native' | 'disabled' | 'failed'
   const [progress, setProgress] = useState(0);
+  // >0 while this file is waiting on the single encode slot behind another
+  // transcode. Distinct from progress: a queued job sits at 0% for as long as
+  // the job ahead of it runs, which without this reads as a hung player.
+  const [queuePosition, setQueuePosition] = useState(0);
   const [hlsUrl, setHlsUrl] = useState(null);
   const [subtitles, setSubtitles] = useState([]);
   // null means "not chosen yet", which resolves to the locale default below.
@@ -345,6 +349,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   useLayoutEffect(() => {
     setStatus(null);
     setProgress(0);
+    setQueuePosition(0);
     setHlsUrl(null);
     setSubtitles([]);
     setSelectedSub(null);
@@ -540,6 +545,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         if (!mountedRef.current) return null;
         setStatus(data.status);
         if (data.progress !== undefined) setProgress(data.progress);
+        setQueuePosition(data.queuePosition ?? 0);
         if (data.hlsUrl) setHlsUrl(appendFolderPinToUrl(data.hlsUrl, targetPath));
         return data.status;
       } catch (err) {
@@ -608,6 +614,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const onRetry = () => {
     setStatus(null);
     setProgress(0);
+    setQueuePosition(0);
     setHlsUrl(null);
     triggeredRef.current = false;
     checkStatus();
@@ -632,7 +639,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           <div className="mv-video-transcoding-pill">
             <div className="mv-spinner mv-spinner--glass" style={{ width: 14, height: 14, borderWidth: 2 }} />
             <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap' }}>
-              Transcoding… {progress}%
+              {queuePosition > 0 ? `Queued · ${queuePosition} ahead` : `Transcoding… ${progress}%`}
             </span>
             <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
               <div
@@ -678,6 +685,9 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   }
 
   if (status === 'transcoding') {
+    // Queued jobs have not reached the encoder, so their 0% is not progress —
+    // say so rather than showing a bar that cannot move yet.
+    const queued = queuePosition > 0;
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div
@@ -685,13 +695,21 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           style={{ padding: '28px 36px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 340 }}
         >
           <div className="mv-spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Transcoding video for playback…</div>
-          <div style={{ width: '100%' }}>
-            <div className="mv-progress">
-              <div className="mv-progress__fill" style={{ width: `${progress}%` }} />
-            </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {queued ? 'Waiting for the encoder…' : 'Transcoding video for playback…'}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{progress}% — playback will start soon</div>
+          {!queued && (
+            <div style={{ width: '100%' }}>
+              <div className="mv-progress">
+                <div className="mv-progress__fill" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
+            {queued
+              ? `${queuePosition} ${queuePosition === 1 ? 'video is' : 'videos are'} ahead of this one`
+              : `${progress}% — playback will start soon`}
+          </div>
         </div>
       </div>
     );

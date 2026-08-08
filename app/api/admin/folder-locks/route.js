@@ -13,6 +13,7 @@ import {
   getAllLockedPaths,
   findAncestorLockPath,
   findDescendantLockPaths,
+  invalidateFolderLockCache,
 } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -123,6 +124,7 @@ export async function POST(req) {
       data: { path, pinHash, createdById: session.user.id },
       select: { id: true, path: true, createdAt: true, updatedAt: true },
     });
+    invalidateFolderLockCache();
 
     logger.info('POST /api/admin/folder-locks - Lock created', { path, by: session.user.email });
     return NextResponse.json({ lock });
@@ -158,6 +160,9 @@ export async function PATCH(req) {
       where: { path },
       data: { pinHash, pinFailures: 0, pinLockedUntil: null, createdById: session.user.id },
     });
+    // Must happen before we return: the old PIN is memoised as valid, and
+    // without this it would keep opening the folder until the TTL lapsed.
+    invalidateFolderLockCache();
 
     logger.info('PATCH /api/admin/folder-locks - PIN changed', { path, by: session.user.email });
     return NextResponse.json({ ok: true });
@@ -180,6 +185,7 @@ export async function DELETE(req) {
     }
 
     const removed = await prisma.folderLock.deleteMany({ where: { path } });
+    invalidateFolderLockCache();
     logger.info('DELETE /api/admin/folder-locks - Lock removed', {
       path,
       removed: removed.count,

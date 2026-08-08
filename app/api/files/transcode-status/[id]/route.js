@@ -7,15 +7,14 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
-import { probeCodecs, isAudioBrowserCompatible } from '@/lib/ffmpegUtils';
+import { isNativelyPlayable } from '@/lib/ffmpegUtils';
+import { getProbeInfo, peekProbeInfo } from '@/lib/probeCache';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 import {
   isHlsCacheComplete,
   getHlsSegmentCount,
   getHlsJobStatus,
   getHlsHash,
-  isMarkedNative,
-  markNative,
 } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -52,8 +51,10 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'disabled' });
       }
 
-      // 0. Native streamable MP4 (H.264 + browser-compatible audio) — no HLS needed
-      if (await isMarkedNative(fullPath)) {
+      // 0. Already probed and natively playable — no HLS needed. Cache-only
+      //    lookup so the common poll costs a stat, not a subprocess.
+      const cachedProbe = await peekProbeInfo(fullPath);
+      if (cachedProbe && isNativelyPlayable(fileExt, cachedProbe)) {
         return NextResponse.json({ status: 'native' });
       }
 
@@ -81,7 +82,12 @@ export async function GET(req, { params }) {
         const hash = getHlsHash(fullPath);
         const job = getHlsJobStatus(hash);
         if (job.status === 'transcoding') {
-          return NextResponse.json({ status: 'transcoding', progress: job.progress, hlsUrl });
+          return NextResponse.json({
+            status: 'transcoding',
+            progress: job.progress,
+            queuePosition: job.queuePosition,
+            hlsUrl,
+          });
         }
         // Segments exist but no active job — fall through to pending
       }
@@ -91,7 +97,13 @@ export async function GET(req, { params }) {
       const job = getHlsJobStatus(hash);
 
       if (job.status === 'transcoding') {
-        return NextResponse.json({ status: 'transcoding', progress: job.progress });
+        // queuePosition > 0 means this job hasn't reached the encoder yet — it
+        // is waiting on the single encode slot behind another file.
+        return NextResponse.json({
+          status: 'transcoding',
+          progress: job.progress,
+          queuePosition: job.queuePosition,
+        });
       }
 
       if (job.status === 'done') {
@@ -102,21 +114,18 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'disabled', reason: 'transcode_failed' });
       }
 
-      // 5. Unknown — probe once to detect natively streamable files (H.264 + compatible audio
-      //    in mp4/m4v/mov/mkv). markNative() writes to the persisted registry so subsequent
-      //    calls (including across server restarts) return 'native' without probing again.
-      if (fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv' || fileExt === '.mov') {
-        try {
-          const codecs = await probeCodecs(fullPath, req.signal);
-          if (codecs.videoCodec === 'h264' && isAudioBrowserCompatible(codecs.audioCodec)) {
-            await markNative(fullPath);
-            return NextResponse.json({ status: 'native' });
-          }
-        } catch (err) {
-          if (err.name !== 'AbortError') {
-            logger.warn('transcode-status: probeCodecs failed', { fullPath, error: err.message });
-          }
+      // 5. Unknown — probe once to detect natively playable files. The result is
+      //    persisted by probeCache, so subsequent calls (including across server
+      //    restarts) answer from cache, and the stream route reuses this exact
+      //    entry rather than probing the file a second time.
+      try {
+        const probe = await getProbeInfo(fullPath, req.signal);
+        if (isNativelyPlayable(fileExt, probe)) {
+          return NextResponse.json({ status: 'native' });
         }
+      } catch (err) {
+        if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+        logger.warn('transcode-status: probe failed', { fullPath, error: err.message });
       }
 
       // 6. Not started yet — stream route will begin HLS transcoding

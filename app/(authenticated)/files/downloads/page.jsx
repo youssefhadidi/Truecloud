@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
+import TorrentSearchPanel from '@/components/files/TorrentSearchPanel';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -83,6 +84,11 @@ export default function DownloadsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Torrent Index Search — full width, results table needs the room */}
+            <div className="lg:col-span-3">
+              <TorrentSearchPanel onDownloadStart={handleDownloadStart} />
+            </div>
+
             {/* Download Form */}
             <div className="lg:col-span-1">
               <TorrentDownloadComponent onDownloadStart={handleDownloadStart} />

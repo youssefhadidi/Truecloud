@@ -24,7 +24,10 @@ const CACHE_DIRS = {
     name: 'Stream Cache',
     description: 'Fixed MP4 files for streaming',
     envVar: 'STREAM_CACHE_DIR',
-    defaultPath: './.stream-cache',
+    // Must match the default in lib/hlsManager.js and the stream routes — no
+    // leading dot. When these disagreed, this page read an empty directory and
+    // reported 0 B while the real cache grew without bound.
+    defaultPath: './stream-cache',
   },
   '3d': {
     name: '3D Cache',

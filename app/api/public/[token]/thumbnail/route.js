@@ -14,7 +14,7 @@ import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
-const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './.stream-cache';
+const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export const maxDuration = 60;

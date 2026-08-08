@@ -419,6 +419,12 @@ loadEsModules().then(() => {
     // Start file watcher for search index
     import('./lib/fileWatcher.mjs').then(({ startFileWatcher }) => startFileWatcher());
 
+    // Start the stream-cache pruner (HLS renditions, extracted subtitles, and
+    // legacy remuxes are never cleaned up otherwise)
+    import('./lib/streamCachePrune.mjs').then(({ startStreamCachePruner }) =>
+      startStreamCachePruner(),
+    );
+
     // Start USB drive watcher (Linux only; no-op elsewhere)
     import('./lib/usbManager.js').then(({ startUsbManager }) => startUsbManager());
 

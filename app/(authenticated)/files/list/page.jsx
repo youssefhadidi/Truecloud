@@ -11,6 +11,7 @@ import {
   FiArrowLeft, FiArrowRight, FiRefreshCw, FiSearch, FiCheckSquare, FiSquare, FiImage,
   FiDownload, FiTrash2, FiX,
 } from 'react-icons/fi';
+import { TbMagnet } from 'react-icons/tb';
 import UploadStatus from '@/components/files/UploadStatus';
 import ContextMenu from '@/components/files/ContextMenu';
 import { useSearch } from '@/lib/api/search';
@@ -37,6 +38,7 @@ const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
 const ShareModal = lazy(() => import('@/components/files/ShareModal'));
 const MoveModal = lazy(() => import('@/components/files/MoveModal'));
+const MagnetModal = lazy(() => import('@/components/files/MagnetModal'));
 
 function LoadingPanel({ label = 'Loading…' }) {
   return (
@@ -136,6 +138,7 @@ function FilesPageContent() {
   const moveMutation = useMoveFiles();
   const bulkDeleteMutation = useDeleteFile(state.currentPath);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [magnetModalOpen, setMagnetModalOpen] = useState(false);
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [convertingHeic, setConvertingHeic] = useState(false);
@@ -660,6 +663,11 @@ function FilesPageContent() {
                 <FiPlus size={13} />
                 {t('files.newFolder')}
               </Btn>
+              <IconBtn
+                icon={TbMagnet}
+                title={t('files.addMagnet')}
+                onClick={() => setMagnetModalOpen(true)}
+              />
               <Btn
                 variant={state.selectionMode ? 'primary' : 'surface'}
                 size="sm"
@@ -1319,6 +1327,16 @@ function FilesPageContent() {
             fetchFolders={fetchMoveFolders}
             onConfirm={handleConfirmMove}
             onClose={() => setMoveModalOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {magnetModalOpen && (
+        <Suspense fallback={null}>
+          <MagnetModal
+            open={magnetModalOpen}
+            currentPath={state.currentPath}
+            onClose={() => setMagnetModalOpen(false)}
           />
         </Suspense>
       )}

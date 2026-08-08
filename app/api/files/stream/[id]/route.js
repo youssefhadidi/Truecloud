@@ -8,13 +8,14 @@ import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { getFileDuration, probeCodecs, isAudioBrowserCompatible } from '@/lib/ffmpegUtils';
+import { isNativelyPlayable } from '@/lib/ffmpegUtils';
+import { getProbeInfo, peekProbeInfo } from '@/lib/probeCache';
 import { nodeToWebStream } from '@/lib/streamUtils';
-import { parseRangeHeader } from '@/lib/httpRange';
+import { parseRangeHeader, buildValidators, evaluateConditional } from '@/lib/httpRange';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
-import { startHlsJob, markNative, isMarkedNative } from '@/lib/hlsManager';
+import { startHlsJob } from '@/lib/hlsManager';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
@@ -110,9 +111,14 @@ export async function GET(req, { params }) {
       const components = await readComponentsConfig();
 
       if (components.transcoding) {
-        // Fast path: already confirmed natively streamable on a previous request — skip probing
-        if (await isMarkedNative(fullPath)) {
-          logger.debug('GET /api/files/stream - Native MP4 (cached), serving directly', { fileId });
+        // Fast path: a probe from a previous request already says this file
+        // plays as-is. peekProbeInfo never spawns anything — on a hit this
+        // costs one stat.
+        const cachedProbe = await peekProbeInfo(fullPath);
+        if (cachedProbe && isNativelyPlayable(fileExt, cachedProbe)) {
+          logger.debug('GET /api/files/stream - Natively playable (cached probe), serving directly', {
+            fileId,
+          });
         } else {
           // Backward compat: serve existing MP4 cache directly
           const cachedMp4 = await isCacheReady(fullPath, cacheDir);
@@ -150,23 +156,23 @@ export async function GET(req, { params }) {
               if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
               throw err;
             }
-            let codecs, durationSecs, transcodingConfig;
+            let probe, transcodingConfig;
             try {
               // Check again after waiting for the semaphore — client may have left
               if (req.signal?.aborted) {
                 return new NextResponse(null, { status: 499 });
               }
 
-              [codecs, durationSecs, transcodingConfig] = await Promise.all([
-                probeCodecs(fullPath, req.signal).catch((err) => {
-                  if (err.name !== 'AbortError') {
-                    logger.warn('GET /api/files/stream - probeCodecs failed', { fullPath, error: err.message });
-                  }
-                  return { videoCodec: null, audioCodec: null, videoHeight: null, pixFmt: null };
-                }),
-                getFileDuration(fullPath, req.signal),
+              // One cached probe covers codecs, resolution, pixel format and
+              // duration — and it is the same entry the status route just
+              // populated, so on the normal open path this spawns nothing.
+              [probe, transcodingConfig] = await Promise.all([
+                getProbeInfo(fullPath, req.signal),
                 readTranscodingConfig(),
               ]);
+            } catch (err) {
+              if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+              throw err;
             } finally {
               probeSemaphore.release();
             }
@@ -176,39 +182,39 @@ export async function GET(req, { params }) {
               return new NextResponse(null, { status: 499 });
             }
 
+            const durationSecs = probe.durationSecs;
+
             logger.info('GET /api/files/stream - Probing complete', {
               fullPath,
-              videoCodec: codecs?.videoCodec,
-              audioCodec: codecs?.audioCodec,
-              videoHeight: codecs?.videoHeight,
-              pixFmt: codecs?.pixFmt,
+              videoCodec: probe.videoCodec,
+              audioCodec: probe.audioCodec,
+              videoHeight: probe.videoHeight,
+              pixFmt: probe.pixFmt,
               hwaccel,
               durationSecs,
               maxHeight: transcodingConfig.maxHeight ?? 'original',
             });
 
-            // H.264 + browser-compatible audio in a natively playable container → serve
-            // directly without HLS transcoding.
-            // Note: MKV is supported by Chrome but not Firefox/Safari.
-            if ((fileExt === '.mp4' || fileExt === '.m4v' || fileExt === '.mkv' || fileExt === '.mov') &&
-                codecs.videoCodec === 'h264' &&
-                isAudioBrowserCompatible(codecs.audioCodec)) {
-              await markNative(fullPath);
+            // Container + codecs the browser decodes on its own → serve the
+            // bytes directly, no HLS.
+            if (isNativelyPlayable(fileExt, probe)) {
               logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
               // Fall through to byte-range serving
             } else {
-              const job = await startHlsJob(fullPath, cacheDir, codecs, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
+              const job = await startHlsJob(fullPath, cacheDir, probe, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
 
               if (job.status === 'transcoding') {
                 logger.info('GET /api/files/stream - HLS transcoding in progress', {
                   fileId,
                   progress: job.progress,
+                  queuePosition: job.queuePosition ?? 0,
                 });
                 return NextResponse.json(
                   {
                     error: 'Video is being transcoded for playback. Please try again shortly.',
                     status: 'transcoding',
                     progress: job.progress,
+                    queuePosition: job.queuePosition ?? 0,
                   },
                   { status: 202 },
                 );
@@ -240,9 +246,31 @@ export async function GET(req, { params }) {
     const fileSize = fileStats.size;
     const mimeType = mime.lookup(streamPath) || 'application/octet-stream';
 
+    // Validators describe the bytes actually being served, which may be a cache
+    // file rather than the original — so they are built from streamPath's stat.
+    const validators = buildValidators(fileStats);
+    // Let the browser reuse what it has already downloaded (a backward seek is
+    // otherwise a full re-fetch), but revalidate hourly so a replaced file is
+    // picked up without the viewer having to hard-refresh. `private` because
+    // these bytes are behind a per-user auth check and must not land in a
+    // shared proxy cache.
+    const cacheHeaders = {
+      ETag: validators.etag,
+      'Last-Modified': validators.lastModified,
+      'Cache-Control': 'private, max-age=3600',
+    };
+
     // Parse range header. Handles suffix ranges (`bytes=-N`), which browsers use
     // to locate the `moov` atom of a non-faststart MP4 — see lib/httpRange.js.
-    const parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
+    let parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
+
+    const conditional = evaluateConditional(req, validators, !!parsedRange);
+    if (conditional.notModified) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+    // If-Range didn't match: the file changed under the client, so give it the
+    // whole current entity instead of a range spliced into a stale buffer.
+    if (conditional.ignoreRange) parsedRange = null;
 
     if (parsedRange?.unsatisfiable) {
       return new NextResponse(null, {
@@ -262,6 +290,7 @@ export async function GET(req, { params }) {
           'Content-Type': mimeType,
           'Content-Length': fileSize.toString(),
           'Accept-Ranges': 'bytes',
+          ...cacheHeaders,
         },
       });
     }
@@ -285,6 +314,7 @@ export async function GET(req, { params }) {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize.toString(),
         'Content-Type': mimeType,
+        ...cacheHeaders,
       },
     });
   } catch (error) {
