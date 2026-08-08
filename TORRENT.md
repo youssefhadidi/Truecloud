@@ -76,6 +76,7 @@ The WS bridge in `server.js` auto-reconnects every 3 seconds if the torrent-serv
 | `TORRENT_SERVICE_URL` | `http://localhost:9669` | Base URL of the torrent microservice (set same value in both services) |
 | `TORRENT_SERVICE_PORT` | `9669` | Port the microservice listens on (torrent-service only) |
 | `TORRENT_SERVICE_PATH` | `../torrent-service` | Path to the torrent-service git checkout, used by the admin update check |
+| `TORRENT_SERVICE_PM` | `npm`, or `pnpm` if only `pnpm-lock.yaml` is present | Forces the package manager the admin update uses |
 | `TORRENT_STATE_FILE` | `./torrent-downloads.json` | Path where download state is persisted across restarts |
 | `UPLOAD_DIR` | `./uploads` | Absolute path to the files root — must match the main app |
 
@@ -119,9 +120,14 @@ updates independently of the main app.
   semver bump. If the checkout can't be located, `torrentService.available` is `false`
   and the main app's result is still returned as normal.
 - **Applying** — `POST /api/system/run-update` with `{ "target": "torrent-service" }`
-  runs pull → install → `rebuild-native` → `systemctl restart torrent-service`.
+  runs pull → install → `<pm> rebuild node-datachannel` → `systemctl restart torrent-service`.
   Omit `target` (or send `"app"`) for the main app's update. Only one update may run
   at a time; a second request gets a `409`.
+- **Package manager** — **npm** unless only a `pnpm-lock.yaml` is present, and
+  `TORRENT_SERVICE_PM` pins it outright. Don't let this drift: switching managers
+  rewrites `node_modules`, and `node-datachannel` is a transitive dep of
+  `webtorrent`, so it sits at the root under npm but not under pnpm. The repo's
+  own `rebuild-native` script assumes the npm layout and breaks under pnpm.
 - **UI** — Admin → System Health has a dedicated *Update Torrent Service* button next
   to *Start Update*, and the update toast offers each one separately.
 

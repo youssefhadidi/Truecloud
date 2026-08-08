@@ -55,7 +55,12 @@ function torrentServiceSteps() {
     // and --ff-only keeps a deploy from silently creating a merge commit.
     { name: STEPS.PULLING, command: 'git', args: ['pull', '--ff-only', 'origin', TORRENT_SERVICE_BRANCH], cwd },
     { name: STEPS.INSTALLING, command: pm, args: ['install'], cwd },
-    { name: STEPS.REBUILDING, command: pm, args: ['run', 'rebuild-native'], cwd },
+    // `<pm> rebuild` re-runs the package's own install script (prebuild-install)
+    // in its real directory. The repo's `rebuild-native` script can't be used:
+    // it resolves node-datachannel from the project root, which only works
+    // under npm's hoisted layout — under pnpm the package is a transitive dep
+    // of webtorrent and never appears there.
+    { name: STEPS.REBUILDING, command: pm, args: ['rebuild', 'node-datachannel'], cwd },
     { name: STEPS.RESTARTING, command: 'systemctl', args: ['restart', 'torrent-service'], cwd },
   ];
 }
