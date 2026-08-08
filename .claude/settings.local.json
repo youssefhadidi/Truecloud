@@ -70,7 +70,12 @@
       "PowerShell(npx eslint components/files/DestinationPicker.jsx components/files/TorrentSearchPanel.jsx components/files/TorrentDownloadComponent.jsx components/files/MoveModal.jsx lib/i18n/dictionaries/en.js lib/i18n/dictionaries/fr.js)",
       "PowerShell(npx next build 2>&1)",
       "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" status --short)",
-      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" log --oneline -1)"
+      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" log --oneline -1)",
+      "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" status --short -- lib/torrentServiceRepo.js app/api/system/run-update/route.js app/api/system/check-updates/route.js)",
+      "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" log --oneline -1)",
+      "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" status -sb)",
+      "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" log --oneline \"@{u}..HEAD\" 2>$null)",
+      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" status -sb)"
     ],
     "additionalDirectories": [
       "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks",

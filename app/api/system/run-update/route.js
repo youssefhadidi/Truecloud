@@ -17,14 +17,31 @@ import {
 } from '@/lib/updateStatus';
 import {
   resolveTorrentServicePath,
-  detectPackageManager,
+  resolvePackageManager,
   nativeRebuildArgs,
   TORRENT_SERVICE_BRANCH,
 } from '@/lib/torrentServiceRepo';
 
+/**
+ * Parks anything the last deploy left dirty — installs and builds rewrite
+ * package.json and lockfiles in place, and `git pull` refuses to run over them.
+ *
+ * Stashing rather than discarding keeps the changes recoverable via
+ * `git stash list`. The identity is set inline because stash writes a commit
+ * object, which fails outright on a server with no git user configured. No
+ * argument may contain a space: executeCommand spawns with `shell: true`, which
+ * does not quote them.
+ */
+const STASH_ARGS = [
+  '-c', 'user.name=truecloud-updater',
+  '-c', 'user.email=updater@truecloud.local',
+  'stash', 'push', '-m', 'truecloud-auto-update',
+];
+
 function appSteps() {
   const cwd = process.cwd();
   return [
+    { name: STEPS.STASHING, command: 'git', args: STASH_ARGS, cwd },
     { name: STEPS.PULLING, command: 'bun', args: ['run', 'pull'], cwd },
     { name: STEPS.INSTALLING, command: 'bun', args: ['install'], cwd },
     { name: STEPS.REBUILDING, command: 'sh', args: ['-c', 'SHARP_FORCE_GLOBAL_LIBVIPS= bun pm trust --all'], cwd },
@@ -50,17 +67,17 @@ function torrentServiceSteps() {
     throw new Error('torrent-service checkout not found. Set TORRENT_SERVICE_PATH to its directory.');
   }
 
-  const pm = detectPackageManager(cwd);
+  const pm = resolvePackageManager();
   return [
+    { name: STEPS.STASHING, command: 'git', args: STASH_ARGS, cwd },
     // Explicit remote/branch: the checkout may have no upstream tracking set,
     // and --ff-only keeps a deploy from silently creating a merge commit.
     { name: STEPS.PULLING, command: 'git', args: ['pull', '--ff-only', 'origin', TORRENT_SERVICE_BRANCH], cwd },
     { name: STEPS.INSTALLING, command: pm, args: ['install'], cwd },
-    // Re-runs node-datachannel's own install script (prebuild-install) in its
-    // real directory. The repo's `rebuild-native` script can't be used: it
-    // resolves node-datachannel from the project root, which only holds under a
-    // hoisted layout — under pnpm it's a transitive dep of webtorrent and never
-    // appears there.
+    // Re-runs node-datachannel's own install script (prebuild-install). The
+    // repo's `rebuild-native` script can't be used: it resolves
+    // node-datachannel from the project root, which only holds under a hoisted
+    // layout — under pnpm it's a transitive dep of webtorrent and isn't there.
     { name: STEPS.REBUILDING, command: pm, args: nativeRebuildArgs(pm), cwd },
     { name: STEPS.RESTARTING, command: 'systemctl', args: ['restart', 'torrent-service'], cwd },
   ];

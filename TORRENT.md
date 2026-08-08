@@ -76,7 +76,7 @@ The WS bridge in `server.js` auto-reconnects every 3 seconds if the torrent-serv
 | `TORRENT_SERVICE_URL` | `http://localhost:9669` | Base URL of the torrent microservice (set same value in both services) |
 | `TORRENT_SERVICE_PORT` | `9669` | Port the microservice listens on (torrent-service only) |
 | `TORRENT_SERVICE_PATH` | `../torrent-service` | Path to the torrent-service git checkout, used by the admin update check |
-| `TORRENT_SERVICE_PM` | from lockfile, else `npm` | Forces the package manager the admin update uses (`bun` / `pnpm` / `npm`) |
+| `TORRENT_SERVICE_PM` | `bun` | Package manager (or absolute path to it) the admin update installs with |
 | `TORRENT_STATE_FILE` | `./torrent-downloads.json` | Path where download state is persisted across restarts |
 | `UPLOAD_DIR` | `./uploads` | Absolute path to the files root — must match the main app |
 
@@ -120,20 +120,18 @@ updates independently of the main app.
   semver bump. If the checkout can't be located, `torrentService.available` is `false`
   and the main app's result is still returned as normal.
 - **Applying** — `POST /api/system/run-update` with `{ "target": "torrent-service" }`
-  runs pull → install → `<pm> rebuild node-datachannel` → `systemctl restart torrent-service`.
+  runs stash → pull → install → native rebuild → `systemctl restart torrent-service`.
   Omit `target` (or send `"app"`) for the main app's update. Only one update may run
   at a time; a second request gets a `409`.
-- **Package manager** — chosen from the lockfile (`bun.lock` → bun,
-  `pnpm-lock.yaml` → pnpm, else npm), or pinned with `TORRENT_SERVICE_PM`.
-  Only the *install* varies; `ExecStart` must stay `node index.mjs` whatever
-  installs the deps. Don't let it drift: switching rewrites `node_modules`, and
-  `node-datachannel` is a transitive dep of `webtorrent`, so it sits at the root
-  under bun/npm but not under pnpm — which is why the repo's own
-  `rebuild-native` script breaks there. Delete stale lockfiles when switching.
-- **Native rebuild** — `bun pm trust --all` under bun (bun has no `rebuild`),
-  `<pm> rebuild node-datachannel` otherwise. Under bun this needs the top-level
-  `trustedDependencies` in torrent-service's `package.json`; under pnpm 10 it
-  needs `pnpm.onlyBuiltDependencies`. Both keys are declared.
+- **Package manager** — always **bun**, matching the main app. Only the
+  *install* is bun's: `ExecStart` must stay `node index.mjs` no matter what
+  installs the deps. `TORRENT_SERVICE_PM` overrides, and takes an absolute path
+  (`/root/.bun/bin/bun`) for when bun isn't on the service's `PATH`.
+- **Native rebuild** — `bun pm trust --all`; bun has no `rebuild` command. This
+  relies on the top-level `trustedDependencies` in torrent-service's
+  `package.json`. (`pnpm.onlyBuiltDependencies` is declared alongside it so an
+  override to pnpm still builds, where the step becomes
+  `<pm> rebuild node-datachannel`.)
 - **UI** — Admin → System Health has a dedicated *Update Torrent Service* button next
   to *Start Update*, and the update toast offers each one separately.
 
