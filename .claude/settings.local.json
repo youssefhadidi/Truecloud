@@ -68,7 +68,9 @@
       "PowerShell(npx next lint --file components/files/TorrentSearchPanel.jsx --file components/files/TorrentDownloadComponent.jsx --file lib/redux/hooks.js --file lib/redux/store.js --file lib/redux/slices/downloadsSlice.js --file hooks/useLogout.js)",
       "PowerShell(npx eslint components/files/TorrentSearchPanel.jsx components/files/TorrentDownloadComponent.jsx lib/redux/hooks.js lib/redux/store.js lib/redux/slices/downloadsSlice.js hooks/useLogout.js)",
       "PowerShell(npx eslint components/files/DestinationPicker.jsx components/files/TorrentSearchPanel.jsx components/files/TorrentDownloadComponent.jsx components/files/MoveModal.jsx lib/i18n/dictionaries/en.js lib/i18n/dictionaries/fr.js)",
-      "PowerShell(npx next build 2>&1)"
+      "PowerShell(npx next build 2>&1)",
+      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" status --short)",
+      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" log --oneline -1)"
     ],
     "additionalDirectories": [
       "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks",

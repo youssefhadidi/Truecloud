@@ -76,7 +76,7 @@ The WS bridge in `server.js` auto-reconnects every 3 seconds if the torrent-serv
 | `TORRENT_SERVICE_URL` | `http://localhost:9669` | Base URL of the torrent microservice (set same value in both services) |
 | `TORRENT_SERVICE_PORT` | `9669` | Port the microservice listens on (torrent-service only) |
 | `TORRENT_SERVICE_PATH` | `../torrent-service` | Path to the torrent-service git checkout, used by the admin update check |
-| `TORRENT_SERVICE_PM` | `npm`, or `pnpm` if only `pnpm-lock.yaml` is present | Forces the package manager the admin update uses |
+| `TORRENT_SERVICE_PM` | from lockfile, else `npm` | Forces the package manager the admin update uses (`bun` / `pnpm` / `npm`) |
 | `TORRENT_STATE_FILE` | `./torrent-downloads.json` | Path where download state is persisted across restarts |
 | `UPLOAD_DIR` | `./uploads` | Absolute path to the files root — must match the main app |
 
@@ -99,9 +99,9 @@ The `truecloud.service` unit declares `Wants=torrent-service.service` so systemd
 ## Development
 
 ```bash
-# Terminal 1 — torrent service (Node.js required, not Bun)
+# Terminal 1 — torrent service. Install with anything; RUN with node, not bun.
 cd torrent-service
-pnpm install
+bun install
 node index.mjs
 
 # Terminal 2 — main app
@@ -123,11 +123,17 @@ updates independently of the main app.
   runs pull → install → `<pm> rebuild node-datachannel` → `systemctl restart torrent-service`.
   Omit `target` (or send `"app"`) for the main app's update. Only one update may run
   at a time; a second request gets a `409`.
-- **Package manager** — **npm** unless only a `pnpm-lock.yaml` is present, and
-  `TORRENT_SERVICE_PM` pins it outright. Don't let this drift: switching managers
-  rewrites `node_modules`, and `node-datachannel` is a transitive dep of
-  `webtorrent`, so it sits at the root under npm but not under pnpm. The repo's
-  own `rebuild-native` script assumes the npm layout and breaks under pnpm.
+- **Package manager** — chosen from the lockfile (`bun.lock` → bun,
+  `pnpm-lock.yaml` → pnpm, else npm), or pinned with `TORRENT_SERVICE_PM`.
+  Only the *install* varies; `ExecStart` must stay `node index.mjs` whatever
+  installs the deps. Don't let it drift: switching rewrites `node_modules`, and
+  `node-datachannel` is a transitive dep of `webtorrent`, so it sits at the root
+  under bun/npm but not under pnpm — which is why the repo's own
+  `rebuild-native` script breaks there. Delete stale lockfiles when switching.
+- **Native rebuild** — `bun pm trust --all` under bun (bun has no `rebuild`),
+  `<pm> rebuild node-datachannel` otherwise. Under bun this needs the top-level
+  `trustedDependencies` in torrent-service's `package.json`; under pnpm 10 it
+  needs `pnpm.onlyBuiltDependencies`. Both keys are declared.
 - **UI** — Admin → System Health has a dedicated *Update Torrent Service* button next
   to *Start Update*, and the update toast offers each one separately.
 
@@ -140,7 +146,12 @@ If `node-datachannel` fails to find its prebuilt binary (e.g. after a fresh clon
 
 ```bash
 cd torrent-service
-pnpm run rebuild-native
+bun pm trust --all        # bun; or `npm rebuild node-datachannel`
 ```
 
-This runs `prebuild-install -r napi` against the installed `node-datachannel` package to fetch or compile the correct binary for the current Node.js ABI version.
+This re-runs `node-datachannel`'s install script (`prebuild-install -r napi`) to
+fetch or compile the correct binary for the current Node.js ABI version.
+
+The repo's `rebuild-native` script does the same thing, but resolves
+`node-datachannel` from the project root — fine under bun/npm, broken under
+pnpm, where it's a transitive dep of `webtorrent`. Prefer the commands above.
