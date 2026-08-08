@@ -85,12 +85,16 @@ export default function TorrentDownloadComponent({ onDownloadStart, currentPath 
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Start New Download</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow flex flex-col lg:h-full lg:min-h-0">
+      {/* Fixed header; the form below scrolls on its own so the page doesn't. */}
+      <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Start New Download</h2>
+      </div>
 
-      {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{error}</div>}
+      <div className="p-6 lg:flex-1 lg:overflow-y-auto lg:min-h-0">
+        {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{error}</div>}
 
-      <div className="space-y-6">
+        <div className="space-y-6">
         {/* Download Path */}
         <div>
           <label htmlFor="path" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -180,6 +184,7 @@ export default function TorrentDownloadComponent({ onDownloadStart, currentPath 
           <FiPlay size={18} />
           {startDownloadMutation.isPending ? 'Starting Download...' : 'Start Download'}
         </button>
+        </div>
       </div>
     </div>
   );

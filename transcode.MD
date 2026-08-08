@@ -8,6 +8,29 @@ Hardware acceleration via VAAPI is used automatically when available (`/dev/dri/
 
 ---
 
+## Design decision: no adaptive bitrate
+
+**Truecloud does not do ABR, and this is deliberate — not a missing feature.**
+
+Every file gets exactly one rendition. Its quality is whatever the administrator
+configured in **Admin → Media Processing → Transcoding** (`maxHeight`, stored in
+`config/transcoding-settings.json`, read through `lib/transcodingConfig.mjs`).
+That setting is authoritative: quality is never negotiated from client bandwidth,
+viewport size, or hls.js level switching, and the player is never offered a
+choice of levels.
+
+The reason is hardware. The server has a single VAAPI encode engine, which is why
+`lib/hlsManager.js` caps HLS transcoding at one concurrent job — parallel jobs
+would serialise on the GPU anyway. An ABR ladder means encoding each file two or
+three times over, multiplying a queue that already makes a second concurrent
+viewer wait behind the first.
+
+If playback quality needs to change, change the admin setting. Do not add
+multi-rendition manifests, per-client quality selection, or bandwidth-driven
+level switching.
+
+---
+
 ## Enabling Transcoding
 
 1. Go to **Admin → Components**

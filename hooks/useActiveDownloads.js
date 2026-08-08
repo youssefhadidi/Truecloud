@@ -5,7 +5,8 @@
  * file browser (useFilesPage) and the downloads management page.
  *
  * DATA FLOW:
- * 1. On mount, initializes with provided initialDownloads (from API)
+ * 1. Seeds from initialDownloads (from API) whenever they arrive — live
+ *    WebSocket state always wins over a seed for the same gid
  * 2. Subscribes to 'torrent-downloads' messages from app-level WebSocket
  * 3. Receives real-time updates via subscribed messages:
  *    - download-progress: Updates progress every 1s
@@ -27,17 +28,55 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useNotifications } from '@/contexts/NotificationsContext';
+import { useTranslation } from '@/components/LanguageProvider';
 import { usePauseDownload, useResumeDownload, useRemoveDownload } from '@/lib/api/downloads';
+
+const DOWNLOAD_DEFAULTS = {
+  name: 'Unknown',
+  path: '', // relative path, used to filter downloads per browsed directory
+  progress: 0,
+  status: 'active',
+  downloadSpeed: '0 B/s',
+  uploadSpeed: '0 B/s',
+  downloaded: '0 B',
+  totalSize: '—',
+  seeders: 0,
+  peers: 0,
+  isTorrent: false,
+  error: null,
+};
+
+/**
+ * Merge a download record over the entry we already hold.
+ *
+ * Every record arrives as JSON (API response or WebSocket frame), so a field the
+ * backend omits is an absent key rather than an explicit undefined — spreading
+ * therefore keeps the previous value instead of resetting it to the default.
+ */
+function mergeDownload(existing, record) {
+  return { ...DOWNLOAD_DEFAULTS, ...existing, ...record };
+}
 
 export function useActiveDownloads(initialDownloads = []) {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
-  const initializedRef = useRef(false); // Track if we've initialized to prevent reinitializing on every apiDownloads change
   const rafPendingRef = useRef(false); // RAF flush is scheduled
   const { subscribe } = useWebSocket(); // Call hook at top level
+  const { addNotification } = useNotifications();
+  const { t } = useTranslation();
   const pauseMutation = usePauseDownload();
   const resumeMutation = useResumeDownload();
   const removeMutation = useRemoveDownload();
+
+  // Kept in a ref rather than read straight from the closure: addNotification
+  // gets a fresh identity every time a toast is shown, so depending on it in the
+  // subscription effect below would tear down and re-open the WebSocket
+  // subscription on each notification.
+  const notifyCompleteRef = useRef(null);
+  useEffect(() => {
+    notifyCompleteRef.current = (name) => addNotification('success', t('notify.downloadCompleted', { name }));
+  }, [addNotification, t]);
 
   // Sync downloads map to state
   const syncDownloads = useCallback(() => {
@@ -59,124 +98,84 @@ export function useActiveDownloads(initialDownloads = []) {
     }
   }, [syncDownloads]);
 
-  // Initialize with provided downloads (from API or caller) - only once on mount
-  // Do NOT reinitialize when initialDownloads changes, as that clears WebSocket updates
+  // Seed with downloads fetched from the API (they may arrive after mount, and
+  // again on a refetch). Only gids we haven't heard of are added, so a seed can
+  // never roll back or clobber fresher WebSocket state.
   useEffect(() => {
-    if (!initializedRef.current && initialDownloads && Array.isArray(initialDownloads) && initialDownloads.length > 0) {
-      initializedRef.current = true;
-      for (const dl of initialDownloads) {
-        downloadsRef.current.set(dl.gid, {
-          gid: dl.gid,
-          name: dl.name,
-          path: dl.path || '', // Use relative path from backend
-          progress: dl.progress || 0,
-          status: dl.status || 'active',
-          downloadSpeed: dl.downloadSpeed || '0 B/s',
-          uploadSpeed: dl.uploadSpeed || '0 B/s',
-          seeders: dl.seeders || 0,
-          peers: dl.peers || 0,
-          isTorrent: dl.isTorrent || false,
-          error: dl.error || null,
-        });
-      }
-      syncDownloads();
+    if (!Array.isArray(initialDownloads) || initialDownloads.length === 0) return;
+
+    let seeded = false;
+    for (const dl of initialDownloads) {
+      if (!dl?.gid || downloadsRef.current.has(dl.gid)) continue;
+      downloadsRef.current.set(dl.gid, mergeDownload(null, dl));
+      seeded = true;
     }
-  }, [syncDownloads]); // Only depend on syncDownloads, not initialDownloads!
+    // Flushed on the next frame rather than synchronously: a seed must not
+    // cascade a second render out of the effect that produced it.
+    if (seeded) scheduleSync();
+  }, [initialDownloads, scheduleSync]);
 
   // Subscribe to torrent-downloads messages from unified WebSocket
   useEffect(() => {
     const unsubscribe = subscribe('torrent-downloads', (message) => {
       try {
-        const { payload } = message;
+        // server.js wraps each producer event once more before it reaches the
+        // browser, so the frame is:
+        //   { type: 'torrent-downloads', payload: { type, payload: <data> } }
+        // The download fields live in that inner payload, not one level up. The
+        // fallback covers a producer that puts them on the event itself.
+        const inner = message.payload || {};
+        const { type } = inner;
+        const data = inner.payload || inner;
+        const { gid } = data;
 
-        if (payload.type === 'download-progress') {
-          // Update download progress in real-time
-          const existing = downloadsRef.current.get(payload.gid);
-          if (existing) {
-            downloadsRef.current.set(payload.gid, {
-              ...existing,
-              ...payload,
-            });
+        if (type === 'download-progress') {
+          // Progress frames carry the full record, so an unknown gid (a download
+          // started before this page mounted, or from another client) is upserted
+          // rather than dropped.
+          if (gid) {
+            downloadsRef.current.set(gid, mergeDownload(downloadsRef.current.get(gid), data));
             scheduleSync(); // batched — avoids a setState per-second per-download
           }
-        } else if (payload.type === 'download-added') {
-          const existing = downloadsRef.current.get(payload.gid);
-          downloadsRef.current.set(payload.gid, {
-            ...existing,
-            gid: payload.gid,
-            name: payload.name || 'Unknown',
-            path: payload.path || '',
-            progress: payload.progress || 0,
-            status: payload.status || 'active',
-            downloadSpeed: payload.downloadSpeed || '0 B/s',
-            uploadSpeed: payload.uploadSpeed || '0 B/s',
-            seeders: payload.seeders || 0,
-            peers: payload.peers || 0,
-            isTorrent: payload.isTorrent || false,
-            error: payload.error || null,
-          });
-          syncDownloads();
-        } else if (payload.type === 'downloads-status') {
-          const { downloads: downloadsList } = payload;
+        } else if (type === 'download-added') {
+          if (gid) {
+            downloadsRef.current.set(gid, mergeDownload(downloadsRef.current.get(gid), data));
+            syncDownloads();
+          }
+        } else if (type === 'downloads-status') {
+          const { downloads: downloadsList } = data;
           if (Array.isArray(downloadsList)) {
             for (const dl of downloadsList) {
-              const existing = downloadsRef.current.get(dl.gid);
-              downloadsRef.current.set(dl.gid, {
-                ...existing,
-                gid: dl.gid,
-                name: dl.name || 'Unknown',
-                path: dl.path || '', // Include path from backend
-                progress: dl.progress || 0,
-                status: dl.status || 'active',
-                downloadSpeed: dl.downloadSpeed || '0 B/s',
-                uploadSpeed: dl.uploadSpeed || '0 B/s',
-                seeders: dl.seeders || 0,
-                peers: dl.peers || 0,
-                isTorrent: dl.isTorrent || false,
-                error: dl.error || null,
-              });
+              if (!dl?.gid) continue;
+              downloadsRef.current.set(dl.gid, mergeDownload(downloadsRef.current.get(dl.gid), dl));
             }
-          }
-          syncDownloads();
-        } else if (payload.type === 'download-paused') {
-          const existing = downloadsRef.current.get(payload.gid);
-          if (existing) {
-            downloadsRef.current.set(payload.gid, {
-              ...existing,
-              ...payload,
-              status: 'paused',
-            });
             syncDownloads();
           }
-        } else if (payload.type === 'download-resumed') {
-          const existing = downloadsRef.current.get(payload.gid);
-          if (existing) {
-            downloadsRef.current.set(payload.gid, {
-              ...existing,
-              ...payload,
-              status: 'active',
-            });
-            syncDownloads();
-          }
-        } else if (payload.type === 'download-removed') {
-          const { gid } = payload;
-          downloadsRef.current.delete(gid);
-          syncDownloads();
-        } else if (payload.type === 'download-complete') {
-          const { gid } = payload;
+        } else if (type === 'download-paused') {
           const existing = downloadsRef.current.get(gid);
           if (existing) {
-            downloadsRef.current.set(gid, {
-              ...existing,
-              status: 'complete',
-              progress: 100,
-            });
+            downloadsRef.current.set(gid, { ...mergeDownload(existing, data), status: 'paused' });
             syncDownloads();
-            // Auto-remove after 5 s so user can see completion before it disappears
-            setTimeout(() => {
-              downloadsRef.current.delete(gid);
-              syncDownloads();
-            }, 5000);
+          }
+        } else if (type === 'download-resumed') {
+          const existing = downloadsRef.current.get(gid);
+          if (existing) {
+            downloadsRef.current.set(gid, { ...mergeDownload(existing, data), status: 'active' });
+            syncDownloads();
+          }
+        } else if (type === 'download-removed') {
+          downloadsRef.current.delete(gid);
+          syncDownloads();
+        } else if (type === 'download-complete') {
+          if (gid) {
+            const existing = downloadsRef.current.get(gid);
+            // The completion frame carries the finished record, so a client that
+            // never saw the transfer still gets a named row. The entry is kept:
+            // the service holds finished downloads as history until dismissed.
+            downloadsRef.current.set(gid, { ...mergeDownload(existing, data), status: 'complete', progress: 100 });
+            syncDownloads();
+            // Guarded on the previous status so a repeated frame can't toast twice.
+            if (existing?.status !== 'complete') notifyCompleteRef.current?.(data.name || existing?.name);
           }
         }
       } catch (err) {
@@ -185,24 +184,20 @@ export function useActiveDownloads(initialDownloads = []) {
     });
 
     return unsubscribe;
-  }, [syncDownloads, scheduleSync]);
+  }, [subscribe, syncDownloads, scheduleSync]);
 
   // Add a download to the tracked map (called when user starts a download from UI)
   const addDownload = useCallback(
     (gid, name, path) => {
-      downloadsRef.current.set(gid, {
+      downloadsRef.current.set(
         gid,
-        name,
-        path,
-        progress: 0,
-        status: 'active',
-        downloadSpeed: '0 B/s',
-        uploadSpeed: '0 B/s',
-        seeders: 0,
-        peers: 0,
-        isTorrent: name.toLowerCase().endsWith('.torrent') || false,
-        error: null,
-      });
+        mergeDownload(null, {
+          gid,
+          name,
+          path,
+          isTorrent: name.toLowerCase().endsWith('.torrent'),
+        }),
+      );
       syncDownloads();
     },
     [syncDownloads],
@@ -234,11 +229,12 @@ export function useActiveDownloads(initialDownloads = []) {
     [resumeMutation],
   );
 
-  // Remove a download
+  // Remove a download. Resolves with { filesDeleted } so the caller can say
+  // whether this dismissed history or deleted an unfinished download's data.
   const removeDownload = useCallback(
     async (gid) => {
       try {
-        await removeMutation.mutateAsync(gid);
+        return await removeMutation.mutateAsync(gid);
       } catch (err) {
         console.error('[DOWNLOADS] Failed to remove download:', err.message);
         throw err;

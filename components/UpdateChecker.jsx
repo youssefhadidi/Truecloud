@@ -12,15 +12,25 @@ import { useNotifications } from '@/contexts/NotificationsContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 
 const DISMISSED_VERSION_KEY = 'update_dismissed_version';
+const DISMISSED_TORRENT_KEY = 'update_dismissed_torrent_service';
 
 export default function UpdateChecker() {
   const { data: updateInfo } = useCheckUpdates(true);
   const runUpdateMutation = useRunUpdate();
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(null); // null | 'app' | 'torrent-service'
   const [dismissed, setDismissed] = useState(false);
+  const [torrentDismissed, setTorrentDismissed] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const { subscribe } = useWebSocket();
   const { addNotification } = useNotifications();
+
+  const torrentService = updateInfo?.torrentService;
+  // torrent-service pins its package.json version, so dismissal is keyed on the
+  // remote commit instead.
+  const torrentMarker = torrentService?.latestCommit || null;
+
+  const showAppUpdate = Boolean(updateInfo?.hasUpdate) && !dismissed;
+  const showTorrentUpdate = Boolean(torrentService?.hasUpdate) && !torrentDismissed;
 
   useEffect(() => {
     if (updateInfo?.latestVersion) {
@@ -30,6 +40,12 @@ export default function UpdateChecker() {
   }, [updateInfo]);
 
   useEffect(() => {
+    if (torrentMarker) {
+      setTorrentDismissed(localStorage.getItem(DISMISSED_TORRENT_KEY) === torrentMarker);
+    }
+  }, [torrentMarker]);
+
+  useEffect(() => {
     const unsubscribe = subscribe('update-status', (message) => {
       try { setUpdateStatus(message.payload); } catch {}
     });
@@ -37,24 +53,35 @@ export default function UpdateChecker() {
   }, [subscribe]);
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.latestVersion);
-    setDismissed(true);
-  };
-
-  const handleUpdate = async () => {
-    try {
-      const result = await runUpdateMutation.mutateAsync();
-      if (result.success) {
-        addNotification('success', 'Update started. The server will restart shortly…');
-        setShowConfirm(false);
-      }
-    } catch (error) {
-      addNotification('error', 'Failed to start update: ' + (error.response?.data?.error || error.message));
-      setShowConfirm(false);
+    if (showAppUpdate) {
+      localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.latestVersion);
+      setDismissed(true);
+    }
+    if (showTorrentUpdate && torrentMarker) {
+      localStorage.setItem(DISMISSED_TORRENT_KEY, torrentMarker);
+      setTorrentDismissed(true);
     }
   };
 
-  if (!updateInfo?.hasUpdate || dismissed) return null;
+  const handleUpdate = async (target) => {
+    try {
+      const result = await runUpdateMutation.mutateAsync(target);
+      if (result.success) {
+        addNotification(
+          'success',
+          target === 'torrent-service'
+            ? 'Torrent service update started…'
+            : 'Update started. The server will restart shortly…'
+        );
+        setShowConfirm(null);
+      }
+    } catch (error) {
+      addNotification('error', 'Failed to start update: ' + (error.response?.data?.error || error.message));
+      setShowConfirm(null);
+    }
+  };
+
+  if (!showAppUpdate && !showTorrentUpdate) return null;
 
   return (
     <div
@@ -96,9 +123,17 @@ export default function UpdateChecker() {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Update available</div>
-          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-            {updateInfo.currentVersion} → {updateInfo.latestVersion}
-          </div>
+          {showAppUpdate && (
+            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+              Truecloud {updateInfo.currentVersion} → {updateInfo.latestVersion}
+            </div>
+          )}
+          {showTorrentUpdate && (
+            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+              Torrent service · {torrentService.commitsBehind ?? 'new'} new commit
+              {torrentService.commitsBehind === 1 ? '' : 's'}
+            </div>
+          )}
 
           {updateStatus?.isRunning && (
             <div
@@ -122,7 +157,9 @@ export default function UpdateChecker() {
                     animation: 'tc-pulse 1.2s ease infinite',
                   }}
                 />
-                <span style={{ fontWeight: 600 }}>Update in progress…</span>
+                <span style={{ fontWeight: 600 }}>
+                  {updateStatus.targetLabel ? `${updateStatus.targetLabel} update in progress…` : 'Update in progress…'}
+                </span>
               </div>
               <div>
                 Step {updateStatus.steps.filter((s) => s.status === 'completed').length +
@@ -153,23 +190,43 @@ export default function UpdateChecker() {
             </details>
           )}
 
+          {/* The app and torrent-service are separate repos, so each gets its
+              own button — updating one leaves the other untouched. */}
           <div style={{ marginTop: 10 }}>
-            {!showConfirm ? (
-              <Btn
-                variant="primary"
-                size="sm"
-                disabled={runUpdateMutation.isPending}
-                onClick={() => setShowConfirm(true)}
-              >
-                {runUpdateMutation.isPending ? 'Updating…' : 'Update now'}
-              </Btn>
-            ) : (
+            {showConfirm ? (
               <Confirm
-                message="Update? The server will restart automatically."
-                onCancel={() => setShowConfirm(false)}
-                onConfirm={handleUpdate}
+                message={
+                  showConfirm === 'torrent-service'
+                    ? 'Update the torrent service? Active torrent downloads will be interrupted.'
+                    : 'Update? The server will restart automatically.'
+                }
+                onCancel={() => setShowConfirm(null)}
+                onConfirm={() => handleUpdate(showConfirm)}
                 isLoading={runUpdateMutation.isPending}
               />
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {showAppUpdate && (
+                  <Btn
+                    variant="primary"
+                    size="sm"
+                    disabled={runUpdateMutation.isPending}
+                    onClick={() => setShowConfirm('app')}
+                  >
+                    {runUpdateMutation.isPending ? 'Updating…' : 'Update now'}
+                  </Btn>
+                )}
+                {showTorrentUpdate && (
+                  <Btn
+                    variant={showAppUpdate ? 'outline' : 'primary'}
+                    size="sm"
+                    disabled={runUpdateMutation.isPending}
+                    onClick={() => setShowConfirm('torrent-service')}
+                  >
+                    {runUpdateMutation.isPending ? 'Updating…' : 'Update torrent service'}
+                  </Btn>
+                )}
+              </div>
             )}
           </div>
         </div>

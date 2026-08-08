@@ -2,28 +2,42 @@
 
 'use client';
 
-import { useState } from 'react';
-import { FiPause, FiPlay, FiTrash2 } from 'react-icons/fi';
+import { useState, useMemo } from 'react';
+import { FiPause, FiPlay, FiTrash2, FiCheckCircle, FiX } from 'react-icons/fi';
 import TorrentDownloadComponent from '@/components/files/TorrentDownloadComponent';
 import TorrentSearchPanel from '@/components/files/TorrentSearchPanel';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
+import { useGetDownloads, useClearCompleted } from '@/lib/api/downloads';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTranslation } from '@/components/LanguageProvider';
 
 /**
  * Downloads management page.
  *
- * Uses the same useActiveDownloads WebSocket hook as the file browser,
- * so all download status updates are real-time (no polling needed).
+ * Uses the same useActiveDownloads WebSocket hook as the file browser, so all
+ * download status updates are real-time (no polling needed). The initial list is
+ * fetched once from the API — WebSocket events alone would leave transfers that
+ * were already running before this page mounted invisible until they finish.
  */
 export default function DownloadsPage() {
-  const { downloads: downloadsMap, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads();
+  const { data: initialDownloads } = useGetDownloads();
+  const { downloads: downloadsMap, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads(initialDownloads);
   const { addNotification } = useNotifications();
   const { t } = useTranslation();
+  const clearCompletedMutation = useClearCompleted();
   const [actionLoading, setActionLoading] = useState(null); // gid of item currently being acted on
 
-  // Convert downloads map to array (show ALL downloads, not filtered by path)
-  const downloads = Object.values(downloadsMap);
+  // Transfers in flight and finished history are listed separately: a finished
+  // download has no progress to watch, only a name to keep or dismiss.
+  const { active, completed } = useMemo(() => {
+    const all = Object.values(downloadsMap); // every path, not just the browsed one
+    return {
+      active: all.filter((d) => d.status !== 'complete'),
+      completed: all
+        .filter((d) => d.status === 'complete')
+        .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)),
+    };
+  }, [downloadsMap]);
 
   const handleDownloadStart = (downloadInfo) => {
     addNotification('success', t('notify.downloadStarted', { name: downloadInfo.name }));
@@ -56,8 +70,11 @@ export default function DownloadsPage() {
   const handleRemove = async (download) => {
     try {
       setActionLoading(download.gid);
-      await removeDownload(download.gid);
-      addNotification('success', t('notify.removed', { name: download.name }));
+      // Finished downloads are only dismissed; unfinished ones lose their
+      // partial data, and the message says so rather than leaving it implied.
+      const result = await removeDownload(download.gid);
+      const key = result?.filesDeleted ? 'notify.removedWithFiles' : 'notify.removed';
+      addNotification('success', t(key, { name: download.name }));
     } catch (error) {
       addNotification('error', t('notify.removeFailed', { message: error.message }));
     } finally {
@@ -65,49 +82,57 @@ export default function DownloadsPage() {
     }
   };
 
+  const handleClearCompleted = async () => {
+    try {
+      const { cleared } = await clearCompletedMutation.mutateAsync();
+      addNotification('success', t('notify.completedCleared', { count: cleared }));
+    } catch (error) {
+      addNotification('error', t('notify.removeFailed', { message: error.message }));
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Page Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 lg:px-8 py-4 flex-shrink-0">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+        {/* Full width to line up with the three-column body below */}
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('downloads.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">{t('downloads.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">{downloads.length}</span>
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">{active.length}</span>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Torrent Index Search — full width, results table needs the room */}
-            <div className="lg:col-span-3">
+      {/* Main Content — three columns side by side on large screens. Each column owns
+          its own scrollbar (min-h-0 is what lets a grid child shrink and scroll), so
+          the page itself never scrolls. Below lg the columns stack and the page scrolls
+          normally, since three columns don't fit a narrow viewport. */}
+      <div className="flex-1 overflow-y-auto lg:overflow-hidden">
+        <div className="lg:h-full px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:h-full lg:min-h-0">
+            {/* Torrent Index Search — widest, its results list scrolls internally */}
+            <div className="lg:col-span-5 lg:h-full lg:min-h-0">
               <TorrentSearchPanel onDownloadStart={handleDownloadStart} />
             </div>
 
-            {/* Download Form */}
-            <div className="lg:col-span-1">
-              <TorrentDownloadComponent onDownloadStart={handleDownloadStart} />
-            </div>
-
             {/* Downloads List */}
-            <div className="lg:col-span-2">
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <div className="lg:col-span-4 lg:h-full lg:min-h-0">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow flex flex-col lg:h-full lg:min-h-0">
+                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('downloads.activeDownloads')}</h2>
                 </div>
 
-                {downloads.length === 0 ? (
+                {active.length === 0 && completed.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
                     <p>{t('downloads.noActiveDownloads')}</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {downloads.map((download) => (
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700 lg:flex-1 lg:overflow-y-auto lg:min-h-0">
+                    {active.map((download) => (
                       <div key={download.gid} className="p-6">
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <h3 className="font-medium text-gray-900 dark:text-white truncate">{download.name}</h3>
@@ -212,9 +237,58 @@ export default function DownloadsPage() {
                         </div>
                       </div>
                     ))}
+
+                    {/* Finished transfers, kept until dismissed. Compact on purpose:
+                        there is no progress left to watch, only a name and a size. */}
+                    {completed.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-gray-900/40">
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            {t('downloads.completedSection', { count: completed.length })}
+                          </h3>
+                          <button
+                            onClick={handleClearCompleted}
+                            disabled={clearCompletedMutation.isPending}
+                            className="text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 disabled:opacity-50"
+                          >
+                            {t('downloads.clearAll')}
+                          </button>
+                        </div>
+                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {completed.map((download) => (
+                            <div key={download.gid} className="flex items-center gap-3 px-6 py-3">
+                              <FiCheckCircle className="flex-shrink-0 text-green-600 dark:text-green-400" size={16} />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm text-gray-900 dark:text-white" title={download.name}>
+                                  {download.name}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {download.totalSize}
+                                  {download.completedAt ? ` · ${new Date(download.completedAt).toLocaleString()}` : ''}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleRemove(download)}
+                                disabled={actionLoading === download.gid}
+                                title={t('downloads.dismissHint')}
+                                className="flex flex-shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                              >
+                                <FiX size={14} />
+                                {t('downloads.dismiss')}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Add New Download */}
+            <div className="lg:col-span-3 lg:h-full lg:min-h-0">
+              <TorrentDownloadComponent onDownloadStart={handleDownloadStart} />
             </div>
           </div>
         </div>

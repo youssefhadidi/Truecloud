@@ -25,8 +25,37 @@ Running the torrent code inside the main Bun process is therefore not viable wit
 │  server.js WS bridge ◄──────────┼────────┤  → download-complete         │
 │  global.broadcastTorrentDownload│        │  → download-paused           │
 │  Update → frontend clients      │        │  → download-resumed          │
+│                                 │        │  → download-removed          │
+│                                 │        │  → downloads-status          │
 └─────────────────────────────────┘        └──────────────────────────────┘
 ```
+
+### Completed downloads
+
+A finished download is **kept** as history (`GET /downloads/completed`) instead of
+being forgotten, because the clients that care about a completion are not
+necessarily connected when it happens. The history is bounded
+(`TORRENT_COMPLETED_HISTORY`, default 100), persisted with the rest of the state,
+and dismissed explicitly — per entry via `DELETE /downloads/:gid`, or wholesale
+via `DELETE /downloads/completed`.
+
+Deleting is not one behaviour:
+
+| Download state | `DELETE /downloads/:gid` does |
+|---|---|
+| complete | drops the history row; **files are kept** |
+| active | removes the torrent with `destroyStore: true` — **partial data is deleted** |
+| paused | unlinks `${dir}/${name}` after checking it resolves inside `dir` |
+
+Completed entries are returned by `GET /api/files/torrent-download` (for the
+downloads page) but deliberately **not** by `GET /api/files`, and `useFilesPage`
+filters out any that reach it over the WebSocket — otherwise the placeholder row
+would sit next to the real file it just produced.
+
+Every event carries the finished record, so `download-complete` is enough on its
+own to render a named row. A client connecting to `/events` is also sent a
+`downloads-status` snapshot of the current state, which closes the gap where the
+bridge's 3-second reconnect used to drop completions on the floor.
 
 ### Data flow
 
@@ -46,6 +75,7 @@ The WS bridge in `server.js` auto-reconnects every 3 seconds if the torrent-serv
 |---|---|---|
 | `TORRENT_SERVICE_URL` | `http://localhost:9669` | Base URL of the torrent microservice (set same value in both services) |
 | `TORRENT_SERVICE_PORT` | `9669` | Port the microservice listens on (torrent-service only) |
+| `TORRENT_SERVICE_PATH` | `../torrent-service` | Path to the torrent-service git checkout, used by the admin update check |
 | `TORRENT_STATE_FILE` | `./torrent-downloads.json` | Path where download state is persisted across restarts |
 | `UPLOAD_DIR` | `./uploads` | Absolute path to the files root — must match the main app |
 
@@ -77,6 +107,26 @@ node index.mjs
 cd Truecloud
 bun dev
 ```
+
+## Updates
+
+torrent-service is a **separate git repo** (`youssefhadidi/torrent-service`), so it
+updates independently of the main app.
+
+- **Checking** — `GET /api/system/check-updates` inspects both checkouts and returns
+  the torrent-service result under `torrentService`. Its `package.json` version is
+  pinned, so an update is any commit the remote is ahead by (`commitsBehind`), not a
+  semver bump. If the checkout can't be located, `torrentService.available` is `false`
+  and the main app's result is still returned as normal.
+- **Applying** — `POST /api/system/run-update` with `{ "target": "torrent-service" }`
+  runs pull → install → `rebuild-native` → `systemctl restart torrent-service`.
+  Omit `target` (or send `"app"`) for the main app's update. Only one update may run
+  at a time; a second request gets a `409`.
+- **UI** — Admin → System Health has a dedicated *Update Torrent Service* button next
+  to *Start Update*, and the update toast offers each one separately.
+
+Locate the checkout with `TORRENT_SERVICE_PATH`; it otherwise defaults to a sibling
+directory of the main app.
 
 ## Rebuilding the Native Binary
 

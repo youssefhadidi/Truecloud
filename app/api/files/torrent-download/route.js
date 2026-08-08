@@ -26,7 +26,16 @@ import { writeFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'fs';
 import { logger } from '@/lib/logger';
-import { addDownload, getActiveDownloads, getWaitingDownloads, pauseDownload, resumeDownload, removeDownload } from '@/lib/torrentClient';
+import {
+  addDownload,
+  getActiveDownloads,
+  getWaitingDownloads,
+  getCompletedDownloads,
+  clearCompletedDownloads,
+  pauseDownload,
+  resumeDownload,
+  removeDownload,
+} from '@/lib/torrentClient';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 
 const TORRENT_FILE_DIR = process.env.TORRENT_FILE_DIR || './torrents';
@@ -157,18 +166,21 @@ export async function GET(req) {
 
       logger.debug('GET /api/files/torrent-download', { filterPath });
 
-      // Fetch active and paused downloads in parallel
-      const [activeDownloads, waitingDownloads] = await Promise.all([
+      // Fetch active, paused and completed downloads in parallel
+      const [activeDownloads, waitingDownloads, completedDownloads] = await Promise.all([
         getActiveDownloads(filterPath),
         getWaitingDownloads(0, 100, filterPath),
+        getCompletedDownloads(filterPath),
       ]);
 
-      // Combine active and paused downloads
-      const allDownloads = [...activeDownloads, ...waitingDownloads];
+      // Completed downloads are history: they are returned here for the downloads
+      // page, and left out of GET /api/files so the browser shows the real file.
+      const allDownloads = [...activeDownloads, ...waitingDownloads, ...completedDownloads];
 
       logger.debug('GET /api/files/torrent-download - Success', {
         active: activeDownloads.length,
         waiting: waitingDownloads.length,
+        completed: completedDownloads.length,
         filterPath,
       });
 
@@ -208,6 +220,14 @@ export async function PATCH(req) {
     const body = await req.json();
     const { gid, action } = body;
 
+    // The only action that isn't about one download.
+    if (action === 'clear-completed') {
+      const cleared = await clearCompletedDownloads();
+      logger.info('PATCH /api/files/torrent-download - Completed history cleared', { cleared });
+      // The service broadcasts a download-removed per entry, so clients update themselves.
+      return NextResponse.json({ success: true, cleared });
+    }
+
     if (!gid || !action) {
       return NextResponse.json({ error: 'Missing gid or action' }, { status: 400 });
     }
@@ -225,9 +245,9 @@ export async function PATCH(req) {
         // WebSocket broadcast is handled inside resumeDownload() in webTorrentManager
         return NextResponse.json({ success: true, message: 'Download resumed' });
 
-      case 'remove':
-        await removeDownload(gid);
-        logger.info('PATCH /api/files/torrent-download - Download removed', { gid });
+      case 'remove': {
+        const { filesDeleted = false } = (await removeDownload(gid)) || {};
+        logger.info('PATCH /api/files/torrent-download - Download removed', { gid, filesDeleted });
         // removeDownload() does NOT broadcast, so we broadcast from here
         if (global.broadcastTorrentDownloadUpdate) {
           global.broadcastTorrentDownloadUpdate({
@@ -235,7 +255,10 @@ export async function PATCH(req) {
             payload: { gid },
           });
         }
-        return NextResponse.json({ success: true, message: 'Download removed' });
+        // filesDeleted is true only for unfinished downloads, whose partial data
+        // the service unlinks — the UI tells the user which of the two happened.
+        return NextResponse.json({ success: true, filesDeleted, message: 'Download removed' });
+      }
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

@@ -86,99 +86,107 @@ export default function TorrentSearchPanel({ currentPath = '', onDownloadStart }
   const sortProps = { activeField: sort, order, onSort: handleSort };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('torrentSearch.title')}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow flex flex-col lg:h-full lg:min-h-0">
+      {/* Controls stay pinned; only the results list below scrolls. */}
+      <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{t('torrentSearch.title')}</h2>
 
-      {/* Search controls */}
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 mb-4">
-        <input
-          type="text"
-          value={queryInput}
-          onChange={(e) => setQueryInput(e.target.value)}
-          placeholder={t('torrentSearch.placeholder')}
-          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white sm:w-56"
-        >
-          {SEARCH_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={queryInput.trim().length < 2 || search.isFetching}
-          className="flex items-center justify-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-        >
-          <FiSearch size={16} />
-          {search.isFetching ? t('torrentSearch.searching') : t('torrentSearch.search')}
-        </button>
-      </form>
+        {/* Search controls — query on its own row so the column can stay narrow */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+            placeholder={t('torrentSearch.placeholder')}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          />
+          <div className="flex gap-2">
+            <select
+              value={category}
+              onChange={(e) => setCategory(Number(e.target.value))}
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+            >
+              {SEARCH_CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={queryInput.trim().length < 2 || search.isFetching}
+              className="flex items-center justify-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap"
+            >
+              <FiSearch size={16} />
+              {search.isFetching ? t('torrentSearch.searching') : t('torrentSearch.search')}
+            </button>
+          </div>
+        </form>
 
-      {/* Destination folder for anything started from this panel */}
-      <div className="mb-4">
-        <label htmlFor="torrent-search-path" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-          {t('torrentSearch.savePath')}
-        </label>
-        <input
-          id="torrent-search-path"
-          type="text"
-          value={downloadPath}
-          onChange={(e) => setDownloadPath(e.target.value)}
-          placeholder={t('torrentSearch.savePathPlaceholder')}
-          className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-        />
+        {/* Destination folder for anything started from this panel */}
+        <div className="mt-3">
+          <label htmlFor="torrent-search-path" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+            {t('torrentSearch.savePath')}
+          </label>
+          <input
+            id="torrent-search-path"
+            type="text"
+            value={downloadPath}
+            onChange={(e) => setDownloadPath(e.target.value)}
+            placeholder={t('torrentSearch.savePathPlaceholder')}
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          />
+        </div>
+
+        {startError && (
+          <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{startError}</div>
+        )}
+
+        {searchError && (
+          <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+            {t('torrentSearch.searchFailed', { message: searchError })}
+          </div>
+        )}
+
+        {/* The HTML mirror answered: fewer fields per row, 30 results instead of 100. */}
+        {search.data?.degraded && (
+          <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-400 text-sm flex items-start gap-2">
+            <FiAlertTriangle className="mt-0.5 flex-shrink-0" size={14} />
+            <span>{t('torrentSearch.degraded')}</span>
+          </div>
+        )}
       </div>
 
-      {startError && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">{startError}</div>
-      )}
-
-      {searchError && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
-          {t('torrentSearch.searchFailed', { message: searchError })}
-        </div>
-      )}
-
-      {/* The HTML mirror answered: fewer fields per row, 30 results instead of 100. */}
-      {search.data?.degraded && (
-        <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-400 text-sm flex items-start gap-2">
-          <FiAlertTriangle className="mt-0.5 flex-shrink-0" size={14} />
-          <span>{t('torrentSearch.degraded')}</span>
-        </div>
-      )}
-
-      {/* Results */}
-      {search.isFetching ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.searching')}</p>
-      ) : !submitted ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.prompt')}</p>
-      ) : results.length === 0 && !searchError ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.noResults', { query: submitted })}</p>
-      ) : results.length > 0 ? (
-        <>
-          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{t('torrentSearch.resultCount', { count: results.length })}</p>
-          <div className="overflow-x-auto -mx-6 px-6">
+      {/* Results — the page's only scroll region on large screens.
+          Both axes scroll on this one element so the sticky header below has a
+          vertical scroll container to stick to (a nested overflow-x wrapper would
+          become the sticky ancestor and never scroll vertically). */}
+      <div className="px-6 py-4 overflow-x-auto lg:flex-1 lg:overflow-auto lg:min-h-0">
+        {search.isFetching ? (
+          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.searching')}</p>
+        ) : !submitted ? (
+          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.prompt')}</p>
+        ) : results.length === 0 && !searchError ? (
+          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{t('torrentSearch.noResults', { query: submitted })}</p>
+        ) : results.length > 0 ? (
+          <>
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{t('torrentSearch.resultCount', { count: results.length })}</p>
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+              <thead className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 <tr>
-                  <SortHeader field="name" {...sortProps}>
+                  <SortHeader field="name" className="sticky top-0 z-10 bg-white dark:bg-gray-800" {...sortProps}>
                     {t('torrentSearch.colName')}
                   </SortHeader>
-                  <SortHeader field="size" className="whitespace-nowrap" {...sortProps}>
+                  <SortHeader field="size" className="whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-gray-800" {...sortProps}>
                     {t('torrentSearch.colSize')}
                   </SortHeader>
-                  <SortHeader field="seeders" className="whitespace-nowrap" {...sortProps}>
+                  <SortHeader field="seeders" className="whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-gray-800" {...sortProps}>
                     {t('torrentSearch.colSeeders')}
                   </SortHeader>
-                  <SortHeader field="added" className="whitespace-nowrap hidden md:table-cell" {...sortProps}>
+                  <SortHeader field="added" className="whitespace-nowrap hidden xl:table-cell sticky top-0 z-10 bg-white dark:bg-gray-800" {...sortProps}>
                     {t('torrentSearch.colAdded')}
                   </SortHeader>
-                  <th className="px-3 py-2" />
+                  <th className="px-3 py-2 sticky top-0 z-10 bg-white dark:bg-gray-800" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -216,7 +224,7 @@ export default function TorrentSearchPanel({ currentPath = '', onDownloadStart }
                         <span className="text-gray-400 dark:text-gray-500 font-normal">/{r.leechers}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hidden xl:table-cell">
                       {r.added ? new Date(r.added).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -233,9 +241,9 @@ export default function TorrentSearchPanel({ currentPath = '', onDownloadStart }
                 ))}
               </tbody>
             </table>
-          </div>
-        </>
-      ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

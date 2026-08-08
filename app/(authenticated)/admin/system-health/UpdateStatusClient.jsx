@@ -6,7 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from '@/lib/timeAgo';
 import { FiWifi, FiWifiOff } from 'react-icons/fi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useUpdateStatus, useRunUpdate } from '@/lib/api/system';
+import { useUpdateStatus, useRunUpdate, useCheckUpdates } from '@/lib/api/system';
 import { useTranslation } from '@/components/LanguageProvider';
 
 export default function UpdateStatusClient() {
@@ -14,12 +14,27 @@ export default function UpdateStatusClient() {
   const [status, setStatus] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [error, setError] = useState(null);
+  const [pendingTarget, setPendingTarget] = useState(null);
   const [stickLogsToBottom, setStickLogsToBottom] = useState(true);
   const logsContainerRef = useRef(null);
   const { connected, subscribe } = useWebSocket();
 
   const { data: initialStatus, isLoading } = useUpdateStatus();
+  const { data: updateInfo } = useCheckUpdates(true);
   const runUpdateMutation = useRunUpdate();
+  const torrentService = updateInfo?.torrentService;
+
+  const startUpdate = async (target) => {
+    try {
+      setError(null);
+      setPendingTarget(target);
+      await runUpdateMutation.mutateAsync(target);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || t('adminHealth.startUpdateFailed'));
+    } finally {
+      setPendingTarget(null);
+    }
+  };
 
   useEffect(() => {
     if (initialStatus) setStatus(initialStatus);
@@ -96,7 +111,11 @@ export default function UpdateStatusClient() {
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white mb-2">{t('adminHealth.systemUpdate')}</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">
+              {status.targetLabel
+                ? t('adminHealth.systemUpdateFor', { target: status.targetLabel })
+                : t('adminHealth.systemUpdate')}
+            </h2>
             <div className="flex items-center gap-2">
               {connected ? (
                 <>
@@ -227,24 +246,39 @@ export default function UpdateStatusClient() {
         </div>
       )}
 
-      {/* Start Update Button */}
+      {/* Start Update Buttons — the app and torrent-service are separate
+          checkouts and are updated independently. */}
       {!status.isRunning && (
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={async () => {
-              try {
-                setError(null);
-                await runUpdateMutation.mutateAsync();
-              } catch (err) {
-                setError(err.response?.data?.error || err.message || t('adminHealth.startUpdateFailed'));
-              }
-            }}
+            onClick={() => startUpdate('app')}
             disabled={runUpdateMutation.isPending}
             className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
           >
-            {runUpdateMutation.isPending ? t('adminHealth.starting') : t('adminHealth.startUpdate')}
+            {pendingTarget === 'app' ? t('adminHealth.starting') : t('adminHealth.startUpdate')}
+          </button>
+          <button
+            onClick={() => startUpdate('torrent-service')}
+            disabled={runUpdateMutation.isPending || torrentService?.available === false}
+            title={torrentService?.available === false ? torrentService.message : undefined}
+            className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 hover:bg-gray-600 transition-colors font-medium disabled:opacity-50"
+          >
+            {pendingTarget === 'torrent-service'
+              ? t('adminHealth.starting')
+              : t('adminHealth.startUpdateTorrentService')}
+            {torrentService?.hasUpdate && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                {t('adminHealth.updateAvailableBadge')}
+              </span>
+            )}
           </button>
         </div>
+      )}
+
+      {torrentService?.available === false && (
+        <p className="text-xs text-gray-400">
+          {t('adminHealth.torrentServiceNotFound')}
+        </p>
       )}
 
       {error && (

@@ -36,8 +36,9 @@ export default function AccountsPage() {
   const handleCheckUpdates = async () => {
     try {
       localStorage.removeItem('update_dismissed_version');
+      localStorage.removeItem('update_dismissed_torrent_service');
       const result = await checkForUpdates();
-      if (result.data && !result.data.hasUpdate) {
+      if (result.data && !result.data.hasAnyUpdate) {
         addNotification('info', t('adminAccounts.upToDate', { version: result.data.currentVersion }));
       }
     } catch (error) {
@@ -319,6 +320,22 @@ export default function AccountsPage() {
                   </p>
                   <p className="text-xs text-blue-400 mt-1">{t('adminAccounts.useNotificationToUpdate')}</p>
                 </div>
+              )}
+              {/* torrent-service is a separate repo — reported on its own line */}
+              {updateInfo?.torrentService?.hasUpdate && (
+                <div className="border border-blue-700 bg-blue-900/30 rounded-lg p-3">
+                  <p className="text-xs sm:text-sm text-blue-300">
+                    {t('adminAccounts.torrentServiceUpdateAvailable', {
+                      commits: updateInfo.torrentService.commitsBehind ?? '?',
+                    })}
+                  </p>
+                  <p className="text-xs text-blue-400 mt-1">{t('adminAccounts.useNotificationToUpdate')}</p>
+                </div>
+              )}
+              {updateInfo?.torrentService?.available === false && (
+                <p className="text-xs text-gray-400">
+                  {t('adminAccounts.torrentServiceNotFound')}
+                </p>
               )}
             </div>
           </div>

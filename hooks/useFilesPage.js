@@ -343,6 +343,13 @@ export function useFilesPage(status) {
       }
     }
 
+    // A finished download stays in the downloads page's history, but here its
+    // placeholder row would sit next to the real file it just produced. Drop it
+    // and let the folder listing speak for itself.
+    for (const [gid, d] of mergedDownloads) {
+      if (d.status === 'complete') mergedDownloads.delete(gid);
+    }
+
     // Common case: no downloads in this folder — just return the cached sort.
     if (mergedDownloads.size === 0) return sortedFiltered;
 
