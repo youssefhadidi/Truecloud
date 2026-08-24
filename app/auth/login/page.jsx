@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { FiCloud, FiEye, FiEyeOff, FiLock, FiAlertCircle } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiLock, FiAlertCircle } from 'react-icons/fi';
 import Field from '@/components/ui/Field';
 import Spinner from '@/components/ui/Spinner';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -95,21 +95,19 @@ export default function LoginPage() {
         >
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-128.png"
+              alt=""
+              width={48}
+              height={48}
               style={{
-                width: 48,
-                height: 48,
                 borderRadius: 'var(--r-lg)',
-                background: 'var(--accent)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 6px 20px rgba(99,102,241,.35)',
+                boxShadow: '0 6px 20px rgba(2,35,160,.45)',
                 marginBottom: 12,
+                display: 'inline-block',
               }}
-            >
-              <FiCloud size={22} color="#fff" />
-            </div>
+            />
             <div style={{ fontWeight: 700, fontSize: 22, letterSpacing: '-0.03em', color: 'var(--text)' }}>
               Truecloud
             </div>

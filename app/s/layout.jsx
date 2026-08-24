@@ -1,7 +1,5 @@
 /** @format */
 
-import { FiCloud } from 'react-icons/fi';
-
 export const metadata = {
   title: 'Shared File · Truecloud',
   description: 'View shared file',
@@ -33,19 +31,14 @@ export default function ShareLayout({ children }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 'var(--r-sm)',
-              background: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <FiCloud size={14} color="#fff" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-128.png"
+            alt=""
+            width={28}
+            height={28}
+            style={{ borderRadius: 'var(--r-sm)', flexShrink: 0, display: 'block' }}
+          />
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>Truecloud</span>
         </div>
         <div style={{ flex: 1 }} />

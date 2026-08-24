@@ -4,7 +4,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { FiCloud } from 'react-icons/fi';
 import UserMenu from '@/components/UserMenu';
 import UpdateChecker from '@/components/UpdateChecker';
 import PendingReloadBanner from '@/components/PendingReloadBanner';
@@ -76,20 +75,14 @@ function AuthenticatedLayoutContent({ children }) {
             padding: 0,
           }}
         >
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 'var(--r-sm)',
-              background: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <FiCloud size={14} color="#fff" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-128.png"
+            alt=""
+            width={28}
+            height={28}
+            style={{ borderRadius: 'var(--r-sm)', flexShrink: 0, display: 'block' }}
+          />
           <span
             style={{
               fontWeight: 700,
