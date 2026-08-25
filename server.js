@@ -207,8 +207,11 @@ loadEsModules().then(() => {
   // generic broadcasts like file-change). Returns null when unauthenticated.
   // Cookie *names* only (never values) — enough to tell "browser sent no session
   // cookie" apart from "cookie present but this instance can't decrypt it".
+  // Tolerates the array form Bun can hand back for a repeated header — this must
+  // never be the thing that throws, or it masks the failure it exists to explain.
   const cookieNames = (header) =>
-    (header || '').split(';').map((c) => c.split('=')[0].trim()).filter(Boolean);
+    (Array.isArray(header) ? header.join(';') : String(header ?? ''))
+      .split(';').map((c) => c.split('=')[0].trim()).filter(Boolean);
 
   async function authenticateWsUpgrade(request) {
     // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
@@ -248,6 +251,10 @@ loadEsModules().then(() => {
       return;
     }
 
+    // The .catch below covers both the auth promise and the body of this .then
+    // (handleUpgrade included), so track which half we were in when it threw.
+    let stage = 'auth';
+
     authenticateWsUpgrade(request).then((authResult) => {
       if (!authResult) {
         console.warn(
@@ -263,6 +270,7 @@ loadEsModules().then(() => {
       }
 
       const clientVersion = url.searchParams.get('v');
+      stage = 'handleUpgrade';
 
       wss.handleUpgrade(request, socket, head, (ws) => {
         ws.isAlive = true;
@@ -379,7 +387,7 @@ loadEsModules().then(() => {
         });
       });
     }).catch((err) => {
-      console.error('[ws] upgrade failed:', err?.stack || err?.message || err);
+      console.error(`[ws] upgrade failed during ${stage}:`, err?.stack || err?.message || err);
       socket.end('HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
     });
   });
