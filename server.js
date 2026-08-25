@@ -205,13 +205,21 @@ loadEsModules().then(() => {
   // when a valid NextAuth session is present, or `'share'` for share-token
   // sessions (which don't have a user id but are allowed to connect for
   // generic broadcasts like file-change). Returns null when unauthenticated.
+  // Cookie *names* only (never values) — enough to tell "browser sent no session
+  // cookie" apart from "cookie present but this instance can't decrypt it".
+  const cookieNames = (header) =>
+    (header || '').split(';').map((c) => c.split('=')[0].trim()).filter(Boolean);
+
   async function authenticateWsUpgrade(request) {
     // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
     try {
       const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
       if (token?.id) return { userId: token.id };
-    } catch {
-      // No valid session, continue to share check
+      if (token) console.warn('[ws] session token decoded but carries no `id` — stale sign-in, user must re-login');
+    } catch (err) {
+      // Most often: NEXTAUTH_SECRET missing/renamed on this instance (getToken
+      // throws MissingSecret), or a cookie that won't decrypt with that secret.
+      console.warn('[ws] getToken threw:', err?.message || err);
     }
 
     // 2. Check share token + password query params
@@ -235,14 +243,22 @@ loadEsModules().then(() => {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
     if (url.pathname !== '/api/ws') {
+      console.warn(`[ws] upgrade rejected: unexpected path "${url.pathname}" (host=${request.headers.host})`);
       socket.destroy();
       return;
     }
 
     authenticateWsUpgrade(request).then((authResult) => {
       if (!authResult) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-        socket.destroy();
+        console.warn(
+          `[ws] upgrade rejected: 401 (host=${request.headers.host}` +
+          `, cookies=[${cookieNames(request.headers.cookie).join(',') || 'none'}]` +
+          `, share=${url.searchParams.has('token')})`,
+        );
+        // end() rather than write()+destroy(): destroy() can discard the buffered
+        // response, leaving the browser with a bare closed socket (shown as
+        // "finished" in devtools) instead of a readable 401.
+        socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
         return;
       }
 
@@ -362,9 +378,9 @@ loadEsModules().then(() => {
           import('./lib/storageScanManager.js').then(({ removeSubscriber }) => removeSubscriber(ws)).catch(() => {});
         });
       });
-    }).catch(() => {
-      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
-      socket.destroy();
+    }).catch((err) => {
+      console.error('[ws] upgrade failed:', err?.stack || err?.message || err);
+      socket.end('HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
     });
   });
 
@@ -386,6 +402,15 @@ loadEsModules().then(() => {
   server.listen(3000, (err) => {
     if (err) throw err;
     console.log('> Ready on http://localhost:3000');
+    // Startup fingerprint — makes it possible to diff two instances at a glance.
+    console.log(
+      `[server] v${CURRENT_APP_VERSION}` +
+      ` | runtime=${process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.version}`}` +
+      ` | NODE_ENV=${process.env.NODE_ENV}` +
+      ` | NEXTAUTH_SECRET=${process.env.NEXTAUTH_SECRET ? `set(len ${process.env.NEXTAUTH_SECRET.length})` : 'MISSING'}` +
+      ` | AUTH_SECRET=${process.env.AUTH_SECRET ? 'set' : 'unset'}` +
+      ` | NEXTAUTH_URL=${process.env.NEXTAUTH_URL || 'unset'}`,
+    );
 
     // Bridge WebSocket events from the torrent microservice to main app WebSocket clients
     if (process.env.DISABLE_TORRENT_SERVICE !== '1') {
