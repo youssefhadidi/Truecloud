@@ -7,7 +7,22 @@ process.env.VIPS_CONCURRENCY = process.env.VIPS_CONCURRENCY || '1';
 process.env.OMP_NUM_THREADS = process.env.OMP_NUM_THREADS || '1';
 
 const { createServer } = require('http');
-const { WebSocketServer } = require('ws');
+
+// Bun ships a builtin `ws` that shadows node_modules entirely — under Bun,
+// `require.resolve('ws')` returns the bare specifier rather than a file path.
+// As of Bun 1.4.0 its noServer handshake path calls abortHandshake() and then
+// throws inside it, so every /api/ws upgrade dies before the 101 is written.
+// Load the vendored implementation by path so all instances run identical code
+// regardless of runtime version; fall back to the builtin if it isn't present.
+let wsImpl = 'vendored';
+let wsLib;
+try {
+  wsLib = require('./node_modules/ws');
+} catch {
+  wsLib = require('ws');
+  wsImpl = 'runtime-builtin';
+}
+const { WebSocketServer } = wsLib;
 const next = require('next');
 const { startLogStream, stopLogStream } = require('./lib/logStreamManager');
 
@@ -414,6 +429,7 @@ loadEsModules().then(() => {
     console.log(
       `[server] v${CURRENT_APP_VERSION}` +
       ` | runtime=${process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.version}`}` +
+      ` | ws=${wsImpl}` +
       ` | NODE_ENV=${process.env.NODE_ENV}` +
       ` | NEXTAUTH_SECRET=${process.env.NEXTAUTH_SECRET ? `set(len ${process.env.NEXTAUTH_SECRET.length})` : 'MISSING'}` +
       ` | AUTH_SECRET=${process.env.AUTH_SECRET ? 'set' : 'unset'}` +
@@ -422,7 +438,7 @@ loadEsModules().then(() => {
 
     // Bridge WebSocket events from the torrent microservice to main app WebSocket clients
     if (process.env.DISABLE_TORRENT_SERVICE !== '1') {
-      const { WebSocket: WsClient } = require('ws');
+      const { WebSocket: WsClient } = wsLib;
       const torrentServiceBase = process.env.TORRENT_SERVICE_URL || 'http://localhost:9669';
       const torrentWsUrl = torrentServiceBase.replace(/^http/, 'ws') + '/events';
       function connectTorrentServiceWs() {
