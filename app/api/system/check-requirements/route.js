@@ -238,6 +238,14 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y powertop',
   },
   {
+    // Not installable from here: Pi-hole's installer is interactive and takes
+    // over DNS on port 53, so it must be run deliberately on the host.
+    name: 'Pi-hole',
+    command: 'pihole',
+    description: 'Network-wide DNS ad blocking — install with the official Pi-hole installer',
+    installable: false,
+  },
+  {
     name: 'cpupower',
     command: 'cpupower',
     description: 'CPU frequency governor control (Power Management)',

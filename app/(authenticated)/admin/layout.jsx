@@ -5,7 +5,7 @@
 import { useStableSession } from '@/lib/api/session';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap, FiShield, FiPieChart } from 'react-icons/fi';
+import { FiUsers, FiCheckSquare, FiArrowLeft, FiHardDrive, FiImage, FiShare2, FiDatabase, FiServer, FiActivity, FiMonitor, FiPackage, FiSearch, FiMenu, FiX, FiZap, FiShield, FiPieChart, FiFilter } from 'react-icons/fi';
 import Link from 'next/link';
 import { useComponentsConfig } from '@/lib/api/system';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -73,9 +73,12 @@ export default function AdminLayout({ children }) {
         { href: '/admin/cache', icon: FiHardDrive, label: t('admin.nav.cache') },
       ],
     },
-    components.minecraft && {
+    {
       label: t('admin.nav.services'),
-      items: [{ href: '/admin/minecraft', icon: FiServer, label: t('admin.nav.minecraft') }],
+      items: [
+        components.minecraft && { href: '/admin/minecraft', icon: FiServer, label: t('admin.nav.minecraft') },
+        components.pihole && { href: '/admin/pihole', icon: FiFilter, label: t('admin.nav.pihole') },
+      ].filter(Boolean),
     },
     {
       label: t('admin.nav.system'),

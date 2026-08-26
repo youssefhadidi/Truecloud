@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiDatabase, FiShare2, FiRefreshCw, FiCpu, FiServer, FiMessageSquare } from 'react-icons/fi';
+import { FiDatabase, FiShare2, FiRefreshCw, FiCpu, FiServer, FiMessageSquare, FiFilter } from 'react-icons/fi';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useComponentsConfig, useSaveComponentsConfig } from '@/lib/api/system';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -14,6 +14,7 @@ const COMPONENT_DEFS = [
   { key: 'transcoding', labelKey: 'adminExtensions.transcodingLabel', descKey: 'adminExtensions.transcodingDesc', icon: FiCpu },
   { key: 'minecraft', labelKey: 'adminExtensions.minecraftLabel', descKey: 'adminExtensions.minecraftDesc', icon: FiServer },
   { key: 'aiChat', labelKey: 'adminExtensions.aiChatLabel', descKey: 'adminExtensions.aiChatDesc', icon: FiMessageSquare },
+  { key: 'pihole', labelKey: 'adminExtensions.piholeLabel', descKey: 'adminExtensions.piholeDesc', icon: FiFilter },
 ];
 
 export default function FeaturesPanel() {
@@ -22,7 +23,7 @@ export default function FeaturesPanel() {
   const { data, isLoading, refetch } = useComponentsConfig();
   const saveMutation = useSaveComponentsConfig();
 
-  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false, minecraft: false, aiChat: false });
+  const [settings, setSettings] = useState({ zfs: true, smb: true, transcoding: false, minecraft: false, aiChat: false, pihole: false });
 
   useEffect(() => {
     if (data?.config) {

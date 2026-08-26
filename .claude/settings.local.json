@@ -75,7 +75,13 @@
       "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" log --oneline -1)",
       "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" status -sb)",
       "PowerShell(& git -C \"c:\\\\Users\\\\youssef\\\\Desktop\\\\Truecloud\" log --oneline \"@{u}..HEAD\" 2>$null)",
-      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" status -sb)"
+      "PowerShell(& git -C \"C:\\\\Users\\\\youssef\\\\Desktop\\\\torrent-service\" status -sb)",
+      "Bash(npm install *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(cp -r C:/Users/youssef/AppData/Local/Temp/claude/c--Users-youssef-Desktop-Truecloud/4f2a4845-8b9d-4eca-b1d1-3e3d4255e09f/scratchpad/chokidar-install/node_modules/chokidar node_modules/)",
+      "Bash(cp -r C:/Users/youssef/AppData/Local/Temp/claude/c--Users-youssef-Desktop-Truecloud/4f2a4845-8b9d-4eca-b1d1-3e3d4255e09f/scratchpad/chokidar-install/node_modules/readdirp node_modules/)",
+      "Bash(node -e \"console.log\\('chokidar resolves:', require.resolve\\('chokidar'\\)\\)\")",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks",
