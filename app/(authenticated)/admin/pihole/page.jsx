@@ -12,6 +12,7 @@ import ListsPanel from './ListsPanel';
 import QueryLogPanel from './QueryLogPanel';
 import SettingsPanel from './SettingsPanel';
 import NotConnected from './NotConnected';
+import InstallPanel from './InstallPanel';
 import { buttonSecondary } from './ui';
 
 export default function PiholePage() {
@@ -40,6 +41,9 @@ export default function PiholePage() {
 
       {isLoading ? (
         <div className="text-gray-400">{t('adminPihole.loading')}</div>
+      ) : !status?.installed ? (
+        // Nothing to administer yet — the whole page is the guided installer.
+        <InstallPanel />
       ) : (
         <>
           <Tabs tabs={TABS} active={active} onChange={setActive} />

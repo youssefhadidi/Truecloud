@@ -238,11 +238,12 @@ const REQUIRED_PROGRAMS = [
     installCommand: 'sudo apt-get install -y powertop',
   },
   {
-    // Not installable from here: Pi-hole's installer is interactive and takes
-    // over DNS on port 53, so it must be run deliberately on the host.
+    // Not installable from here: Pi-hole is not in the Debian repos, so it
+    // cannot use the one-line apt mechanism this panel expects. It has its own
+    // guided installer with preflight checks under Admin → Pi-hole.
     name: 'Pi-hole',
     command: 'pihole',
-    description: 'Network-wide DNS ad blocking — install with the official Pi-hole installer',
+    description: 'Network-wide DNS ad blocking — install from Admin → Pi-hole',
     installable: false,
   },
   {

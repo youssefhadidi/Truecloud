@@ -81,7 +81,11 @@
       "Bash(cp -r C:/Users/youssef/AppData/Local/Temp/claude/c--Users-youssef-Desktop-Truecloud/4f2a4845-8b9d-4eca-b1d1-3e3d4255e09f/scratchpad/chokidar-install/node_modules/chokidar node_modules/)",
       "Bash(cp -r C:/Users/youssef/AppData/Local/Temp/claude/c--Users-youssef-Desktop-Truecloud/4f2a4845-8b9d-4eca-b1d1-3e3d4255e09f/scratchpad/chokidar-install/node_modules/readdirp node_modules/)",
       "Bash(node -e \"console.log\\('chokidar resolves:', require.resolve\\('chokidar'\\)\\)\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "WebSearch",
+      "WebFetch(domain:docs.pi-hole.net)",
+      "WebFetch(domain:github.com)",
+      "Bash(sed -i \"/^  preflightTitle: /d\" lib/i18n/dictionaries/parts/pihole.js)"
     ],
     "additionalDirectories": [
       "C:\\Users\\youssef\\Desktop\\Truecloud\\app\\api\\admin\\folder-locks",
