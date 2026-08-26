@@ -93,23 +93,30 @@ export default function QueryLogPanel() {
       ) : queries.length === 0 ? (
         <EmptyRow>{t('adminPihole.noQueries')}</EmptyRow>
       ) : (
-        <div className={`overflow-x-auto -mx-4 sm:-mx-6 transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
+        // The log holds up to 500 rows, so it scrolls in its own bounded region
+        // rather than growing the page — the app shell is overflow:hidden, so an
+        // unbounded table has nowhere to scroll.
+        <div
+          className={`max-h-[60vh] overflow-auto rounded-lg border border-gray-700/60 transition-opacity ${
+            isFetching ? 'opacity-60' : ''
+          }`}
+        >
           <table className="w-full text-sm min-w-[760px]">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-gray-800">
               <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-700">
-                <th className="px-4 sm:px-6 py-2 font-semibold w-24">{t('adminPihole.colTime')}</th>
+                <th className="px-3 py-2 font-semibold w-24">{t('adminPihole.colTime')}</th>
                 <th className="px-3 py-2 font-semibold w-16">{t('adminPihole.colType')}</th>
                 <th className="px-3 py-2 font-semibold">{t('adminPihole.colDomain')}</th>
                 <th className="px-3 py-2 font-semibold w-40">{t('adminPihole.colClient')}</th>
                 <th className="px-3 py-2 font-semibold w-32">{t('adminPihole.colStatus')}</th>
                 <th className="px-3 py-2 font-semibold w-40">{t('adminPihole.colUpstream')}</th>
-                <th className="px-4 sm:px-6 py-2 font-semibold w-24">{t('adminPihole.colReply')}</th>
+                <th className="px-3 py-2 font-semibold w-24">{t('adminPihole.colReply')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/60">
               {queries.map((q, index) => (
                 <tr key={q.id ?? `${q.time}-${q.domain}-${index}`} className="text-gray-300">
-                  <td className="px-4 sm:px-6 py-2 text-gray-500 tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2 text-gray-500 tabular-nums whitespace-nowrap">
                     {formatTime(q.time)}
                   </td>
                   <td className="px-3 py-2 text-gray-400">{q.type}</td>
@@ -118,16 +125,20 @@ export default function QueryLogPanel() {
                       {q.domain}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-gray-400 truncate" title={q.client?.ip}>
-                    {q.client?.name || q.client?.ip || '—'}
+                  <td className="px-3 py-2 text-gray-400 max-w-[10rem]">
+                    <span className="block truncate" title={q.client?.ip}>
+                      {q.client?.name || q.client?.ip || '—'}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
                     <StatusBadge status={q.status} />
                   </td>
-                  <td className="px-3 py-2 text-gray-500 truncate" title={q.upstream || ''}>
-                    {q.upstream || '—'}
+                  <td className="px-3 py-2 text-gray-500 max-w-[10rem]">
+                    <span className="block truncate" title={q.upstream || ''}>
+                      {q.upstream || '—'}
+                    </span>
                   </td>
-                  <td className="px-4 sm:px-6 py-2 text-gray-500 tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2 text-gray-500 tabular-nums whitespace-nowrap">
                     {formatReply(q.reply)}
                   </td>
                 </tr>

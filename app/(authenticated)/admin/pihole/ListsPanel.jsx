@@ -137,21 +137,21 @@ export default function ListsPanel() {
         ) : lists.length === 0 ? (
           <EmptyRow>{t('adminPihole.noLists')}</EmptyRow>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:-mx-6">
+          <div className="max-h-[50vh] overflow-auto rounded-lg border border-gray-700/60">
             <table className="w-full text-sm min-w-[640px]">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-gray-800">
                 <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-700">
-                  <th className="px-4 sm:px-6 py-2 font-semibold">{t('adminPihole.colAddress')}</th>
+                  <th className="px-3 py-2 font-semibold">{t('adminPihole.colAddress')}</th>
                   <th className="px-3 py-2 font-semibold w-28">{t('adminPihole.colDomainCount')}</th>
                   <th className="px-3 py-2 font-semibold w-28">{t('adminPihole.colStatus')}</th>
                   <th className="px-3 py-2 font-semibold">{t('adminPihole.colComment')}</th>
-                  <th className="px-4 sm:px-6 py-2 w-16" />
+                  <th className="px-3 py-2 w-16" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/60">
                 {lists.map((list) => (
                   <tr key={list.address} className="text-gray-300">
-                    <td className="px-4 sm:px-6 py-2.5 max-w-md">
+                    <td className="px-3 py-2.5 max-w-md">
                       <span className="block truncate" title={list.address}>
                         {list.address}
                       </span>
@@ -176,7 +176,7 @@ export default function ListsPanel() {
                     <td className="px-3 py-2.5 text-gray-500 max-w-xs">
                       <span className="block truncate">{list.comment || '—'}</span>
                     </td>
-                    <td className="px-4 sm:px-6 py-2.5 text-right">
+                    <td className="px-3 py-2.5 text-right">
                       <button
                         type="button"
                         onClick={() => handleDelete(list)}
