@@ -123,6 +123,20 @@ Clients should auto-reload within 30 seconds of your deployment. If not:
 1. Hard refresh the browser: `Ctrl+Shift+R` (Windows/Linux) or `Cmd+Shift+R` (Mac)
 2. Or manually call from browser console: `clearAllCachesAndReload()`
 
+### WebSocket connections fail after deployment
+
+Live logs, torrent progress, and file-change events all ride the single
+`/api/ws` socket. If they go dead, check the runtime first:
+
+```bash
+/root/.bun/bin/bun --version                              # must be >= 1.4.0
+grep -F '[server] v' /var/log/truecloud/output.log | tail -1  # want ws=vendored
+grep -F '[ws]' /var/log/truecloud/error.log | tail -20
+```
+
+Bun 1.3.x cannot run the vendored `ws` the app requires — upgrade it, then
+rebuild. See [SYSTEMD-SETUP.md](SYSTEMD-SETUP.md#runtime-requirement-bun-140).
+
 ### Git pull fails
 
 Check if you have uncommitted changes:

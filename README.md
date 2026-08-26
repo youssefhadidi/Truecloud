@@ -16,6 +16,11 @@ A secure file management system for TrueNAS with user authentication, ACLs, thum
 
 ## Setup
 
+> **Requires Bun 1.4.0 or newer.** `server.js` loads `ws` from `node_modules`
+> instead of Bun's builtin; that only works on Bun ≥ 1.4.0, and older versions
+> break every `/api/ws` upgrade. See
+> [SYSTEMD-SETUP.md](SYSTEMD-SETUP.md#runtime-requirement-bun-140).
+
 1. Install dependencies:
 
 ```bash
