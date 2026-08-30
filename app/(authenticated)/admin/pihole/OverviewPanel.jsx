@@ -6,13 +6,11 @@ import { useEffect, useState } from 'react';
 import { FiPause, FiPlay, FiRotateCw } from 'react-icons/fi';
 import { useTranslation } from '@/components/LanguageProvider';
 import { useNotifications } from '@/contexts/NotificationsContext';
-import { usePiholeStats, useSetPiholeBlocking, useRestartPiholeDns } from '@/lib/api/pihole';
+import { useSetPiholeBlocking, useRestartPiholeDns } from '@/lib/api/pihole';
 import {
   SectionCard,
   StatusPill,
   StatTile,
-  BarRow,
-  EmptyRow,
   formatNumber,
   formatPercent,
   formatDuration,
@@ -30,7 +28,6 @@ const PAUSE_OPTIONS = [
 export default function OverviewPanel({ status }) {
   const { t } = useTranslation();
   const { addNotification } = useNotifications();
-  const { data: stats, isLoading } = usePiholeStats();
   const setBlocking = useSetPiholeBlocking();
   const restartDns = useRestartPiholeDns();
 
@@ -39,7 +36,7 @@ export default function OverviewPanel({ status }) {
   const blockingActive = status?.blocking?.blocking === 'enabled';
   const remaining = useCountdown(status?.blocking?.timer);
 
-  const summary = stats?.summary ?? status?.summary;
+  const summary = status?.summary;
   const queries = summary?.queries ?? {};
   const gravity = summary?.gravity ?? {};
   const clients = summary?.clients ?? {};
@@ -112,7 +109,7 @@ export default function OverviewPanel({ status }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {blockingActive && (
               <>
                 <label htmlFor="pihole-pause-for" className="text-xs text-gray-500 hidden sm:inline">
@@ -146,74 +143,18 @@ export default function OverviewPanel({ status }) {
       </SectionCard>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatTile label={t('adminPihole.statQueries')} value={formatNumber(queries.total)} />
         <StatTile label={t('adminPihole.statBlocked')} value={formatNumber(queries.blocked)} accent="text-red-300" />
         <StatTile label={t('adminPihole.statPercent')} value={formatPercent(queries.percent_blocked)} />
         <StatTile label={t('adminPihole.statDomains')} value={formatNumber(gravity.domains_being_blocked)} />
-        <StatTile label={t('adminPihole.statClients')} value={formatNumber(clients.active)} />
+        <StatTile
+          label={t('adminPihole.statClients')}
+          value={formatNumber(clients.active)}
+          className="col-span-2 sm:col-span-1"
+        />
       </div>
-
-      {isLoading ? (
-        <div className="text-gray-400">{t('adminPihole.loading')}</div>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <TopList
-            title={t('adminPihole.topBlocked')}
-            rows={(stats?.topBlocked?.domains ?? []).map((d) => ({ label: d.domain, value: d.count }))}
-            emptyLabel={t('adminPihole.noData')}
-          />
-          <TopList
-            title={t('adminPihole.topPermitted')}
-            rows={(stats?.topPermitted?.domains ?? []).map((d) => ({ label: d.domain, value: d.count }))}
-            emptyLabel={t('adminPihole.noData')}
-          />
-          <TopList
-            title={t('adminPihole.topClients')}
-            rows={(stats?.topClients?.clients ?? []).map((c) => ({
-              label: c.name || c.ip,
-              sublabel: c.name ? c.ip : null,
-              value: c.count,
-            }))}
-            emptyLabel={t('adminPihole.noData')}
-          />
-          <TopList
-            title={t('adminPihole.upstreamsTitle')}
-            rows={(stats?.upstreams?.upstreams ?? []).map((u) => ({
-              label: u.name || u.ip || t('adminPihole.unknown'),
-              sublabel: u.port > 0 ? `${u.ip}#${u.port}` : null,
-              value: u.count,
-            }))}
-            emptyLabel={t('adminPihole.noData')}
-          />
-          <TopList
-            title={t('adminPihole.queryTypesTitle')}
-            rows={Object.entries(stats?.queryTypes?.types ?? {})
-              .filter(([, count]) => count > 0)
-              .sort((a, b) => b[1] - a[1])
-              .map(([type, count]) => ({ label: type, value: count }))}
-            emptyLabel={t('adminPihole.noData')}
-          />
-        </div>
-      )}
     </div>
-  );
-}
-
-function TopList({ title, rows, emptyLabel }) {
-  const max = rows.reduce((acc, r) => Math.max(acc, Number(r.value) || 0), 0);
-  return (
-    <SectionCard title={title}>
-      {rows.length === 0 ? (
-        <EmptyRow>{emptyLabel}</EmptyRow>
-      ) : (
-        <div className="space-y-1 -mx-1">
-          {rows.map((row) => (
-            <BarRow key={row.label} label={row.label} sublabel={row.sublabel} value={row.value} max={max} />
-          ))}
-        </div>
-      )}
-    </SectionCard>
   );
 }
 

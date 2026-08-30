@@ -22,6 +22,7 @@ import {
   formatNumber,
   errorMessage,
   inputClass,
+  iconButtonDanger,
   buttonPrimary,
   buttonSecondary,
 } from './ui';
@@ -138,7 +139,31 @@ export default function ListsPanel() {
           <EmptyRow>{t('adminPihole.noLists')}</EmptyRow>
         ) : (
           <div className="max-h-[50vh] overflow-auto rounded-lg border border-gray-700/60">
-            <table className="w-full text-sm min-w-[640px]">
+            {/* Phones get stacked cards: the table below needs 640px, which on a
+                narrow screen is a sideways scroll under the thumb. */}
+            <ul className="divide-y divide-gray-700/60 md:hidden">
+              {lists.map((list) => (
+                <li key={list.address} className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 text-sm text-gray-200 break-all">{list.address}</span>
+                    <RemoveButton
+                      onClick={() => handleDelete(list)}
+                      disabled={deleteList.isPending}
+                      label={t('adminPihole.remove')}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <ListToggle list={list} onToggle={handleToggle} pending={updateList.isPending} t={t} />
+                    <span className="text-xs text-gray-500 tabular-nums">
+                      {t('adminPihole.colDomainCount')}: {formatNumber(list.number)}
+                    </span>
+                  </div>
+                  {list.comment && <p className="text-xs text-gray-500 break-words">{list.comment}</p>}
+                </li>
+              ))}
+            </ul>
+
+            <table className="hidden md:table w-full text-sm min-w-[640px]">
               <thead className="sticky top-0 z-10 bg-gray-800">
                 <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-700">
                   <th className="px-3 py-2 font-semibold">{t('adminPihole.colAddress')}</th>
@@ -158,34 +183,19 @@ export default function ListsPanel() {
                     </td>
                     <td className="px-3 py-2.5 tabular-nums">{formatNumber(list.number)}</td>
                     <td className="px-3 py-2.5">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={Boolean(list.enabled)}
-                        onClick={() => handleToggle(list)}
-                        disabled={updateList.isPending}
-                        className={`px-2 py-1 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
-                          list.enabled
-                            ? 'bg-green-900 text-green-200 hover:bg-green-800'
-                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                        }`}
-                      >
-                        {list.enabled ? t('adminPihole.enabled') : t('adminPihole.disabled')}
-                      </button>
+                      <ListToggle list={list} onToggle={handleToggle} pending={updateList.isPending} t={t} />
                     </td>
                     <td className="px-3 py-2.5 text-gray-500 max-w-xs">
                       <span className="block truncate">{list.comment || '—'}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(list)}
-                        disabled={deleteList.isPending}
-                        className="text-gray-500 hover:text-red-400 disabled:opacity-50 transition-colors"
-                        aria-label={t('adminPihole.remove')}
-                      >
-                        <FiTrash2 size={16} />
-                      </button>
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-end">
+                        <RemoveButton
+                          onClick={() => handleDelete(list)}
+                          disabled={deleteList.isPending}
+                          label={t('adminPihole.remove')}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -264,19 +274,45 @@ function DomainSection({ type, kind, titleKey }) {
               <span className="text-sm text-gray-300 font-mono truncate" title={entry.domain}>
                 {entry.domain}
               </span>
-              <button
-                type="button"
+              <RemoveButton
                 onClick={() => handleDelete(entry.domain)}
                 disabled={deleteDomain.isPending}
-                className="text-gray-500 hover:text-red-400 disabled:opacity-50 shrink-0 transition-colors"
-                aria-label={t('adminPihole.remove')}
-              >
-                <FiTrash2 size={15} />
-              </button>
+                label={t('adminPihole.remove')}
+              />
             </li>
           ))}
         </ul>
       )}
     </SectionCard>
+  );
+}
+
+/* The adlist rows render twice — as phone cards and as table rows — so their
+   two interactive bits live here rather than being written out in both. */
+
+function ListToggle({ list, onToggle, pending, t }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={Boolean(list.enabled)}
+      onClick={() => onToggle(list)}
+      disabled={pending}
+      className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 ${
+        list.enabled
+          ? 'bg-green-900 text-green-200 hover:bg-green-800'
+          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+      }`}
+    >
+      {list.enabled ? t('adminPihole.enabled') : t('adminPihole.disabled')}
+    </button>
+  );
+}
+
+function RemoveButton({ onClick, disabled, label }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={iconButtonDanger} aria-label={label}>
+      <FiTrash2 size={16} />
+    </button>
   );
 }

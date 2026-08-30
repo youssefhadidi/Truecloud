@@ -9,8 +9,8 @@ export function SectionCard({ title, action, children, footer }) {
   return (
     <div className="bg-gray-800 rounded-lg shadow">
       {(title || action) && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700 flex items-center justify-between gap-3">
-          <h2 className="text-base sm:text-lg font-semibold text-white">{title}</h2>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-700 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h2 className="min-w-0 text-base sm:text-lg font-semibold text-white">{title}</h2>
           {action}
         </div>
       )}
@@ -33,11 +33,11 @@ export function StatusPill({ ok, okLabel, badLabel }) {
   );
 }
 
-export function StatTile({ label, value, accent = 'text-white' }) {
+export function StatTile({ label, value, accent = 'text-white', className = '' }) {
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
-      <div className="text-xs uppercase tracking-wider text-gray-500">{label}</div>
-      <div className={`mt-1 text-2xl font-bold tabular-nums ${accent}`}>{value}</div>
+    <div className={`bg-gray-800 rounded-lg p-3 sm:p-4 ${className}`}>
+      <div className="text-[11px] sm:text-xs uppercase tracking-wider text-gray-500">{label}</div>
+      <div className={`mt-1 text-xl sm:text-2xl font-bold tabular-nums ${accent}`}>{value}</div>
     </div>
   );
 }
@@ -111,3 +111,10 @@ export const buttonSecondary =
 
 export const buttonDanger =
   'inline-flex items-center justify-center gap-2 px-3 py-2 bg-red-900/60 text-red-200 text-sm rounded-lg hover:bg-red-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+
+/**
+ * Icon-only actions: on a phone the glyph itself is far below the ~44px touch
+ * target a finger needs, so the hit area comes from the button, not the icon.
+ */
+export const iconButtonDanger =
+  'inline-flex items-center justify-center w-9 h-9 shrink-0 rounded-lg text-gray-500 hover:text-red-400 hover:bg-gray-700/60 disabled:opacity-50 disabled:hover:bg-transparent transition-colors';

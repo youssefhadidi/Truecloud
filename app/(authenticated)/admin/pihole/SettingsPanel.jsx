@@ -12,6 +12,7 @@ import {
   StatusPill,
   errorMessage,
   inputClass,
+  iconButtonDanger,
   buttonPrimary,
   buttonSecondary,
 } from './ui';
@@ -155,7 +156,7 @@ export default function SettingsPanel({ status }) {
             </p>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <StatusPill
               ok={connected}
               okLabel={t('adminPihole.connectionOk')}
@@ -308,10 +309,10 @@ function ListEditor({ label, hint, placeholder, addLabel, values, onChange, remo
             <button
               type="button"
               onClick={() => removeAt(index)}
-              className="px-3 text-gray-500 hover:text-red-400 transition-colors"
+              className={iconButtonDanger}
               aria-label={removeAriaLabel}
             >
-              <FiTrash2 size={15} />
+              <FiTrash2 size={16} />
             </button>
           </div>
         ))}

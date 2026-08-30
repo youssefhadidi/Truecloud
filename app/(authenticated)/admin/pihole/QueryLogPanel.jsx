@@ -72,7 +72,7 @@ export default function QueryLogPanel() {
           placeholder={t('adminPihole.filterClient')}
           className={`${inputClass} sm:flex-1`}
         />
-        <label className="flex items-center gap-2 shrink-0">
+        <label className="flex items-center justify-between gap-2 shrink-0 sm:justify-start">
           <span className="text-xs text-gray-500">{t('adminPihole.rowCount')}</span>
           <select
             value={length}
@@ -101,7 +101,27 @@ export default function QueryLogPanel() {
             isFetching ? 'opacity-60' : ''
           }`}
         >
-          <table className="w-full text-sm min-w-[760px]">
+          {/* Seven columns need 760px, so below lg each query becomes a card:
+              domain and verdict on top, the rest as wrapping metadata. */}
+          <ul className="divide-y divide-gray-700/60 lg:hidden">
+            {queries.map((q, index) => (
+              <li key={q.id ?? `${q.time}-${q.domain}-${index}`} className="p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 font-mono text-xs text-gray-200 break-all">{q.domain}</span>
+                  <StatusBadge status={q.status} />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                  <span className="tabular-nums">{formatTime(q.time)}</span>
+                  <span className="uppercase">{q.type}</span>
+                  <span className="truncate max-w-[12rem]">{q.client?.name || q.client?.ip || '—'}</span>
+                  <span className="tabular-nums">{formatReply(q.reply)}</span>
+                  {q.upstream && <span className="truncate max-w-[12rem]">{q.upstream}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <table className="hidden lg:table w-full text-sm min-w-[760px]">
             <thead className="sticky top-0 z-10 bg-gray-800">
               <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-700">
                 <th className="px-3 py-2 font-semibold w-24">{t('adminPihole.colTime')}</th>
