@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -75,6 +76,15 @@ export async function DELETE(req, { params }) {
         token,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Refuse to delete a cache dir, anything inside one, or a folder holding one
+    if (isProtectedFromWrite(filePath)) {
+      logger.warn('DELETE /api/public/[token]/delete - Blocked delete of reserved cache path', {
+        filePath,
+        token,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Prevent deleting the root shared folder itself

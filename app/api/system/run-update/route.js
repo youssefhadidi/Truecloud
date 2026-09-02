@@ -78,7 +78,7 @@ function torrentServiceSteps() {
     // repo's `rebuild-native` script can't be used: it resolves
     // node-datachannel from the project root, which only holds under a hoisted
     // layout — under pnpm it's a transitive dep of webtorrent and isn't there.
-    { name: STEPS.REBUILDING, command: pm, args: nativeRebuildArgs(pm), cwd },
+    { name: STEPS.REBUILDING, command: pm, args: nativeRebuildArgs(pm, cwd), cwd },
     { name: STEPS.RESTARTING, command: 'systemctl', args: ['restart', 'torrent-service'], cwd },
   ];
 }

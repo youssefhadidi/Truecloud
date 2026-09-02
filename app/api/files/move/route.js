@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { requireFolderUnlock } from '@/lib/folderLocks';
+import { isCachePath, isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -83,6 +84,11 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
+    // Neither end of the move may be a cache dir configured under UPLOAD_DIR
+    if (isCachePath(sourceDir) || isCachePath(destDir)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
+
     let destStats;
     try {
       destStats = await stat(destDir);
@@ -110,6 +116,13 @@ export async function POST(req) {
       const resolvedDestItem = resolve(destItemPath) + sep;
 
       if (!resolvedSourceItem.startsWith(RESOLVED_UPLOAD_DIR) || !resolvedDestItem.startsWith(RESOLVED_UPLOAD_DIR)) {
+        invalidMoves.push(name);
+        continue;
+      }
+
+      // Moving a cache dir away (or a folder holding one) orphans every cached
+      // path; moving onto one would clobber it.
+      if (isProtectedFromWrite(sourceItemPath) || isCachePath(destItemPath)) {
         invalidMoves.push(name);
         continue;
       }

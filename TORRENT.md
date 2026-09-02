@@ -127,11 +127,17 @@ updates independently of the main app.
   *install* is bun's: `ExecStart` must stay `node index.mjs` no matter what
   installs the deps. `TORRENT_SERVICE_PM` overrides, and takes an absolute path
   (`/root/.bun/bin/bun`) for when bun isn't on the service's `PATH`.
-- **Native rebuild** — `bun pm trust --all`; bun has no `rebuild` command. This
-  relies on the top-level `trustedDependencies` in torrent-service's
-  `package.json`. (`pnpm.onlyBuiltDependencies` is declared alongside it so an
-  override to pnpm still builds, where the step becomes
-  `<pm> rebuild node-datachannel`.)
+- **Native rebuild** — `bun pm trust <names>`; bun has no `rebuild` command. The
+  names come from the top-level `trustedDependencies` in torrent-service's
+  `package.json`, falling back to `node-datachannel`.
+  (`pnpm.onlyBuiltDependencies` is declared alongside it so an override to pnpm
+  still builds, where the step becomes `<pm> rebuild node-datachannel`.)
+
+  **Never `--all`.** It runs lifecycle scripts for every dependency that has
+  one, and WebTorrent pulls in `ip-set`, whose preinstall is an `only-allow
+  pnpm` guard that exits 1 under bun. The step dies there — before
+  node-datachannel is rebuilt — and the service then starts on an unbuilt
+  addon.
 - **UI** — Admin → System Health has a dedicated *Update Torrent Service* button next
   to *Start Update*, and the update toast offers each one separately.
 
@@ -144,7 +150,7 @@ If `node-datachannel` fails to find its prebuilt binary (e.g. after a fresh clon
 
 ```bash
 cd torrent-service
-bun pm trust --all        # bun; or `npm rebuild node-datachannel`
+bun pm trust node-datachannel    # bun; or `npm rebuild node-datachannel`
 ```
 
 This re-runs `node-datachannel`'s install script (`prebuild-install -r napi`) to

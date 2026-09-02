@@ -5,6 +5,7 @@ import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { buildTempName } from '@/lib/uploadTemp';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 export const config = {
   api: {
@@ -60,6 +61,12 @@ export default async function handler(req, res) {
 
     if (!(resolve(targetDir) + sep).startsWith(RESOLVED_UPLOAD_DIR)) {
       return res.status(400).json({ error: 'Invalid path' });
+    }
+
+    // Never write share uploads into a cache dir configured under UPLOAD_DIR.
+    // Checked before the mkdir below, which would otherwise create the tree.
+    if (isCachePath(targetDir)) {
+      return res.status(403).json({ error: CACHE_PATH_ERROR });
     }
 
     if (!existsSync(targetDir)) {

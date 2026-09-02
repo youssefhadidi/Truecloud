@@ -5,6 +5,7 @@ import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/share
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { isUploadTempName } from '@/lib/uploadTemp';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -56,6 +57,11 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
+    // A cache dir configured under UPLOAD_DIR is never share-browsable
+    if (isCachePath(targetDir)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
+
     // Read files from filesystem
     let fileNames;
     try {
@@ -67,6 +73,9 @@ export async function GET(req, { params }) {
     // Hide in-flight upload temp files so the share list never shows a
     // half-written upload.
     fileNames = fileNames.filter((name) => !isUploadTempName(name));
+
+    // Hide cache dirs that sit inside the shared folder
+    fileNames = fileNames.filter((name) => !isCachePath(join(targetDir, name)));
 
     // Get file stats for each file
     const files = await Promise.all(

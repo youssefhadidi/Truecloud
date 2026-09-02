@@ -12,6 +12,7 @@ import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 import { logger } from '@/lib/logger';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -55,6 +56,18 @@ export async function GET(req, { params }) {
     if (locked) return locked;
 
     const filePath = join(UPLOAD_DIR, relativePath, fileName);
+
+    // A cache dir configured under UPLOAD_DIR is hidden from listings, so it
+    // must not be reachable by crafting a path either — this route zips whole
+    // directories, which would otherwise hand back the entire cache.
+    if (isCachePath(filePath)) {
+      logger.warn('Download: blocked reserved cache path', {
+        path: relativePath,
+        fileName,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
 
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });

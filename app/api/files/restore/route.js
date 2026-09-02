@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { requireFolderUnlock } from '@/lib/folderLocks';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -89,6 +90,17 @@ export async function POST(req) {
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // A trashed item must not be restored into a cache dir configured under
+    // UPLOAD_DIR (the original path may predate the cache move)
+    if (isCachePath(destPath)) {
+      logger.warn('POST /api/files/restore - Blocked restore into reserved cache path', {
+        fileName,
+        originalPath,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Check if source exists

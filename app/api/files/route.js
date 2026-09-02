@@ -12,6 +12,7 @@ import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentClient';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { requireFolderUnlock, getAllLockedPaths } from '@/lib/folderLocks';
+import { isCacheEntry, isCacheRelativePath, isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 // Pre-resolve the upload directory with trailing separator for proper security checks
@@ -98,6 +99,16 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
+    // Block browsing directly into a cache dir configured inside UPLOAD_DIR —
+    // filtering the parent listing alone would still leave the path reachable.
+    if (isCacheRelativePath(relativePath)) {
+      logger.warn('GET /api/files - Blocked listing of reserved cache path', {
+        requestedPath: relativePath,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
+
     // Kick off the torrent service call in parallel with the directory walk.
     // Why: today readdir → stat-all → fetch downloads ran sequentially, so the
     // torrent service latency was always on the critical path. Overlapping it
@@ -142,6 +153,8 @@ export async function GET(req) {
       if (name.startsWith('.')) return false;
       if (HIDDEN_NAMES.has(name)) return false;
       if (downloadingNames.has(name)) return false;
+      // Cache dirs configured inside UPLOAD_DIR are generated data, not content
+      if (isCacheEntry(relativePath, name)) return false;
       if (atRoot) {
         if (name === 'trash') return false;
         // Non-admin users only see their own user_ folder at root.
@@ -315,6 +328,16 @@ export async function DELETE(req) {
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Refuse to delete a cache dir, anything inside one, or a folder holding one
+    if (isProtectedFromWrite(targetPath)) {
+      logger.warn('DELETE /api/files - Blocked delete of reserved cache path', {
+        fileName,
+        path: relativePath,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Check if it's a directory or file
@@ -496,6 +519,18 @@ export async function PATCH(req) {
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Renaming a cache dir (or a folder holding one) breaks every cached path;
+    // renaming *onto* one would clobber it.
+    if (isProtectedFromWrite(oldPath) || isProtectedFromWrite(newPath)) {
+      logger.warn('PATCH /api/files - Blocked rename of reserved cache path', {
+        oldName,
+        newName,
+        path: relativePath,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Rename using fs.rename

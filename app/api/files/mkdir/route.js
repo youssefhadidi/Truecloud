@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { requireFolderUnlock } from '@/lib/folderLocks';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -82,6 +83,17 @@ export async function POST(req) {
         user: session.user.email,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Don't let a user create (or silently adopt, via recursive:true) a folder
+    // inside a cache dir configured under UPLOAD_DIR
+    if (isCachePath(targetPath)) {
+      logger.warn('POST /api/files/mkdir - Blocked create inside reserved cache path', {
+        folderName,
+        path: adjustedPath,
+        user: session.user.email,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     await mkdir(targetPath, { recursive: true });

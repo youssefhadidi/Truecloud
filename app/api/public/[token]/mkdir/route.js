@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -71,6 +72,12 @@ export async function POST(req, { params }) {
     if (!resolvedFolderPath.startsWith(RESOLVED_UPLOAD_DIR)) {
       logger.error('POST /api/public/[token]/mkdir - Path traversal attempt', { folderPath, token });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Never create inside a cache dir configured under UPLOAD_DIR
+    if (isCachePath(folderPath)) {
+      logger.warn('POST /api/public/[token]/mkdir - Blocked create inside reserved cache path', { folderPath, token });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Check if folder already exists

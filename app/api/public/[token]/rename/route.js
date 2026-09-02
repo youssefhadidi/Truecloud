@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
+import { isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -82,6 +83,17 @@ export async function PATCH(req, { params }) {
         token,
       });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Renaming a cache dir (or a folder holding one) breaks every cached path;
+    // renaming onto one would clobber it.
+    if (isProtectedFromWrite(oldPath) || isProtectedFromWrite(newPath)) {
+      logger.warn('PATCH /api/public/[token]/rename - Blocked rename of reserved cache path', {
+        oldPath,
+        newPath,
+        token,
+      });
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Check if old file exists

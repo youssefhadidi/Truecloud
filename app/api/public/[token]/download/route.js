@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 import fs from 'fs';
 import { stat } from 'fs/promises';
 import { join, basename, resolve, sep } from 'node:path';
@@ -57,6 +58,13 @@ export async function GET(req, { params }) {
     // Security: prevent directory traversal
     if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Cache dirs under UPLOAD_DIR are hidden from share listings, so they must
+    // not be reachable via a crafted subpath either — this route zips whole
+    // directories, which would otherwise hand back the entire cache.
+    if (isCachePath(filePath)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     if (!fs.existsSync(filePath)) {
