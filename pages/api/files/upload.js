@@ -152,6 +152,7 @@ export default async function handler(req, res) {
     const { default: Busboy } = await import('busboy');
     const busboy = Busboy({
       headers: req.headers,
+      defParamCharset: 'utf8',
       limits: {
         files: 100,
         fileSize: 100 * 1024 * 1024 * 1024,
