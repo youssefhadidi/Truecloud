@@ -139,22 +139,24 @@ export default function ContextMenu({
 
       {!inTrash && (
         <>
-          {/* Liked files get their own gallery at /files/liked; folders are not likeable. */}
-          {!file.isDirectory && onToggleLike && (
-            <MenuItem
-              icon={FiHeart}
-              label={isLiked ? t('menu.unlike') : t('menu.like')}
-              onClick={onToggleLike}
-              accent={isLiked}
-            />
-          )}
-          {onToggleFavorite && (
-            <MenuItem
-              icon={FiStar}
-              label={isFavorite ? t('menu.removeFromFavorites') : t('menu.addToFavorites')}
-              onClick={onToggleFavorite}
-            />
-          )}
+          {/* The two collections are disjoint: folders are bookmarked as sidebar
+              favorites, files are liked into the gallery at /files/liked. */}
+          {file.isDirectory
+            ? onToggleFavorite && (
+                <MenuItem
+                  icon={FiStar}
+                  label={isFavorite ? t('menu.removeFromFavorites') : t('menu.addToFavorites')}
+                  onClick={onToggleFavorite}
+                />
+              )
+            : onToggleLike && (
+                <MenuItem
+                  icon={FiHeart}
+                  label={isLiked ? t('menu.unlike') : t('menu.like')}
+                  onClick={onToggleLike}
+                  accent={isLiked}
+                />
+              )}
           {onShare && <MenuItem icon={FiShare2} label={t('common.share')} onClick={onShare} />}
         </>
       )}
