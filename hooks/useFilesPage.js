@@ -1,6 +1,6 @@
 /** @format */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 // Cached collator with natural numeric ordering ("file2" before "file10").
 // Roughly 5–10× faster than calling String.prototype.localeCompare per pair
@@ -72,6 +72,10 @@ export function useFilesPage(status) {
     }
     return '';
   });
+
+  // Guards the URL<->state sync effect below so its first pass can adopt an
+  // incoming ?path= instead of overwriting it.
+  const urlSyncStartedRef = useRef(false);
 
   // Navigation state - grouped
   const [navigation, setNavigation] = useState({
@@ -191,6 +195,26 @@ export function useFilesPage(status) {
       return;
     }
     const currentUrlPath = new URL(window.location.href).searchParams.get('path') || '';
+    // On the first pass the URL is the source of truth, not our state. Arriving
+    // from another route ("open containing folder", a sidebar favourite clicked
+    // from /files/shares) renders this page before Next.js commits the new URL
+    // in its insertion effect, so initialPath read the *previous* location and
+    // came back empty. Adopt the path instead of replacing it away to root.
+    if (!urlSyncStartedRef.current) {
+      urlSyncStartedRef.current = true;
+      if (currentUrlPath && currentUrlPath !== navigation.currentPath) {
+        setNavigation((prev) => ({
+          ...prev,
+          currentPath: currentUrlPath,
+          pathHistory: [currentUrlPath],
+          historyIndex: 0,
+        }));
+        window.dispatchEvent(
+          new CustomEvent('tc-files-set-path', { detail: { path: currentUrlPath } }),
+        );
+        return;
+      }
+    }
     if (currentUrlPath !== navigation.currentPath) {
       const target = navigation.currentPath
         ? `/files/list?path=${encodeURIComponent(navigation.currentPath)}`
