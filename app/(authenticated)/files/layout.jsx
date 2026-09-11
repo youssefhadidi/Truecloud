@@ -41,6 +41,7 @@ function FilesLayoutContent({ children }) {
   const sidebarCurrentPath = useMemo(() => {
     if (pathname === '/files/list') return filesPath;
     if (pathname === '/files/downloads') return '__downloads__';
+    if (pathname === '/files/liked') return '__liked__';
     if (pathname === '/files/shares') return '__shares__';
     return '';
   }, [pathname, filesPath]);

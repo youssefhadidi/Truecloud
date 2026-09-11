@@ -22,6 +22,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
+import { useLikedPaths, useToggleLike } from '@/lib/api/likes';
 import { useMoveFiles, useDeleteFile, fetchFoldersHelper } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
 import { parseUsbPath, USB_PREFIX } from '@/lib/usbPath';
@@ -135,6 +136,17 @@ function FilesPageContent() {
   const { data: favorites = [] } = useFavorites();
   const { toggleFavorite } = useToggleFavorite();
   const favoritePaths = useMemo(() => new Set(favorites.map((f) => f.path)), [favorites]);
+  const likedPaths = useLikedPaths();
+  const { toggleLike } = useToggleLike();
+  // Global-search hits live outside the browsed folder, so trust the path the
+  // search carried rather than assuming the file sits in currentPath.
+  const contextFilePath = useMemo(() => {
+    const file = state.selectedContextFile;
+    if (!file) return null;
+    if (file._fullPath) return file._fullPath;
+    const dir = file._parentPath != null ? file._parentPath : state.currentPath;
+    return dir ? `${dir}/${file.name}` : file.name;
+  }, [state.selectedContextFile, state.currentPath]);
   const moveMutation = useMoveFiles();
   const bulkDeleteMutation = useDeleteFile(state.currentPath);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -1102,6 +1114,7 @@ function FilesPageContent() {
                         initiateShare={isGlobalSearch || readOnly ? undefined : handlers.initiateShare}
                         sharedPaths={isGlobalSearch || readOnly ? undefined : state.sharedPaths}
                         favoritePaths={isGlobalSearch || readOnly ? undefined : favoritePaths}
+                        likedPaths={isGlobalSearch || readOnly ? undefined : likedPaths}
                         currentPath={state.currentPath}
                         isGlobalSearch={isGlobalSearch}
                         selectionMode={isGlobalSearch || readOnly ? false : state.selectionMode}
@@ -1174,6 +1187,7 @@ function FilesPageContent() {
                       onInitiateShare={isGlobalSearch || readOnly ? undefined : handlers.initiateShare}
                       sharedPaths={isGlobalSearch || readOnly ? undefined : state.sharedPaths}
                       favoritePaths={isGlobalSearch || readOnly ? undefined : favoritePaths}
+                      likedPaths={isGlobalSearch || readOnly ? undefined : likedPaths}
                       selectionMode={isGlobalSearch || readOnly ? false : state.selectionMode}
                       selectedFiles={selectedFileSet}
                       onToggleSelect={toggleSelection}
@@ -1273,6 +1287,21 @@ function FilesPageContent() {
           }
           contextMenu.closeContextMenu();
         }}
+        onToggleLike={readOnly || state.selectedContextFile?.isDirectory ? undefined : async () => {
+          if (state.selectedContextFile && contextFilePath) {
+            try {
+              const { liked } = await toggleLike({
+                path: contextFilePath,
+                name: state.selectedContextFile.name,
+              });
+              state.addNotification('success', liked ? t('notify.liked') : t('notify.unliked'));
+            } catch {
+              state.addNotification('error', t('notify.likeUpdateFailed'));
+            }
+          }
+          contextMenu.closeContextMenu();
+        }}
+        isLiked={contextFilePath ? likedPaths.has(contextFilePath) : false}
         isFavorite={
           state.selectedContextFile
             ? favorites.some(

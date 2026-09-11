@@ -6,7 +6,7 @@ import React, { useState, memo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiFolder, FiFile, FiX, FiStar, FiChevronLeft, FiChevronRight,
-  FiTrash2, FiSearch, FiHardDrive, FiDownload, FiShare2,
+  FiTrash2, FiSearch, FiHardDrive, FiDownload, FiShare2, FiHeart,
 } from 'react-icons/fi';
 import { useFavorites, useRemoveFavorite } from '@/lib/api/favorites';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -355,6 +355,12 @@ function FavoritesSidebar({ onNavigate, currentPath, searchQuery, onSearchQueryC
           label={t('shell.downloads')}
           active={currentPath === '__downloads__'}
           onClick={() => router.push('/files/downloads')}
+        />
+        <NavRow
+          icon={FiHeart}
+          label={t('sidebar.liked')}
+          active={currentPath === '__liked__'}
+          onClick={() => router.push('/files/liked')}
         />
         <NavRow
           icon={FiShare2}

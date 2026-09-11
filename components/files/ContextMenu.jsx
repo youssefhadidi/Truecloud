@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import {
   FiFolder, FiEdit, FiDownload, FiVideo, FiImage, FiTrash2, FiBox, FiShare2,
-  FiRotateCcw, FiStar, FiMusic, FiFileText,
+  FiRotateCcw, FiStar, FiMusic, FiFileText, FiHeart,
 } from 'react-icons/fi';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -60,6 +60,8 @@ export default function ContextMenu({
   onShare,
   onToggleFavorite,
   isFavorite = false,
+  onToggleLike,
+  isLiked = false,
   onClose,
 }) {
   const ref = useRef(null);
@@ -137,6 +139,15 @@ export default function ContextMenu({
 
       {!inTrash && (
         <>
+          {/* Liked files get their own gallery at /files/liked; folders are not likeable. */}
+          {!file.isDirectory && onToggleLike && (
+            <MenuItem
+              icon={FiHeart}
+              label={isLiked ? t('menu.unlike') : t('menu.like')}
+              onClick={onToggleLike}
+              accent={isLiked}
+            />
+          )}
           {onToggleFavorite && (
             <MenuItem
               icon={FiStar}

@@ -6,7 +6,7 @@ import { useRef, useMemo, useCallback, useState, useEffect, memo, forwardRef, us
 import { Grid, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiLock,
-  FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
+  FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart,
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { isViewableFile } from '@/lib/getFileType';
@@ -87,6 +87,7 @@ const GridItem = memo(
     onRemoveDownload,
     isGlobalSearch,
     isFavorite,
+    isLiked,
   }) => {
     const { t } = useTranslation();
     const kind = fileKind(item);
@@ -296,6 +297,29 @@ const GridItem = memo(
                 }}
               >
                 <FiStar size={10} fill="currentColor" />
+              </div>
+            )}
+
+            {isLiked && (
+              <div
+                title={t('fileItem.liked')}
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8 + (sharedPath ? 24 : 0) + (isFavorite ? 24 : 0),
+                  zIndex: 4,
+                  background: 'var(--danger)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiHeart size={10} fill="currentColor" />
               </div>
             )}
 
@@ -690,6 +714,7 @@ const GridView = forwardRef(
       onInitiateShare,
       sharedPaths,
       favoritePaths,
+      likedPaths,
       onContextMenu,
       selectionMode,
       selectedFiles,
@@ -729,6 +754,7 @@ const GridView = forwardRef(
     const processingFileRef = useRef(processingFile);
     const sharedPathsRef = useRef(sharedPaths);
     const favoritePathsRef = useRef(favoritePaths);
+    const likedPathsRef = useRef(likedPaths);
     const deletingFileIdRef = useRef(deletingFile?.id);
     const renamingFileIdRef = useRef(renamingFile?.id);
     const showingActionsForRef = useRef(showingActionsFor);
@@ -740,6 +766,7 @@ const GridView = forwardRef(
     useEffect(() => { processingFileRef.current = processingFile; }, [processingFile]);
     useEffect(() => { sharedPathsRef.current = sharedPaths; }, [sharedPaths]);
     useEffect(() => { favoritePathsRef.current = favoritePaths; }, [favoritePaths]);
+    useEffect(() => { likedPathsRef.current = likedPaths; }, [likedPaths]);
     useEffect(() => { deletingFileIdRef.current = deletingFile?.id; }, [deletingFile]);
     useEffect(() => { renamingFileIdRef.current = renamingFile?.id; }, [renamingFile]);
     useEffect(() => { showingActionsForRef.current = showingActionsFor; }, [showingActionsFor]);
@@ -748,7 +775,7 @@ const GridView = forwardRef(
 
     useEffect(() => {
       gridRef.current?.forceUpdate();
-    }, [selectedFiles, processingFile, sharedPaths, favoritePaths, deletingFile, renamingFile, showingActionsFor, newFolderName, newFileName, allItems]);
+    }, [selectedFiles, processingFile, sharedPaths, favoritePaths, likedPaths, deletingFile, renamingFile, showingActionsFor, newFolderName, newFileName, allItems]);
 
     useImperativeHandle(
       ref,
@@ -809,6 +836,7 @@ const GridView = forwardRef(
           .replace(/^\//, '');
         const isShared = sharedPathsRef.current?.has(pathKey) ?? false;
         const isFavorite = favoritePathsRef.current?.has(pathKey) ?? false;
+        const isLiked = likedPathsRef.current?.has(pathKey) ?? false;
         const isDeletingThis = deletingFileIdRef.current === item.id;
         const isRenamingThis = renamingFileIdRef.current === item.id;
         const isProcessing = processingFileRef.current === item.id;
@@ -840,6 +868,7 @@ const GridView = forwardRef(
             onInitiateShare={onInitiateShare}
             sharedPath={isShared}
             isFavorite={isFavorite}
+            isLiked={isLiked}
             onContextMenu={onContextMenu}
             selectionMode={selectionMode}
             isSelected={!!selectedFilesRef.current?.has(item.name)}

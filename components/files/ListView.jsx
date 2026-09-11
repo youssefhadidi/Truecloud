@@ -6,7 +6,7 @@ import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHand
 import { List, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiLock,
-  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar,
+  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
@@ -79,6 +79,7 @@ const ListRow = memo(function ListRow({
   isSelected,
   isShared,
   isFavorite,
+  isLiked,
   isProcessing,
   showActions,
   formatFileSize,
@@ -198,6 +199,27 @@ const ListRow = memo(function ListRow({
                 }}
               >
                 <FiStar size={8} fill="currentColor" />
+              </div>
+            )}
+            {isLiked && (
+              <div
+                title={t('fileItem.liked')}
+                style={{
+                  position: 'absolute',
+                  bottom: -4,
+                  left: -4,
+                  background: 'var(--danger)',
+                  color: '#fff',
+                  borderRadius: 99,
+                  width: 14,
+                  height: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <FiHeart size={8} fill="currentColor" />
               </div>
             )}
           </div>
@@ -320,6 +342,7 @@ const ListView = forwardRef(({
   initiateShare,
   sharedPaths,
   favoritePaths,
+  likedPaths,
   currentPath,
   selectionMode,
   selectedFiles,
@@ -353,6 +376,7 @@ const ListView = forwardRef(({
   const processingFileRef = useRef(processingFile);
   const sharedPathsRef = useRef(sharedPaths);
   const favoritePathsRef = useRef(favoritePaths);
+  const likedPathsRef = useRef(likedPaths);
   const deletingFileIdRef = useRef(deletingFile?.id);
   const renamingFileIdRef = useRef(renamingFile?.id);
   const showingActionsForRef = useRef(showingActionsFor);
@@ -361,6 +385,7 @@ const ListView = forwardRef(({
   useEffect(() => { processingFileRef.current = processingFile; }, [processingFile]);
   useEffect(() => { sharedPathsRef.current = sharedPaths; }, [sharedPaths]);
   useEffect(() => { favoritePathsRef.current = favoritePaths; }, [favoritePaths]);
+  useEffect(() => { likedPathsRef.current = likedPaths; }, [likedPaths]);
   useEffect(() => { deletingFileIdRef.current = deletingFile?.id; }, [deletingFile]);
   useEffect(() => { renamingFileIdRef.current = renamingFile?.id; }, [renamingFile]);
   useEffect(() => { showingActionsForRef.current = showingActionsFor; }, [showingActionsFor]);
@@ -370,7 +395,7 @@ const ListView = forwardRef(({
   // props actually changed re-render to the DOM.
   useEffect(() => {
     listRef.current?.forceUpdateGrid();
-  }, [selectedFiles, processingFile, sharedPaths, favoritePaths, deletingFile, renamingFile, showingActionsFor]);
+  }, [selectedFiles, processingFile, sharedPaths, favoritePaths, likedPaths, deletingFile, renamingFile, showingActionsFor]);
 
   const handleTouchStart = useCallback((file) => {
     if (!isMobile) return;
@@ -548,6 +573,7 @@ const ListView = forwardRef(({
         .replace(/^\//, '');
       const isShared = sharedPathsRef.current?.has(pathKey) ?? false;
       const isFavorite = favoritePathsRef.current?.has(pathKey) ?? false;
+      const isLiked = likedPathsRef.current?.has(pathKey) ?? false;
       const isProcessing = processingFileRef.current === file.id;
       const showActions = !deletingFileIdRef.current && !renamingFileIdRef.current && showingActionsForRef.current === file.id;
 
@@ -573,6 +599,7 @@ const ListView = forwardRef(({
           isSelected={isSelected}
           isShared={isShared}
           isFavorite={isFavorite}
+          isLiked={isLiked}
           isProcessing={isProcessing}
           showActions={showActions}
           formatFileSize={formatFileSize}

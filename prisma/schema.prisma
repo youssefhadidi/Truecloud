@@ -33,6 +33,7 @@ model User {
   sessions    Session[]
   shares      Share[]
   favorites   Favorite[]
+  likedFiles  LikedFile[]
   aiChats     AiChat[]
   aiUsage     AiUsage[]
 }
@@ -108,6 +109,19 @@ model Favorite {
   isDirectory Boolean  @default(false)
   ownerId     String
   createdAt   DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([path, ownerId])
+  @@index([ownerId])
+}
+
+model LikedFile {
+  id        String   @id @default(cuid())
+  path      String   // Full path to the file (directory + filename)
+  name      String   // Display name (filename)
+  ownerId   String
+  createdAt DateTime @default(now())
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
