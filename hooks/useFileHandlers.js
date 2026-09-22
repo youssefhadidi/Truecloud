@@ -1,5 +1,6 @@
 /** @format */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
 import { useStartDownload } from '@/lib/api/downloads';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
@@ -7,6 +8,10 @@ import { useTranslation } from '@/components/LanguageProvider';
 
 // Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
+
+// Uploads run this many at a time: enough to hide per-request latency on
+// batches of small files without splitting bandwidth too thin for big ones.
+const UPLOAD_CONCURRENCY = 3;
 
 export function useFileHandlers({
   currentPath,
@@ -26,6 +31,7 @@ export function useFileHandlers({
 }) {
   const { addTransfer, updateTransfer, removeTransfer, setTransferring } = useTransfersDispatch();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   // Mutations
   const createFolderMutation = useCreateFolder(currentPath);
@@ -129,10 +135,21 @@ export function useFileHandlers({
     // Handle regular uploads
     if (regularFiles.length > 0) {
       setTransferring(true);
-      for (const file of regularFiles) {
-        await uploadSingleFile(file, uploadPath);
-      }
+      // uploadSingleFile never rejects, so each worker drains the shared queue
+      // until it's empty.
+      const queue = [...regularFiles];
+      const worker = async () => {
+        while (queue.length > 0) {
+          await uploadSingleFile(queue.shift(), uploadPath);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, worker),
+      );
       setTransferring(false);
+      // One refresh for the whole batch (the file-change WebSocket event
+      // covers the per-file updates while it runs).
+      queryClient.invalidateQueries({ queryKey: ['files', uploadPath] });
     }
   };
 

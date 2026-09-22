@@ -8,9 +8,8 @@ import {
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
-import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
+import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail, runThumbnailJob } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
-import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
@@ -21,9 +20,6 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export const maxDuration = 60;
-
-// Semaphore for limiting concurrent generation
-const thumbnailSemaphore = new Semaphore(20);
 
 export async function GET(req, { params }) {
   try {
@@ -161,20 +157,15 @@ export async function GET(req, { params }) {
     }
 
     if (!thumbnailExists) {
-      await thumbnailSemaphore.acquire();
       try {
-        if (isPdf) {
-          await generatePdfThumbnail(filePath, thumbnailPath);
-        } else if (isVideo) {
-          await generateVideoThumbnail(filePath, thumbnailPath);
-        } else {
+        await runThumbnailJob(thumbnailPath, () => {
+          if (isPdf) return generatePdfThumbnail(filePath, thumbnailPath);
+          if (isVideo) return generateVideoThumbnail(filePath, thumbnailPath);
           // Image (including HEIC/HEIF): sharp handles all formats + auto-rotation
-          await generateImageThumbnail(filePath, thumbnailPath);
-        }
+          return generateImageThumbnail(filePath, thumbnailPath);
+        });
       } catch (error) {
         return NextResponse.json({ error: 'Thumbnail generation failed', details: error.message }, { status: 500 });
-      } finally {
-        thumbnailSemaphore.release();
       }
     }
 

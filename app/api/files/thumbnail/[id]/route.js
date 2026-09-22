@@ -9,9 +9,8 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
-import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail } from '@/lib/thumbnailUtils';
+import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail, runThumbnailJob } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
-import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
@@ -22,9 +21,6 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 // Increase timeout for thumbnail generation (HEIC and PDF processing can be slow)
 export const maxDuration = 60;
-
-// Semaphore to limit concurrent thumbnail generation
-const thumbnailSemaphore = new Semaphore(20); // Limited parallelization to prevent resource exhaustion
 
 export async function GET(req, { params }) {
   const startTime = Date.now();
@@ -163,16 +159,13 @@ export async function GET(req, { params }) {
       // Ensure thumbnails directory exists (only when needed)
       await fsPromises.mkdir(thumbnailsDir, { recursive: true });
 
-      await thumbnailSemaphore.acquire();
       try {
-        if (isPdf) {
-          await generatePdfThumbnail(filePath, thumbnailPath);
-        } else if (isVideo) {
-          await generateVideoThumbnail(filePath, thumbnailPath);
-        } else {
+        await runThumbnailJob(thumbnailPath, () => {
+          if (isPdf) return generatePdfThumbnail(filePath, thumbnailPath);
+          if (isVideo) return generateVideoThumbnail(filePath, thumbnailPath);
           // Image — sharp handles all formats + auto-rotation
-          await generateImageThumbnail(filePath, thumbnailPath);
-        }
+          return generateImageThumbnail(filePath, thumbnailPath);
+        });
         logger.info('GET /api/files/thumbnail - Generation complete', { fileId });
       } catch (error) {
         logger.error('GET /api/files/thumbnail - Generation failed', { fileId, error: error.message });
@@ -191,8 +184,6 @@ export async function GET(req, { params }) {
           },
           { status: 500 },
         );
-      } finally {
-        thumbnailSemaphore.release();
       }
     }
 

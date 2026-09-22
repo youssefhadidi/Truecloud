@@ -153,6 +153,10 @@ export default async function handler(req, res) {
     const busboy = Busboy({
       headers: req.headers,
       defParamCharset: 'utf8',
+      // 1 MB parser/file buffers (defaults: the runtime's 16–64 KB) so large files move in
+      // fewer, bigger chunks — matches the write stream below.
+      highWaterMark: 1024 * 1024,
+      fileHwm: 1024 * 1024,
       limits: {
         files: 100,
         fileSize: 100 * 1024 * 1024 * 1024,
@@ -229,7 +233,7 @@ export default async function handler(req, res) {
         path: normalizedFilePath,
       };
 
-      const writeStream = createWriteStream(tempPath);
+      const writeStream = createWriteStream(tempPath, { highWaterMark: 1024 * 1024 });
       const writePromise = new Promise((resolveWrite, rejectWrite) => {
         writeStream.on('finish', resolveWrite);
         writeStream.on('error', rejectWrite);
