@@ -44,6 +44,9 @@ next-env.d.ts
 uploads
 prisma/*.db
 prisma/*.db-journal
+# SQLite WAL side files (see enableSqliteWal in server.js)
+*.db-wal
+*.db-shm
 /thumbnails
 /public/thumbnails
 /heic-cache

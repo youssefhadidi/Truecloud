@@ -8,6 +8,8 @@ import { mkdir, rmdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'node:path';
 import { addOrUpdateSmbUser, deleteSmbUser } from '@/lib/samba';
+import { clearRootAccessCache } from '@/lib/pathPermissions';
+import { clearLockStatusCache } from '@/lib/authOptions';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -140,6 +142,8 @@ export async function DELETE(req) {
     await prisma.user.delete({
       where: { id: userId },
     });
+    clearRootAccessCache(userId);
+    clearLockStatusCache(userId);
 
     // Delete user from Samba (best-effort, don't fail the request if Samba is unavailable)
     try {
@@ -206,6 +210,7 @@ export async function PATCH(req) {
         hasRootAccess: true,
       },
     });
+    clearRootAccessCache(id);
 
     // Update Samba user if password was changed (best-effort, don't fail the request)
     if (password) {

@@ -206,8 +206,26 @@ global.broadcastSystemMetrics = (metrics) => {
   });
 };
 
+// Switch SQLite to WAL journaling so reads no longer block behind writes (the
+// lastActivityAt bumps, job/metrics writes) and commits cost less. The mode is
+// persisted in the database file, so this one-shot connection at startup
+// covers every later connection, including Prisma's pool. Best-effort: on
+// failure SQLite just stays in its default rollback-journal mode.
+async function enableSqliteWal() {
+  const { PrismaClient } = require('@prisma/client');
+  const client = new PrismaClient();
+  try {
+    const [row] = await client.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
+    console.log(`[server] SQLite journal_mode=${row?.journal_mode ?? 'unknown'}`);
+  } catch (err) {
+    console.warn('[server] Could not enable SQLite WAL mode:', err?.message || err);
+  } finally {
+    await client.$disconnect().catch(() => {});
+  }
+}
+
 // Load ES modules before starting server
-loadEsModules().then(() => {
+enableSqliteWal().then(() => loadEsModules()).then(() => {
   return app.prepare();
 }).then(() => {
   const server = createServer((req, res) => {
