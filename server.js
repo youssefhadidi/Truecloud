@@ -206,26 +206,31 @@ global.broadcastSystemMetrics = (metrics) => {
   });
 };
 
-// Switch SQLite to WAL journaling so reads no longer block behind writes (the
-// lastActivityAt bumps, job/metrics writes) and commits cost less. The mode is
-// persisted in the database file, so this one-shot connection at startup
-// covers every later connection, including Prisma's pool. Best-effort: on
-// failure SQLite just stays in its default rollback-journal mode.
-async function enableSqliteWal() {
+// Keep SQLite in its default rollback-journal mode — do NOT switch to WAL.
+// The in-app updater runs `prisma migrate deploy` while this server is still
+// up, and Prisma's migration engine takes locking_mode=EXCLUSIVE; under WAL
+// that can never be granted while our connections are open, so every update
+// fails with "database is locked". The journal mode is persisted in the file,
+// so this also converts back a database a previous build switched to WAL. It
+// runs before Next opens any connections, since leaving WAL needs sole access.
+// Best-effort: a failure only means the file keeps its current mode.
+async function ensureSqliteRollbackJournal() {
   const { PrismaClient } = require('@prisma/client');
   const client = new PrismaClient();
   try {
-    const [row] = await client.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
-    console.log(`[server] SQLite journal_mode=${row?.journal_mode ?? 'unknown'}`);
+    const [row] = await client.$queryRawUnsafe('PRAGMA journal_mode = DELETE;');
+    if (row?.journal_mode !== 'delete') {
+      console.warn(`[server] SQLite journal_mode is still ${row?.journal_mode ?? 'unknown'}; migrations may fail while running`);
+    }
   } catch (err) {
-    console.warn('[server] Could not enable SQLite WAL mode:', err?.message || err);
+    console.warn('[server] Could not set SQLite journal mode:', err?.message || err);
   } finally {
     await client.$disconnect().catch(() => {});
   }
 }
 
 // Load ES modules before starting server
-enableSqliteWal().then(() => loadEsModules()).then(() => {
+ensureSqliteRollbackJournal().then(() => loadEsModules()).then(() => {
   return app.prepare();
 }).then(() => {
   const server = createServer((req, res) => {
