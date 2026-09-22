@@ -91,15 +91,32 @@ model Share {
   passwordHash String?   // Optional bcrypt hash
   expiresAt    DateTime?
   allowEditing Boolean   @default(false) // Allow public edits (upload, rename, move, delete, mkdir) to this share
+  privateUploads Boolean @default(false) // Each visitor (identified by email) sees only the top-level items they uploaded
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   accessCount  Int       @default(0)
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  uploads ShareUpload[]
 
   @@index([token])
   @@index([ownerId])
   @@index([path, fileName])
+}
+
+// Ownership of top-level entries inside a privateUploads share. Anything nested
+// under an owned top-level folder belongs to the same email.
+model ShareUpload {
+  id        String   @id @default(cuid())
+  shareId   String
+  name      String   // top-level entry name inside the shared folder
+  email     String   // normalized (trimmed, lowercased)
+  createdAt DateTime @default(now())
+
+  share Share @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, name])
+  @@index([shareId, email])
 }
 
 model Favorite {

@@ -1,7 +1,7 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, incrementShareAccess, clientIpFromHeaders } from '@/lib/shareAuth';
+import { verifyShare, incrementShareAccess, clientIpFromHeaders, readShareEmail } from '@/lib/shareAuth';
 import { join, resolve, sep } from 'node:path';
 import { stat } from 'fs/promises';
 import { lookup } from 'mime-types';
@@ -68,6 +68,8 @@ export async function GET(req, { params }) {
       ownerUsername: share.owner.username,
       createdAt: share.createdAt,
       allowEditing: share.allowEditing || false,
+      privateUploads: share.privateUploads || false,
+      uploaderEmail: share.privateUploads ? readShareEmail(req, token) : null,
     });
   } catch (error) {
     console.error('GET /api/public/[token] - Error:', error);

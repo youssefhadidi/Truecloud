@@ -4,9 +4,9 @@
 
 import { useState, useEffect } from 'react';
 import {
-  FiCopy, FiLock, FiCheck, FiTrash2, FiX, FiLink, FiShare2, FiUpload,
+  FiCopy, FiLock, FiCheck, FiTrash2, FiX, FiLink, FiShare2, FiUpload, FiUsers,
 } from 'react-icons/fi';
-import { useCreateShare, useDeleteShare, useFileShare } from '@/lib/api/files';
+import { useCreateShare, useDeleteShare, useFileShare, useShareUploads } from '@/lib/api/files';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTranslation } from '@/components/LanguageProvider';
 import Overlay from '@/components/ui/Overlay';
@@ -42,6 +42,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const [usePassword, setUsePassword] = useState(false);
   const [expiresIn, setExpiresIn] = useState('never');
   const [allowEditing, setAllowEditing] = useState(false);
+  const [privateUploads, setPrivateUploads] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,7 @@ export default function ShareModal({ file, currentPath, onClose }) {
   const createShareMutation = useCreateShare();
   const deleteShareMutation = useDeleteShare();
   const { data: existingShare, isLoading: checkingShare } = useFileShare(currentPath, file?.name);
+  const { data: uploaders = [] } = useShareUploads(existingShare?.id, !!existingShare?.privateUploads);
 
   useEffect(() => {
     if (existingShare) {
@@ -68,7 +70,8 @@ export default function ShareModal({ file, currentPath, onClose }) {
         isDirectory: file.isDirectory,
         password: usePassword ? password : null,
         expiresAt: calculateExpiry(expiresIn),
-        allowEditing: file.isDirectory ? allowEditing : false,
+        allowEditing: file.isDirectory ? (allowEditing || privateUploads) : false,
+        privateUploads: file.isDirectory ? privateUploads : false,
       });
       setShareUrl(result.shareUrl);
       addNotification('success', t('notify.shareCreated'));
@@ -221,6 +224,48 @@ export default function ShareModal({ file, currentPath, onClose }) {
                       {t('share.editingEnabled')}
                     </div>
                   )}
+                  {existingShare.privateUploads && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}>
+                      <FiUsers size={13} />
+                      {t('share.privateUploadsEnabled')}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {existingShare?.privateUploads && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
+                    {t('share.uploaders')}
+                  </label>
+                  {uploaders.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('share.noUploaders')}</div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        maxHeight: 180,
+                        overflowY: 'auto',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--r-sm)',
+                        padding: '8px 12px',
+                      }}
+                    >
+                      {uploaders.map((u) => (
+                        <div key={u.email} style={{ fontSize: 12, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                            <span className="tc-truncate" style={{ fontWeight: 600, color: 'var(--text)' }}>{u.email}</span>
+                            <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>{t('share.nItems', { count: u.names.length })}</span>
+                          </div>
+                          <div className="tc-truncate" style={{ color: 'var(--text-3)', marginTop: 2 }} title={u.names.join(', ')}>
+                            {u.names.join(', ')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -290,7 +335,23 @@ export default function ShareModal({ file, currentPath, onClose }) {
                       {t('share.allowEditingHint')}
                     </div>
                   </div>
-                  <Toggle value={allowEditing} onChange={setAllowEditing} />
+                  <Toggle value={allowEditing || privateUploads} onChange={setAllowEditing} disabled={privateUploads} />
+                </div>
+              )}
+
+              {/* Private uploads (folders only) — implies editing */}
+              {file.isDirectory && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <FiUsers size={14} color="var(--text-2)" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t('share.privateUploads')}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                      {t('share.privateUploadsHint')}
+                    </div>
+                  </div>
+                  <Toggle value={privateUploads} onChange={setPrivateUploads} />
                 </div>
               )}
             </>

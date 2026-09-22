@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries,
+} from '@/lib/shareAuth';
 import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'fs';
 import { stat, rename } from 'fs/promises';
@@ -70,6 +73,22 @@ export async function POST(req, { params }) {
     if (!destCheck.allowed) {
       return NextResponse.json({ error: destCheck.error }, { status: 400 });
     }
+
+    // Private-uploads shares: every moved item and the destination must be
+    // the visitor's own (the destination may also be the share root)
+    const email = readShareEmail(req, token);
+    const destPrivateCheck = await authorizePrivatePath(share, email, destinationPath, { allowRoot: true });
+    if (!destPrivateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(destPrivateCheck), { status: destPrivateCheck.status });
+    }
+    for (const name of safeNames) {
+      const itemCheck = await authorizePrivatePath(share, email, sourcePath ? `${sourcePath}/${name}` : name);
+      if (!itemCheck.allowed) {
+        return NextResponse.json(privateAccessErrorBody(itemCheck), { status: itemCheck.status });
+      }
+    }
+    const sourceIsPrivateRoot = share.privateUploads && isShareRoot(sourcePath);
+    const destIsPrivateRoot = share.privateUploads && isShareRoot(destinationPath);
 
     if (sourceCheck.fullPath === destCheck.fullPath) {
       return NextResponse.json({ error: 'Destination matches source' }, { status: 400 });
@@ -172,10 +191,30 @@ export async function POST(req, { params }) {
       );
     }
 
+    // Moving into the root of a private-uploads share: claim every name first
+    if (destIsPrivateRoot) {
+      const claimed = [];
+      for (const plan of movePlan) {
+        const name = await claimRootName(share, email, destDir, plan.name, { allowOwnedOverwrite: false, exact: true });
+        if (!name) {
+          await removeRootEntries(share.id, claimed);
+          return NextResponse.json(
+            { error: 'Destination already has items with the same name', conflicts: [plan.name] },
+            { status: 409 },
+          );
+        }
+        claimed.push(name);
+      }
+    }
+
     for (const plan of movePlan) {
       await rename(plan.sourceItemPath, plan.destItemPath);
       // Broadcast file change to all connected clients
       broadcastFileChange('move', destCheck.fullPath, plan.name, `T-${token}`);
+    }
+
+    if (sourceIsPrivateRoot) {
+      await removeRootEntries(share.id, movePlan.map((plan) => plan.name));
     }
 
     const duration = Date.now() - startTime;

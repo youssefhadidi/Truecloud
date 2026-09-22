@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, getOwnedNames,
+} from '@/lib/shareAuth';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { isUploadTempName } from '@/lib/uploadTemp';
@@ -49,6 +52,13 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors only see what they uploaded
+    const email = readShareEmail(req, token);
+    const privateCheck = await authorizePrivatePath(share, email, subPath, { allowRoot: true });
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+
     const targetDir = join(UPLOAD_DIR, pathCheck.fullPath);
     const resolvedTarget = resolve(targetDir) + sep;
 
@@ -76,6 +86,12 @@ export async function GET(req, { params }) {
 
     // Hide cache dirs that sit inside the shared folder
     fileNames = fileNames.filter((name) => !isCachePath(join(targetDir, name)));
+
+    // At the root of a private-uploads share, only list this visitor's entries
+    if (share.privateUploads && isShareRoot(subPath)) {
+      const owned = await getOwnedNames(share.id, email);
+      fileNames = fileNames.filter((name) => owned.has(name));
+    }
 
     // Get file stats for each file
     const files = await Promise.all(

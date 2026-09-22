@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server';
 import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries,
+} from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
@@ -20,7 +23,8 @@ export async function POST(req, { params }) {
     const { token } = await params;
     const password = req.headers.get('x-share-password');
     const body = await req.json();
-    const { name, path: subPath = '' } = body;
+    const { name: requestedName, path: subPath = '' } = body;
+    let name = requestedName;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
@@ -64,6 +68,20 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors can only touch their own entries
+    const email = readShareEmail(req, token);
+    const privateCheck = await authorizePrivatePath(share, email, subPath, { allowRoot: true });
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+    const atPrivateRoot = share.privateUploads && isShareRoot(subPath);
+
+    // At the root of a private-uploads share, claim a name nobody else owns
+    // (a taken name gets a " (n)" suffix rather than revealing it exists)
+    if (atPrivateRoot) {
+      name = await claimRootName(share, email, join(UPLOAD_DIR, pathCheck.fullPath), name, { allowOwnedOverwrite: false });
+    }
+
     // Construct full folder path
     const folderPath = join(UPLOAD_DIR, pathCheck.fullPath, name);
     const resolvedFolderPath = resolve(folderPath) + sep;
@@ -86,7 +104,12 @@ export async function POST(req, { params }) {
     }
 
     // Create folder
-    await mkdir(folderPath, { recursive: false });
+    try {
+      await mkdir(folderPath, { recursive: false });
+    } catch (err) {
+      if (atPrivateRoot) await removeRootEntries(share.id, [name]);
+      throw err;
+    }
 
     // Broadcast file change to all connected clients
     broadcastFileChange('create', pathCheck.fullPath, name, `T-${token}`);

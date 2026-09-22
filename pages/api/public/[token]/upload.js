@@ -3,7 +3,10 @@
 import { mkdir, unlink, rename } from 'fs/promises';
 import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName,
+} from '@/lib/shareAuth';
 import { buildTempName } from '@/lib/uploadTemp';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
@@ -56,6 +59,15 @@ export default async function handler(req, res) {
     if (!pathCheck.allowed) {
       return res.status(400).json({ error: pathCheck.error });
     }
+
+    // Private-uploads shares: visitors can only upload to the root or into
+    // their own folders; root uploads get an ownership row per file.
+    const email = readShareEmail(req, token);
+    const privateCheck = await authorizePrivatePath(share, email, subPath, { allowRoot: true });
+    if (!privateCheck.allowed) {
+      return res.status(privateCheck.status).json(privateAccessErrorBody(privateCheck));
+    }
+    const claimAtRoot = share.privateUploads && isShareRoot(subPath);
 
     const targetDir = join(UPLOAD_DIR, pathCheck.fullPath);
 
@@ -123,7 +135,6 @@ export default async function handler(req, res) {
         ? `upload_${Date.now()}`
         : baseName;
       const fileMimeType = info?.mimeType || 'application/octet-stream';
-      const filePath = join(targetDir, safeName);
 
       // Stream to a hidden temp name first; rename to the final name on
       // finish so the list/thumbnail endpoints never see a half-written file.
@@ -142,6 +153,12 @@ export default async function handler(req, res) {
         writeStream.on('finish', resolveWrite);
         writeStream.on('error', rejectWrite);
       }).then(async () => {
+        // Claim the final name only once the bytes are on disk, so the claim
+        // and the rename happen back to back.
+        if (claimAtRoot) {
+          fileRecord.name = await claimRootName(share, email, targetDir, safeName);
+        }
+        const filePath = join(targetDir, fileRecord.name);
         await rename(tempPath, filePath);
         writtenFilePaths.push(filePath);
         uploadedFiles.push(fileRecord);

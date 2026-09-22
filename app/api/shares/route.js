@@ -53,7 +53,7 @@ export async function POST(req) {
     const { session, error } = await requireAuth();
     if (error) return error;
 
-    const { path, fileName, isDirectory, password, expiresAt, allowEditing } = await req.json();
+    const { path, fileName, isDirectory, password, expiresAt, allowEditing, privateUploads } = await req.json();
 
     if (!fileName) {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
@@ -117,6 +117,10 @@ export async function POST(req) {
     // Hash password if provided
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
+    // Private uploads only make sense for folders, and need editing so
+    // visitors can upload at all
+    const isPrivate = !!(isDirectory && privateUploads);
+
     // Create share
     const share = await prisma.share.create({
       data: {
@@ -127,7 +131,8 @@ export async function POST(req) {
         ownerId: session.user.id,
         passwordHash,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        allowEditing: isDirectory ? (allowEditing || false) : false,
+        allowEditing: isDirectory ? (isPrivate || allowEditing || false) : false,
+        privateUploads: isPrivate,
       },
     });
 

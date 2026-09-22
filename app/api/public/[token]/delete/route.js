@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server';
 import { unlink, rm } from 'fs/promises';
 import { stat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, removeRootEntries,
+} from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
@@ -65,6 +68,14 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors can only touch their own entries
+    const email = readShareEmail(req, token);
+    const privateCheck = await authorizePrivatePath(share, email, subPath ? `${subPath}/${fileName}` : fileName, { allowRoot: false });
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+    const atPrivateRoot = share.privateUploads && isShareRoot(subPath);
+
     // Construct full file path
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath, fileName);
     const resolvedFilePath = resolve(filePath) + sep;
@@ -121,6 +132,8 @@ export async function DELETE(req, { params }) {
         duration: `${Date.now() - startTime}ms`,
       });
     }
+
+    if (atPrivateRoot) await removeRootEntries(share.id, [fileName]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

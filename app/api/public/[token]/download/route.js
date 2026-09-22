@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+} from '@/lib/shareAuth';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 import fs from 'fs';
 import { stat } from 'fs/promises';
@@ -49,6 +52,13 @@ export async function GET(req, { params }) {
     const pathCheck = validateSharePath(share, subPath);
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
+    }
+
+    // Private-uploads shares: visitors can only read their own entries
+    // (never the share root itself, e.g. a whole-folder zip)
+    const privateCheck = await authorizePrivatePath(share, readShareEmail(req, token), shareInnerPath(share, pathCheck.fullPath));
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
     }
 
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
@@ -139,7 +149,7 @@ export async function GET(req, { params }) {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
           'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(downloadName))}"; filename*=UTF-8''${encodeURIComponent(basename(downloadName))}`,
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=3600',
         },
       }
     );

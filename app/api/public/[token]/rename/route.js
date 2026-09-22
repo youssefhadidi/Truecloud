@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server';
 import { rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries,
+} from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
@@ -69,6 +72,14 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors can only touch their own entries
+    const email = readShareEmail(req, token);
+    const privateCheck = await authorizePrivatePath(share, email, subPath ? `${subPath}/${oldName}` : oldName, { allowRoot: false });
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+    const atPrivateRoot = share.privateUploads && isShareRoot(subPath);
+
     // Construct old and new paths
     const oldPath = join(UPLOAD_DIR, pathCheck.fullPath, oldName);
     const newPath = join(UPLOAD_DIR, pathCheck.fullPath, newName);
@@ -106,8 +117,22 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'File already exists' }, { status: 409 });
     }
 
+    // At the root of a private-uploads share, the new name must be claimable
+    if (atPrivateRoot) {
+      const claimed = await claimRootName(share, email, join(UPLOAD_DIR, pathCheck.fullPath), newName, { allowOwnedOverwrite: false, exact: true });
+      if (!claimed) {
+        return NextResponse.json({ error: 'Name unavailable' }, { status: 409 });
+      }
+    }
+
     // Rename file
-    await rename(oldPath, newPath);
+    try {
+      await rename(oldPath, newPath);
+    } catch (err) {
+      if (atPrivateRoot) await removeRootEntries(share.id, [newName]);
+      throw err;
+    }
+    if (atPrivateRoot) await removeRootEntries(share.id, [oldName]);
 
     // Broadcast file change to all connected clients
     broadcastFileChange('rename', pathCheck.fullPath, newName, `T-${token}`);

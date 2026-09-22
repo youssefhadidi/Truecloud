@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+} from '@/lib/shareAuth';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 
@@ -50,6 +53,13 @@ export async function GET(req, { params }) {
 
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
+    }
+
+    // Private-uploads shares: visitors can only read their own entries
+    // (never the share root itself, e.g. a whole-folder zip)
+    const privateCheck = await authorizePrivatePath(share, readShareEmail(req, token), shareInnerPath(share, pathCheck.fullPath));
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
     }
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);

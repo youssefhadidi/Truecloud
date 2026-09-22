@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+} from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, mkdir } from 'fs/promises';
 import { join, resolve, sep, extname } from 'node:path';
@@ -68,6 +71,13 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors can only read their own entries
+    // (never the share root itself, e.g. a whole-folder zip)
+    const privateCheck = await authorizePrivatePath(share, readShareEmail(req, token), shareInnerPath(share, pathCheck.fullPath));
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
 
     // Security: prevent directory traversal
@@ -97,7 +107,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Cache-Control': 'public, max-age=31536000',
+          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
         },
       });
     }
@@ -123,7 +133,7 @@ export async function GET(req, { params }) {
           headers: {
             'Content-Type': 'image/webp',
             'Content-Length': cachedBuffer.length.toString(),
-            'Cache-Control': 'public, max-age=31536000',
+            'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
             'X-Cache': 'HIT',
           },
         });
@@ -160,7 +170,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': optimizedBuffer.length.toString(),
-          'Cache-Control': 'public, max-age=31536000',
+          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
           'X-Cache': 'MISS',
         },
       });
@@ -172,7 +182,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Cache-Control': 'public, max-age=31536000',
+          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
         },
       });
     } finally {

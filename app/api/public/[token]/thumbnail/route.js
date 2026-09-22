@@ -1,7 +1,10 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, validateSharePath, clientIpFromHeaders } from '@/lib/shareAuth';
+import {
+  verifyShare, validateSharePath, clientIpFromHeaders,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+} from '@/lib/shareAuth';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
@@ -76,6 +79,13 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
 
+    // Private-uploads shares: visitors can only read their own entries
+    // (never the share root itself, e.g. a whole-folder zip)
+    const privateCheck = await authorizePrivatePath(share, readShareEmail(req, token), shareInnerPath(share, pathCheck.fullPath));
+    if (!privateCheck.allowed) {
+      return NextResponse.json(privateAccessErrorBody(privateCheck), { status: privateCheck.status });
+    }
+
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
     const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
@@ -135,7 +145,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': cachedBuffer.length.toString(),
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000, immutable',
           'X-Cache': 'MEMORY',
         },
       });
@@ -179,7 +189,7 @@ export async function GET(req, { params }) {
       headers: {
         'Content-Type': 'image/webp',
         'Content-Length': thumbnailBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000, immutable',
         'X-Cache': !thumbnailExists ? 'MISS' : 'HIT',
       },
     });

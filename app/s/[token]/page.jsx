@@ -6,12 +6,14 @@ import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState 
 import dynamic from 'next/dynamic';
 import {
   FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList,
-  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2,
+  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2, FiMail,
 } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
 import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
-import { useShare, useShareFiles, useDeleteShareFile } from '@/lib/api/publicShares';
+import {
+  useShare, useShareFiles, useDeleteShareFile, useIdentifyShare, useClearShareIdentity,
+} from '@/lib/api/publicShares';
 import Btn from '@/components/ui/Btn';
 import IconBtn from '@/components/ui/IconBtn';
 import Divider from '@/components/ui/Divider';
@@ -53,12 +55,18 @@ export default function SharePage({ params }) {
   const [shareFiles, setShareFiles] = useState([]);
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [email, setEmail] = useState('');
   // Fetch share metadata
   const {
     data: shareResponse,
     isLoading: loading,
     error: shareError,
   } = useShare(token, submittedPassword);
+
+  // Private-uploads shares need a visitor email before anything is listed
+  const needsEmail = !!shareResponse?.privateUploads && !shareResponse?.uploaderEmail;
+  const identifyMutation = useIdentifyShare();
+  const clearIdentityMutation = useClearShareIdentity();
 
   // Use share hooks for state management
   const shareState = useSharePage(token, shareResponse ? { ...shareResponse, files: shareFiles } : null);
@@ -68,7 +76,7 @@ export default function SharePage({ params }) {
     token,
     submittedPassword,
     shareState.currentSubPath,
-    !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory
+    !!shareResponse && !shareResponse.requiresPassword && !!shareResponse.isDirectory && !needsEmail
   );
 
   useEffect(() => {
@@ -302,6 +310,29 @@ export default function SharePage({ params }) {
     setSubmittedPassword(password);
   };
 
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await identifyMutation.mutateAsync({ token, sharePassword: submittedPassword, email });
+      shareState.setCurrentSubPath('');
+    } catch (err) {
+      shareState.addNotification('error', err.response?.data?.error === 'Invalid email'
+        ? t('sharePage.invalidEmail')
+        : t('sharePage.identifyFailed'));
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    try {
+      await clearIdentityMutation.mutateAsync({ token });
+      shareState.setCurrentSubPath('');
+      shareState.setSelectionMode(false);
+      shareState.setSelectedFiles([]);
+    } catch {
+      shareState.addNotification('error', t('sharePage.identifyFailed'));
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -411,6 +442,79 @@ export default function SharePage({ params }) {
             </div>
             <Btn type="submit" variant="primary" size="lg" style={{ width: '100%' }}>
               {t('sharePage.unlock')}
+            </Btn>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Email entry form (private-uploads shares)
+  if (needsEmail) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16 }}>
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--shadow-md)',
+            padding: 32,
+            maxWidth: 420,
+            width: '100%',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div
+              style={{
+                width: 64, height: 64,
+                background: 'var(--accent-light)',
+                borderRadius: 999,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <FiMail color="var(--accent)" size={32} />
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{t('sharePage.emailTitle')}</h2>
+            <p style={{ color: 'var(--text-2)', fontSize: 13 }}>{t('sharePage.emailBody')}</p>
+            {shareResponse?.fileName && (
+              <p style={{ fontSize: 13, color: 'var(--text)', marginTop: 8, fontWeight: 500 }}>{shareResponse.fileName}</p>
+            )}
+          </div>
+
+          <form onSubmit={handleEmailSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label
+                htmlFor="email"
+                style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 6 }}
+              >
+                {t('sharePage.email')}
+              </label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                autoFocus
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <Btn type="submit" variant="primary" size="lg" style={{ width: '100%' }} disabled={identifyMutation.isPending || !email}>
+              {identifyMutation.isPending ? <Spinner size={14} /> : t('sharePage.continue')}
             </Btn>
           </form>
         </div>
@@ -553,6 +657,17 @@ export default function SharePage({ params }) {
           <span style={{ fontSize: 12, color: 'var(--text-3)' }} className="tc-share-owner">
             {t('sharePage.sharedBy', { owner: shareResponse.ownerUsername })}
           </span>
+          {shareResponse.privateUploads && shareResponse.uploaderEmail && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
+              <FiMail size={12} />
+              <span className="tc-truncate" style={{ maxWidth: 200 }} title={shareResponse.uploaderEmail}>
+                {t('sharePage.uploadingAs', { email: shareResponse.uploaderEmail })}
+              </span>
+              <Btn variant="ghost" size="sm" onClick={handleChangeEmail} disabled={clearIdentityMutation.isPending}>
+                {t('sharePage.changeEmail')}
+              </Btn>
+            </span>
+          )}
 
           <Divider vertical />
 
@@ -762,7 +877,7 @@ export default function SharePage({ params }) {
             }}
           >
             {(shareState.sortedFilteredFiles || []).length === 0 ? (
-              <EmptyState label={t('sharePage.thisFolderEmpty')} />
+              <EmptyState label={shareResponse.privateUploads && !shareState.currentSubPath ? t('sharePage.noUploadsYet') : t('sharePage.thisFolderEmpty')} />
             ) : (
               <Suspense fallback={<LoadingPanel />}>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
