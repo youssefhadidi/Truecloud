@@ -6,7 +6,7 @@ import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHand
 import { List, AutoSizer } from 'react-virtualized';
 import {
   FiFolder, FiFile, FiImage, FiVideo, FiBox, FiEdit, FiDownload, FiTrash2, FiLock,
-  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart,
+  FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart, FiUpload,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
@@ -239,6 +239,24 @@ const ListRow = memo(function ListRow({
           {file.locked && <FiLock size={12} color="var(--warning)" title={t('fileItem.passcodeLocked')} />}
           {file.displayName || file.name}
         </span>
+        {file.uploadedBy && (
+          <span
+            className="tc-truncate"
+            title={t('fileItem.uploadedBy', { email: file.uploadedBy })}
+            style={{
+              fontSize: 11,
+              color: 'var(--text-3)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              minWidth: 0,
+              flexShrink: 2,
+            }}
+          >
+            <FiUpload size={10} style={{ flexShrink: 0 }} />
+            {file.uploadedBy}
+          </span>
+        )}
       </div>
 
       {!isMobile && (

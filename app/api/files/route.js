@@ -12,6 +12,7 @@ import { getActiveDownloads, getWaitingDownloads } from '@/lib/torrentClient';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { requireFolderUnlock, getAllLockedPaths } from '@/lib/folderLocks';
+import { getUploaderLookup } from '@/lib/shareAuth';
 import { isCacheEntry, isCacheRelativePath, isProtectedFromWrite, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -191,11 +192,18 @@ export async function GET(req) {
     // selects just the `path` column from a small table.
     const lockedPathsPromise = getAllLockedPaths();
 
+    // Who uploaded what, for folders shared as private-uploads drop folders
+    const uploaderLookupPromise = getUploaderLookup(relativePath).catch((e) => {
+      logger.warn('GET /api/files - Failed to fetch uploaders', { error: e.message });
+      return () => null;
+    });
+
     // Stat the surviving entries with the existing concurrency limit. The
     // user lookup runs in parallel because it's an independent DB query.
-    const [userMap, lockedPaths, files] = await Promise.all([
+    const [userMap, lockedPaths, uploaderOf, files] = await Promise.all([
       userLookupPromise,
       lockedPathsPromise,
+      uploaderLookupPromise,
       Promise.all(
         visibleEntries.map(async (entry) => {
           await statSemaphore.acquire();
@@ -246,6 +254,11 @@ export async function GET(req) {
         const fullRel = relativePath ? `${relativePath}/${file.name}` : file.name;
         if (lockedSet.has(fullRel)) file.locked = true;
       }
+    }
+
+    for (const file of files) {
+      const uploadedBy = uploaderOf(file.name);
+      if (uploadedBy) file.uploadedBy = uploadedBy;
     }
 
     // Note: Sorting is handled on the frontend (useFilesPage.js) based on user preference
