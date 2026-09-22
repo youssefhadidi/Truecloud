@@ -19,6 +19,7 @@ export function PendingPreview({ file, currentPath, compact = false, shareToken,
     pdf: <FiFileText size={iconSize} className="text-red-400" />,
     xlsx: <FiFile size={iconSize} className="text-green-400" />,
     image: <FiImage size={iconSize} className="text-green-400" />,
+    text: <FiFileText size={iconSize} className="text-gray-400" />,
   };
 
   return (

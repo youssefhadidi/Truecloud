@@ -18,7 +18,7 @@ import { isImage, isVideo, isPdf } from '@/lib/clientFileUtils';
 
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 
-const TYPE_ICONS = { image: FiImage, video: FiVideo, audio: FiMusic, pdf: FiFileText, xlsx: FiFileText, '3d': FiBox };
+const TYPE_ICONS = { image: FiImage, video: FiVideo, audio: FiMusic, pdf: FiFileText, xlsx: FiFileText, '3d': FiBox, text: FiFileText };
 
 function formatFileSize(bytes) {
   if (bytes === null || bytes === undefined) return '';

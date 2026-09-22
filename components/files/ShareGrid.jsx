@@ -9,7 +9,7 @@ import {
   FiPlay, FiMusic, FiFileText, FiPackage, FiCheck,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { getShareThumbnailUrl } from '@/lib/api/files';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -484,7 +484,7 @@ const GridItem = memo(
                   : isImage(item.name) ? <FiImage size={14} />
                   : isAudio(item.name) ? <FiMusic size={14} />
                   : isPdf(item.name) ? <FiFileText size={14} />
-                  : isXlsx(item.name) ? <FiFileText size={14} />
+                  : isXlsx(item.name) || isText(item.name) ? <FiFileText size={14} />
                   : <FiFile size={14} />}
                 </button>
               )}

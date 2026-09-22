@@ -9,7 +9,7 @@ import {
   FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart, FiUpload,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import { ListDownloadRow } from '@/components/files/ListDownloadRow';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -290,7 +290,7 @@ const ListRow = memo(function ListRow({
                : isImage(file.name) ? <FiImage size={15} />
                : isAudio(file.name) ? <FiMusic size={15} />
                : isPdf(file.name) ? <FiFileText size={15} />
-               : isXlsx(file.name) ? <FiFileText size={15} />
+               : isXlsx(file.name) || isText(file.name) ? <FiFileText size={15} />
                : <FiFile size={15} />}
             </button>
           )}

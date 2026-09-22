@@ -9,7 +9,7 @@ import {
   FiMusic, FiFileText, FiPackage, FiCheck,
 } from 'react-icons/fi';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { useTranslation } from '@/components/LanguageProvider';
 
@@ -328,7 +328,7 @@ function ShareList({
                    : isImage(file.name) ? <FiImage size={15} />
                    : isAudio(file.name) ? <FiMusic size={15} />
                    : isPdf(file.name) ? <FiFileText size={15} />
-                   : isXlsx(file.name) ? <FiFileText size={15} />
+                   : isXlsx(file.name) || isText(file.name) ? <FiFileText size={15} />
                    : <FiFile size={15} />}
                 </button>
               )}

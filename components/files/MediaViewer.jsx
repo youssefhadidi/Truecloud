@@ -52,6 +52,17 @@ const XlsxViewer = dynamic(() => import('./XlsxViewer'), {
   ),
 });
 
+const TextViewer = dynamic(() => import('./viewers/TextViewer'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="mv-loader-card">
+        <div className="mv-spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
+      </div>
+    </div>
+  ),
+});
+
 function PDFViewer({ file, getFileUrl, onClick }) {
   return (
     <div className="mv-pdf-wrapper">
@@ -186,6 +197,10 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
   useEffect(() => {
     if (!viewerFile) return undefined;
     function onKey(e) {
+      // Typing in a field (the text viewer's search box) must not page through
+      // files or toggle fullscreen.
+      const typing = e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]');
+      if (typing && e.key !== 'Escape') return;
       if (e.key === 'Escape') {
         if (effectiveFullscreen && !isMobile) toggleFullscreen();
         else onClose?.();
@@ -302,6 +317,8 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         return <PDFViewer file={viewerFile} getFileUrl={getFileUrl} onClick={stopProp} />;
       case 'xlsx':
         return <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
+      case 'text':
+        return <TextViewer file={viewerFile} getFileUrl={getFileUrl} />;
       default:
         return <UnsupportedViewer file={viewerFile} getFileUrl={getFileUrl} />;
     }

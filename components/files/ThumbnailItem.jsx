@@ -16,6 +16,7 @@ const TYPE_ICONS = {
   '3d':  FiBox,
   xlsx:  FiGrid,
   sheet: FiGrid,
+  text:  FiFileText,
 };
 
 // Named export for legacy import sites; default export matches the design API.

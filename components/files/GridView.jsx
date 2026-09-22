@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
 import { isViewableFile } from '@/lib/getFileType';
-import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import DownloadCard from '@/components/files/DownloadCard';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { useTranslation } from '@/components/LanguageProvider';
@@ -601,7 +601,7 @@ const GridItem = memo(
                     : isImage(item.name) ? <FiImage size={14} />
                     : isAudio(item.name) ? <FiMusic size={14} />
                     : isPdf(item.name) ? <FiFileText size={14} />
-                    : isXlsx(item.name) ? <FiFileText size={14} />
+                    : isXlsx(item.name) || isText(item.name) ? <FiFileText size={14} />
                     : <FiFile size={14} />}
                   </button>
                 )}
