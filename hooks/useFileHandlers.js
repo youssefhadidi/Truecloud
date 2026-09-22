@@ -80,26 +80,21 @@ export function useFileHandlers({
       type: 'upload',
     });
 
-    return new Promise((resolve) => {
-      uploadMutation.mutate(
-        { file, uploadId, path: uploadPath },
-        {
-          onSuccess: () => {
-            updateTransfer(uploadId, { status: 'success', progress: 100 });
-            setTimeout(() => {
-              removeTransfer(uploadId);
-            }, 3000);
-            resolve();
-          },
-          onError: (error) => {
-            console.error('Upload error:', error);
-            updateTransfer(uploadId, { status: 'error', error: error.message });
-            addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
-            resolve();
-          },
-        },
-      );
-    });
+    // mutateAsync (not mutate + per-call callbacks): TanStack drops per-call callbacks
+    // when another upload batch starts or the component unmounts, leaving the transfer stuck
+    return uploadMutation
+      .mutateAsync({ file, uploadId, path: uploadPath })
+      .then(() => {
+        updateTransfer(uploadId, { status: 'success', progress: 100 });
+        setTimeout(() => {
+          removeTransfer(uploadId);
+        }, 3000);
+      })
+      .catch((error) => {
+        console.error('Upload error:', error);
+        updateTransfer(uploadId, { status: 'error', error: error.message });
+        addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
+      });
   };
 
   const startTorrentDownload = async (torrentFile) => {

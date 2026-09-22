@@ -300,14 +300,23 @@ export default async function handler(req, res) {
         payload.file = uploadedFiles[0];
       }
 
-      const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
-      const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
-      for (const f of uploadedFiles) {
-        broadcastFileChange('upload', relativePath, f.name, token.id);
-        generateThumbnailForUpload(join(targetDir, f.name), relativePath, f.name);
-      }
-
+      // Files are on disk: respond before side effects so a failure in the
+      // broadcast/thumbnail step can't leave the client waiting forever.
       respond(200, payload);
+
+      try {
+        const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+        const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
+        for (const f of uploadedFiles) {
+          broadcastFileChange('upload', relativePath, f.name, token.id);
+          generateThumbnailForUpload(join(targetDir, f.name), relativePath, f.name);
+        }
+      } catch (error) {
+        logError('POST /api/files/upload - Post-upload hooks failed (pages api)', {
+          message: error?.message,
+          stack: error?.stack,
+        });
+      }
     });
 
     req.on('aborted', async () => {
@@ -415,15 +424,22 @@ export default async function handler(req, res) {
             mimeType: fileMimeType,
             path: normalizedFilePath,
           };
-          const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
-          broadcastFileChange('upload', relativePath, fileRecord.name, token.id);
-          const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
-          generateThumbnailForUpload(filePath, relativePath, fileRecord.name);
           respond(200, {
             success: true,
             files: [fileRecord],
             file: fileRecord,
           });
+          try {
+            const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+            broadcastFileChange('upload', relativePath, fileRecord.name, token.id);
+            const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
+            generateThumbnailForUpload(filePath, relativePath, fileRecord.name);
+          } catch (error) {
+            logError('POST /api/files/upload - Post-upload hooks failed (raw body)', {
+              message: error?.message,
+              stack: error?.stack,
+            });
+          }
         } catch (error) {
           logError('POST /api/files/upload - Stat failed (raw body)', {
             message: error?.message,

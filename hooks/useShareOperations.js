@@ -263,34 +263,35 @@ export function useShareOperations({
           },
         ]);
 
-        uploadFileMutation.mutate(
-          { token, sharePassword, file, currentSubPath },
-          {
-            onSuccess: () => {
-              setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
+        // mutateAsync (not mutate + per-call callbacks): TanStack only fires per-call
+        // callbacks for the latest mutate() call, so concurrent uploads got stuck
+        uploadFileMutation
+          .mutateAsync({ token, sharePassword, file, currentSubPath })
+          .then(() => {
+            setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'success', progress: 100 } : u)));
 
-              setTimeout(() => {
-                setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
-              }, 2000);
+            setTimeout(() => {
+              setUploadingFiles((prev) => prev.filter((u) => u.id !== uploadId));
+            }, 2000);
 
-              addNotification('success', t('notify.fileUploaded', { name: file.name }));
-              refreshListing();
-            },
-            onError: (error) => {
-              console.error('Upload error:', error);
-              setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
-              addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
-            },
-          }
-        );
+            addNotification('success', t('notify.fileUploaded', { name: file.name }));
+            refreshListing();
+          })
+          .catch((error) => {
+            console.error('Upload error:', error);
+            setUploadingFiles((prev) => prev.map((u) => (u.id === uploadId ? { ...u, status: 'error', error: error.message } : u)));
+            addNotification('error', t('notify.uploadFailedFor', { name: file.name }), t('notify.titles.uploadError'));
+          });
       }
     },
-    [token, sharePassword, currentSubPath, allowEditing, setUploadingFiles, addNotification, refreshListing, t],
+    [token, sharePassword, currentSubPath, allowEditing, setUploadingFiles, addNotification, refreshListing, t, uploadFileMutation],
   );
 
   const handleUploadFromInput = useCallback(
     async (e) => {
       const files = Array.from(e.target.files || []);
+      // Reset so picking the same file again still fires onChange
+      e.target.value = '';
       if (files.length === 0) return;
       await handleUpload(files);
     },

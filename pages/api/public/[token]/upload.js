@@ -214,15 +214,21 @@ export default async function handler(req, res) {
         payload.file = uploadedFiles[0];
       }
 
-      const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
-      const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
-      for (const f of uploadedFiles) {
-        broadcastFileChange('upload', pathCheck.fullPath, f.name, 'share-' + token);
-        generateThumbnailForUpload(join(targetDir, f.name), pathCheck.fullPath, f.name);
-      }
-
-      respond(200, payload);
+      // Files are on disk: respond before side effects so a failure in the
+      // broadcast/thumbnail step can't leave the client waiting forever.
       writtenFilePaths = [];
+      respond(200, payload);
+
+      try {
+        const { broadcastFileChange } = await import('@/lib/fileChangeBroadcast');
+        const { generateThumbnailForUpload } = await import('@/lib/thumbnailUtils');
+        for (const f of uploadedFiles) {
+          broadcastFileChange('upload', pathCheck.fullPath, f.name, 'share-' + token);
+          generateThumbnailForUpload(join(targetDir, f.name), pathCheck.fullPath, f.name);
+        }
+      } catch (error) {
+        console.error('POST /api/public/[token]/upload - Post-upload hooks failed:', error);
+      }
     });
 
     req.on('aborted', async () => {
@@ -238,16 +244,6 @@ export default async function handler(req, res) {
     console.error('POST /api/public/[token]/upload - Error:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Upload failed' });
-    }
-  } finally {
-    if (writtenFilePaths.length > 0) {
-      await Promise.all(
-        writtenFilePaths.map(async (path) => {
-          try {
-            await unlink(path);
-          } catch {}
-        }),
-      );
     }
   }
 }
