@@ -5,9 +5,10 @@ import fs from 'fs';
 import { stat } from 'fs/promises';
 import { requireAdmin } from '@/lib/authCheck';
 import { nodeToWebStream } from '@/lib/streamUtils';
-import { APK_PATH, APK_FILENAME } from '@/lib/truecloudSync';
+import { APK_PATH, APK_FILENAME, APK_FALLBACK_URL } from '@/lib/truecloudSync';
 
-// GET - Download the Truecloud Sync Android APK
+// GET - Download the Truecloud Sync Android APK, falling back to the EAS
+// build artifact when no local copy is present
 export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
@@ -17,7 +18,7 @@ export async function GET() {
     stats = await stat(APK_PATH);
     if (!stats.isFile()) throw new Error('not a file');
   } catch {
-    return NextResponse.json({ error: 'APK not found' }, { status: 404 });
+    return NextResponse.redirect(APK_FALLBACK_URL, 302);
   }
 
   return new NextResponse(nodeToWebStream(fs.createReadStream(APK_PATH)), {

@@ -109,14 +109,31 @@ export default function TruecloudSyncPage() {
         <SectionCard title={t('adminSync.androidTitle')}>
           {isLoading ? (
             <div className="text-sm text-gray-400">{t('adminSync.loading')}</div>
-          ) : !apk?.available ? (
-            <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-200 flex items-start gap-2">
-              <FiAlertTriangle className="mt-0.5 flex-shrink-0" />
-              <span>{t('adminSync.apkMissing', { path: 'downloads/truecloudsync.apk' })}</span>
-            </div>
-          ) : (
+          ) : !apk ? (
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-sm text-red-200">{t('adminSync.loadFailed')}</div>
+          ) : !apk.available ? (
             <>
               <p className="text-sm text-gray-400">{t('adminSync.androidSteps')}</p>
+              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-200 flex items-start gap-2">
+                <FiAlertTriangle className="mt-0.5 flex-shrink-0" />
+                <span>{t('adminSync.apkFallback', { path: 'downloads/truecloudsync.apk' })}</span>
+              </div>
+              <QrBox value={apk.fallbackUrl} />
+              <div className="flex justify-end">
+                <a
+                  href={apk.fallbackUrl}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <FiDownload size={14} />
+                  {t('adminSync.downloadApkEas')}
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-400">
+                {t('adminSync.androidSteps')} {t('adminSync.qrNeedsLogin')}
+              </p>
               {apkUrl && <QrBox value={apkUrl} />}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs text-gray-400">
