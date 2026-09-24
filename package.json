@@ -1,6 +1,6 @@
 {
   "name": "truecloud",
-  "version": "1.336.0",
+  "version": "1.337.0",
   "private": true,
   "scripts": {
     "dev": "bun server.js",
