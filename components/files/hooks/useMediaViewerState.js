@@ -7,7 +7,6 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const stripRef = useRef(null);
-  const scrollTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
 
   // Initialize fullscreen state from localStorage
@@ -50,7 +49,6 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
     effectiveFullscreen,
     toggleFullscreen,
     stripRef,
-    scrollTimeoutRef,
     programmaticScrollRef,
     currentIndex,
     canGoPrev,
@@ -102,19 +100,22 @@ export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile
     return viewableFiles.find((f) => f.id === fileId) || null;
   }, [stripRef, viewableFiles]);
 
-  // Handle strip scroll - change viewed file when scrolling settles
+  // Change the viewed file once scrolling settles. Debounced (not a timer per
+  // scroll event): during a fling every intermediate file would otherwise be
+  // selected in turn, each one starting a full-size load.
+  const settleTimerRef = useRef(null);
   const handleStripScroll = useCallback(() => {
     if (programmaticScrollRef.current) return;
-
-    const timeoutId = setTimeout(() => {
+    clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
       const centeredFile = getCenteredFile();
       if (centeredFile && centeredFile.id !== viewerFile?.id) {
         onSelectFile(centeredFile);
       }
     }, 150);
-
-    return timeoutId;
   }, [getCenteredFile, viewerFile, onSelectFile, programmaticScrollRef]);
+
+  useEffect(() => () => clearTimeout(settleTimerRef.current), []);
 
   return { handleStripScroll, getCenteredFile };
 }

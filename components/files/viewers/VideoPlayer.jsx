@@ -332,6 +332,8 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   // -1 is an explicit Off. Keeping them distinct is what lets the default apply
   // without an effect that would fight the viewer's own choice.
   const [selectedSub, setSelectedSub] = useState(null);
+  // While playing, the badge and CC button fade out unless hovered.
+  const [playing, setPlaying] = useState(false);
   const pollRef = useRef(null);
   const triggeredRef = useRef(false);
   const mountedRef = useRef(true);
@@ -353,6 +355,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     setHlsUrl(null);
     setSubtitles([]);
     setSelectedSub(null);
+    setPlaying(false);
   }, [file.id]);
 
   // Discover subtitle tracks. Independent of the transcode state machine: the
@@ -620,68 +623,61 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     checkStatus();
   };
 
+  // One player for every playable state; only the source, badge and the
+  // transcoding overlay differ. hls.js attaches itself, so HLS has no src.
+  const renderPlayer = ({ src, badge = null, overlay = null }) => (
+    <div className={`mv-video${playing ? ' mv-video--playing' : ''}`}>
+      <video
+        key={file.id}
+        ref={videoRef}
+        src={src}
+        controls
+        playsInline
+        className="mv-video__el"
+        onClick={(e) => e.stopPropagation()}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+      >
+        {subtitleTrackEls}
+      </video>
+      {overlay}
+      <div className="mv-video__chrome">
+        <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
+        {badge}
+      </div>
+    </div>
+  );
+
   if (status === null) return <StateInitial />;
 
   if (hlsUrl) {
-    return (
-      <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
-        <video
-          key={file.id}
-          ref={videoRef}
-          controls
-          playsInline
-          style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {subtitleTrackEls}
-        </video>
-        {status === 'transcoding' && progress < 99 && (
-          <div className="mv-video-transcoding-pill">
-            <div className="mv-spinner mv-spinner--glass" style={{ width: 14, height: 14, borderWidth: 2 }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap' }}>
-              {queuePosition > 0 ? `Queued · ${queuePosition} ahead` : `Transcoding… ${progress}%`}
-            </span>
-            <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${progress}%`,
-                  background: 'var(--accent)',
-                  borderRadius: 999,
-                  transition: 'width 400ms ease',
-                }}
-              />
-            </div>
+    return renderPlayer({
+      badge: <div className="mv-video-badge mv-video-badge--hls">HLS</div>,
+      overlay: status === 'transcoding' && progress < 99 && (
+        <div className="mv-video-transcoding-pill">
+          <div className="mv-spinner mv-spinner--glass" style={{ width: 14, height: 14, borderWidth: 2 }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap' }}>
+            {queuePosition > 0 ? `Queued · ${queuePosition} ahead` : `Transcoding… ${progress}%`}
+          </span>
+          <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${progress}%`,
+                background: 'var(--accent)',
+                borderRadius: 999,
+                transition: 'width 400ms ease',
+              }}
+            />
           </div>
-        )}
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
-          <div className="mv-video-badge mv-video-badge--hls">HLS</div>
         </div>
-      </div>
-    );
+      ),
+    });
   }
 
   if (status === 'native' || status === 'ready') {
-    return (
-      <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
-        <video
-          key={file.id}
-          ref={videoRef}
-          src={streamUrl}
-          controls
-          playsInline
-          style={{ width: '100%',height: '100%', flex: 1, objectFit: 'contain' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {subtitleTrackEls}
-        </video>
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
-          <div className="mv-video-badge mv-video-badge--mp4">MP4</div>
-        </div>
-      </div>
-    );
+    return renderPlayer({ src: streamUrl, badge: <div className="mv-video-badge mv-video-badge--mp4">MP4</div> });
   }
 
   if (status === 'transcoding') {
@@ -719,24 +715,5 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   if (status === 'disabled') return <StateDisabled onDownload={onDownload} />;
   if (status === 'failed') return <StateFailed onDownload={onDownload} onRetry={onRetry} />;
 
-  return (
-    <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', flexDirection: 'column' }}>
-      <video
-        key={file.id}
-        ref={videoRef}
-        src={streamUrl}
-        controls
-        playsInline
-        style={{ width: '100%', height: '100%', flex: 1, objectFit: 'contain' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {subtitleTrackEls}
-      </video>
-      {subtitles.length > 0 && (
-        <div style={{ position: 'absolute', top: 12, right: 12 }}>
-          <SubtitlePicker tracks={subtitles} selected={effectiveSub} onSelect={onSelectSub} uiLang={lang} />
-        </div>
-      )}
-    </div>
-  );
+  return renderPlayer({ src: streamUrl });
 }

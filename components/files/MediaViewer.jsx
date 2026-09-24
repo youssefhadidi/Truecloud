@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { FiX, FiDownload, FiTrash2, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
 import Confirm from '@/components/Confirm';
 import { getFileType } from '@/lib/getFileType';
+import { formatFileSize } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 import { AudioPlayer } from './viewers/AudioPlayer';
@@ -63,13 +64,19 @@ const TextViewer = dynamic(() => import('./viewers/TextViewer'), {
   ),
 });
 
-function PDFViewer({ file, getFileUrl, onClick }) {
-  return (
-    <div className="mv-pdf-wrapper">
-      <iframe className="mv-pdf-frame" src={getFileUrl(file, 'pdf')} title={file.name} onClick={onClick} />
+// pdf.js rather than an <iframe> of the browser's viewer: mobile browsers
+// either can't show a PDF in an iframe at all (Android) or show it without
+// usable zoom (iOS). Loaded on demand — only PDF opens pay for it.
+const PdfViewer = dynamic(() => import('./viewers/PdfViewer'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="mv-loader-card">
+        <div className="mv-spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
+      </div>
     </div>
-  );
-}
+  ),
+});
 
 function UnsupportedViewer({ file, getFileUrl }) {
   const { t } = useTranslation();
@@ -137,7 +144,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     setAiOpen(false);
   }, [viewerFile?.id]);
 
-  const { isFullscreen, isMobile, effectiveFullscreen, toggleFullscreen, stripRef, scrollTimeoutRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
+  const { isMobile, effectiveFullscreen, toggleFullscreen, stripRef, programmaticScrollRef, currentIndex, canGoPrev, canGoNext } =
     useMediaViewerState(viewerFile, viewableFiles);
 
   const { handleStripScroll } = useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile);
@@ -193,18 +200,36 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     [shareToken, sharePassword, currentPath],
   );
 
+  // Warm the cache for the neighbouring images so stepping through a folder
+  // shows the next photo at once instead of a blurred placeholder. Delayed a
+  // beat so the current file isn't competing with them for bandwidth.
+  useEffect(() => {
+    if (currentIndex < 0 || !viewableFiles?.length) return undefined;
+    const id = setTimeout(() => {
+      for (const i of [currentIndex + 1, currentIndex - 1]) {
+        const f = viewableFiles[i];
+        if (f && getFileType(f) === 'image') new Image().src = getFileUrl(f, 'image');
+      }
+    }, 400);
+    return () => clearTimeout(id);
+  }, [currentIndex, viewableFiles, getFileUrl]);
+
   // Keyboard nav
   useEffect(() => {
     if (!viewerFile) return undefined;
     function onKey(e) {
-      // Typing in a field (the text viewer's search box) must not page through
-      // files or toggle fullscreen.
-      const typing = e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]');
+      const el = e.target instanceof Element ? e.target : null;
+      // Typing in a field (the text viewer's search box, the PDF page box)
+      // must not page through files or toggle fullscreen.
+      const typing = el?.closest('input, textarea, select, [contenteditable="true"]');
       if (typing && e.key !== 'Escape') return;
       if (e.key === 'Escape') {
         if (effectiveFullscreen && !isMobile) toggleFullscreen();
         else onClose?.();
+        return;
       }
+      // Alt+arrows is browser history; a focused video seeks with the arrows.
+      if (e.altKey || e.ctrlKey || e.metaKey || el?.closest('video, audio')) return;
       if (e.key === 'ArrowRight' && canGoNext) onNavigate?.('next');
       if (e.key === 'ArrowLeft' && canGoPrev) onNavigate?.('prev');
       if ((e.key === 'f' || e.key === 'F') && !isMobile) toggleFullscreen();
@@ -212,6 +237,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [viewerFile, effectiveFullscreen, canGoNext, canGoPrev, isMobile, onClose, onNavigate, toggleFullscreen]);
+
+  const handleSwipe = useCallback(
+    (direction) => {
+      if (direction === 'next' ? canGoNext : canGoPrev) onNavigate?.(direction);
+    },
+    [canGoNext, canGoPrev, onNavigate],
+  );
 
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
@@ -266,6 +298,16 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     }, 500);
   }, []);
 
+  // A finger that moves is a swipe or a pan, not a long-press.
+  const handleTouchMove = useCallback((e) => {
+    if (!touchTimerRef.current) return;
+    const touch = e.touches[0];
+    if (Math.hypot(touch.clientX - touchStartRef.current.x, touch.clientY - touchStartRef.current.y) > 10) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  }, []);
+
   const handleTouchEnd = useCallback(() => {
     if (touchTimerRef.current) {
       clearTimeout(touchTimerRef.current);
@@ -273,18 +315,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    };
-  }, [scrollTimeoutRef]);
-
   if (!viewerFile) return null;
 
   const fileType = getFileType(viewerFile);
   const stopProp = (e) => e.stopPropagation();
   const total = viewableFiles?.length || 0;
   const multi = total > 1;
+  const meta = [multi && `${currentIndex + 1} / ${total}`, formatFileSize(viewerFile.size)].filter(Boolean).join(' · ');
 
   const deleteConfirmOverlay = canDelete && confirmingDelete ? (
     <div
@@ -308,13 +345,17 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       case '3d':
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
       case 'image':
-        return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} />;
+        return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} onSwipe={multi ? handleSwipe : undefined} />;
       case 'video':
         return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} />;
       case 'audio':
         return <AudioPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} sharePassword={sharePassword} />;
-      case 'pdf':
-        return <PDFViewer file={viewerFile} getFileUrl={getFileUrl} onClick={stopProp} />;
+      case 'pdf': {
+        // Keyed by URL so every document mounts a fresh viewer (no state
+        // carried over from the previous PDF).
+        const pdfUrl = getFileUrl(viewerFile, 'pdf');
+        return <PdfViewer key={pdfUrl} url={pdfUrl} fileSize={viewerFile.size} onClick={stopProp} />;
+      }
       case 'xlsx':
         return <XlsxViewer fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
       case 'text':
@@ -324,153 +365,22 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     }
   }
 
-  // Windowed mode
-  if (!effectiveFullscreen) {
-    return (
-      <div className="mv-backdrop" onClick={onClose}>
-        <div className="mv-sheet" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
-          <div className="mv-header">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="mv-header__title">{viewerFile.name}</div>
-              {multi && (
-                <div className="mv-header__counter">
-                  {currentIndex + 1} / {total}
-                </div>
-              )}
-            </div>
-            <div className="mv-header__actions">
-              {aiAvailable && (
-                <button
-                  type="button"
-                  className="mv-icon-btn"
-                  title={aiOpen ? t('viewer.hideClaude') : t('viewer.askClaude')}
-                  onClick={() => setAiOpen((v) => !v)}
-                  style={aiOpen ? { color: 'var(--accent)' } : undefined}
-                >
-                  <FiMessageSquare size={16} />
-                </button>
-              )}
-              <button type="button" className="mv-icon-btn" title={t('common.download')} onClick={handleDownload}>
-                <FiDownload size={16} />
-              </button>
-              {canDelete && (
-                <button
-                  type="button"
-                  className="mv-icon-btn"
-                  title={t('common.delete')}
-                  onClick={() => setConfirmingDelete(true)}
-                  style={{ color: 'var(--danger)' }}
-                >
-                  <FiTrash2 size={16} />
-                </button>
-              )}
-              {!isMobile && (
-                <button type="button" className="mv-icon-btn" title={t('viewer.fullscreen')} onClick={toggleFullscreen}>
-                  <FiMaximize2 size={16} />
-                </button>
-              )}
-            </div>
-            <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
-            <button type="button" className="mv-icon-btn" title={t('common.close')} onClick={onClose}>
-              <FiX size={16} />
-            </button>
-          </div>
-
-          {/* Stage + AI panel row */}
-          <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'row' }}>
-            <div
-              className="mv-stage"
-              style={{ flex: 1, minWidth: 0 }}
-              onContextMenu={handleContextMenu}
-              onClick={() => setContextMenu(null)}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-            >
-              <div className="mv-stage__content">{renderMedia()}</div>
-
-              {multi && (
-                <>
-                  <button
-                    type="button"
-                    className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
-                    aria-label={t('common.previous')}
-                    disabled={!canGoPrev}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNavigate?.('prev');
-                    }}
-                  >
-                    <FiChevronLeft size={22} />
-                  </button>
-                  <button
-                    type="button"
-                    className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
-                    aria-label={t('common.next')}
-                    disabled={!canGoNext}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNavigate?.('next');
-                    }}
-                  >
-                    <FiChevronRight size={22} />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {aiAvailable && aiOpen && (
-              <AiChatPanel
-                filePath={aiFilePath}
-                fileName={viewerFile.name}
-                isMobile={isMobile}
-                onClose={() => setAiOpen(false)}
-              />
-            )}
-          </div>
-
-          {/* Strip */}
-          {multi && (
-            <ThumbnailStrip
-              files={viewableFiles}
-              activeId={viewerFile.id}
-              currentPath={currentPath}
-              shareToken={shareToken}
-              sharePassword={sharePassword}
-              onSelect={onSelectFile}
-              onScroll={handleStripScroll}
-              stripRef={stripRef}
-            />
-          )}
-
-          <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
-          {deleteConfirmOverlay}
-        </div>
-      </div>
-    );
-  }
-
-  // Fullscreen mode — same modal layout, full viewport
-  return (
-    <div className="mv-fullscreen" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      {/* Header */}
+  // Windowed and fullscreen share one layout; only the outer frame differs.
+  const content = (
+    <>
       <div className="mv-header">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="mv-header__title">{viewerFile.name}</div>
-          {multi && (
-            <div className="mv-header__counter">
-              {currentIndex + 1} / {total}
-            </div>
-          )}
+        <div className="mv-header__info">
+          <div className="mv-header__title" title={viewerFile.name}>{viewerFile.name}</div>
+          {meta && <div className="mv-header__meta">{meta}</div>}
         </div>
         <div className="mv-header__actions">
           {aiAvailable && (
             <button
               type="button"
-              className="mv-icon-btn"
+              className={`mv-icon-btn${aiOpen ? ' mv-icon-btn--active' : ''}`}
               title={aiOpen ? t('viewer.hideClaude') : t('viewer.askClaude')}
+              aria-pressed={aiOpen}
               onClick={() => setAiOpen((v) => !v)}
-              style={aiOpen ? { color: 'var(--accent)' } : undefined}
             >
               <FiMessageSquare size={16} />
             </button>
@@ -478,27 +388,48 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           <button type="button" className="mv-icon-btn" title={t('common.download')} onClick={handleDownload}>
             <FiDownload size={16} />
           </button>
+          {canDelete && (
+            <button
+              type="button"
+              className="mv-icon-btn mv-icon-btn--danger"
+              title={t('common.delete')}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <FiTrash2 size={16} />
+            </button>
+          )}
           {!isMobile && (
-            <button type="button" className="mv-icon-btn" title={t('viewer.exitFullscreen')} onClick={toggleFullscreen}>
-              <FiMinimize2 size={16} />
+            <button
+              type="button"
+              className="mv-icon-btn"
+              title={effectiveFullscreen ? t('viewer.exitFullscreen') : t('viewer.fullscreen')}
+              onClick={toggleFullscreen}
+            >
+              {effectiveFullscreen ? <FiMinimize2 size={16} /> : <FiMaximize2 size={16} />}
             </button>
           )}
         </div>
-        <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
+        <div className="mv-header__divider" />
         <button type="button" className="mv-icon-btn" title={t('common.close')} onClick={onClose}>
           <FiX size={16} />
         </button>
       </div>
 
       {/* Stage + AI panel row */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'row' }}>
+      <div className="mv-body">
         <div
           className="mv-stage"
-          style={{ flex: 1, minWidth: 0 }}
           onContextMenu={handleContextMenu}
           onClick={() => setContextMenu(null)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
-          <div className="mv-stage__content">{renderMedia()}</div>
+          {/* Keyed by file so each one mounts a fresh viewer (no state carried
+              over from the previous file) and fades in. */}
+          <div key={viewerFile.id} className="mv-stage__content">
+            {renderMedia()}
+          </div>
 
           {multi && (
             <>
@@ -506,6 +437,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 type="button"
                 className="mv-nav-btn mv-stage__nav mv-stage__nav--prev"
                 aria-label={t('common.previous')}
+                title={t('common.previous')}
                 disabled={!canGoPrev}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -518,6 +450,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
                 type="button"
                 className="mv-nav-btn mv-stage__nav mv-stage__nav--next"
                 aria-label={t('common.next')}
+                title={t('common.next')}
                 disabled={!canGoNext}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -540,7 +473,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
         )}
       </div>
 
-      {/* Strip */}
       {multi && (
         <ThumbnailStrip
           files={viewableFiles}
@@ -556,6 +488,16 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
       <ContextMenu contextMenu={contextMenu} file={viewerFile} onDownload={handleDownload} onClose={() => setContextMenu(null)} />
       {deleteConfirmOverlay}
+    </>
+  );
+
+  if (effectiveFullscreen) return <div className="mv-fullscreen">{content}</div>;
+
+  return (
+    <div className="mv-backdrop" onClick={onClose}>
+      <div className="mv-sheet" onClick={(e) => e.stopPropagation()}>
+        {content}
+      </div>
     </div>
   );
 }

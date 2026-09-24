@@ -4,16 +4,32 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { FiZoomIn, FiZoomOut } from 'react-icons/fi';
 import { useShareAwareThumbnail } from '../hooks/useShareAwareThumbnail';
+import { useTranslation } from '@/components/LanguageProvider';
 
-export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword }) {
+const MAX_SCALE = 6;
+const ZOOM_STEP = 0.5; // react-zoom-pan-pinch step: scale × e^step per click
+// A horizontal flick at least this long (px), mostly sideways and quick,
+// moves to the neighbouring file. Only when not zoomed — a zoomed image
+// needs the same gesture to pan.
+const SWIPE_MIN_DX = 50;
+const SWIPE_MAX_MS = 600;
+
+export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, onSwipe }) {
+  const { t } = useTranslation();
   const [fullLoaded, setFullLoaded] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
-  const [showZoomPill, setShowZoomPill] = useState(false);
+  const stageRef = useRef(null);
   const imgRef = useRef(null);
   const transformRef = useRef(null);
-  const zoomTimer = useRef(null);
+  const scaleRef = useRef(1);
+  const onSwipeRef = useRef(onSwipe);
   const thumbnailUrl = useShareAwareThumbnail(file, currentPath, true, shareToken, sharePassword);
+
+  useEffect(() => {
+    onSwipeRef.current = onSwipe;
+  }, [onSwipe]);
 
   useEffect(() => {
     setFullLoaded(false);
@@ -25,20 +41,56 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
     }
   }, [file, currentPath, shareToken, sharePassword, getFileUrl]);
 
-  function handleZoomChange({ state }) {
-    setZoomScale(state.scale);
-    if (state.scale > 1.01) {
-      setShowZoomPill(true);
-      clearTimeout(zoomTimer.current);
-      zoomTimer.current = setTimeout(() => setShowZoomPill(false), 1800);
-    } else {
-      setShowZoomPill(false);
+  // Swipe detection. Capture-phase listeners so the zoom library's own touch
+  // handling can't hide the gesture from us; passive, so native behaviour is
+  // untouched.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return undefined;
+    let start = null;
+
+    function onStart(e) {
+      start =
+        e.touches.length === 1 && scaleRef.current <= 1.01
+          ? { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() }
+          : null; // a second finger means pinch, not swipe
     }
+    function onEnd(e) {
+      if (!start || e.touches.length > 0) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      const quick = Date.now() - start.time < SWIPE_MAX_MS;
+      start = null;
+      if (quick && Math.abs(dx) >= SWIPE_MIN_DX && Math.abs(dx) > Math.abs(dy) * 1.5 && scaleRef.current <= 1.01) {
+        onSwipeRef.current?.(dx < 0 ? 'next' : 'prev');
+      }
+    }
+    function onCancel() {
+      start = null;
+    }
+
+    el.addEventListener('touchstart', onStart, { capture: true, passive: true });
+    el.addEventListener('touchend', onEnd, { capture: true, passive: true });
+    el.addEventListener('touchcancel', onCancel, { capture: true, passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart, { capture: true });
+      el.removeEventListener('touchend', onEnd, { capture: true });
+      el.removeEventListener('touchcancel', onCancel, { capture: true });
+    };
+  }, []);
+
+  function handleZoomChange({ state }) {
+    scaleRef.current = state.scale;
+    setZoomScale(state.scale);
   }
+
+  const zoomed = zoomScale > 1.01;
 
   return (
     <div
-      className="mv-image-stage"
+      ref={stageRef}
+      className={`mv-image-stage${zoomed ? ' is-zoomed' : ''}`}
       style={{
         WebkitTouchCallout: 'none',
         WebkitUserSelect: 'none',
@@ -85,11 +137,11 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
 
       <TransformWrapper
         ref={transformRef}
-        minScale={0.95}
-        maxScale={6}
+        minScale={1}
+        maxScale={MAX_SCALE}
         initialScale={1}
         wheel={{ step: 0.08 }}
-        doubleClick={{ mode: 'reset' }}
+        doubleClick={{ mode: 'toggle', step: 1 }}
         onTransformed={handleZoomChange}
         centerOnInit
       >
@@ -107,10 +159,10 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
             ref={imgRef}
             alt={file.name}
             draggable={false}
-            className={`mv-image-stage__img ${fullLoaded ? 'mv-image-stage__img--loaded' : 'mv-image-stage__img--loading'}`}
+            className={`mv-image-stage__img mv-image-stage__img--main ${fullLoaded ? 'mv-image-stage__img--loaded' : 'mv-image-stage__img--loading'}`}
             onLoad={() => {
               setFullLoaded(true);
-              transformRef.current?.resetTransform();
+              transformRef.current?.resetTransform(0);
             }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -119,8 +171,35 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
         </TransformComponent>
       </TransformWrapper>
 
-      {showZoomPill && zoomScale > 1.01 && (
-        <div className="mv-zoom-pill">{Math.round(zoomScale * 100)}%</div>
+      {fullLoaded && (
+        <div className="mv-toolbar mv-toolbar--image" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="mv-toolbar__btn"
+            title={t('viewer.zoomOut')}
+            disabled={!zoomed}
+            onClick={() => transformRef.current?.zoomOut(ZOOM_STEP)}
+          >
+            <FiZoomOut size={16} />
+          </button>
+          <button
+            type="button"
+            className="mv-toolbar__btn mv-toolbar__btn--text"
+            title={t('viewer.resetZoom')}
+            onClick={() => transformRef.current?.resetTransform()}
+          >
+            {Math.round(zoomScale * 100)}%
+          </button>
+          <button
+            type="button"
+            className="mv-toolbar__btn"
+            title={t('viewer.zoomIn')}
+            disabled={zoomScale >= MAX_SCALE - 0.01}
+            onClick={() => transformRef.current?.zoomIn(ZOOM_STEP)}
+          >
+            <FiZoomIn size={16} />
+          </button>
+        </div>
       )}
     </div>
   );

@@ -84,23 +84,8 @@ export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
     setViewerFile(viewableFiles[newIndex]);
   };
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (!viewerFile) return;
-
-      if (e.key === 'ArrowRight') {
-        navigateViewer('next');
-      } else if (e.key === 'ArrowLeft') {
-        navigateViewer('prev');
-      } else if (e.key === 'Escape') {
-        closeMediaViewer();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [viewerFile, viewableFiles]);
+  // Keyboard navigation is owned by MediaViewer, which knows when a key
+  // belongs to a focused field or video instead.
 
   const selectViewerFile = (file) => {
     if (file && file.id !== viewerFile?.id) {

@@ -6,6 +6,7 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, u
 import { FiSearch, FiChevronUp, FiChevronDown, FiCopy, FiCheck, FiAlignLeft } from 'react-icons/fi';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useTranslation } from '@/components/LanguageProvider';
+import { formatFileSize } from '@/lib/clientFileUtils';
 import { TOKEN_CLASS, createHighlighter, languageOf } from './textSyntax';
 import './text-viewer.css';
 
@@ -44,18 +45,6 @@ function decodeText(buffer) {
   } catch {
     return new TextDecoder('windows-1252').decode(buffer);
   }
-}
-
-function formatSize(bytes) {
-  if (bytes == null) return '';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let n = bytes;
-  let u = 0;
-  while (n >= 1024 && u < units.length - 1) {
-    n /= 1024;
-    u += 1;
-  }
-  return `${n >= 10 || u === 0 ? Math.round(n) : n.toFixed(1)} ${units[u]}`;
 }
 
 /**
@@ -183,7 +172,7 @@ function TextViewerBody({ file, url }) {
       <div className="tv-toolbar">
         <span className="tv-lang">{lang.label}</span>
         <span className="tv-meta">
-          {t('viewer.textLines', { count: lines.length.toLocaleString() })} · {formatSize(byteSize ?? file.size)}
+          {t('viewer.textLines', { count: lines.length.toLocaleString() })} · {formatFileSize(byteSize ?? file.size)}
         </span>
 
         <div style={{ flex: 1 }} />
@@ -355,7 +344,7 @@ function HeavyGate({ size, onConfirm }) {
           {t('viewer.textLargeTitle')}
         </span>
         <span className="mv-loader-card__text" style={{ fontSize: 12 }}>
-          {t('viewer.textLargeBody', { size: formatSize(size) })}
+          {t('viewer.textLargeBody', { size: formatFileSize(size) })}
         </span>
         <button
           type="button"

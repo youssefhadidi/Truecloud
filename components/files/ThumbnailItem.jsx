@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FiBox, FiVideo, FiMusic, FiFileText, FiFile, FiImage, FiGrid } from 'react-icons/fi';
+import { FiBox, FiVideo, FiMusic, FiFileText, FiFile, FiImage, FiGrid, FiPlay } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareAwareThumbnail } from './hooks/useShareAwareThumbnail';
 import { fileKind } from '@/components/files/fileKindUtils';
@@ -76,6 +76,17 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
         <div className={`mv-thumb__inner ft-${fileKind(file)}`}>
           <Icon size={20} />
         </div>
+      )}
+      {/* A video or PDF thumbnail looks like any other picture; mark it. */}
+      {thumbnailUrl && fileType === 'video' && (
+        <span className="mv-thumb__badge" aria-hidden="true">
+          <FiPlay size={9} />
+        </span>
+      )}
+      {thumbnailUrl && fileType === 'pdf' && (
+        <span className="mv-thumb__badge mv-thumb__badge--text" aria-hidden="true">
+          PDF
+        </span>
       )}
     </button>
   );
