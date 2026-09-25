@@ -7,7 +7,6 @@ import {
 } from '@/lib/shareAuth';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
-import { createHash } from 'crypto';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail, runThumbnailJob } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
 import { thumbnailCache } from '@/lib/thumbnailCache';
@@ -17,7 +16,6 @@ import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/h
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
-const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export const maxDuration = 60;
@@ -85,12 +83,11 @@ export async function GET(req, { params }) {
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
-    const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
 
-    let filePath = join(uploadsDir, pathCheck.fullPath);
+    const filePath = join(uploadsDir, pathCheck.fullPath);
 
     // Check file exists and capture its size for the (path-independent)
-    // thumbnail key — before any .mp4 stream-cache reassignment below.
+    // thumbnail key.
     let fileStats;
     try {
       fileStats = await fsPromises.stat(filePath);
@@ -105,18 +102,6 @@ export async function GET(req, { params }) {
     }
 
     const fileExt = extname(fileName).toLowerCase();
-
-    // For MP4 videos, check stream-cache
-    if (fileExt === '.mp4') {
-      const pathHash = createHash('md5').update(filePath).digest('hex');
-      const cachedPath = join(streamCacheDir, `${pathHash}.mp4`);
-      try {
-        await fsPromises.access(cachedPath);
-        filePath = cachedPath;
-      } catch {
-        // Use original
-      }
-    }
 
     const isImage = IMAGE_EXTENSIONS.includes(fileExt);
     const isVideo = VIDEO_EXTENSIONS.includes(fileExt);

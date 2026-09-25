@@ -6,10 +6,10 @@ import {
   readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
 } from '@/lib/shareAuth';
 import fs from 'fs';
-import { stat, access, mkdir, rename } from 'fs/promises';
+import { stat, access, mkdir, rename, unlink } from 'fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
 import mime from 'mime-types';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { logger } from '@/lib/logger';
 import {
   checkMoovAtom,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/ffmpegUtils';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { parseRangeHeader } from '@/lib/httpRange';
+import { Semaphore } from '@/lib/semaphore.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
@@ -28,12 +29,50 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 // same share link each spawn their own ffmpeg process writing to the same file.
 const inProgressFixes = new Map();
 
-function dedupeFix(cachedPath, fn) {
+// Each fix reads and rewrites the whole file, and share links are anonymous —
+// without a cap, a visitor opening every video in a shared folder starts one
+// ffmpeg per file.
+const fixSemaphore = new Semaphore(2);
+
+/**
+ * Build `cachedPath` with `produce(tmpPath)`, at most once at a time per path.
+ *
+ * Written under a temp name and renamed into place: the cache is trusted as
+ * soon as it exists and is newer than the source, so a copy still being
+ * written — or one left behind by a failed run — was otherwise served
+ * truncated, to this visitor and every later one.
+ */
+function dedupeFix(cachedPath, produce) {
   const existing = inProgressFixes.get(cachedPath);
   if (existing) return existing;
-  const p = Promise.resolve().then(fn).finally(() => inProgressFixes.delete(cachedPath));
+  const p = (async () => {
+    await fixSemaphore.acquire();
+    // Both producers pass `-f mp4`, so the extension doesn't need to be .mp4.
+    const tmpPath = `${cachedPath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
+    try {
+      await produce(tmpPath);
+      await rename(tmpPath, cachedPath);
+    } catch (err) {
+      await unlink(tmpPath).catch(() => {});
+      throw err;
+    } finally {
+      fixSemaphore.release();
+    }
+  })().finally(() => inProgressFixes.delete(cachedPath));
   inProgressFixes.set(cachedPath, p);
   return p;
+}
+
+/**
+ * Where a share's streamable copy of `filePath` lives. `.share.mp4`, not
+ * `.mp4`: the signed-in stream routes used to treat any `{hash}.mp4` as a
+ * finished transcode, and these keep the source's codecs (a faststart copy is
+ * still HEVC if the source was), which the browser may not decode.
+ */
+function shareCachePath(filePath) {
+  const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
+  const pathHash = createHash('md5').update(filePath).digest('hex');
+  return { cacheDir, cachedPath: join(cacheDir, `${pathHash}.share.mp4`) };
 }
 
 export async function GET(req, { params }) {
@@ -109,9 +148,7 @@ export async function GET(req, { params }) {
 
     // Check if it's an MP4 that might need fixing for streaming
     if (fileExt === '.mp4') {
-      const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
-      const pathHash = createHash('md5').update(filePath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
+      const { cacheDir, cachedPath } = shareCachePath(filePath);
 
       let useCache = false;
       try {
@@ -132,7 +169,7 @@ export async function GET(req, { params }) {
           await mkdir(cacheDir, { recursive: true });
 
           try {
-            await dedupeFix(cachedPath, () => fixMp4ForStreaming(filePath, cachedPath));
+            await dedupeFix(cachedPath, (tmpPath) => fixMp4ForStreaming(filePath, tmpPath));
             streamPath = cachedPath;
           } catch (err) {
             // Fall back to original file
@@ -143,9 +180,7 @@ export async function GET(req, { params }) {
 
     // MKV files need remuxing to MP4 for browser playback (audio codec compatibility)
     if (fileExt === '.mkv') {
-      const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
-      const pathHash = createHash('md5').update(filePath).digest('hex');
-      const cachedPath = join(cacheDir, `${pathHash}.mp4`);
+      const { cacheDir, cachedPath } = shareCachePath(filePath);
 
       let useCache = false;
       try {
@@ -162,11 +197,7 @@ export async function GET(req, { params }) {
         await mkdir(cacheDir, { recursive: true });
 
         try {
-          await dedupeFix(cachedPath, async () => {
-            const tmpPath = cachedPath + '.tmp';
-            await remuxMkvToMp4(filePath, tmpPath);
-            await rename(tmpPath, cachedPath);
-          });
+          await dedupeFix(cachedPath, (tmpPath) => remuxMkvToMp4(filePath, tmpPath));
           streamPath = cachedPath;
         } catch (err) {
           // Fall back to original MKV

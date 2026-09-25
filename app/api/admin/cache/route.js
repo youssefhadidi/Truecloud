@@ -29,12 +29,6 @@ const CACHE_DIRS = {
     // reported 0 B while the real cache grew without bound.
     defaultPath: './stream-cache',
   },
-  '3d': {
-    name: '3D Cache',
-    description: '3D file conversions',
-    envVar: 'CACHE_DIR',
-    defaultPath: './.cache',
-  },
 };
 
 // Helper to format bytes

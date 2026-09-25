@@ -11,6 +11,7 @@ import { formatFileSize } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 import { fileVersion } from '@/lib/api/files';
+import { VIEWER_IMAGE } from '@/lib/imageVariants.mjs';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { isAiSupported } from '@/lib/ai/fileTypes';
 import { useComponentsConfig } from '@/lib/api/system';
@@ -79,9 +80,10 @@ const PdfViewer = dynamic(() => import('./viewers/PdfViewer'), {
   ),
 });
 
-// Longest edge (px) of the image the viewer shows, for both signed-in users
-// and share links. The server fits inside this box and never upscales.
-const VIEWER_IMAGE_SIZE = 2000;
+// The image the viewer shows, for both signed-in users and share links. The
+// server fits it inside this box and never upscales. Shared with the cache
+// worker, which pre-generates exactly this variant.
+const { quality: VIEWER_IMAGE_QUALITY, width: VIEWER_IMAGE_WIDTH, height: VIEWER_IMAGE_HEIGHT } = VIEWER_IMAGE;
 
 function UnsupportedViewer({ file, getFileUrl }) {
   const { t } = useTranslation();
@@ -167,13 +169,13 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
           params.append('file', filePath);
           const version = fileVersion(file);
           if (version) params.append('v', version);
-          params.append('quality', type === 'thumbnail' ? '60' : '85');
+          params.append('quality', type === 'thumbnail' ? '60' : String(VIEWER_IMAGE_QUALITY));
           if (type === 'thumbnail') {
             params.append('w', '400');
             params.append('h', '400');
           } else {
-            params.append('w', String(VIEWER_IMAGE_SIZE));
-            params.append('h', String(VIEWER_IMAGE_SIZE));
+            params.append('w', String(VIEWER_IMAGE_WIDTH));
+            params.append('h', String(VIEWER_IMAGE_HEIGHT));
           }
           return `/api/public/${shareToken}/optimize-image?${params.toString()}`;
         }
@@ -190,7 +192,7 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       const v = version ? `&v=${encodeURIComponent(version)}` : '';
       if (type === 'image' || type === 'full') {
         return appendFolderPinToUrl(
-          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=${VIEWER_IMAGE_SIZE}&h=${VIEWER_IMAGE_SIZE}${v}`,
+          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=${VIEWER_IMAGE_QUALITY}&w=${VIEWER_IMAGE_WIDTH}&h=${VIEWER_IMAGE_HEIGHT}${v}`,
           targetPath,
         );
       }
@@ -500,11 +502,11 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     </>
   );
 
-  if (effectiveFullscreen) return <div className="mv-fullscreen">{content}</div>;
-
+  // Same element tree in both modes, only classes change: switching wrappers
+  // would remount the viewer and restart a playing video.
   return (
-    <div className="mv-backdrop" onClick={onClose}>
-      <div className="mv-sheet" onClick={(e) => e.stopPropagation()}>
+    <div className={`mv-backdrop${effectiveFullscreen ? ' mv-backdrop--bare' : ''}`} onClick={effectiveFullscreen ? undefined : onClose}>
+      <div className={effectiveFullscreen ? 'mv-fullscreen' : 'mv-sheet'} onClick={(e) => e.stopPropagation()}>
         {content}
       </div>
     </div>

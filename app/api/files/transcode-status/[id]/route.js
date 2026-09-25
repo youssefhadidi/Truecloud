@@ -7,7 +7,6 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { readComponentsConfig } from '@/lib/componentsConfig';
-import { isCacheReady } from '@/lib/transcodeManager';
 import { isNativelyPlayable } from '@/lib/ffmpegUtils';
 import { getProbeInfo, peekProbeInfo } from '@/lib/probeCache';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
@@ -74,54 +73,50 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'native' });
       }
 
-      // 1. Backward compat: existing MP4 cache still wins
-      const cachedMp4 = await isCacheReady(fullPath, cacheDir);
-      if (cachedMp4) {
-        return NextResponse.json({ status: 'ready' });
-      }
-
       // Which rendition this viewer gets — it names the directory to look in,
       // so it must match what the stream route will start. Only a browser
       // that can decode HEVC can get anything but the default, and only then
-      // does the choice need the codecs; the probe is cached, and step 5 below
+      // does the choice need the codecs; the probe is cached, and step 4 below
       // would run it on this same poll anyway.
+      // maxHeight is part of the rendition's key, so it names the directory too.
+      const { maxHeight } = await readTranscodingConfig();
       let variant = 'h264';
       const hevcSupport = parseHevcSupport(url.searchParams.get('hevc'));
       if (hevcSupport) {
         try {
-          const [probe, transcodingConfig] = await Promise.all([
-            cachedProbe ?? getProbeInfo(fullPath, req.signal),
-            readTranscodingConfig(),
-          ]);
+          const probe = await (cachedProbe ?? getProbeInfo(fullPath, req.signal));
           if (isNativelyPlayable(fileExt, probe)) return NextResponse.json({ status: 'native' });
-          variant = chooseHlsVariant(probe, { hevcSupport, maxHeight: transcodingConfig.maxHeight });
+          variant = chooseHlsVariant(probe, { hevcSupport, maxHeight });
         } catch (err) {
           if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
           logger.warn('transcode-status: probe failed', { fullPath, error: err.message });
         }
       }
+      const rendition = { variant, maxHeight };
 
-      // Build the hlsUrl used for early and complete playback
+      // Build the hlsUrl used for early and complete playback. Same params as
+      // the stream route's: `mh` pins the rendition across a settings change.
       const params = new URLSearchParams({ path: relativePath });
       if (variant !== 'h264') params.set('r', variant);
+      if (maxHeight != null) params.set('mh', String(maxHeight));
       const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${params}`;
 
       let hash, hlsDir;
       try {
-        ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, variant));
+        ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, rendition));
       } catch {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
       // The player polls this while a transcode runs; see touchHlsJob.
       touchHlsJob(hash);
 
-      // 2. HLS fully complete (manifest has #EXT-X-ENDLIST)
-      const hlsComplete = await isHlsCacheComplete(fullPath, cacheDir, variant);
+      // 1. HLS fully complete (manifest has #EXT-X-ENDLIST)
+      const hlsComplete = await isHlsCacheComplete(fullPath, cacheDir, rendition);
       if (hlsComplete) {
         return NextResponse.json({ status: 'ready', hlsUrl });
       }
 
-      // 3. A running job with a manifest the player can load — start early
+      // 2. A running job with a manifest the player can load — start early
       //    playback. The HLS route holds each segment request until ffmpeg
       //    writes it, so there is no need to wait for segments here. Leftover
       //    segments without an active job (pre-cached state) fall through to
@@ -136,7 +131,7 @@ export async function GET(req, { params }) {
         });
       }
 
-      // 4. In-memory HLS job status
+      // 3. In-memory HLS job status
 
       if (job.status === 'transcoding') {
         // queuePosition > 0 means this job hasn't reached the encoder yet — it
@@ -156,7 +151,7 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'disabled', reason: 'transcode_failed' });
       }
 
-      // 5. Unknown — probe once to detect natively playable files. The result is
+      // 4. Unknown — probe once to detect natively playable files. The result is
       //    persisted by probeCache, so subsequent calls (including across server
       //    restarts) answer from cache, and the stream route reuses this exact
       //    entry rather than probing the file a second time.
@@ -170,7 +165,7 @@ export async function GET(req, { params }) {
         logger.warn('transcode-status: probe failed', { fullPath, error: err.message });
       }
 
-      // 6. Not started yet — stream route will begin HLS transcoding
+      // 5. Not started yet — stream route will begin HLS transcoding
       return NextResponse.json({ status: 'pending' });
     }
 

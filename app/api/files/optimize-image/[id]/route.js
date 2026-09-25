@@ -3,11 +3,13 @@
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
 import { stat, mkdir, readFile, writeFile, rename, unlink } from 'fs/promises';
-import { join, extname } from 'node:path';
+import { join, resolve, dirname, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
+import { optiCachePath } from '@/lib/optiCache.mjs';
+import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
@@ -98,7 +100,7 @@ export async function GET(req, { params }) {
     }
 
     // Skip optimization for SVG or very small files — serve as-is
-    if (fileExt === '.svg' || fileStats.size < 100000) {
+    if (fileExt === '.svg' || fileStats.size < OPTIMIZE_MIN_BYTES) {
       const fileBuffer = await readFile(filePath);
       const mimeType = lookup(fileName) || 'application/octet-stream';
       return new NextResponse(fileBuffer, {
@@ -110,14 +112,14 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Generate cache key based on file path, quality, dimensions, format, and file mtime
-    const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}-${format}-${fileStats.mtimeMs}`).digest('hex');
-
-    // Create cache path preserving directory structure
-    const relativeCacheDir = join(relativePath);
-    const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
-    const cacheFileName = `${cacheKey}.${format}`;
-    const cachePath = join(cacheDir, cacheFileName);
+    // Same key the share route and the cache worker use (lib/optiCache.mjs)
+    const cachePath = optiCachePath(resolve(process.cwd(), OPTI_CACHE_DIR), relativePath, resolve(filePath), fileStats, {
+      quality,
+      width: maxWidth,
+      height: maxHeight,
+      format,
+    });
+    const cacheDir = dirname(cachePath);
 
     // Fast path: check memory cache first
     const memoryCached = thumbnailCache.get(cachePath);
@@ -133,24 +135,22 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Check if disk cached version exists and is newer than source file
+    // Disk cache. The key covers the source's size and mtime, so any file
+    // found here was made from the current version.
     try {
-      const cacheStats = await stat(cachePath);
-      if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
-        const cachedBuffer = await readFile(cachePath);
-        thumbnailCache.set(cachePath, cachedBuffer);
-        const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-        return new NextResponse(cachedBuffer, {
-          headers: {
-            'Content-Type': contentType,
-            'Content-Length': cachedBuffer.length.toString(),
-            ...cacheHeaders,
-            'X-Cache': 'HIT',
-          },
-        });
-      }
+      const cachedBuffer = await readFile(cachePath);
+      thumbnailCache.set(cachePath, cachedBuffer);
+      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
+      return new NextResponse(cachedBuffer, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': cachedBuffer.length.toString(),
+          ...cacheHeaders,
+          'X-Cache': 'HIT',
+        },
+      });
     } catch {
-      // Cache doesn't exist or is invalid, will optimize
+      // Not cached yet, will optimize
     }
 
     // Acquire semaphore only for actual optimization

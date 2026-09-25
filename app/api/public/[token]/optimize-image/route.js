@@ -7,11 +7,12 @@ import {
 } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, mkdir } from 'fs/promises';
-import { join, resolve, sep, extname } from 'node:path';
+import { join, resolve, dirname, sep, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
-import { createHash } from 'crypto';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
+import { optiCachePath } from '@/lib/optiCache.mjs';
+import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { Semaphore } from '@/lib/semaphore';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
@@ -110,7 +111,7 @@ export async function GET(req, { params }) {
     }
 
     // Skip optimization for very small files or SVG
-    if (mimeType === 'image/svg+xml' || fileExt === '.svg' || fileStats.size < 100000) {
+    if (mimeType === 'image/svg+xml' || fileExt === '.svg' || fileStats.size < OPTIMIZE_MIN_BYTES) {
       const fileBuffer = fs.readFileSync(filePath);
       return new NextResponse(fileBuffer, {
         headers: {
@@ -121,32 +122,31 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Generate cache key based on file path, quality, and dimensions
-    // Uses the same scheme as the authenticated route so both share the cache
-    const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}`).digest('hex');
-
-    // Build cache path: split fullPath into directory and filename
+    // Same key the signed-in route and the cache worker use (lib/optiCache.mjs),
+    // so a share visitor gets the variant a signed-in viewer already made.
     const lastSlash = pathCheck.fullPath.lastIndexOf('/');
     const relativeCacheDir = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
-    const cacheDir = join(OPTI_CACHE_DIR, relativeCacheDir);
-    const cacheFileName = `${cacheKey}.webp`;
-    const cachePath = join(cacheDir, cacheFileName);
+    const cachePath = optiCachePath(resolve(process.cwd(), OPTI_CACHE_DIR), relativeCacheDir, resolve(filePath), fileStats, {
+      quality,
+      width: maxWidth,
+      height: maxHeight,
+      format: 'webp',
+    });
+    const cacheDir = dirname(cachePath);
 
-    // Check if cached version exists and is newer than source file
+    // The key covers the source's size and mtime, so any file found here was
+    // made from the current version.
     if (fs.existsSync(cachePath)) {
-      const cacheStats = await stat(cachePath);
-      if (cacheStats.mtimeMs >= fileStats.mtimeMs) {
-        // Serve cached version without semaphore
-        const cachedBuffer = fs.readFileSync(cachePath);
-        return new NextResponse(cachedBuffer, {
-          headers: {
-            'Content-Type': 'image/webp',
-            'Content-Length': cachedBuffer.length.toString(),
-            ...cacheHeaders,
-            'X-Cache': 'HIT',
-          },
-        });
-      }
+      // Serve cached version without semaphore
+      const cachedBuffer = fs.readFileSync(cachePath);
+      return new NextResponse(cachedBuffer, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Content-Length': cachedBuffer.length.toString(),
+          ...cacheHeaders,
+          'X-Cache': 'HIT',
+        },
+      });
     }
 
     // Acquire semaphore only for actual optimization

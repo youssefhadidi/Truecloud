@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
 import { join, resolve, extname, sep } from 'node:path';
 import fsPromises from 'fs/promises';
-import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
@@ -18,7 +17,6 @@ import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/h
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
-const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
 // Increase timeout for thumbnail generation (HEIC and PDF processing can be slow)
 export const maxDuration = 60;
@@ -75,13 +73,11 @@ export async function GET(req, { params }) {
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const thumbnailsDir = resolve(process.cwd(), THUMBNAIL_DIR);
-    const streamCacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
 
-    let filePath = join(uploadsDir, relativePath, fileId);
+    const filePath = join(uploadsDir, relativePath, fileId);
 
     // Check if file exists and capture its size for the (path-independent)
-    // thumbnail key. Done before any .mp4 stream-cache reassignment below so the
-    // key reflects the original file, not the cache copy.
+    // thumbnail key.
     let fileStats;
     try {
       fileStats = await fsPromises.stat(filePath);
@@ -92,20 +88,6 @@ export async function GET(req, { params }) {
 
     // Get file extension for type detection
     const fileExt = extname(fileId).toLowerCase();
-
-    // For MP4 videos, check if we have a stream-cache version (faster to process)
-    if (fileExt === '.mp4') {
-      const pathHash = createHash('md5').update(filePath).digest('hex');
-      const cachedPath = join(streamCacheDir, `${pathHash}.mp4`);
-
-      try {
-        await fsPromises.access(cachedPath);
-        logger.debug('GET /api/files/thumbnail - Using stream-cache version for thumbnail', { fileId, cachedPath });
-        filePath = cachedPath;
-      } catch {
-        logger.debug('GET /api/files/thumbnail - No stream-cache version, using original', { fileId });
-      }
-    }
 
     // Classify file type
     const isImage = IMAGE_EXTENSIONS.includes(fileExt);

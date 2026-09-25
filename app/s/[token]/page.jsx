@@ -575,7 +575,7 @@ export default function SharePage({ params }) {
 
             {is3dFile(shareResponse.fileName) && (
               <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden', height: 500 }}>
-                <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
+                <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} singleFileShare />
               </div>
             )}
 

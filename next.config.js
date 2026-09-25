@@ -48,7 +48,12 @@ const nextConfig = {
     const buildId = process.env.NEXT_BUILD_ID || new Date().getTime().toString();
     return [
       {
-        source: '/:path*',
+        // Not /api: Next drops a route handler's own Cache-Control when one is
+        // already set (send-response.js), so this rule silently overrode every
+        // media route's immutable / private / no-store policy. API routes that
+        // set no Cache-Control also send no validators, so browsers don't
+        // cache them heuristically.
+        source: '/((?!api/).*)',
         headers: [
           {
             key: 'Cache-Control',

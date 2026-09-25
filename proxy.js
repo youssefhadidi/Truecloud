@@ -46,7 +46,8 @@ export const config = {
      * - _next/static, _next/image (Next.js internals)
      * - favicon.ico
      * - s/ (public share routes - no auth required)
+     * - vendor/ (static decoder libs the 3D viewer loads on share pages too)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|s/).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|s/|vendor/).*)',
   ],
 };

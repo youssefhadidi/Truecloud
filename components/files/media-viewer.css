@@ -153,6 +153,13 @@
   animation: mv-fade-in 180ms ease both;
 }
 
+/* Fullscreen covers the backdrop entirely; skip the blur it would never show. */
+.mv-backdrop--bare {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .mv-sheet {
   position: relative;
   width: min(1600px, 95vw);

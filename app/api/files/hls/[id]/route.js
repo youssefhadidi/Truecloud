@@ -9,8 +9,9 @@ import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { getHlsOutputDir, requestHlsSegment, touchHlsJob } from '@/lib/hlsManager';
+import { normalizeTranscodingConfig } from '@/lib/transcodingConfig';
 import { nodeToWebStream } from '@/lib/streamUtils';
-import { parseRangeHeader } from '@/lib/httpRange';
+import { parseRangeHeader, buildValidators, evaluateConditional } from '@/lib/httpRange';
 import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -92,6 +93,10 @@ export async function GET(req, { params }) {
     // default, so a tampered value can only select a directory that exists
     // for this file anyway.
     const variant = url.searchParams.get('r') === 'hevc' ? 'hevc' : 'h264';
+    // The maxHeight the viewer's rendition was started with (absent = source
+    // height). Normalised to a valid preset, so like `r` it can only select
+    // another rendition of this same file.
+    const { maxHeight } = normalizeTranscodingConfig({ maxHeight: url.searchParams.get('mh') });
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {
@@ -127,7 +132,7 @@ export async function GET(req, { params }) {
     // Derive the HLS output directory for this version of the file
     let hash, hlsDir;
     try {
-      ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, variant));
+      ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, { variant, maxHeight }));
     } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -171,7 +176,25 @@ export async function GET(req, { params }) {
       }
 
       const fileSize = segmentStat.size;
-      const parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
+      let parsedRange = parseRangeHeader(req.headers.get('range'), fileSize);
+
+      // Segment URLs carry `v`, the rendition hash, which covers the file
+      // version, variant, maxHeight and encode args — anything that changes a
+      // segment's content changes its URL, so the browser may keep it for good.
+      // Only when `v` is this rendition, though: a URL from a manifest handed
+      // out before the file was replaced now resolves to the new rendition, and
+      // must not pin its segments under the old name. Validators cover the rest.
+      const validators = buildValidators(segmentStat);
+      const cacheHeaders = {
+        ETag: validators.etag,
+        'Last-Modified': validators.lastModified,
+        'Cache-Control': url.searchParams.get('v') === hash ? 'private, max-age=31536000, immutable' : 'private, no-cache',
+      };
+      const conditional = evaluateConditional(req, validators, !!parsedRange);
+      if (conditional.notModified) {
+        return new NextResponse(null, { status: 304, headers: cacheHeaders });
+      }
+      if (conditional.ignoreRange) parsedRange = null;
 
       if (parsedRange?.unsatisfiable) {
         return new NextResponse(null, {
@@ -191,7 +214,7 @@ export async function GET(req, { params }) {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': chunkSize.toString(),
-            'Cache-Control': 'private, max-age=31536000, immutable',
+            ...cacheHeaders,
           },
         });
       }
@@ -201,7 +224,7 @@ export async function GET(req, { params }) {
           'Content-Type': segmentContentType(segment),
           'Content-Length': fileSize.toString(),
           'Accept-Ranges': 'bytes',
-          'Cache-Control': 'private, max-age=31536000, immutable',
+          ...cacheHeaders,
         },
       });
     }
@@ -246,9 +269,10 @@ export async function GET(req, { params }) {
       }
     }
     // `v` names this rendition, so segment URLs change when the file is
-    // replaced and the browser's immutable copies of the old ones go unused.
+    // replaced and the browser's copies of the old ones go unused.
     const variantSuffix = variant === 'h264' ? '' : `&r=${variant}`;
-    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}${pinSuffix}${variantSuffix}&v=${hash}&segment=`;
+    const maxHeightSuffix = maxHeight == null ? '' : `&mh=${maxHeight}`;
+    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}${pinSuffix}${variantSuffix}${maxHeightSuffix}&v=${hash}&segment=`;
     const m3u8Rewritten = m3u8Raw
       .replace(/^(seg\d+\.(?:ts|m4s))$/gm, `${baseUrl}$1`)
       // fMP4 renditions name their init segment in a tag, not on a line of its own.

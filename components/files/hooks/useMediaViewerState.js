@@ -19,9 +19,13 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
     }
   }, []);
 
-  // Detect mobile device
+  // Detect mobile device. A touch device is judged by its short edge so a
+  // phone stays "mobile" in landscape — flipping on rotation would swap the
+  // viewer's layout mid-playback.
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const checkMobile = () =>
+      setIsMobile(window.innerWidth < 768 || (coarse.matches && Math.min(window.innerWidth, window.innerHeight) < 768));
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);

@@ -12,17 +12,28 @@ import {
   DirectionalLight,
   GridHelper,
   AxesHelper,
+  PMREMGenerator,
   MOUSE,
   TOUCH,
   Box3,
   Vector3,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { appendFolderPinToUrl } from '@/lib/folderPinStore';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { createModelSource, loadModel } from './viewers/model3d';
 
-export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sharePassword }) {
+function disposeObject(root) {
+  root.traverse((node) => {
+    node.geometry?.dispose();
+    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+    for (const material of materials) {
+      for (const value of Object.values(material)) if (value?.isTexture) value.dispose();
+      material.dispose();
+    }
+  });
+}
+
+export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sharePassword, singleFileShare }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -30,7 +41,9 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
   const cameraRef = useRef(null);
   const modelBoundsRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
+  const [missing, setMissing] = useState([]);
   const [currentView, setCurrentView] = useState('isometric');
 
   // Function to jump camera to a specific view
@@ -65,6 +78,12 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
 
   useEffect(() => {
     if (!mountRef.current) return;
+
+    setLoading(true);
+    setProgress(null);
+    setError(null);
+    setMissing([]);
+    modelBoundsRef.current = null;
 
     // Initialize Three.js scene
     const scene = new Scene();
@@ -102,6 +121,12 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
 
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // Image-based lighting so PBR materials (glTF, USDZ, FBX) aren't flat and dark
+    const pmrem = new PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environment;
+    scene.environmentIntensity = 0.6;
 
     // Add lighting
     const ambientLight = new AmbientLight(0xffffff, 0.5);
@@ -145,142 +170,103 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
 
     controlsRef.current = controls;
 
-    // Load 3D file
-    const loadGeometry = async () => {
-      try {
-        const fileNameLower = (fileName || '').toLowerCase();
-        const fileExt = fileNameLower.split('.').pop();
-        let object;
+    // The effect can be torn down (viewer closed, next file) while the model
+    // is still downloading or parsing — nothing may touch the scene or React
+    // state after that.
+    const abort = new AbortController();
+    let disposed = false;
+    let model = null;
+    let disposeLoaders = null;
+    let missingNames = [];
 
-        // Determine the conversion URL based on file type and share mode
-        let conversionUrl;
+    const fitModel = (loadedObject) => {
+      // Calculate bounding box
+      const box = new Box3().setFromObject(loadedObject);
+      const size = box.getSize(new Vector3());
 
-        // Files that need conversion to GLTF
-        const needsConversion = !['glb', 'gltf', 'obj'].includes(fileExt);
+      // Scale model to fit 50% of grid (grid is 200x200, so target is ~100 units)
+      const targetSize = 100; // 50% of 200 unit grid
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (!Number.isFinite(maxDim) || maxDim === 0) throw new Error('The file contains no visible geometry');
+      const scale = targetSize / maxDim;
+      loadedObject.scale.multiplyScalar(scale);
 
-        // Use public routes for share mode
-        if (shareToken) {
-          // Server-side conversion isn't available for shared files — only
-          // formats the browser can load directly (glb/gltf/obj) are supported.
-          if (needsConversion) {
-            setError(`Unsupported file format: ${fileExt}`);
-            setLoading(false);
-            return;
-          }
-          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-          conversionUrl = `/api/public/${shareToken}/download?path=${encodeURIComponent(filePath)}`;
-        } else {
-          // GLTFLoader fetches the URL directly (no axios), so embed the
-          // folder PIN as a query param for passcode-locked folders.
-          const targetPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-          if (needsConversion) {
-            conversionUrl = appendFolderPinToUrl(
-              `/api/files/convert-3d?id=${encodeURIComponent(fileId)}&path=${encodeURIComponent(currentPath)}`,
-              targetPath,
-            );
-          } else {
-            conversionUrl = appendFolderPinToUrl(
-              `/api/files/download/${encodeURIComponent(fileId)}?path=${encodeURIComponent(currentPath)}`,
-              targetPath,
-            );
-          }
-        }
+      // Recalculate bounding box after scaling
+      const scaledBox = new Box3().setFromObject(loadedObject);
+      const scaledSize = scaledBox.getSize(new Vector3());
+      const scaledCenter = scaledBox.getCenter(new Vector3());
 
-        // Build headers for password-protected shares
-        const fetchHeaders = sharePassword ? { 'x-share-password': sharePassword } : {};
+      // Position model: center horizontally (X, Z), position on floor (Y)
+      const floorY = -100;
+      loadedObject.position.x = -scaledCenter.x;
+      loadedObject.position.y = floorY - scaledBox.min.y;
+      loadedObject.position.z = -scaledCenter.z;
 
-        // Load as GLTF/GLB
-        if (fileNameLower.endsWith('.glb') || fileNameLower.endsWith('.gltf') || needsConversion) {
-          const gltfLoader = new GLTFLoader();
+      // Point clouds: point size is in view units, unaffected by the scale above
+      loadedObject.traverse((node) => {
+        if (node.isPoints) node.material.size = 0.6;
+      });
 
-          // For share mode with password, fetch first and use blob URL
-          if (shareToken && sharePassword) {
-            const response = await fetch(conversionUrl, { headers: fetchHeaders });
-            if (!response.ok) throw new Error('Failed to load model');
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            object = await new Promise((resolve, reject) => {
-              gltfLoader.load(blobUrl, (gltf) => {
-                URL.revokeObjectURL(blobUrl);
-                resolve(gltf);
-              }, undefined, reject);
-            });
-          } else {
-            object = await new Promise((resolve, reject) => {
-              gltfLoader.load(conversionUrl, resolve, undefined, reject);
-            });
-          }
-          scene.add(object.scene);
-        }
-        // Load as OBJ
-        else if (fileNameLower.endsWith('.obj')) {
-          const objLoader = new OBJLoader();
-          const response = await fetch(conversionUrl, { headers: fetchHeaders });
-          const text = await response.text();
-          object = objLoader.parse(text);
-          scene.add(object);
-        } else {
-          setError(`Unsupported file format: ${fileExt}`);
-          setLoading(false);
-          return;
-        }
+      // Recalculate bounding box after positioning
+      const finalBox = new Box3().setFromObject(loadedObject);
+      const finalCenter = finalBox.getCenter(new Vector3());
 
-        // Get the loaded object for bounding box calculation
-        const loadedObject = object.scene || object;
+      // Store model bounds for camera control
+      modelBoundsRef.current = { center: finalCenter, size: scaledSize };
 
-        // Calculate bounding box
-        const box = new Box3().setFromObject(loadedObject);
-        const size = box.getSize(new Vector3());
+      // Auto-fit camera
+      const scaledMaxDim = Math.max(scaledSize.x, scaledSize.y, scaledSize.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(scaledMaxDim / 2 / Math.tan(fov / 2));
+      cameraZ *= 1.5;
+      camera.position.z = cameraZ;
 
-        // Scale model to fit 50% of grid (grid is 200x200, so target is ~100 units)
-        const targetSize = 100; // 50% of 200 unit grid
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = targetSize / maxDim;
-        loadedObject.scale.multiplyScalar(scale);
-
-        // Recalculate bounding box after scaling
-        const scaledBox = new Box3().setFromObject(loadedObject);
-        const scaledSize = scaledBox.getSize(new Vector3());
-        const scaledCenter = scaledBox.getCenter(new Vector3());
-
-        // Position model: center horizontally (X, Z), position on floor (Y)
-        const floorY = -100;
-        loadedObject.position.x = -scaledCenter.x;
-        loadedObject.position.y = floorY - scaledBox.min.y;
-        loadedObject.position.z = -scaledCenter.z;
-
-        // Recalculate bounding box after positioning
-        const finalBox = new Box3().setFromObject(loadedObject);
-        const finalCenter = finalBox.getCenter(new Vector3());
-
-        // Store model bounds for camera control
-        modelBoundsRef.current = { center: finalCenter, size: scaledSize };
-
-        // Auto-fit camera
-        const scaledMaxDim = Math.max(scaledSize.x, scaledSize.y, scaledSize.z);
-        const fov = camera.fov * (Math.PI / 180);
-        let cameraZ = Math.abs(scaledMaxDim / 2 / Math.tan(fov / 2));
-        cameraZ *= 1.5;
-        camera.position.z = cameraZ;
-
-        // Update camera target to look at the centered model
-        controls.target.copy(finalCenter);
-        controls.update();
-        setCurrentView('isometric');
-
-        setLoading(false);
-      } catch (err) {
-        console.error('Error loading 3D model:', err);
-        setError(`Failed to load file: ${err.message}`);
-        setLoading(false);
-      }
+      // Update camera target to look at the centered model
+      controls.target.copy(finalCenter);
+      controls.update();
+      setCurrentView('isometric');
     };
 
-    loadGeometry();
+    loadModel({
+      source: createModelSource({ fileId, fileName, currentPath, shareToken, sharePassword, singleFileShare }),
+      fileName,
+      renderer,
+      signal: abort.signal,
+      onProgress: (fraction) => !disposed && setProgress(fraction),
+      onMissing: (names) => {
+        missingNames = names;
+        if (!disposed) setMissing(names);
+      },
+    })
+      .then(({ object, dispose }) => {
+        model = object;
+        disposeLoaders = dispose;
+        if (disposed) {
+          disposeLoaders();
+          disposeObject(model);
+          return;
+        }
+        fitModel(object);
+        scene.add(object);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (disposed || err.name === 'AbortError') return;
+        console.error('Error loading 3D model:', err);
+        // A missing .bin / .mtl usually is the real cause; the loader's own
+        // message is just the failed request URL.
+        setError(
+          missingNames.length
+            ? `Failed to load file: missing ${missingNames.join(', ')}`
+            : `Failed to load file: ${err.message}`,
+        );
+        setLoading(false);
+      });
 
     // Animation loop
+    let frame = 0;
     const animate = () => {
-      requestAnimationFrame(animate);
+      frame = requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     };
@@ -299,7 +285,18 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
     window.addEventListener('resize', handleResize);
 
     return () => {
+      disposed = true;
+      abort.abort();
+      cancelAnimationFrame(frame);
       window.removeEventListener('resize', handleResize);
+      controls.dispose();
+      if (model) disposeObject(model);
+      disposeLoaders?.();
+      gridHelper.dispose();
+      axesHelper.dispose();
+      texture.dispose();
+      environment.dispose();
+      pmrem.dispose();
       renderer.dispose();
 
       // Properly clean up all children in mount ref
@@ -309,7 +306,7 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
         }
       }
     };
-  }, [fileId, currentPath, fileName, shareToken, sharePassword]);
+  }, [fileId, currentPath, fileName, shareToken, sharePassword, singleFileShare]);
 
   const cubeBtn = (active) => ({
     fontSize: 11,
@@ -339,7 +336,9 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
         >
           <div className="mv-loader-card">
             <div className="mv-spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
-            <span className="mv-loader-card__text">Loading 3D model…</span>
+            <span className="mv-loader-card__text">
+              Loading 3D model…{progress != null && progress < 1 ? ` ${Math.round(progress * 100)}%` : ''}
+            </span>
           </div>
         </div>
       )}
@@ -368,6 +367,32 @@ export default function Viewer3D({ fileId, currentPath, fileName, shareToken, sh
           >
             {error}
           </div>
+        </div>
+      )}
+      {/* Textures / .mtl / .bin the model references but that aren't in its folder */}
+      {missing.length > 0 && !error && (
+        <div
+          title={missing.join('\n')}
+          style={{
+            position: 'absolute',
+            left: 14,
+            bottom: 14,
+            maxWidth: 'calc(100% - 28px)',
+            padding: '6px 10px',
+            background: 'rgba(15,23,42,.72)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,.10)',
+            borderRadius: 8,
+            color: 'rgba(255,255,255,.85)',
+            fontSize: 12,
+            zIndex: 45,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {missing.length === 1 ? 'Missing file' : `${missing.length} missing files`}: {missing.slice(0, 3).join(', ')}
+          {missing.length > 3 ? '…' : ''}
         </div>
       )}
       <div ref={mountRef} style={{ flex: 1, width: '100%', position: 'relative', background: '#0f172a', borderRadius: 0 }}>

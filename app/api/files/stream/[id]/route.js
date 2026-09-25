@@ -15,7 +15,6 @@ import { nodeToWebStream } from '@/lib/streamUtils';
 import { parseRangeHeader, buildValidators, evaluateConditional } from '@/lib/httpRange';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
-import { isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
 import { chooseHlsVariant, parseHevcSupport } from '@/lib/hlsEncode.mjs';
 import { Semaphore } from '@/lib/semaphore.mjs';
@@ -126,7 +125,6 @@ export async function GET(req, { params }) {
       });
     }
 
-    let streamPath = fullPath;
     const fileExt = extname(fileId).toLowerCase();
 
     // On-demand HLS transcoding for all video formats
@@ -143,130 +141,127 @@ export async function GET(req, { params }) {
             fileId,
           });
         } else {
-          // Backward compat: serve existing MP4 cache directly
-          const cachedMp4 = await isCacheReady(fullPath, cacheDir);
-          if (cachedMp4) {
-            streamPath = cachedMp4;
-            logger.debug('GET /api/files/stream - Using transcoded MP4 cache', { fileId });
+          // Short-circuit if the client already navigated away before we start
+          // the expensive ffprobe work — prevents FD exhaustion from rapid scrolling.
+          if (req.signal?.aborted) {
+            return new NextResponse(null, { status: 499 });
+          }
+
+          // Start HLS job in background (non-blocking)
+          // Debug: Log file stats and probing info
+          logger.info('GET /api/files/stream - Before HLS probing', {
+            fullPath,
+            fileId,
+            fileExists: true,
+            uploadDir: UPLOAD_DIR,
+            relativePath
+          });
+
+          // Hardware transcoding is explicitly enabled in admin — use VAAPI.
+          // HWACCEL=none env var is the only escape hatch to force software encoding.
+          const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
+
+          // Acquire the probe semaphore: at most 3 concurrent ffprobe pairs can run
+          // at the same time. Requests beyond that wait in queue rather than spawning
+          // unlimited subprocesses. Pass req.signal so waiting requests are cancelled
+          // immediately if the client disconnects while queued.
+          try {
+            await probeSemaphore.acquire(1, req.signal);
+          } catch (err) {
+            if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+            throw err;
+          }
+          let probe, transcodingConfig;
+          try {
+            // Check again after waiting for the semaphore — client may have left
+            if (req.signal?.aborted) {
+              return new NextResponse(null, { status: 499 });
+            }
+
+            // One cached probe covers codecs, resolution, pixel format and
+            // duration — and it is the same entry the status route just
+            // populated, so on the normal open path this spawns nothing.
+            [probe, transcodingConfig] = await Promise.all([
+              getProbeInfo(fullPath, req.signal),
+              readTranscodingConfig(),
+            ]);
+          } catch (err) {
+            if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+            throw err;
+          } finally {
+            probeSemaphore.release();
+          }
+
+          // If the client disconnected while we were probing, don't start ffmpeg
+          if (req.signal?.aborted) {
+            return new NextResponse(null, { status: 499 });
+          }
+
+          const durationSecs = probe.durationSecs;
+
+          logger.info('GET /api/files/stream - Probing complete', {
+            fullPath,
+            videoCodec: probe.videoCodec,
+            audioCodec: probe.audioCodec,
+            videoHeight: probe.videoHeight,
+            pixFmt: probe.pixFmt,
+            hwaccel,
+            durationSecs,
+            maxHeight: transcodingConfig.maxHeight ?? 'original',
+          });
+
+          // Container + codecs the browser decodes on its own → serve the
+          // bytes directly, no HLS.
+          if (isNativelyPlayable(fileExt, probe)) {
+            logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
+            // Fall through to byte-range serving
           } else {
-            // Short-circuit if the client already navigated away before we start
-            // the expensive ffprobe work — prevents FD exhaustion from rapid scrolling.
-            if (req.signal?.aborted) {
-              return new NextResponse(null, { status: 499 });
-            }
-
-            // Start HLS job in background (non-blocking)
-            // Debug: Log file stats and probing info
-            logger.info('GET /api/files/stream - Before HLS probing', {
-              fullPath,
-              fileId,
-              fileExists: true,
-              uploadDir: UPLOAD_DIR,
-              relativePath
+            // Copy HEVC as-is when this viewer's browser reported it can decode it.
+            const variant = chooseHlsVariant(probe, {
+              hevcSupport: parseHevcSupport(url.searchParams.get('hevc')),
+              maxHeight: transcodingConfig.maxHeight,
+            });
+            const job = await startHlsJob(fullPath, cacheDir, probe, hwaccel, durationSecs, {
+              maxHeight: transcodingConfig.maxHeight,
+              variant,
             });
 
-            // Hardware transcoding is explicitly enabled in admin — use VAAPI.
-            // HWACCEL=none env var is the only escape hatch to force software encoding.
-            const hwaccel = process.env.HWACCEL?.toLowerCase() === 'none' ? 'none' : 'vaapi';
-
-            // Acquire the probe semaphore: at most 3 concurrent ffprobe pairs can run
-            // at the same time. Requests beyond that wait in queue rather than spawning
-            // unlimited subprocesses. Pass req.signal so waiting requests are cancelled
-            // immediately if the client disconnects while queued.
-            try {
-              await probeSemaphore.acquire(1, req.signal);
-            } catch (err) {
-              if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
-              throw err;
-            }
-            let probe, transcodingConfig;
-            try {
-              // Check again after waiting for the semaphore — client may have left
-              if (req.signal?.aborted) {
-                return new NextResponse(null, { status: 499 });
-              }
-
-              // One cached probe covers codecs, resolution, pixel format and
-              // duration — and it is the same entry the status route just
-              // populated, so on the normal open path this spawns nothing.
-              [probe, transcodingConfig] = await Promise.all([
-                getProbeInfo(fullPath, req.signal),
-                readTranscodingConfig(),
-              ]);
-            } catch (err) {
-              if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
-              throw err;
-            } finally {
-              probeSemaphore.release();
-            }
-
-            // If the client disconnected while we were probing, don't start ffmpeg
-            if (req.signal?.aborted) {
-              return new NextResponse(null, { status: 499 });
-            }
-
-            const durationSecs = probe.durationSecs;
-
-            logger.info('GET /api/files/stream - Probing complete', {
-              fullPath,
-              videoCodec: probe.videoCodec,
-              audioCodec: probe.audioCodec,
-              videoHeight: probe.videoHeight,
-              pixFmt: probe.pixFmt,
-              hwaccel,
-              durationSecs,
-              maxHeight: transcodingConfig.maxHeight ?? 'original',
-            });
-
-            // Container + codecs the browser decodes on its own → serve the
-            // bytes directly, no HLS.
-            if (isNativelyPlayable(fileExt, probe)) {
-              logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
-              // Fall through to byte-range serving
-            } else {
-              // Copy HEVC as-is when this viewer's browser reported it can decode it.
-              const variant = chooseHlsVariant(probe, {
-                hevcSupport: parseHevcSupport(url.searchParams.get('hevc')),
-                maxHeight: transcodingConfig.maxHeight,
+            if (job.status === 'transcoding') {
+              logger.info('GET /api/files/stream - HLS transcoding in progress', {
+                fileId,
+                progress: job.progress,
+                queuePosition: job.queuePosition ?? 0,
               });
-              const job = await startHlsJob(fullPath, cacheDir, probe, hwaccel, durationSecs, {
-                maxHeight: transcodingConfig.maxHeight,
-                variant,
-              });
-
-              if (job.status === 'transcoding') {
-                logger.info('GET /api/files/stream - HLS transcoding in progress', {
-                  fileId,
+              return NextResponse.json(
+                {
+                  error: 'Video is being transcoded for playback. Please try again shortly.',
+                  status: 'transcoding',
                   progress: job.progress,
                   queuePosition: job.queuePosition ?? 0,
-                });
-                return NextResponse.json(
-                  {
-                    error: 'Video is being transcoded for playback. Please try again shortly.',
-                    status: 'transcoding',
-                    progress: job.progress,
-                    queuePosition: job.queuePosition ?? 0,
-                  },
-                  { status: 202 },
-                );
-              }
+                },
+                { status: 202 },
+              );
+            }
 
-              if (job.status === 'done') {
-                const hlsParams = new URLSearchParams({ path: relativePath });
-                if (variant !== 'h264') hlsParams.set('r', variant);
-                // Carry the folder PIN forward — the browser will fetch this
-                // manifest URL directly via hls.js / <video src> and can't
-                // attach the X-Folder-Pins header on its own.
-                const hlsPinSuffix = await buildHlsPinSuffix(req, relativePath);
-                const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}${hlsPinSuffix}`;
-                logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
-                return NextResponse.json({ status: 'ready', hlsUrl });
-              }
+            if (job.status === 'done') {
+              const hlsParams = new URLSearchParams({ path: relativePath });
+              if (variant !== 'h264') hlsParams.set('r', variant);
+              // The rendition is keyed on maxHeight too; pin the one this
+              // viewer started on, so an admin changing it mid-film doesn't
+              // move the HLS route to a directory that isn't encoded yet.
+              if (transcodingConfig.maxHeight != null) hlsParams.set('mh', String(transcodingConfig.maxHeight));
+              // Carry the folder PIN forward — the browser will fetch this
+              // manifest URL directly via hls.js / <video src> and can't
+              // attach the X-Folder-Pins header on its own.
+              const hlsPinSuffix = await buildHlsPinSuffix(req, relativePath);
+              const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${hlsParams}${hlsPinSuffix}`;
+              logger.info('GET /api/files/stream - HLS ready, returning hlsUrl', { fileId });
+              return NextResponse.json({ status: 'ready', hlsUrl });
+            }
 
-              if (job.status === 'error') {
-                logger.warn('GET /api/files/stream - HLS transcode failed, serving original', { fileId });
-                // Fall through to serve original file as best-effort
-              }
+            if (job.status === 'error') {
+              logger.warn('GET /api/files/stream - HLS transcode failed, serving original', { fileId });
+              // Fall through to serve original file as best-effort
             }
           }
         }
@@ -274,12 +269,11 @@ export async function GET(req, { params }) {
       // If transcoding disabled: fall through and serve the original file as-is
     }
 
-    const fileStats = await stat(streamPath);
+    const fileStats = await stat(fullPath);
     const fileSize = fileStats.size;
-    const mimeType = mime.lookup(streamPath) || 'application/octet-stream';
+    const mimeType = mime.lookup(fullPath) || 'application/octet-stream';
 
-    // Validators describe the bytes actually being served, which may be a cache
-    // file rather than the original — so they are built from streamPath's stat.
+    // Validators describe the bytes being served, which are always the original file.
     const validators = buildValidators(fileStats);
     // Let the browser reuse what it has already downloaded (a backward seek is
     // otherwise a full re-fetch), but revalidate hourly so a replaced file is
@@ -317,7 +311,7 @@ export async function GET(req, { params }) {
       // No range (or one we don't honour), send entire file
       const duration = Date.now() - startTime;
       logger.debug('GET /api/files/stream - Streaming full file', { fileId, duration: `${duration}ms` });
-      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { highWaterMark: STREAM_CHUNK_BYTES })), {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(fullPath, { highWaterMark: STREAM_CHUNK_BYTES })), {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileSize.toString(),
@@ -339,7 +333,7 @@ export async function GET(req, { params }) {
       duration: `${duration}ms`,
     });
 
-    return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { start, end, highWaterMark: STREAM_CHUNK_BYTES })), {
+    return new NextResponse(nodeToWebStream(fs.createReadStream(fullPath, { start, end, highWaterMark: STREAM_CHUNK_BYTES })), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
