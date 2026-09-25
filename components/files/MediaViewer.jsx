@@ -10,6 +10,7 @@ import { getFileType } from '@/lib/getFileType';
 import { formatFileSize } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
+import { fileVersion } from '@/lib/api/files';
 import { AudioPlayer } from './viewers/AudioPlayer';
 import { isAiSupported } from '@/lib/ai/fileTypes';
 import { useComponentsConfig } from '@/lib/api/system';
@@ -77,6 +78,10 @@ const PdfViewer = dynamic(() => import('./viewers/PdfViewer'), {
     </div>
   ),
 });
+
+// Longest edge (px) of the image the viewer shows, for both signed-in users
+// and share links. The server fits inside this box and never upscales.
+const VIEWER_IMAGE_SIZE = 2000;
 
 function UnsupportedViewer({ file, getFileUrl }) {
   const { t } = useTranslation();
@@ -160,13 +165,15 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
 
         if (type === 'image' || type === 'full' || type === 'thumbnail') {
           params.append('file', filePath);
+          const version = fileVersion(file);
+          if (version) params.append('v', version);
           params.append('quality', type === 'thumbnail' ? '60' : '85');
           if (type === 'thumbnail') {
             params.append('w', '400');
             params.append('h', '400');
           } else {
-            params.append('w', '1800');
-            params.append('h', '1800');
+            params.append('w', String(VIEWER_IMAGE_SIZE));
+            params.append('h', String(VIEWER_IMAGE_SIZE));
           }
           return `/api/public/${shareToken}/optimize-image?${params.toString()}`;
         }
@@ -179,15 +186,17 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
       // can't carry the X-Folder-Pins header, so for passcode-locked folders
       // the PIN is embedded as a query param.
       const targetPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      const version = fileVersion(file);
+      const v = version ? `&v=${encodeURIComponent(version)}` : '';
       if (type === 'image' || type === 'full') {
         return appendFolderPinToUrl(
-          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=2000&h=2000`,
+          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=85&w=${VIEWER_IMAGE_SIZE}&h=${VIEWER_IMAGE_SIZE}${v}`,
           targetPath,
         );
       }
       if (type === 'thumbnail') {
         return appendFolderPinToUrl(
-          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=60&w=400&h=400`,
+          `/api/files/optimize-image/${encodeURIComponent(file.name)}?path=${encodeURIComponent(currentPath)}&quality=60&w=400&h=400${v}`,
           targetPath,
         );
       }

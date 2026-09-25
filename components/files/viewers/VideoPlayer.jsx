@@ -14,6 +14,32 @@ function getExt(filename) {
 }
 
 /**
+ * What HEVC this browser can decode through MSE (which hls.js plays into):
+ * 0 none, 1 Main (8-bit), 2 Main 10 too. Sent to the server, which copies an
+ * HEVC source's stream as-is for a viewer that can play it rather than
+ * re-encoding the whole film to H.264. Level 5.1 so 4K sources are covered.
+ */
+let hevcSupportCache = null;
+function getHevcSupport() {
+  if (hevcSupportCache !== null) return hevcSupportCache;
+  const supports = (codec) => {
+    try {
+      return !!window.MediaSource?.isTypeSupported?.(`video/mp4; codecs="${codec}"`);
+    } catch {
+      return false;
+    }
+  };
+  hevcSupportCache = supports('hvc1.2.4.L153.B0') ? 2 : supports('hvc1.1.6.L153.B0') ? 1 : 0;
+  return hevcSupportCache;
+}
+
+/** Add the HEVC capability to a status/stream URL, when there is one to add. */
+function withHevcSupport(url) {
+  const level = getHevcSupport();
+  return level ? `${url}${url.includes('?') ? '&' : '?'}hevc=${level}` : url;
+}
+
+/**
  * Name a subtitle track for the menu. Prefers the embedded title ("English
  * (SDH)"), then the language rendered in the *viewer's* locale — so a French UI
  * shows "Anglais", not "English".
@@ -440,6 +466,26 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       manifestLoadingTimeOut: 10000,
       manifestLoadingMaxRetry: 6,
       manifestLoadingRetryDelay: 1000,
+      // Fetch the first segment while the playlist is still being parsed,
+      // rather than after — one round trip off the time to first frame.
+      startFragPrefetch: true,
+      // Buffer a minute ahead instead of the default 30 s, so a slow patch on
+      // the network (or the encoder catching up after a seek) is absorbed
+      // without a stall.
+      maxBufferLength: 60,
+      // Playback now starts before ffmpeg has written the first segment, and the
+      // HLS route holds a segment request up to 30 s until it exists. hls.js's
+      // default 10 s time-to-first-byte would abort and refetch mid-wait, so
+      // match the server. Rest is the hls.js default — this policy is replaced
+      // whole, not merged.
+      fragLoadPolicy: {
+        default: {
+          maxTimeToFirstByteMs: 30000,
+          maxLoadTimeMs: 120000,
+          timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
+          errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+        },
+      },
     });
 
     // Without this the player fails silently: a stalled or undecodable segment
@@ -539,7 +585,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         // returns a bare hlsUrl too — re-append the PIN before handing it
         // to hls.js, otherwise the manifest fetch will 423.
         const statusUrl = appendFolderPinToUrl(
-          `/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`,
+          withHevcSupport(`/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`),
           targetPath,
         );
         const res = await fetch(statusUrl, { signal });
@@ -564,7 +610,9 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
     triggeredRef.current = true;
     const ac = new AbortController();
     triggerAbortRef.current = ac;
-    fetch(streamUrl, { signal: ac.signal }).catch(() => {});
+    // Must carry the same HEVC capability as the status poll: the two have to
+    // agree on which rendition this viewer gets.
+    fetch(withHevcSupport(streamUrl), { signal: ac.signal }).catch(() => {});
   }, [streamUrl]);
 
   useEffect(() => {
@@ -578,16 +626,18 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
 
     const ac = new AbortController();
     let debounceTimer = null;
+    // Start fast and back off. The server can hand out a playable hlsUrl within
+    // a second of the trigger, and a flat 3 s interval was most of the wait
+    // before the first frame; once playing, polls only move the progress pill.
+    let pollDelay = 500;
 
     const poll = async () => {
       const s = await checkStatus(ac.signal);
       if (ac.signal.aborted) return;
-      if (s === 'pending') {
+      if (s === 'pending' || s === 'transcoding') {
         triggerTranscode();
-        pollRef.current = setTimeout(poll, 3000);
-      } else if (s === 'transcoding') {
-        triggerTranscode();
-        pollRef.current = setTimeout(poll, 3000);
+        pollRef.current = setTimeout(poll, pollDelay);
+        pollDelay = Math.min(pollDelay * 2, 3000);
       } else if (s === null) {
         pollRef.current = setTimeout(poll, 5000);
       }

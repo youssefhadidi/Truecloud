@@ -31,11 +31,11 @@ function ThumbnailSpinner() {
   );
 }
 
-export default function LazyImage({ src, alt, style, onError, isThumbnail = false, fileId = null, filePath = '' }) {
+export default function LazyImage({ src, alt, style, onError, isThumbnail = false, fileId = null, filePath = '', version = '' }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
 
-  const imageSrc = isThumbnail && fileId ? getThumbnailUrl(fileId, filePath) : src;
+  const imageSrc = isThumbnail && fileId ? getThumbnailUrl(fileId, filePath, version) : src;
 
   if (!imageSrc) {
     return (

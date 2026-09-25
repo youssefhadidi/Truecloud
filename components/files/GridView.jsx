@@ -9,6 +9,7 @@ import {
   FiPlay, FiShare2, FiMusic, FiFileText, FiPackage, FiCheck, FiStar, FiHeart,
 } from 'react-icons/fi';
 import LazyImage from '@/components/files/LazyImage';
+import { fileVersion } from '@/lib/api/files';
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import DownloadCard from '@/components/files/DownloadCard';
@@ -512,6 +513,7 @@ const GridItem = memo(
                     isThumbnail={true}
                     fileId={item.id}
                     filePath={item._parentPath != null ? item._parentPath : currentPath}
+                    version={fileVersion(item)}
                     onError={(e) => { if (e?.target) e.target.style.display = 'none'; }}
                   />
                   {isVideo(item.name) && (

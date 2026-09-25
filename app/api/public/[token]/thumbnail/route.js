@@ -13,6 +13,7 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extens
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
+import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -125,6 +126,14 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail not supported for this file type' }, { status: 404 });
     }
 
+    const validators = buildValidators(fileStats);
+    const cacheHeaders = share.privateUploads
+      ? { 'Cache-Control': 'private, no-store' }
+      : { ETag: validators.etag, 'Last-Modified': validators.lastModified, 'Cache-Control': mediaCacheControl(url) };
+    if (!share.privateUploads && evaluateConditional(req, validators, false).notModified) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+
     // Use the same name+size key as the authenticated thumbnail route so both
     // routes share cached thumbnails for the same file (and survive renames).
     const lastSlash = pathCheck.fullPath.lastIndexOf('/');
@@ -141,7 +150,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': cachedBuffer.length.toString(),
-          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000, immutable',
+          ...cacheHeaders,
           'X-Cache': 'MEMORY',
         },
       });
@@ -180,7 +189,7 @@ export async function GET(req, { params }) {
       headers: {
         'Content-Type': 'image/webp',
         'Content-Length': thumbnailBuffer.length.toString(),
-        'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000, immutable',
+        ...cacheHeaders,
         'X-Cache': !thumbnailExists ? 'MISS' : 'HIT',
       },
     });

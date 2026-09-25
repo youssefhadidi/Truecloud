@@ -14,6 +14,7 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extens
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
+import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
@@ -116,6 +117,18 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Thumbnail generation not supported for this file type' }, { status: 404 });
     }
 
+    // Validators describe the source file: the thumbnail changes exactly when
+    // it does. Answering the revalidation here skips everything below.
+    const validators = buildValidators(fileStats);
+    const cacheHeaders = {
+      ETag: validators.etag,
+      'Last-Modified': validators.lastModified,
+      'Cache-Control': mediaCacheControl(url),
+    };
+    if (evaluateConditional(req, validators, false).notModified) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+
     // Create thumbnail filename - always use WebP format. Keyed on name+size
     // (not path) so it survives folder rename/move.
     const thumbnailFileName = `${thumbnailKey(fileId, fileStats.size)}.webp`;
@@ -134,7 +147,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': cachedBuffer.length.toString(),
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          ...cacheHeaders,
           'X-Cache': 'MEMORY',
         },
       });
@@ -206,7 +219,7 @@ export async function GET(req, { params }) {
       headers: {
         'Content-Type': 'image/webp',
         'Content-Length': thumbnailBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        ...cacheHeaders,
         'X-Cache': thumbnailExists ? 'HIT' : 'MISS',
       },
     });

@@ -13,6 +13,7 @@ import sharp from 'sharp';
 import { createHash } from 'crypto';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { Semaphore } from '@/lib/semaphore';
+import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
@@ -100,6 +101,14 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Only images can be optimized' }, { status: 400 });
     }
 
+    const validators = buildValidators(fileStats);
+    const cacheHeaders = share.privateUploads
+      ? { 'Cache-Control': 'private, no-store' }
+      : { ETag: validators.etag, 'Last-Modified': validators.lastModified, 'Cache-Control': mediaCacheControl(url) };
+    if (!share.privateUploads && evaluateConditional(req, validators, false).notModified) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+
     // Skip optimization for very small files or SVG
     if (mimeType === 'image/svg+xml' || fileExt === '.svg' || fileStats.size < 100000) {
       const fileBuffer = fs.readFileSync(filePath);
@@ -107,7 +116,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
+          ...cacheHeaders,
         },
       });
     }
@@ -133,7 +142,7 @@ export async function GET(req, { params }) {
           headers: {
             'Content-Type': 'image/webp',
             'Content-Length': cachedBuffer.length.toString(),
-            'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
+            ...cacheHeaders,
             'X-Cache': 'HIT',
           },
         });
@@ -170,7 +179,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': 'image/webp',
           'Content-Length': optimizedBuffer.length.toString(),
-          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
+          ...cacheHeaders,
           'X-Cache': 'MISS',
         },
       });
@@ -182,7 +191,8 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=31536000',
+          // Fallback bytes, not the variant this URL names — don't pin them.
+          'Cache-Control': 'no-store',
         },
       });
     } finally {

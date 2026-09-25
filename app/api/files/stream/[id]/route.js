@@ -8,6 +8,7 @@ import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { isNativelyPlayable } from '@/lib/ffmpegUtils';
 import { getProbeInfo, peekProbeInfo } from '@/lib/probeCache';
 import { nodeToWebStream } from '@/lib/streamUtils';
@@ -16,6 +17,7 @@ import { readComponentsConfig } from '@/lib/componentsConfig';
 import { readTranscodingConfig } from '@/lib/transcodingConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
 import { startHlsJob } from '@/lib/hlsManager';
+import { chooseHlsVariant, parseHevcSupport } from '@/lib/hlsEncode.mjs';
 import { Semaphore } from '@/lib/semaphore.mjs';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
 import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
@@ -41,10 +43,18 @@ const probeSemaphore = new Semaphore(3);
 
 const VIDEO_EXTENSIONS_SET = new Set(VIDEO_EXTENSIONS);
 
+// Read size for serving file bytes. Every chunk is a pull through the Web
+// stream wrapper and a trip through the event loop; the 64 KB default costs
+// ~190 of them per second for a 100 Mbit/s 4K remux, per viewer, against ~12
+// at 1 MB. The stream is pull-based
+// (see nodeToWebStream), so this is also roughly the memory each open stream
+// holds — 1 MB is fine for a handful of viewers.
+const STREAM_CHUNK_BYTES = 1024 * 1024;
+
 export async function GET(req, { params }) {
   const startTime = Date.now();
   try {
-    const { error } = await requireAuthNoActivity();
+    const { session, error } = await requireAuthNoActivity();
     if (error) return error;
 
     const resolvedParams = await params;
@@ -52,7 +62,7 @@ export async function GET(req, { params }) {
 
     // Get path from query params
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
 
     logger.debug('GET /api/files/stream - Processing', { fileId, path: relativePath });
 
@@ -61,6 +71,19 @@ export async function GET(req, { params }) {
       logger.error('GET /api/files/stream - Directory traversal attempt', { fileId, relativePath });
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files/stream - Access denied', { fileId, relativePath, userId: session.user.id });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+    relativePath = accessCheck.normalizedPath;
 
     const locked = await requireFolderUnlock(req, relativePath);
     if (locked) return locked;
@@ -201,7 +224,15 @@ export async function GET(req, { params }) {
               logger.info('GET /api/files/stream - Native video detected, serving directly', { fileId, ext: fileExt });
               // Fall through to byte-range serving
             } else {
-              const job = await startHlsJob(fullPath, cacheDir, probe, hwaccel, durationSecs, { maxHeight: transcodingConfig.maxHeight });
+              // Copy HEVC as-is when this viewer's browser reported it can decode it.
+              const variant = chooseHlsVariant(probe, {
+                hevcSupport: parseHevcSupport(url.searchParams.get('hevc')),
+                maxHeight: transcodingConfig.maxHeight,
+              });
+              const job = await startHlsJob(fullPath, cacheDir, probe, hwaccel, durationSecs, {
+                maxHeight: transcodingConfig.maxHeight,
+                variant,
+              });
 
               if (job.status === 'transcoding') {
                 logger.info('GET /api/files/stream - HLS transcoding in progress', {
@@ -222,6 +253,7 @@ export async function GET(req, { params }) {
 
               if (job.status === 'done') {
                 const hlsParams = new URLSearchParams({ path: relativePath });
+                if (variant !== 'h264') hlsParams.set('r', variant);
                 // Carry the folder PIN forward — the browser will fetch this
                 // manifest URL directly via hls.js / <video src> and can't
                 // attach the X-Folder-Pins header on its own.
@@ -285,7 +317,7 @@ export async function GET(req, { params }) {
       // No range (or one we don't honour), send entire file
       const duration = Date.now() - startTime;
       logger.debug('GET /api/files/stream - Streaming full file', { fileId, duration: `${duration}ms` });
-      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath)), {
+      return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { highWaterMark: STREAM_CHUNK_BYTES })), {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileSize.toString(),
@@ -307,7 +339,7 @@ export async function GET(req, { params }) {
       duration: `${duration}ms`,
     });
 
-    return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { start, end, highWaterMark: 256 * 1024 })), {
+    return new NextResponse(nodeToWebStream(fs.createReadStream(streamPath, { start, end, highWaterMark: STREAM_CHUNK_BYTES })), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,

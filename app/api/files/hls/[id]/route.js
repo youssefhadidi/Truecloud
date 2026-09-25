@@ -7,7 +7,8 @@ import { stat, access } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
-import { getHlsOutputDir } from '@/lib/hlsManager';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
+import { getHlsOutputDir, requestHlsSegment, touchHlsJob } from '@/lib/hlsManager';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { parseRangeHeader } from '@/lib/httpRange';
 import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLockedPaths } from '@/lib/folderLocks';
@@ -15,8 +16,15 @@ import { requireFolderUnlock, extractIncomingPin, findAncestorLockPath, getAllLo
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
 
-// Only allow seg[digits].ts — no path separators, no traversal
-const SEGMENT_FILENAME_RE = /^seg\d+\.ts$/;
+// Only allow segN.ts / segN.m4s / init.mp4 — no path separators, no traversal
+const SEGMENT_FILENAME_RE = /^(?:seg\d+\.(?:ts|m4s)|init\.mp4)$/;
+
+// MPEG-TS for the H.264 rendition; fragmented MP4 for HEVC copies.
+function segmentContentType(name) {
+  if (name.endsWith('.ts')) return 'video/mp2t';
+  if (name.endsWith('.m4s')) return 'video/iso.segment';
+  return 'video/mp4';
+}
 
 // Wait up to `timeoutMs` for `segmentPath` to exist. Uses fs.watch to get a
 // kernel-level wakeup the moment ffmpeg writes the segment (~ms latency)
@@ -71,15 +79,19 @@ async function waitForSegment(hlsDir, segmentPath, timeoutMs, signal) {
 
 export async function GET(req, { params }) {
   try {
-    const { error } = await requireAuthNoActivity();
+    const { session, error } = await requireAuthNoActivity();
     if (error) return error;
 
     const resolvedParams = await params;
     const fileId = safeDecodeURIComponent(resolvedParams.id);
 
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
     const segment = url.searchParams.get('segment') || null;
+    // Which rendition (see chooseHlsVariant). Anything unrecognised is the
+    // default, so a tampered value can only select a directory that exists
+    // for this file anyway.
+    const variant = url.searchParams.get('r') === 'hevc' ? 'hevc' : 'h264';
 
     // Security: prevent directory traversal
     if (relativePath.includes('..') || fileId.includes('..')) {
@@ -92,6 +104,19 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid segment' }, { status: 400 });
     }
 
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+    if (!accessCheck.allowed) {
+      logger.warn('GET /api/files/hls - Access denied', { fileId, relativePath, userId: session.user.id });
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+    relativePath = accessCheck.normalizedPath;
+
     const locked = await requireFolderUnlock(req, relativePath);
     if (locked) return locked;
 
@@ -99,8 +124,17 @@ export async function GET(req, { params }) {
     const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
     const fullPath = join(uploadsDir, relativePath, fileId);
 
-    // Derive the HLS output directory for this file
-    const { hlsDir } = getHlsOutputDir(fullPath, cacheDir);
+    // Derive the HLS output directory for this version of the file
+    let hash, hlsDir;
+    try {
+      ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, variant));
+    } catch {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Someone is watching: keeps a running transcode from being stopped as
+    // idle while another video waits for the encoder.
+    touchHlsJob(hash);
 
     // Ensure the HLS directory exists
     try {
@@ -117,16 +151,23 @@ export async function GET(req, { params }) {
       // stall hls.js when using the pre-written VOD manifest.
       const segmentPath = join(hlsDir, segment);
 
-      let segmentStat;
-      try {
-        segmentStat = await waitForSegment(hlsDir, segmentPath, 30_000, req.signal);
-      } catch (err) {
-        if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
-        if (err.message === 'timeout') {
-          logger.warn('GET /api/files/hls - Segment not ready after 30s', { segment });
-          return NextResponse.json({ error: 'Segment not ready' }, { status: 504 });
+      let segmentStat = await stat(segmentPath).catch(() => null);
+      if (!segmentStat) {
+        // Not written yet. If it is far ahead of the encoder (the viewer
+        // seeked), this restarts ffmpeg at it rather than leaving the request
+        // to wait for an encode that will not get there within 30 s.
+        const index = /^seg(\d+)\./.exec(segment);
+        if (index) requestHlsSegment(hash, parseInt(index[1], 10));
+        try {
+          segmentStat = await waitForSegment(hlsDir, segmentPath, 30_000, req.signal);
+        } catch (err) {
+          if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+          if (err.message === 'timeout') {
+            logger.warn('GET /api/files/hls - Segment not ready after 30s', { segment });
+            return NextResponse.json({ error: 'Segment not ready' }, { status: 504 });
+          }
+          throw err;
         }
-        throw err;
       }
 
       const fileSize = segmentStat.size;
@@ -146,21 +187,21 @@ export async function GET(req, { params }) {
         return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath, { start, end })), {
           status: 206,
           headers: {
-            'Content-Type': 'video/mp2t',
+            'Content-Type': segmentContentType(segment),
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': chunkSize.toString(),
-            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Cache-Control': 'private, max-age=31536000, immutable',
           },
         });
       }
 
       return new NextResponse(nodeToWebStream(fs.createReadStream(segmentPath)), {
         headers: {
-          'Content-Type': 'video/mp2t',
+          'Content-Type': segmentContentType(segment),
           'Content-Length': fileSize.toString(),
           'Accept-Ranges': 'bytes',
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Cache-Control': 'private, max-age=31536000, immutable',
         },
       });
     }
@@ -204,8 +245,14 @@ export async function GET(req, { params }) {
         if (incomingPin) pinSuffix = `&folderPin=${encodeURIComponent(incomingPin)}`;
       }
     }
-    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}${pinSuffix}&segment=`;
-    const m3u8Rewritten = m3u8Raw.replace(/^(seg\d+\.ts)$/gm, `${baseUrl}$1`);
+    // `v` names this rendition, so segment URLs change when the file is
+    // replaced and the browser's immutable copies of the old ones go unused.
+    const variantSuffix = variant === 'h264' ? '' : `&r=${variant}`;
+    const baseUrl = `/api/files/hls/${encodeURIComponent(fileId)}?path=${encodeURIComponent(relativePath)}${pinSuffix}${variantSuffix}&v=${hash}&segment=`;
+    const m3u8Rewritten = m3u8Raw
+      .replace(/^(seg\d+\.(?:ts|m4s))$/gm, `${baseUrl}$1`)
+      // fMP4 renditions name their init segment in a tag, not on a line of its own.
+      .replace(/^#EXT-X-MAP:URI="(init\.mp4)"/m, `#EXT-X-MAP:URI="${baseUrl}$1"`);
 
     return new NextResponse(m3u8Rewritten, {
       headers: {

@@ -11,7 +11,7 @@ import {
 import { isViewableFile } from '@/lib/getFileType';
 import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/lib/clientFileUtils';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
-import { getShareThumbnailUrl } from '@/lib/api/files';
+import { getShareThumbnailUrl, fileVersion } from '@/lib/api/files';
 import { useTranslation } from '@/components/LanguageProvider';
 
 const BREAKPOINT = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
@@ -43,7 +43,7 @@ function KindIcon({ kind, size = 36 }) {
   return <Icon size={size} />;
 }
 
-function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword, isVideoFile }) {
+function ShareThumbnail({ token, fileName, version, currentSubPath, submittedPassword, isVideoFile }) {
   const ref = useRef(null);
   const [isInView, setIsInView] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -62,7 +62,7 @@ function ShareThumbnail({ token, fileName, currentSubPath, submittedPassword, is
     return () => observer.disconnect();
   }, []);
 
-  const thumbnailUrl = isInView ? getShareThumbnailUrl(token, fileName, currentSubPath, submittedPassword) : null;
+  const thumbnailUrl = isInView ? getShareThumbnailUrl(token, fileName, currentSubPath, submittedPassword, version) : null;
 
   return (
     <div ref={ref} style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -427,6 +427,7 @@ const GridItem = memo(
                 <ShareThumbnail
                   token={token}
                   fileName={item.name}
+                  version={fileVersion(item)}
                   currentSubPath={currentSubPath}
                   submittedPassword={submittedPassword}
                   isVideoFile={isVideo(item.name)}

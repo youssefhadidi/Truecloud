@@ -5,16 +5,20 @@ import { requireAuthNoActivity } from '@/lib/authCheck';
 import { resolve, join, extname } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { readComponentsConfig } from '@/lib/componentsConfig';
 import { isCacheReady } from '@/lib/transcodeManager';
 import { isNativelyPlayable } from '@/lib/ffmpegUtils';
 import { getProbeInfo, peekProbeInfo } from '@/lib/probeCache';
 import { VIDEO_EXTENSIONS } from '@/lib/extensions.mjs';
+import { readTranscodingConfig } from '@/lib/transcodingConfig';
+import { chooseHlsVariant, parseHevcSupport } from '@/lib/hlsEncode.mjs';
 import {
   isHlsCacheComplete,
-  getHlsSegmentCount,
+  isHlsEarlyPlaybackReady,
   getHlsJobStatus,
-  getHlsHash,
+  getHlsOutputDir,
+  touchHlsJob,
 } from '@/lib/hlsManager';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -24,18 +28,30 @@ const VIDEO_EXTENSIONS_SET = new Set(VIDEO_EXTENSIONS);
 
 export async function GET(req, { params }) {
   try {
-    const { error } = await requireAuthNoActivity();
+    const { session, error } = await requireAuthNoActivity();
     if (error) return error;
 
     const resolvedParams = await params;
     const fileId = safeDecodeURIComponent(resolvedParams.id);
 
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
 
     if (relativePath.includes('..') || fileId.includes('..')) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+    if (!accessCheck.allowed) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+    relativePath = accessCheck.normalizedPath;
 
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const cacheDir = resolve(process.cwd(), STREAM_CACHE_DIR);
@@ -64,37 +80,63 @@ export async function GET(req, { params }) {
         return NextResponse.json({ status: 'ready' });
       }
 
+      // Which rendition this viewer gets — it names the directory to look in,
+      // so it must match what the stream route will start. Only a browser
+      // that can decode HEVC can get anything but the default, and only then
+      // does the choice need the codecs; the probe is cached, and step 5 below
+      // would run it on this same poll anyway.
+      let variant = 'h264';
+      const hevcSupport = parseHevcSupport(url.searchParams.get('hevc'));
+      if (hevcSupport) {
+        try {
+          const [probe, transcodingConfig] = await Promise.all([
+            cachedProbe ?? getProbeInfo(fullPath, req.signal),
+            readTranscodingConfig(),
+          ]);
+          if (isNativelyPlayable(fileExt, probe)) return NextResponse.json({ status: 'native' });
+          variant = chooseHlsVariant(probe, { hevcSupport, maxHeight: transcodingConfig.maxHeight });
+        } catch (err) {
+          if (err.name === 'AbortError') return new NextResponse(null, { status: 499 });
+          logger.warn('transcode-status: probe failed', { fullPath, error: err.message });
+        }
+      }
+
       // Build the hlsUrl used for early and complete playback
       const params = new URLSearchParams({ path: relativePath });
+      if (variant !== 'h264') params.set('r', variant);
       const hlsUrl = `/api/files/hls/${encodeURIComponent(fileId)}?${params}`;
 
+      let hash, hlsDir;
+      try {
+        ({ hash, hlsDir } = await getHlsOutputDir(fullPath, cacheDir, variant));
+      } catch {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+      // The player polls this while a transcode runs; see touchHlsJob.
+      touchHlsJob(hash);
+
       // 2. HLS fully complete (manifest has #EXT-X-ENDLIST)
-      const hlsComplete = await isHlsCacheComplete(fullPath, cacheDir);
+      const hlsComplete = await isHlsCacheComplete(fullPath, cacheDir, variant);
       if (hlsComplete) {
         return NextResponse.json({ status: 'ready', hlsUrl });
       }
 
-      // 3. HLS has >= 2 segments AND an active in-memory job — start early playback.
-      //    If segments exist but no active job (pre-cached state, manifest deleted),
-      //    fall through to 'pending' so the stream route starts on-demand transcoding.
-      const segCount = await getHlsSegmentCount(fullPath, cacheDir);
-      if (segCount >= 2) {
-        const hash = getHlsHash(fullPath);
-        const job = getHlsJobStatus(hash);
-        if (job.status === 'transcoding') {
-          return NextResponse.json({
-            status: 'transcoding',
-            progress: job.progress,
-            queuePosition: job.queuePosition,
-            hlsUrl,
-          });
-        }
-        // Segments exist but no active job — fall through to pending
+      // 3. A running job with a manifest the player can load — start early
+      //    playback. The HLS route holds each segment request until ffmpeg
+      //    writes it, so there is no need to wait for segments here. Leftover
+      //    segments without an active job (pre-cached state) fall through to
+      //    'pending' so the stream route starts on-demand transcoding.
+      const job = getHlsJobStatus(hash);
+      if (await isHlsEarlyPlaybackReady(hash, hlsDir)) {
+        return NextResponse.json({
+          status: 'transcoding',
+          progress: job.progress,
+          queuePosition: 0,
+          hlsUrl,
+        });
       }
 
       // 4. In-memory HLS job status
-      const hash = getHlsHash(fullPath);
-      const job = getHlsJobStatus(hash);
 
       if (job.status === 'transcoding') {
         // queuePosition > 0 means this job hasn't reached the encoder yet — it

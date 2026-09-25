@@ -6,6 +6,7 @@ import { readFile } from 'fs/promises';
 import { join, resolve } from 'node:path';
 import { logger } from '@/lib/logger';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
+import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { listSubtitleTracks, extractSubtitleVtt } from '@/lib/subtitles';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 
@@ -21,19 +22,31 @@ const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
  */
 export async function GET(req, { params }) {
   try {
-    const { error } = await requireAuthNoActivity();
+    const { session, error } = await requireAuthNoActivity();
     if (error) return error;
 
     const resolvedParams = await params;
     const fileId = safeDecodeURIComponent(resolvedParams.id);
 
     const url = new URL(req.url);
-    const relativePath = url.searchParams.get('path') || '';
+    let relativePath = url.searchParams.get('path') || '';
     const trackParam = url.searchParams.get('track');
 
     if (relativePath.includes('..') || fileId.includes('..')) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    const isRoot = await hasRootAccess(session.user.id);
+    const accessCheck = checkPathAccess({
+      userId: session.user.id,
+      path: relativePath,
+      operation: 'read',
+      isRootUser: isRoot,
+    });
+    if (!accessCheck.allowed) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
+    }
+    relativePath = accessCheck.normalizedPath;
 
     const locked = await requireFolderUnlock(req, relativePath);
     if (locked) return locked;

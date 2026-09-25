@@ -2,17 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
-import { stat, mkdir, readFile, writeFile } from 'fs/promises';
+import { stat, mkdir, readFile, writeFile, rename, unlink } from 'fs/promises';
 import { join, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 import { Semaphore } from '@/lib/semaphore';
 import { thumbnailCache } from '@/lib/thumbnailCache';
+import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
@@ -84,6 +85,18 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Only images can be optimized' }, { status: 400 });
     }
 
+    // Validators describe the source file: every variant of it changes exactly
+    // when it does, and each variant has its own URL.
+    const validators = buildValidators(fileStats);
+    const cacheHeaders = {
+      ETag: validators.etag,
+      'Last-Modified': validators.lastModified,
+      'Cache-Control': mediaCacheControl(url),
+    };
+    if (evaluateConditional(req, validators, false).notModified) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+
     // Skip optimization for SVG or very small files — serve as-is
     if (fileExt === '.svg' || fileStats.size < 100000) {
       const fileBuffer = await readFile(filePath);
@@ -92,20 +105,13 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': fileStats.size.toString(),
-          'Cache-Control': 'public, max-age=31536000',
+          ...cacheHeaders,
         },
       });
     }
 
     // Generate cache key based on file path, quality, dimensions, format, and file mtime
     const cacheKey = createHash('md5').update(`${filePath}-${quality}-${maxWidth}-${maxHeight}-${format}-${fileStats.mtimeMs}`).digest('hex');
-    const etag = `"${cacheKey}"`;
-
-    // Check If-None-Match header for conditional requests
-    const ifNoneMatch = req.headers.get('if-none-match');
-    if (ifNoneMatch === etag) {
-      return new NextResponse(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'public, max-age=31536000' } });
-    }
 
     // Create cache path preserving directory structure
     const relativeCacheDir = join(relativePath);
@@ -121,8 +127,7 @@ export async function GET(req, { params }) {
         headers: {
           'Content-Type': contentType,
           'Content-Length': memoryCached.length.toString(),
-          'Cache-Control': 'public, max-age=31536000',
-          ETag: etag,
+          ...cacheHeaders,
           'X-Cache': 'MEMORY',
         },
       });
@@ -139,8 +144,7 @@ export async function GET(req, { params }) {
           headers: {
             'Content-Type': contentType,
             'Content-Length': cachedBuffer.length.toString(),
-            'Cache-Control': 'public, max-age=31536000',
-            ETag: etag,
+            ...cacheHeaders,
             'X-Cache': 'HIT',
           },
         });
@@ -189,18 +193,18 @@ export async function GET(req, { params }) {
       optimizationSemaphore.release();
     }
 
-    // Store in memory cache + fire-and-forget disk cache write
+    // Store in memory cache + fire-and-forget disk cache write. Written to a
+    // temp name and renamed, so a concurrent request that finds the file never
+    // reads (and memory-caches) a half-written one.
     if (!optimizationFailed) {
       thumbnailCache.set(cachePath, optimizedBuffer);
-      writeFile(cachePath, optimizedBuffer)
+      const tmpPath = `${cachePath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
+      mkdir(cacheDir, { recursive: true })
+        .then(() => writeFile(tmpPath, optimizedBuffer))
+        .then(() => rename(tmpPath, cachePath))
         .catch(async (cacheError) => {
-          // Ensure cache directory exists on first error
-          try {
-            await mkdir(cacheDir, { recursive: true });
-            await writeFile(cachePath, optimizedBuffer);
-          } catch (retryError) {
-            console.error('Failed to cache optimized image:', retryError);
-          }
+          await unlink(tmpPath).catch(() => {});
+          console.error('Failed to cache optimized image:', cacheError);
         });
     }
 
@@ -209,8 +213,9 @@ export async function GET(req, { params }) {
       headers: {
         'Content-Type': contentType,
         'Content-Length': optimizedBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=31536000',
-        ETag: etag,
+        // A failed optimization serves the original instead; don't let the
+        // browser pin that in place of the real variant.
+        ...(optimizationFailed ? { 'Cache-Control': 'no-store' } : cacheHeaders),
         'X-Cache': optimizationFailed ? 'ORIGINAL' : 'MISS',
       },
     });
