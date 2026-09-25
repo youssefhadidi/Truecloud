@@ -1,32 +1,34 @@
 /** @format */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { isImage } from '@/lib/clientFileUtils';
+
+// A touch device is judged by its short edge so a phone stays "mobile" in
+// landscape — flipping on rotation would swap the viewer's layout mid-playback.
+function detectMobile() {
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  return window.innerWidth < 768 || (coarse && Math.min(window.innerWidth, window.innerHeight) < 768);
+}
+
+function savedFullscreen() {
+  try {
+    const saved = localStorage.getItem('mediaViewerFullscreen');
+    return saved !== null ? Boolean(JSON.parse(saved)) : false;
+  } catch {
+    return false;
+  }
+}
 
 export function useMediaViewerState(viewerFile, viewableFiles) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  // Read synchronously rather than in an effect: the viewer mounts when a file
+  // is opened, and an effect would first paint it windowed, then switch it to
+  // fullscreen (on phones, or when that was the last choice).
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof window !== 'undefined' && savedFullscreen());
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && detectMobile());
   const stripRef = useRef(null);
   const programmaticScrollRef = useRef(false);
 
-  // Initialize fullscreen state from localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('mediaViewerFullscreen');
-      if (saved !== null) {
-        setIsFullscreen(JSON.parse(saved));
-      }
-    }
-  }, []);
-
-  // Detect mobile device. A touch device is judged by its short edge so a
-  // phone stays "mobile" in landscape — flipping on rotation would swap the
-  // viewer's layout mid-playback.
-  useEffect(() => {
-    const coarse = window.matchMedia('(pointer: coarse)');
-    const checkMobile = () =>
-      setIsMobile(window.innerWidth < 768 || (coarse.matches && Math.min(window.innerWidth, window.innerHeight) < 768));
-    checkMobile();
+    const checkMobile = () => setIsMobile(detectMobile());
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
@@ -60,6 +62,19 @@ export function useMediaViewerState(viewerFile, viewableFiles) {
   };
 }
 
+/**
+ * Thumbnail strip layout, read from its CSS: thumbnail i sits at
+ * padLeft + i * pitch. ThumbnailStrip only mounts the thumbnails near the
+ * visible part, so positions are computed from the index rather than read off
+ * elements that may not exist.
+ */
+export function stripGeometry(strip) {
+  const style = getComputedStyle(strip);
+  const width = parseFloat(style.getPropertyValue('--mv-thumb-size')) || 64;
+  const gap = parseFloat(style.getPropertyValue('--mv-strip-gap')) || 0;
+  return { width, gap, pitch: width + gap, padLeft: parseFloat(style.paddingLeft) || 0 };
+}
+
 export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile, viewableFiles, onSelectFile) {
   // Auto-center the active thumbnail in the strip.
   //
@@ -72,11 +87,11 @@ export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip || !viewerFile) return undefined;
-    const active = strip.querySelector('[data-active="true"]');
-    if (!active) return undefined;
+    const index = viewableFiles.findIndex((f) => f.id === viewerFile.id);
+    if (index < 0) return undefined;
     programmaticScrollRef.current = true;
-    // Same coordinate space as getCenteredFile (offsetLeft vs scrollLeft).
-    const target = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+    const { width, pitch, padLeft } = stripGeometry(strip);
+    const target = padLeft + index * pitch - (strip.clientWidth - width) / 2;
     strip.scrollTo({ left: target, behavior: 'instant' });
     const id = setTimeout(() => {
       programmaticScrollRef.current = false;
@@ -87,21 +102,11 @@ export function useMediaViewerScroll(stripRef, programmaticScrollRef, viewerFile
   // Find the file whose thumbnail is closest to the strip center
   const getCenteredFile = useCallback(() => {
     const strip = stripRef.current;
-    if (!strip) return null;
+    if (!strip || viewableFiles.length === 0) return null;
+    const { width, pitch, padLeft } = stripGeometry(strip);
     const centerX = strip.scrollLeft + strip.clientWidth / 2;
-    let closest = null;
-    let closestDist = Infinity;
-    for (const child of strip.children) {
-      const childCenter = child.offsetLeft + child.offsetWidth / 2;
-      const dist = Math.abs(childCenter - centerX);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = child;
-      }
-    }
-    if (!closest) return null;
-    const fileId = closest.dataset.fileId;
-    return viewableFiles.find((f) => f.id === fileId) || null;
+    const index = Math.round((centerX - padLeft - width / 2) / pitch);
+    return viewableFiles[Math.min(viewableFiles.length - 1, Math.max(0, index))];
   }, [stripRef, viewableFiles]);
 
   // Change the viewed file once scrolling settles. Debounced (not a timer per

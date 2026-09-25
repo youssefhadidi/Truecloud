@@ -3,10 +3,23 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Hls from 'hls.js';
 import { FiClock, FiAlertTriangle, FiDownload, FiMessageSquare } from 'react-icons/fi';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
 import { useTranslation } from '@/components/LanguageProvider';
+
+// hls.js is a few hundred KB and only needed for transcoded (HLS) playback;
+// files the browser plays natively never load it. Memoized so the poll's early
+// prefetch and the player share one download.
+let hlsPromise = null;
+function loadHls() {
+  if (!hlsPromise) {
+    hlsPromise = import('hls.js').then((m) => m.default);
+    hlsPromise.catch(() => {
+      hlsPromise = null; // let a later attempt retry a failed download
+    });
+  }
+  return hlsPromise;
+}
 
 function getExt(filename) {
   const dot = filename.lastIndexOf('.');
@@ -451,129 +464,152 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   useEffect(() => {
     if (!hlsUrl || !videoRef.current) return undefined;
 
-    if (!Hls.isSupported()) {
-      videoRef.current.src = hlsUrl;
-      return undefined;
-    }
+    let cancelled = false;
+    let detach = null;
 
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
+    loadHls()
+      .then((Hls) => {
+        if (cancelled || !videoRef.current) return;
+        detach = attachHls(Hls);
+      })
+      .catch((err) => {
+        console.error('[hls] failed to load hls.js', err);
+        if (!cancelled && mountedRef.current) {
+          setHlsUrl(null);
+          setStatus('failed');
+        }
+      });
 
-    const hls = new Hls({
-      liveSyncDurationCount: 3,
-      manifestLoadingTimeOut: 10000,
-      manifestLoadingMaxRetry: 6,
-      manifestLoadingRetryDelay: 1000,
-      // Fetch the first segment while the playlist is still being parsed,
-      // rather than after — one round trip off the time to first frame.
-      startFragPrefetch: true,
-      // Buffer a minute ahead instead of the default 30 s, so a slow patch on
-      // the network (or the encoder catching up after a seek) is absorbed
-      // without a stall.
-      maxBufferLength: 60,
-      // Playback now starts before ffmpeg has written the first segment, and the
-      // HLS route holds a segment request up to 30 s until it exists. hls.js's
-      // default 10 s time-to-first-byte would abort and refetch mid-wait, so
-      // match the server. Rest is the hls.js default — this policy is replaced
-      // whole, not merged.
-      fragLoadPolicy: {
-        default: {
-          maxTimeToFirstByteMs: 30000,
-          maxLoadTimeMs: 120000,
-          timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
-          errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
-        },
-      },
-    });
-
-    // Without this the player fails silently: a stalled or undecodable segment
-    // shows up only as the same .ts being refetched forever in the network tab,
-    // with nothing naming the cause. `details` is the useful field — e.g.
-    // bufferAppendError, fragParsingError, levelLoadTimeOut.
-    let recoveries = 0;
-    let repeatedFragErrors = 0;
-    let lastErrorSn = -1;
-
-    // Tearing down has to be idempotent: giving up inside the ERROR handler and
-    // the effect cleanup can both run, and destroying hls.js twice throws.
-    let destroyed = false;
-    const teardown = () => {
-      if (destroyed) return;
-      destroyed = true;
-      hls.destroy();
-      if (hlsRef.current === hls) hlsRef.current = null;
+    return () => {
+      cancelled = true;
+      detach?.();
     };
 
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      const { type, details, fatal, frag, sourceBufferName } = data;
-      // Error/DOMException properties are non-enumerable, so `data.error` prints
-      // as `{}` when the event object is logged or serialised — the one field
-      // that says *why* an append was rejected. Pull it out by hand.
-      const cause = data.error ? `${data.error.name}: ${data.error.message}` : '';
-      console[fatal ? 'error' : 'warn'](
-        `[hls] ${fatal ? 'fatal' : 'non-fatal'} ${type}: ${details}` +
-          (sourceBufferName ? ` [${sourceBufferName}]` : '') +
-          (frag ? ` sn=${frag.sn}` : '') +
-          (cause ? ` — ${cause}` : ''),
-        data,
-      );
+    function attachHls(Hls) {
+      if (!Hls.isSupported()) {
+        videoRef.current.src = hlsUrl;
+        return null;
+      }
 
-      if (!fatal) {
-        // hls.js retries non-fatal errors itself, with no cap when the retry
-        // keeps failing the same way. A segment the browser cannot decode
-        // therefore loops forever, and that loop — not the server — is what
-        // floods the network tab with identical requests. Break it.
-        const sn = frag?.sn ?? -1;
-        repeatedFragErrors = sn === lastErrorSn ? repeatedFragErrors + 1 : 1;
-        lastErrorSn = sn;
-        if (repeatedFragErrors >= 5) {
-          console.error(`[hls] segment ${sn} failed ${repeatedFragErrors}x (${details}) — stopping retry loop`);
-          // Clearing hlsUrl unmounts the <video>, which is what lets the failure
-          // card render — the hlsUrl branch returns the player before any status
-          // is consulted, so without this the user just gets a dead black frame.
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      const hls = new Hls({
+        liveSyncDurationCount: 3,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 6,
+        manifestLoadingRetryDelay: 1000,
+        // Fetch the first segment while the playlist is still being parsed,
+        // rather than after — one round trip off the time to first frame.
+        startFragPrefetch: true,
+        // Buffer a minute ahead instead of the default 30 s, so a slow patch on
+        // the network (or the encoder catching up after a seek) is absorbed
+        // without a stall.
+        maxBufferLength: 60,
+        // Playback now starts before ffmpeg has written the first segment, and the
+        // HLS route holds a segment request up to 30 s until it exists. hls.js's
+        // default 10 s time-to-first-byte would abort and refetch mid-wait, so
+        // match the server. Rest is the hls.js default — this policy is replaced
+        // whole, not merged.
+        fragLoadPolicy: {
+          default: {
+            maxTimeToFirstByteMs: 30000,
+            maxLoadTimeMs: 120000,
+            timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
+            errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+          },
+        },
+      });
+
+      // Without this the player fails silently: a stalled or undecodable segment
+      // shows up only as the same .ts being refetched forever in the network tab,
+      // with nothing naming the cause. `details` is the useful field — e.g.
+      // bufferAppendError, fragParsingError, levelLoadTimeOut.
+      let recoveries = 0;
+      let repeatedFragErrors = 0;
+      let lastErrorSn = -1;
+
+      // Tearing down has to be idempotent: giving up inside the ERROR handler and
+      // the effect cleanup can both run, and destroying hls.js twice throws.
+      let destroyed = false;
+      const teardown = () => {
+        if (destroyed) return;
+        destroyed = true;
+        hls.destroy();
+        if (hlsRef.current === hls) hlsRef.current = null;
+      };
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        const { type, details, fatal, frag, sourceBufferName } = data;
+        // Error/DOMException properties are non-enumerable, so `data.error` prints
+        // as `{}` when the event object is logged or serialised — the one field
+        // that says *why* an append was rejected. Pull it out by hand.
+        const cause = data.error ? `${data.error.name}: ${data.error.message}` : '';
+        console[fatal ? 'error' : 'warn'](
+          `[hls] ${fatal ? 'fatal' : 'non-fatal'} ${type}: ${details}` +
+            (sourceBufferName ? ` [${sourceBufferName}]` : '') +
+            (frag ? ` sn=${frag.sn}` : '') +
+            (cause ? ` — ${cause}` : ''),
+          data,
+        );
+
+        if (!fatal) {
+          // hls.js retries non-fatal errors itself, with no cap when the retry
+          // keeps failing the same way. A segment the browser cannot decode
+          // therefore loops forever, and that loop — not the server — is what
+          // floods the network tab with identical requests. Break it.
+          const sn = frag?.sn ?? -1;
+          repeatedFragErrors = sn === lastErrorSn ? repeatedFragErrors + 1 : 1;
+          lastErrorSn = sn;
+          if (repeatedFragErrors >= 5) {
+            console.error(`[hls] segment ${sn} failed ${repeatedFragErrors}x (${details}) — stopping retry loop`);
+            // Clearing hlsUrl unmounts the <video>, which is what lets the failure
+            // card render — the hlsUrl branch returns the player before any status
+            // is consulted, so without this the user just gets a dead black frame.
+            teardown();
+            if (mountedRef.current) {
+              setHlsUrl(null);
+              setStatus('failed');
+            }
+          }
+          return;
+        }
+
+        // Cap recovery attempts. hls.startLoad()/recoverMediaError() re-enter the
+        // same failing fragment, so an unbounded handler turns one bad segment
+        // into the request storm it was meant to fix.
+        if (recoveries >= 3) {
+          console.error('[hls] giving up after 3 recovery attempts', { details });
+          teardown();
+          if (mountedRef.current) {
+            setHlsUrl(null);
+            setStatus('failed');
+          }
+          return;
+        }
+        recoveries++;
+
+        if (type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+        } else if (type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
           teardown();
           if (mountedRef.current) {
             setHlsUrl(null);
             setStatus('failed');
           }
         }
-        return;
-      }
+      });
 
-      // Cap recovery attempts. hls.startLoad()/recoverMediaError() re-enter the
-      // same failing fragment, so an unbounded handler turns one bad segment
-      // into the request storm it was meant to fix.
-      if (recoveries >= 3) {
-        console.error('[hls] giving up after 3 recovery attempts', { details });
-        teardown();
-        if (mountedRef.current) {
-          setHlsUrl(null);
-          setStatus('failed');
-        }
-        return;
-      }
-      recoveries++;
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(videoRef.current);
+      hlsRef.current = hls;
 
-      if (type === Hls.ErrorTypes.NETWORK_ERROR) {
-        hls.startLoad();
-      } else if (type === Hls.ErrorTypes.MEDIA_ERROR) {
-        hls.recoverMediaError();
-      } else {
-        teardown();
-        if (mountedRef.current) {
-          setHlsUrl(null);
-          setStatus('failed');
-        }
-      }
-    });
-
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(videoRef.current);
-    hlsRef.current = hls;
-
-    return teardown;
+      return teardown;
+    }
   }, [hlsUrl]);
 
   const checkStatus = useCallback(
@@ -593,6 +629,8 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         const data = await res.json();
         if (!mountedRef.current) return null;
         setStatus(data.status);
+        // HLS playback is coming: fetch hls.js now, while the transcode starts.
+        if (data.status === 'pending' || data.status === 'transcoding' || data.hlsUrl) loadHls().catch(() => {});
         if (data.progress !== undefined) setProgress(data.progress);
         setQueuePosition(data.queuePosition ?? 0);
         if (data.hlsUrl) setHlsUrl(appendFolderPinToUrl(data.hlsUrl, targetPath));

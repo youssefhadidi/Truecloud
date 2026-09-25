@@ -21,6 +21,33 @@ const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 // Semaphore to limit concurrent file stat calls (prevent overwhelming NAS/network storage)
 const statSemaphore = new Semaphore(20);
 
+// The listing only uses the torrent service to hide half-downloaded entries and
+// seed the download cards (which then follow the WebSocket), so it doesn't wait
+// long for it: a hung service used to hold every folder open for the client's
+// 30 s timeout. After a timeout it isn't asked again for a while, so a service
+// that stays hung doesn't cost each listing the full wait either.
+const DOWNLOADS_TIMEOUT_MS = 1500;
+const DOWNLOADS_BACKOFF_MS = 15_000;
+let downloadsSkipUntil = 0;
+
+async function fetchFolderDownloads(relativePath) {
+  if (Date.now() < downloadsSkipUntil) return [];
+  try {
+    const [active, waiting] = await Promise.all([
+      getActiveDownloads(relativePath, { timeoutMs: DOWNLOADS_TIMEOUT_MS }),
+      getWaitingDownloads(0, 100, relativePath, { timeoutMs: DOWNLOADS_TIMEOUT_MS }),
+    ]);
+    return [...active, ...waiting];
+  } catch (downloadError) {
+    if (/timed out/.test(downloadError.message)) downloadsSkipUntil = Date.now() + DOWNLOADS_BACKOFF_MS;
+    logger.warn('GET /api/files - Error fetching downloads', {
+      path: relativePath,
+      error: downloadError.message,
+    });
+    return [];
+  }
+}
+
 // GET - List files
 export async function GET(req) {
   const startTime = Date.now();
@@ -110,38 +137,12 @@ export async function GET(req) {
       return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
-    // Kick off the torrent service call in parallel with the directory walk.
-    // Why: today readdir → stat-all → fetch downloads ran sequentially, so the
-    // torrent service latency was always on the critical path. Overlapping it
-    // with the filesystem work hides it under the slower of the two.
-    const downloadsPromise = (async () => {
-      try {
-        const [active, waiting] = await Promise.all([
-          getActiveDownloads(relativePath),
-          getWaitingDownloads(0, 100, relativePath),
-        ]);
-        return [...active, ...waiting];
-      } catch (downloadError) {
-        logger.warn('GET /api/files - Error fetching downloads', {
-          path: relativePath,
-          error: downloadError.message,
-        });
-        return [];
-      }
-    })();
+    // Kick off the torrent service call in parallel with the directory walk:
+    // the listing waits for whichever of the two is slower, not their sum.
+    const downloadsPromise = fetchFolderDownloads(relativePath);
 
     // Read entries with file types so we can filter without statting first.
     const entries = await readdir(targetDir, { withFileTypes: true });
-
-    // Resolve downloads before the stat fan-out so we can pre-filter the
-    // entries that would have been dropped anyway. Each skipped entry is one
-    // saved stat() syscall — significant on large folders / network storage.
-    const downloads = await downloadsPromise;
-    const downloadingNames = new Set(
-      downloads
-        .filter((d) => d.status === 'active' || d.status === 'paused')
-        .map((d) => d.name),
-    );
 
     // Windows-generated system files that clutter listings without ever being
     // user content. Filtered pre-stat so we never pay for them.
@@ -153,7 +154,6 @@ export async function GET(req) {
       const name = entry.name;
       if (name.startsWith('.')) return false;
       if (HIDDEN_NAMES.has(name)) return false;
-      if (downloadingNames.has(name)) return false;
       // Cache dirs configured inside UPLOAD_DIR are generated data, not content
       if (isCacheEntry(relativePath, name)) return false;
       if (atRoot) {
@@ -200,17 +200,26 @@ export async function GET(req) {
 
     // Stat the surviving entries with the existing concurrency limit. The
     // user lookup runs in parallel because it's an independent DB query.
-    const [userMap, lockedPaths, uploaderOf, files] = await Promise.all([
+    const [userMap, lockedPaths, uploaderOf, downloads, statted] = await Promise.all([
       userLookupPromise,
       lockedPathsPromise,
       uploaderLookupPromise,
+      downloadsPromise,
       Promise.all(
         visibleEntries.map(async (entry) => {
           await statSemaphore.acquire();
           try {
             const name = entry.name;
             const filePath = join(targetDir, name);
-            const stats = await stat(filePath);
+            let stats;
+            try {
+              stats = await stat(filePath);
+            } catch (statError) {
+              // Gone since readdir (deleted, renamed, a torrent's temp file):
+              // leave it out rather than fail the whole listing.
+              if (statError.code === 'ENOENT') return null;
+              throw statError;
+            }
 
             // Normalize path for the frontend: hide the uploads/ prefix only,
             // preserve user_123/ and all sub-folder structure.
@@ -232,6 +241,16 @@ export async function GET(req) {
         }),
       ),
     ]);
+
+    // Entries still being downloaded are shown as download cards instead. The
+    // few stats spent on them are cheaper than holding the stat fan-out until
+    // the torrent service answers.
+    const downloadingNames = new Set(
+      downloads
+        .filter((d) => d.status === 'active' || d.status === 'paused')
+        .map((d) => d.name),
+    );
+    const files = statted.filter((f) => f && !downloadingNames.has(f.name));
 
     // Patch displayName for user folders now that userMap is resolved.
     if (atRoot && userIdsToLookup.length > 0) {

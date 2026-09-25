@@ -47,7 +47,6 @@ import { useNotifications } from '@/contexts/NotificationsContext';
 import { useActiveDownloads } from '@/hooks/useActiveDownloads';
 import { useFileChanges } from '@/hooks/useFileChanges';
 import {
-  useTransfers,
   useTransferring,
   useFileOpsState,
   useFileOpsDispatch,
@@ -112,8 +111,8 @@ export function useFilesPage(status) {
   const fileOps = useFileOpsState();
   const { setDeletingFile, setRenamingFile, setNewFileName, setProcessingFile } = useFileOpsDispatch();
 
-  // Transfer state from Redux
-  const reduxTransfers = useTransfers();
+  // Only the boolean: per-file upload progress is read by the transfers panel
+  // itself, so progress events don't re-render the whole file browser.
   const reduxTransferring = useTransferring();
 
   // Modal/Viewer state from Redux
@@ -286,7 +285,11 @@ export function useFilesPage(status) {
 
   // Get real-time download progress via WebSocket (has priority over API downloads)
   // Pass apiDownloads to initialize state without making a separate API call
-  const { downloads: wsDownloads, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads(apiDownloads);
+  // Filtered to the browsed folder, changing only when its set of downloads does
+  // (the download cards follow their own progress).
+  const { downloads: wsDownloads, pauseDownload, resumeDownload, removeDownload } = useActiveDownloads(apiDownloads, {
+    path: navigation.currentPath,
+  });
 
   // Listen for file changes via WebSocket and invalidate cache
   useFileChanges();
@@ -472,10 +475,8 @@ export function useFilesPage(status) {
     selectionMode: selection.selectionMode,
     selectedFiles: selection.selectedFiles,
 
-    // Transfer state from Redux (uploads/downloads)
+    // Transfer state from Redux
     uploading: reduxTransferring,
-    uploads: reduxTransfers.filter((t) => t.type === 'upload'),
-    transfers: reduxTransfers,
 
     // Other state
     folderDisplayNames,

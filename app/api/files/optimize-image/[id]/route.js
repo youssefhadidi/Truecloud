@@ -14,7 +14,7 @@ import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 import { Semaphore } from '@/lib/semaphore';
-import { thumbnailCache } from '@/lib/thumbnailCache';
+import { optimizedImageCache } from '@/lib/thumbnailCache';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -122,7 +122,7 @@ export async function GET(req, { params }) {
     const cacheDir = dirname(cachePath);
 
     // Fast path: check memory cache first
-    const memoryCached = thumbnailCache.get(cachePath);
+    const memoryCached = optimizedImageCache.get(cachePath);
     if (memoryCached) {
       const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
       return new NextResponse(memoryCached, {
@@ -139,7 +139,7 @@ export async function GET(req, { params }) {
     // found here was made from the current version.
     try {
       const cachedBuffer = await readFile(cachePath);
-      thumbnailCache.set(cachePath, cachedBuffer);
+      optimizedImageCache.set(cachePath, cachedBuffer);
       const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
       return new NextResponse(cachedBuffer, {
         headers: {
@@ -197,7 +197,7 @@ export async function GET(req, { params }) {
     // temp name and renamed, so a concurrent request that finds the file never
     // reads (and memory-caches) a half-written one.
     if (!optimizationFailed) {
-      thumbnailCache.set(cachePath, optimizedBuffer);
+      optimizedImageCache.set(cachePath, optimizedBuffer);
       const tmpPath = `${cachePath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
       mkdir(cacheDir, { recursive: true })
         .then(() => writeFile(tmpPath, optimizedBuffer))

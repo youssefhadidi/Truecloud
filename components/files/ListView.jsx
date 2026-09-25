@@ -13,6 +13,7 @@ import { isImage, isVideo, isPdf, isAudio, isXlsx, is3dFile, isText } from '@/li
 import { ListDownloadRow } from '@/components/files/ListDownloadRow';
 import { fileKind, ftClass } from '@/components/files/fileKindUtils';
 import { useTranslation } from '@/components/LanguageProvider';
+import { useStableCallback } from '@/hooks/useStableCallbacks';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -83,9 +84,9 @@ const ListRow = memo(function ListRow({
   isProcessing,
   showActions,
   formatFileSize,
-  onClick,
-  onContextMenu,
-  onTouchStart,
+  onRowClick,
+  onRowContextMenu,
+  onRowTouchStart,
   onTouchEnd,
   onTouchMove,
   onToggleSelect,
@@ -95,6 +96,8 @@ const ListRow = memo(function ListRow({
   onInitiateDelete,
   onInitiateShare,
   onClearActions,
+  onPrefetchFolder,
+  onCancelPrefetch,
 }) {
   const { t } = useTranslation();
   return (
@@ -116,13 +119,19 @@ const ListRow = memo(function ListRow({
         WebkitTapHighlightColor: 'transparent',
         transition: 'background 120ms',
       }}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      onTouchStart={onTouchStart}
+      onClick={(e) => onRowClick(e, file)}
+      onContextMenu={(e) => onRowContextMenu(e, file)}
+      onTouchStart={() => onRowTouchStart(file)}
       onTouchEnd={onTouchEnd}
       onTouchMove={onTouchMove}
-      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)'; }}
-      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+      onMouseEnter={(e) => {
+        if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)';
+        if (file.isDirectory) onPrefetchFolder?.(file);
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) e.currentTarget.style.background = 'transparent';
+        if (file.isDirectory) onCancelPrefetch?.();
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         {selectionMode && (
@@ -369,6 +378,8 @@ const ListView = forwardRef(({
   onResumeDownload,
   onRemoveDownload,
   isGlobalSearch,
+  onPrefetchFolder,
+  onCancelPrefetch,
 }, ref) => {
   const { t } = useTranslation();
   const listRef = useRef(null);
@@ -429,6 +440,23 @@ const ListView = forwardRef(({
   }, []);
 
   const clearActions = useCallback(() => setShowingActionsFor(null), []);
+
+  // Row handlers take the file, so each memo'd <ListRow> gets the same function
+  // instead of a fresh per-row closure that would re-render it every time.
+  const handleRowClick = useStableCallback((e, file) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const shift = e.shiftKey;
+    if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
+    if (selectionMode) { onToggleSelect?.(file); return; }
+    const showActions = !deletingFileIdRef.current && !renamingFileIdRef.current && showingActionsForRef.current === file.id;
+    if (showActions) return;
+    if (file.isDirectory) navigateToFolder(file.name, file);
+    else if (isViewableFile(file)) openMediaViewer(file);
+  });
+  const handleRowContextMenu = useStableCallback((e, file) => handleContextMenu(e, file));
+  const handleRowTouchStart = useStableCallback((file) => {
+    if (!selectionMode) handleTouchStart(file);
+  });
 
   const allItems = useMemo(() => {
     const items = [...files];
@@ -595,16 +623,6 @@ const ListView = forwardRef(({
       const isProcessing = processingFileRef.current === file.id;
       const showActions = !deletingFileIdRef.current && !renamingFileIdRef.current && showingActionsForRef.current === file.id;
 
-      const handleClick = (e) => {
-        const ctrl = e.ctrlKey || e.metaKey;
-        const shift = e.shiftKey;
-        if (ctrl || shift) { e.preventDefault(); onToggleSelect?.(file, { ctrl, shift }); return; }
-        if (selectionMode) { onToggleSelect?.(file); return; }
-        if (showActions) return;
-        if (file.isDirectory) navigateToFolder(file.name, file);
-        else if (isViewableFile(file)) openMediaViewer(file);
-      };
-
       return (
         <ListRow
           key={key}
@@ -621,9 +639,9 @@ const ListView = forwardRef(({
           isProcessing={isProcessing}
           showActions={showActions}
           formatFileSize={formatFileSize}
-          onClick={handleClick}
-          onContextMenu={(e) => handleContextMenu(e, file)}
-          onTouchStart={() => { if (!selectionMode) handleTouchStart(file); }}
+          onRowClick={handleRowClick}
+          onRowContextMenu={handleRowContextMenu}
+          onRowTouchStart={handleRowTouchStart}
           onTouchEnd={handleTouchEnd}
           onTouchMove={handleTouchMove}
           onToggleSelect={onToggleSelect}
@@ -633,6 +651,8 @@ const ListView = forwardRef(({
           onInitiateDelete={initiateDelete}
           onInitiateShare={initiateShare}
           onClearActions={clearActions}
+          onPrefetchFolder={onPrefetchFolder}
+          onCancelPrefetch={onCancelPrefetch}
         />
       );
     },
@@ -641,10 +661,12 @@ const ListView = forwardRef(({
       newFolderName, newFileName,
       onCancelCreateFolder, onConfirmCreateFolder, onNewFolderNameChange,
       cancelDelete, confirmDelete, cancelRename, confirmRename, setNewFileName,
-      handleContextMenu, navigateToFolder, openMediaViewer, initiateRename,
+      openMediaViewer, initiateRename,
       handleDownload, initiateDelete, initiateShare, onToggleSelect,
       onPauseDownload, onResumeDownload, onRemoveDownload, formatFileSize,
-      handleTouchStart, handleTouchEnd, handleTouchMove, clearActions,
+      handleRowClick, handleRowContextMenu, handleRowTouchStart,
+      handleTouchEnd, handleTouchMove, clearActions,
+      onPrefetchFolder, onCancelPrefetch,
     ],
   );
 

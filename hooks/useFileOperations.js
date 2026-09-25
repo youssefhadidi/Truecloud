@@ -1,10 +1,11 @@
 /** @format */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { appendFolderPinToUrl } from '@/lib/folderPinStore';
+import { useStableCallbacks } from '@/hooks/useStableCallbacks';
 
 export function useNavigation({ currentPath, pathHistory, historyIndex, setCurrentPath, setPathHistory, setHistoryIndex }) {
   const navigateToFolder = (folderName) => {
@@ -47,14 +48,9 @@ export function useNavigation({ currentPath, pathHistory, historyIndex, setCurre
     setCurrentPath(targetPath);
   };
 
-  return {
-    navigateToFolder,
-    goBack,
-    goForward,
-    canGoBack,
-    canGoForward,
-    navigateToBreadcrumb,
-  };
+  // Stable handlers: they are passed down to the memo'd grid/list cells.
+  const handlers = useStableCallbacks({ navigateToFolder, goBack, goForward, navigateToBreadcrumb });
+  return useMemo(() => ({ ...handlers, canGoBack, canGoForward }), [handlers, canGoBack, canGoForward]);
 }
 
 export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
@@ -93,12 +89,7 @@ export function useMediaViewer({ viewerFile, viewableFiles, setViewerFile }) {
     }
   };
 
-  return {
-    openMediaViewer,
-    closeMediaViewer,
-    navigateViewer,
-    selectViewerFile,
-  };
+  return useStableCallbacks({ openMediaViewer, closeMediaViewer, navigateViewer, selectViewerFile });
 }
 
 export function useDragAndDrop({ setIsDragging }) {
@@ -148,12 +139,7 @@ export function useDragAndDrop({ setIsDragging }) {
     };
   }, [setIsDragging]);
 
-  return {
-    handleDragEnter,
-    handleDragOver,
-    handleDragLeave,
-    handleDropEvent,
-  };
+  return useStableCallbacks({ handleDragEnter, handleDragOver, handleDragLeave, handleDropEvent });
 }
 
 export function useContextMenu({ setContextMenu, setSelectedContextFile }) {
@@ -171,10 +157,7 @@ export function useContextMenu({ setContextMenu, setSelectedContextFile }) {
     setSelectedContextFile(null);
   };
 
-  return {
-    handleContextMenu,
-    closeContextMenu,
-  };
+  return useStableCallbacks({ handleContextMenu, closeContextMenu });
 }
 
 export function useFileUtils({ currentPath, folderDisplayNames }) {
@@ -195,33 +178,35 @@ export function useFileUtils({ currentPath, folderDisplayNames }) {
     [currentPath, handleShareOrDownload]
   );
 
-  const getFileIcon = (file) => {
-    if (file.isDirectory) return <FiFolder className="text-blue-500" size={24} />;
-    if (is3dFile(file.name)) return <FiBox className="text-orange-500" size={24} />;
-    if (isImage(file.name)) return <FiImage className="text-green-500" size={24} />;
-    if (isVideo(file.name)) return <FiVideo className="text-purple-500" size={24} />;
-    return <FiFile className="text-gray-500" size={24} />;
-  };
+  const getFolderDisplayName = useCallback(
+    (folderName) => {
+      if (folderName.startsWith('user_')) {
+        return folderDisplayNames[folderName] || folderName;
+      }
+      return folderName;
+    },
+    [folderDisplayNames],
+  );
 
-  const getFolderDisplayName = (folderName) => {
-    if (folderName.startsWith('user_')) {
-      return folderDisplayNames[folderName] || folderName;
-    }
-    return folderName;
-  };
+  return useMemo(
+    () => ({ handleDownload, getFileIcon, getFolderDisplayName, formatFileSize }),
+    [handleDownload, getFolderDisplayName],
+  );
+}
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(Number(bytes)) / Math.log(k));
-    return Math.round((Number(bytes) / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
+// Pure, so module-level: one identity for the memo'd grid/list cells they're passed to.
+function getFileIcon(file) {
+  if (file.isDirectory) return <FiFolder className="text-blue-500" size={24} />;
+  if (is3dFile(file.name)) return <FiBox className="text-orange-500" size={24} />;
+  if (isImage(file.name)) return <FiImage className="text-green-500" size={24} />;
+  if (isVideo(file.name)) return <FiVideo className="text-purple-500" size={24} />;
+  return <FiFile className="text-gray-500" size={24} />;
+}
 
-  return {
-    handleDownload,
-    getFileIcon,
-    getFolderDisplayName,
-    formatFileSize,
-  };
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(Number(bytes)) / Math.log(k));
+  return Math.round((Number(bytes) / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }

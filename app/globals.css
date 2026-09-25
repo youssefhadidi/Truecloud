@@ -97,6 +97,13 @@ body {
 button { font-family: inherit; }
 input  { font-family: inherit; }
 
+/* iOS Safari auto-zooms on focus when a field's font-size is < 16px. Inputs set
+   their size inline (13–14px), hence !important. Touch devices only, so desktop
+   keeps the compact sizing. */
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
 /* Optimize scrolling performance on mobile */
 * {
   -webkit-tap-highlight-color: transparent;

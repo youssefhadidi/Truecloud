@@ -1,12 +1,11 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { unlink, rm } from 'fs/promises';
-import { stat } from 'fs/promises';
+import { unlink, rm, lstat } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, removeRootEntries,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, removeRootEntries, isWithinShare,
 } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
@@ -67,6 +66,9 @@ export async function DELETE(req, { params }) {
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
 
     // Private-uploads shares: visitors can only touch their own entries
     const email = readShareEmail(req, token);
@@ -104,10 +106,11 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: 'Cannot delete the shared folder' }, { status: 403 });
     }
 
-    // Check if file/folder exists and get stats
+    // Check if file/folder exists and get stats. lstat: a symlink is removed
+    // itself, never recursed into (its target may be outside the share).
     let stats;
     try {
-      stats = await stat(filePath);
+      stats = await lstat(filePath);
     } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }

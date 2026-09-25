@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
+import { getXlsxPreviewJson } from '@/lib/xlsxPreview.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
@@ -67,9 +68,10 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Check if file exists
+    // Check if file exists (its size and mtime key the parse cache)
+    let stats;
     try {
-      await fsPromises.access(filePath);
+      stats = await fsPromises.stat(filePath);
     } catch {
       logger.warn('GET /api/files/parse-xlsx - File not found', { filePath });
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -82,30 +84,11 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
     }
 
-    // Import xlsx dynamically
-    const xlsx = await import('xlsx');
+    // One sheet per request, parsed off the main thread and cached.
+    const sheetIndex = Number.parseInt(url.searchParams.get('sheet') || '0', 10) || 0;
+    const json = await getXlsxPreviewJson(filePath, stats, sheetIndex);
 
-    // Read file
-    const fileBuffer = await fsPromises.readFile(filePath);
-    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-
-    // Parse all sheets
-    const sheets = workbook.SheetNames.map((sheetName) => {
-      const worksheet = workbook.Sheets[sheetName];
-      const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-      return {
-        name: sheetName,
-        data: data,
-      };
-    });
-
-    logger.debug('GET /api/files/parse-xlsx - Parsed successfully', {
-      fileId,
-      sheetCount: sheets.length,
-    });
-
-    return NextResponse.json({ sheets });
+    return new Response(json, { headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('GET /api/files/parse-xlsx - Error', { error: error.message });
     return NextResponse.json({ error: 'Failed to parse XLSX file' }, { status: 500 });

@@ -11,9 +11,8 @@ import { APP_VERSION } from '@/lib/appVersion';
  * Maintains a single WebSocket connection to /api/ws at the app root level.
  * All components subscribe to specific message types through this provider.
  *
- * Authentication:
- * - Authenticated users: session cookie is sent automatically on upgrade
- * - Share visitors: call setShareCredentials(token, password) to connect with share auth
+ * Authentication: session cookie is sent automatically on upgrade. Share
+ * visitors are not accepted — broadcasts are server-wide, not share-scoped.
  *
  * Message types:
  * - 'file-change': File CRUD operations
@@ -30,7 +29,6 @@ export function WebSocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
   const subscribersRef = useRef(new Map()); // Map<messageType, Set<callbacks>>
   const reconnectTimeoutRef = useRef(null);
-  const shareCredentialsRef = useRef(null);
 
   const sendToServer = useCallback((message) => {
     if (wsRef.current && wsRef.current.readyState === 1) {
@@ -52,10 +50,6 @@ export function WebSocketProvider({ children }) {
     try {
       const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const params = new URLSearchParams({ v: APP_VERSION });
-      if (shareCredentialsRef.current) {
-        params.set('token', shareCredentialsRef.current.token);
-        params.set('password', shareCredentialsRef.current.password);
-      }
       const wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
 
       const ws = new WebSocket(wsUrl);
@@ -124,18 +118,6 @@ export function WebSocketProvider({ children }) {
   }, [connectWebSocket]);
 
   /**
-   * Set share credentials and reconnect the WebSocket with them.
-   * Call this from the share page after the password is verified.
-   */
-  const setShareCredentials = useCallback(
-    (token, password) => {
-      shareCredentialsRef.current = { token, password };
-      connectWebSocket();
-    },
-    [connectWebSocket],
-  );
-
-  /**
    * Subscribe to a specific message type.
    * When the first subscriber registers for a type, notifies the server so it can
    * start server-driven polling (e.g. system-metrics). When the last subscriber
@@ -171,7 +153,6 @@ export function WebSocketProvider({ children }) {
   const value = {
     connected,
     subscribe,
-    setShareCredentials,
   };
 
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>;
@@ -179,7 +160,7 @@ export function WebSocketProvider({ children }) {
 
 /**
  * Hook to use the WebSocket connection
- * @returns {object} { connected, subscribe, setShareCredentials }
+ * @returns {object} { connected, subscribe }
  */
 export function useWebSocket() {
   const context = useContext(WebSocketContext);

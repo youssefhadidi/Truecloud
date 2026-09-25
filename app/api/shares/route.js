@@ -4,13 +4,12 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAuthNoActivity } from '@/lib/authCheck';
 import { prisma } from '@/lib/prisma';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
-import { generateShareToken } from '@/lib/shareAuth';
+import { generateShareToken, isShareTargetAllowed } from '@/lib/shareAuth';
 import bcrypt from 'bcryptjs';
-import { join, resolve, sep } from 'node:path';
+import { join } from 'node:path';
 import { stat } from 'fs/promises';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // GET - List all shares for current user
 export async function GET(req) {
@@ -55,8 +54,11 @@ export async function POST(req) {
 
     const { path, fileName, isDirectory, password, expiresAt, allowEditing, privateUploads } = await req.json();
 
-    if (!fileName) {
+    if (!fileName || typeof fileName !== 'string') {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
+    }
+    if (path != null && typeof path !== 'string') {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
     // Check user has access to this path
@@ -74,13 +76,21 @@ export async function POST(req) {
 
     const normalizedPath = accessCheck.normalizedPath;
 
-    // Verify file/folder exists
-    const targetPath = join(UPLOAD_DIR, normalizedPath, fileName);
-    const resolvedTarget = resolve(targetPath) + sep;
-
-    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // The share becomes an anonymous entry point to this target, so it must
+    // stay inside what this user can reach: checkPathAccess alone lets
+    // "user_me/../user_other" or fileName "../user_other" through.
+    const allowed = await isShareTargetAllowed({
+      path: normalizedPath,
+      fileName,
+      ownerId: session.user.id,
+      owner: { hasRootAccess: isRoot },
+    });
+    if (!allowed) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+
+    // Verify file/folder exists
+    const targetPath = join(UPLOAD_DIR, normalizedPath, fileName);
 
     try {
       const stats = await stat(targetPath);

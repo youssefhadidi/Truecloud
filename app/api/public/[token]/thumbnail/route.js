@@ -3,9 +3,9 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
-import { join, resolve, extname, sep } from 'node:path';
+import { join, resolve, extname } from 'node:path';
 import fsPromises from 'fs/promises';
 import { generateImageThumbnail, generateVideoThumbnail, generatePdfThumbnail, runThumbnailJob } from '@/lib/thumbnailUtils';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS } from '@/lib/extensions';
@@ -13,10 +13,10 @@ import { thumbnailCache } from '@/lib/thumbnailCache';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { thumbnailKey } from '@/lib/thumbnailKey.mjs';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const THUMBNAIL_DIR = process.env.THUMBNAIL_DIR || './.thumbnails';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export const maxDuration = 60;
 
@@ -86,6 +86,16 @@ export async function GET(req, { params }) {
 
     const filePath = join(uploadsDir, pathCheck.fullPath);
 
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Cache dirs under UPLOAD_DIR are hidden from share listings; don't serve them either
+    if (isCachePath(filePath)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
+
     // Check file exists and capture its size for the (path-independent)
     // thumbnail key.
     let fileStats;
@@ -93,12 +103,6 @@ export async function GET(req, { params }) {
       fileStats = await fsPromises.stat(filePath);
     } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
-    }
-
-    // Security check
-    const resolvedPath = resolve(filePath) + sep;
-    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
-      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
     const fileExt = extname(fileName).toLowerCase();

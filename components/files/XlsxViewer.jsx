@@ -2,17 +2,159 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useParseXlsx, useParseXlsxShare } from '@/lib/api/viewers';
+import './xlsx-viewer.css';
+
+// Rows are a fixed height so a scroll offset maps straight to a row index;
+// only the rows in view (plus OVERSCAN_ROWS each side) are mounted. The
+// window moves once the view comes within MARGIN_ROWS of its edge, so a scroll
+// re-renders the table every dozen rows rather than every frame.
+const ROW_HEIGHT = 26;
+const OVERSCAN_ROWS = 30;
+const MARGIN_ROWS = 10;
+
+// Column widths come from the content of the first rows, since the table can't
+// size columns from rows that aren't mounted.
+const ROWNUM_WIDTH = 56;
+const WIDTH_SAMPLE_ROWS = 200;
+const COL_MIN_WIDTH = 80;
+const COL_MAX_WIDTH = 320;
+const CHAR_WIDTH = 7;
+const CELL_PADDING = 22;
+
+function columnWidths(rows) {
+  let count = 0;
+  for (const row of rows) if (row.length > count) count = row.length;
+  const widths = new Array(count).fill(COL_MIN_WIDTH);
+  const sample = Math.min(rows.length, WIDTH_SAMPLE_ROWS);
+  for (let r = 0; r < sample; r++) {
+    const row = rows[r];
+    for (let c = 0; c < row.length; c++) {
+      const width = Math.min(COL_MAX_WIDTH, String(row[c] ?? '').length * CHAR_WIDTH + CELL_PADDING);
+      if (width > widths[c]) widths[c] = width;
+    }
+  }
+  return widths;
+}
+
+function rowWindow(scrollTop, height, rowCount) {
+  const first = Math.floor(scrollTop / ROW_HEIGHT);
+  const last = Math.ceil((scrollTop + height) / ROW_HEIGHT);
+  return {
+    first: Math.max(0, first - OVERSCAN_ROWS),
+    last: Math.min(rowCount - 1, last + OVERSCAN_ROWS),
+    visibleFirst: first,
+    visibleLast: last,
+  };
+}
+
+function SheetGrid({ rows }) {
+  const scrollRef = useRef(null);
+  const rafRef = useRef(0);
+  const widths = useMemo(() => columnWidths(rows), [rows]);
+  const [range, setRange] = useState(() => rowWindow(0, 800, rows.length));
+
+  const update = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = rowWindow(el.scrollTop, el.clientHeight, rows.length);
+    setRange((prev) => {
+      const covered =
+        prev.first <= Math.max(0, next.visibleFirst - MARGIN_ROWS) &&
+        prev.last >= Math.min(rows.length - 1, next.visibleLast + MARGIN_ROWS);
+      return covered ? prev : next;
+    });
+  }, [rows.length]);
+
+  useLayoutEffect(() => {
+    update();
+  }, [update]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver(() => update());
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
+  }, [update]);
+
+  const onScroll = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      update();
+    });
+  }, [update]);
+
+  if (rows.length === 0) {
+    return (
+      <div className="xv-scroll">
+        <div className="xv-empty">No data in this sheet</div>
+      </div>
+    );
+  }
+
+  const tableWidth = widths.reduce((sum, w) => sum + w, ROWNUM_WIDTH);
+  const colSpan = widths.length + 1;
+  const { first, last } = range;
+
+  return (
+    <div ref={scrollRef} className="xv-scroll" onScroll={onScroll}>
+      <table className="xv-table" style={{ width: tableWidth, '--xv-row-h': `${ROW_HEIGHT}px` }}>
+        <colgroup>
+          <col style={{ width: ROWNUM_WIDTH }} />
+          {widths.map((w, c) => (
+            <col key={c} style={{ width: w }} />
+          ))}
+        </colgroup>
+        <tbody>
+          {first > 0 && (
+            <tr className="xv-spacer" style={{ height: first * ROW_HEIGHT }}>
+              <td colSpan={colSpan} />
+            </tr>
+          )}
+          {rows.slice(first, last + 1).map((row, i) => {
+            const r = first + i;
+            return (
+              <tr key={r} className={r === 0 ? 'xv-header' : undefined}>
+                <td className="xv-rownum">{r + 1}</td>
+                {widths.map((_, c) => {
+                  const cell = row[c] ?? '';
+                  return (
+                    <td key={c} className={typeof cell === 'number' ? 'xv-num' : undefined} title={String(cell)}>
+                      {String(cell)}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+          {last < rows.length - 1 && (
+            <tr className="xv-spacer" style={{ height: (rows.length - 1 - last) * ROW_HEIGHT }}>
+              <td colSpan={colSpan} />
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, sharePassword }) {
   const [activeSheet, setActiveSheet] = useState(0);
 
   const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-  const authQuery = useParseXlsx(fileId, currentPath);
-  const shareQuery = useParseXlsxShare(shareToken, filePath, sharePassword);
-  const { data, isLoading, error } = shareToken ? shareQuery : authQuery;
+  // Only the query matching the viewer's context runs: share visitors aren't
+  // signed in, and a 401/403 from the authenticated endpoint would log them out.
+  const authQuery = useParseXlsx(fileId, currentPath, activeSheet, !shareToken);
+  const shareQuery = useParseXlsxShare(shareToken, filePath, sharePassword, activeSheet);
+  const { data, isLoading, isPlaceholderData, error } = shareToken ? shareQuery : authQuery;
 
   if (isLoading) {
     return (
@@ -45,9 +187,9 @@ export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, 
     );
   }
 
-  const sheets = data?.sheets || [];
+  const sheetNames = data?.sheetNames || [];
 
-  if (!sheets.length) {
+  if (!sheetNames.length) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 13 }}>
         No data found in spreadsheet
@@ -55,77 +197,23 @@ export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, 
     );
   }
 
-  const currentSheetData = sheets[activeSheet];
+  const rows = data.rows || [];
+  const shownCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--surface)' }}>
-      <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
-        <table style={{ borderCollapse: 'collapse', background: 'var(--surface)', fontSize: 12 }}>
-          <tbody>
-            {currentSheetData.data?.map((row, rowIdx) => (
-              <tr key={rowIdx}>
-                <td
-                  style={{
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 2,
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--border)',
-                    padding: '4px 10px',
-                    color: 'var(--text-3)',
-                    fontWeight: 600,
-                    width: 48,
-                    textAlign: 'right',
-                  }}
-                >
-                  {rowIdx + 1}
-                </td>
-                {row.map((cell, cellIdx) => {
-                  const isHeaderRow = rowIdx === 0;
-                  const isNumeric = typeof cell === 'number';
-                  return (
-                    <td
-                      key={cellIdx}
-                      style={{
-                        border: '1px solid var(--border)',
-                        padding: '4px 10px',
-                        minWidth: 100,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        background: isHeaderRow ? 'var(--surface-2)' : 'var(--surface)',
-                        fontWeight: isHeaderRow ? 600 : 400,
-                        color: isHeaderRow ? 'var(--accent)' : 'var(--text)',
-                        textAlign: isNumeric ? 'right' : 'left',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                      title={cell?.toString() || ''}
-                    >
-                      {cell ?? ''}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!currentSheetData.data?.length && (
-          <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No data in this sheet</div>
+    <div className="xv">
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* Keyed by sheet: a new sheet starts scrolled to the top. */}
+        <SheetGrid key={data.sheet} rows={rows} />
+        {isPlaceholderData && (
+          <div className="xv-loading">
+            <div className="mv-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+          </div>
         )}
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 16px',
-          background: 'var(--surface-2)',
-          borderTop: '1px solid var(--border)',
-          overflowX: 'auto',
-        }}
-      >
-        {sheets.length > 1 && (
+      <div className="xv-tabs">
+        {sheetNames.length > 1 && (
           <button
             onClick={() => setActiveSheet(Math.max(0, activeSheet - 1))}
             disabled={activeSheet === 0}
@@ -136,35 +224,20 @@ export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, 
           </button>
         )}
         <div style={{ display: 'flex', gap: 4 }}>
-          {sheets.map((sheet, idx) => {
-            const active = idx === activeSheet;
-            return (
-              <button
-                key={idx}
-                onClick={() => setActiveSheet(idx)}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: 'var(--r-sm)',
-                  border: 'none',
-                  background: active ? 'var(--accent)' : 'var(--surface)',
-                  color: active ? '#fff' : 'var(--text-2)',
-                  fontWeight: active ? 600 : 500,
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  transition: 'background 120ms',
-                }}
-              >
-                {sheet.name}
-              </button>
-            );
-          })}
+          {sheetNames.map((name, idx) => (
+            <button
+              key={idx}
+              onClick={() => setActiveSheet(idx)}
+              className={`xv-tab${idx === activeSheet ? ' xv-tab--active' : ''}`}
+            >
+              {name}
+            </button>
+          ))}
         </div>
-        {sheets.length > 1 && (
+        {sheetNames.length > 1 && (
           <button
-            onClick={() => setActiveSheet(Math.min(sheets.length - 1, activeSheet + 1))}
-            disabled={activeSheet === sheets.length - 1}
+            onClick={() => setActiveSheet(Math.min(sheetNames.length - 1, activeSheet + 1))}
+            disabled={activeSheet === sheetNames.length - 1}
             className="mv-icon-btn"
             style={{ width: 28, height: 28 }}
           >
@@ -173,17 +246,16 @@ export default function XlsxViewer({ fileId, currentPath, fileName, shareToken, 
         )}
       </div>
 
-      <div
-        style={{
-          padding: '8px 16px',
-          background: 'var(--surface)',
-          borderTop: '1px solid var(--border)',
-          fontSize: 11,
-          color: 'var(--text-3)',
-        }}
-      >
-        Sheet {activeSheet + 1} of {sheets.length} • {currentSheetData.data?.length || 0} rows •{' '}
-        {currentSheetData.data?.[0]?.length || 0} columns
+      <div className="xv-footer">
+        Sheet {data.sheet + 1} of {sheetNames.length} • {data.totalRows.toLocaleString()} rows •{' '}
+        {data.totalCols.toLocaleString()} columns
+        {(data.truncatedRows || data.truncatedCols) && (
+          <span className="xv-footer__note">
+            {' '}
+            — showing the first {rows.length.toLocaleString()} rows and {shownCols.toLocaleString()} columns; download the
+            file to see the rest
+          </span>
+        )}
       </div>
     </div>
   );

@@ -89,6 +89,8 @@ const GridItem = memo(
     isGlobalSearch,
     isFavorite,
     isLiked,
+    onPrefetchFolder,
+    onCancelPrefetch,
   }) => {
     const { t } = useTranslation();
     const kind = fileKind(item);
@@ -227,6 +229,8 @@ const GridItem = memo(
               }
             }}
             onContextMenu={(e) => onContextMenu?.(e, item)}
+            onMouseEnter={isFolder ? () => onPrefetchFolder?.(item) : undefined}
+            onMouseLeave={isFolder ? onCancelPrefetch : undefined}
             onTouchStart={() => { if (!selectionMode) onTouchStart(item); }}
             onTouchEnd={onTouchEnd}
             onTouchMove={onTouchMove}
@@ -725,6 +729,8 @@ const GridView = forwardRef(
       onResumeDownload,
       onRemoveDownload,
       isGlobalSearch,
+      onPrefetchFolder,
+      onCancelPrefetch,
     },
     ref,
   ) => {
@@ -883,6 +889,8 @@ const GridView = forwardRef(
             onResumeDownload={onResumeDownload}
             onRemoveDownload={onRemoveDownload}
             isGlobalSearch={isGlobalSearch}
+            onPrefetchFolder={onPrefetchFolder}
+            onCancelPrefetch={onCancelPrefetch}
           />
         );
       },
@@ -895,6 +903,7 @@ const GridView = forwardRef(
         formatFileSize, onContextMenu, onToggleSelect,
         handleTouchStart, handleTouchEnd, handleTouchMove,
         onPauseDownload, onResumeDownload, onRemoveDownload,
+        onPrefetchFolder, onCancelPrefetch,
       ],
     );
 

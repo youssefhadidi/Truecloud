@@ -1,13 +1,14 @@
 /** @format */
 
 import { NextResponse } from 'next/server';
-import { verifyShare, incrementShareAccess, clientIpFromHeaders, readShareEmail } from '@/lib/shareAuth';
-import { join, resolve, sep } from 'node:path';
+import {
+  verifyShare, incrementShareAccess, clientIpFromHeaders, readShareEmail, validateSharePath, isWithinShare,
+} from '@/lib/shareAuth';
+import { join } from 'node:path';
 import { stat } from 'fs/promises';
 import { lookup } from 'mime-types';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // GET - Returns share metadata
 export async function GET(req, { params }) {
@@ -41,12 +42,11 @@ export async function GET(req, { params }) {
     const share = verification.share;
 
     // Get file stats
-    const filePath = join(UPLOAD_DIR, share.path, share.fileName);
-    const resolvedPath = resolve(filePath) + sep;
-
-    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
+    const pathCheck = validateSharePath(share, '');
+    if (!pathCheck.allowed || !(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
+    const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
 
     let fileStats;
     try {

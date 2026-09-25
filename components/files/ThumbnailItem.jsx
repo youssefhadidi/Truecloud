@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { FiBox, FiVideo, FiMusic, FiFileText, FiFile, FiImage, FiGrid, FiPlay } from 'react-icons/fi';
 import { getFileType } from '@/lib/getFileType';
 import { useShareAwareThumbnail } from './hooks/useShareAwareThumbnail';
@@ -20,7 +20,7 @@ const TYPE_ICONS = {
 };
 
 // Named export for legacy import sites; default export matches the design API.
-export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken, sharePassword, glass = false }) {
+export function ThumbnailItem({ file, currentPath, isActive, onSelect, shareToken, sharePassword, glass = false }) {
   const itemRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -52,7 +52,7 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
       type="button"
       aria-label={file.name}
       aria-pressed={isActive}
-      onClick={onClick}
+      onClick={() => onSelect(file)}
       className={[
         'mv-thumb',
         isActive ? 'mv-thumb--active' : '',
@@ -92,4 +92,5 @@ export function ThumbnailItem({ file, currentPath, isActive, onClick, shareToken
   );
 }
 
-export default ThumbnailItem;
+// Memo'd: stepping through files changes isActive on two thumbnails only.
+export default memo(ThumbnailItem);

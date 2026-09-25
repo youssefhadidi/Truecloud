@@ -1,10 +1,12 @@
 /** @format */
 
+import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCreateFolder, useUploadFile, useDeleteFile, useRenameFile, useRestoreFile } from '@/lib/api/files';
 import { useStartDownload } from '@/lib/api/downloads';
 import { useTransfersDispatch } from '@/lib/redux/hooks';
 import { useTranslation } from '@/components/LanguageProvider';
+import { useStableCallbacks } from '@/hooks/useStableCallbacks';
 
 // Helper to check if path is in trash
 const isInTrash = (path) => path === 'trash' || path.startsWith('trash/') || path.startsWith('trash\\');
@@ -312,7 +314,8 @@ export function useFileHandlers({
     });
   };
 
-  return {
+  // Stable handlers: they are passed down to the memo'd grid/list cells.
+  const handlers = useStableCallbacks({
     initiateCreateFolder,
     cancelCreateFolder,
     confirmCreateFolder,
@@ -332,6 +335,7 @@ export function useFileHandlers({
     pauseDownload,
     resumeDownload,
     removeDownload,
-    isInTrash: isInTrash(currentPath),
-  };
+  });
+  const inTrash = isInTrash(currentPath);
+  return useMemo(() => ({ ...handlers, isInTrash: inTrash }), [handlers, inTrash]);
 }

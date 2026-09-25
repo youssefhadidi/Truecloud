@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries, isWithinShare,
 } from '@/lib/shareAuth';
 import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'fs';
@@ -72,6 +72,10 @@ export async function POST(req, { params }) {
     const destCheck = validateSharePath(share, destinationPath);
     if (!destCheck.allowed) {
       return NextResponse.json({ error: destCheck.error }, { status: 400 });
+    }
+
+    if (!(await isWithinShare(share, sourceCheck.fullPath)) || !(await isWithinShare(share, destCheck.fullPath))) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
     // Private-uploads shares: every moved item and the destination must be

@@ -6,7 +6,7 @@ import { existsSync } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, removeRootEntries, isWithinShare,
 } from '@/lib/shareAuth';
 import { logger } from '@/lib/logger';
 import { broadcastFileChange } from '@/lib/fileChangeBroadcast';
@@ -70,6 +70,9 @@ export async function PATCH(req, { params }) {
     const pathCheck = validateSharePath(share, subPath);
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
+    }
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
     // Private-uploads shares: visitors can only touch their own entries

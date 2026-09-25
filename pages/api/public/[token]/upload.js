@@ -5,7 +5,7 @@ import { existsSync, createWriteStream } from 'fs';
 import { join, resolve, sep } from 'node:path';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, claimRootName, isWithinShare,
 } from '@/lib/shareAuth';
 import { buildTempName } from '@/lib/uploadTemp';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
@@ -58,6 +58,9 @@ export default async function handler(req, res) {
     const pathCheck = validateSharePath(share, subPath);
     if (!pathCheck.allowed) {
       return res.status(400).json({ error: pathCheck.error });
+    }
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
+      return res.status(400).json({ error: 'Invalid path' });
     }
 
     // Private-uploads shares: visitors can only upload to the root or into

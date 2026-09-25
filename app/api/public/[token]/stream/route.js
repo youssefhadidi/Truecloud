@@ -3,11 +3,11 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, access, mkdir, rename, unlink } from 'fs/promises';
-import { join, resolve, extname, sep } from 'node:path';
+import { join, resolve, extname } from 'node:path';
 import mime from 'mime-types';
 import { createHash, randomBytes } from 'crypto';
 import { logger } from '@/lib/logger';
@@ -19,10 +19,10 @@ import {
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { parseRangeHeader } from '@/lib/httpRange';
 import { Semaphore } from '@/lib/semaphore.mjs';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const STREAM_CACHE_DIR = process.env.STREAM_CACHE_DIR || './stream-cache';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // Track in-progress MP4 fixes / MKV remuxes to deduplicate concurrent public
 // requests for the same cache path. Without this, N concurrent viewers of the
@@ -129,11 +129,15 @@ export async function GET(req, { params }) {
     }
 
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
-    const resolvedPath = resolve(filePath) + sep;
 
-    // Security: prevent directory traversal
-    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Cache dirs under UPLOAD_DIR are hidden from share listings; don't serve them either
+    if (isCachePath(filePath)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     // Verify file exists

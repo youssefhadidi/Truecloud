@@ -3,13 +3,14 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
-import { join, resolve, extname, sep } from 'node:path';
+import { join, resolve, extname } from 'node:path';
 import fsPromises from 'fs/promises';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
+import { getXlsxPreviewJson } from '@/lib/xlsxPreview.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 export async function GET(req, { params }) {
   try {
@@ -65,15 +66,20 @@ export async function GET(req, { params }) {
     const uploadsDir = resolve(process.cwd(), UPLOAD_DIR);
     const filePath = join(uploadsDir, pathCheck.fullPath);
 
-    // Security: prevent directory traversal
-    const resolvedTarget = resolve(filePath) + sep;
-    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
-    // Check if file exists
+    // Cache dirs under UPLOAD_DIR are hidden from share listings; don't serve them either
+    if (isCachePath(filePath)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
+    }
+
+    // Check if file exists (its size and mtime key the parse cache)
+    let stats;
     try {
-      await fsPromises.access(filePath);
+      stats = await fsPromises.stat(filePath);
     } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -84,25 +90,11 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
     }
 
-    // Import xlsx dynamically
-    const xlsx = await import('xlsx');
+    // One sheet per request, parsed off the main thread and cached.
+    const sheetIndex = Number.parseInt(url.searchParams.get('sheet') || '0', 10) || 0;
+    const json = await getXlsxPreviewJson(filePath, stats, sheetIndex);
 
-    // Read file
-    const fileBuffer = await fsPromises.readFile(filePath);
-    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-
-    // Parse all sheets
-    const sheets = workbook.SheetNames.map((sheetName) => {
-      const worksheet = workbook.Sheets[sheetName];
-      const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-      return {
-        name: sheetName,
-        data: data,
-      };
-    });
-
-    return NextResponse.json({ sheets });
+    return new Response(json, { headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('GET /api/public/[token]/parse-xlsx - Error:', error);
     return NextResponse.json({ error: 'Failed to parse XLSX file' }, { status: 500 });

@@ -3,15 +3,14 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, getOwnedNames,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, isShareRoot, getOwnedNames, isWithinShare,
 } from '@/lib/shareAuth';
-import { readdir, stat } from 'fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { readdir, stat, lstat } from 'fs/promises';
+import { join } from 'node:path';
 import { isUploadTempName } from '@/lib/uploadTemp';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // GET - List files in a shared directory
 export async function GET(req, { params }) {
@@ -60,10 +59,9 @@ export async function GET(req, { params }) {
     }
 
     const targetDir = join(UPLOAD_DIR, pathCheck.fullPath);
-    const resolvedTarget = resolve(targetDir) + sep;
 
-    // Security: prevent directory traversal
-    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 
@@ -93,11 +91,21 @@ export async function GET(req, { params }) {
       fileNames = fileNames.filter((name) => owned.has(name));
     }
 
-    // Get file stats for each file
-    const files = await Promise.all(
+    // Get file stats for each file. Symlinks leading outside the share are
+    // left out (every other route refuses them), as are broken ones.
+    const entries = await Promise.all(
       fileNames.map(async (name) => {
         const filePath = join(targetDir, name);
-        const stats = await stat(filePath);
+        let stats;
+        try {
+          stats = await lstat(filePath);
+          if (stats.isSymbolicLink()) {
+            if (!(await isWithinShare(share, `${pathCheck.fullPath}/${name}`))) return null;
+            stats = await stat(filePath);
+          }
+        } catch {
+          return null;
+        }
 
         return {
           id: name,
@@ -109,6 +117,7 @@ export async function GET(req, { params }) {
         };
       })
     );
+    const files = entries.filter(Boolean);
 
     // Note: Sorting is handled on the frontend (useSharePage.js) based on user preference
     // This avoids redundant CPU usage and allows dynamic sorting without additional API calls

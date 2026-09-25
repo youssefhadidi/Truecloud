@@ -58,16 +58,42 @@ function mergeDownload(existing, record) {
   return { ...DOWNLOAD_DEFAULTS, ...existing, ...record };
 }
 
-export function useActiveDownloads(initialDownloads = []) {
+/**
+ * Same downloads, same name and status for each. Progress is deliberately
+ * ignored: each download card subscribes to its own progress frames.
+ */
+function sameMembership(prev, next) {
+  const keys = Object.keys(next);
+  if (keys.length !== Object.keys(prev).length) return false;
+  for (const gid of keys) {
+    const a = prev[gid];
+    const b = next[gid];
+    if (!a || a.name !== b.name || a.status !== b.status) return false;
+  }
+  return true;
+}
+
+/**
+ * @param {Array} initialDownloads
+ * @param {{ path?: string }} [options] With `path`, only that folder's
+ *   downloads are exposed, and state changes only when one is added, removed,
+ *   renamed or changes status. The file browser renders a whole folder from
+ *   this state, so re-rendering it on every progress tick of every torrent
+ *   (in any folder) would repaint every visible card once a second.
+ */
+export function useActiveDownloads(initialDownloads = [], { path } = {}) {
   const downloadsRef = useRef(new Map()); // Map<gid, downloadInfo>
   const [downloads, setDownloads] = useState({});
+  const pathRef = useRef(path);
   const rafPendingRef = useRef(false); // RAF flush is scheduled
   const { subscribe } = useWebSocket(); // Call hook at top level
   const { addNotification } = useNotifications();
   const { t } = useTranslation();
-  const pauseMutation = usePauseDownload();
-  const resumeMutation = useResumeDownload();
-  const removeMutation = useRemoveDownload();
+  // mutateAsync is stable; the mutation objects themselves are new every render
+  // and would give the handlers below a new identity each time.
+  const { mutateAsync: pauseAsync } = usePauseDownload();
+  const { mutateAsync: resumeAsync } = useResumeDownload();
+  const { mutateAsync: removeAsync } = useRemoveDownload();
 
   // Kept in a ref rather than read straight from the closure: addNotification
   // gets a fresh identity every time a toast is shown, so depending on it in the
@@ -80,11 +106,12 @@ export function useActiveDownloads(initialDownloads = []) {
 
   // Sync downloads map to state
   const syncDownloads = useCallback(() => {
+    const filterPath = pathRef.current;
     const obj = {};
     for (const [gid, info] of downloadsRef.current) {
-      obj[gid] = info;
+      if (filterPath === undefined || info.path === filterPath) obj[gid] = info;
     }
-    setDownloads(obj);
+    setDownloads((prev) => (filterPath !== undefined && sameMembership(prev, obj) ? prev : obj));
   }, []);
 
   // Batches high-frequency progress updates — flushes once per animation frame
@@ -97,6 +124,13 @@ export function useActiveDownloads(initialDownloads = []) {
       });
     }
   }, [syncDownloads]);
+
+  // Re-filter when the browsed folder changes.
+  useEffect(() => {
+    if (pathRef.current === path) return;
+    pathRef.current = path;
+    syncDownloads();
+  }, [path, syncDownloads]);
 
   // Seed with downloads fetched from the API (they may arrive after mount, and
   // again on a refetch). Only gids we haven't heard of are added, so a seed can
@@ -207,26 +241,26 @@ export function useActiveDownloads(initialDownloads = []) {
   const pauseDownload = useCallback(
     async (gid) => {
       try {
-        await pauseMutation.mutateAsync(gid);
+        await pauseAsync(gid);
       } catch (err) {
         console.error('[DOWNLOADS] Failed to pause download:', err.message);
         throw err;
       }
     },
-    [pauseMutation],
+    [pauseAsync],
   );
 
   // Resume a download
   const resumeDownload = useCallback(
     async (gid) => {
       try {
-        await resumeMutation.mutateAsync(gid);
+        await resumeAsync(gid);
       } catch (err) {
         console.error('[DOWNLOADS] Failed to resume download:', err.message);
         throw err;
       }
     },
-    [resumeMutation],
+    [resumeAsync],
   );
 
   // Remove a download. Resolves with { filesDeleted } so the caller can say
@@ -234,13 +268,13 @@ export function useActiveDownloads(initialDownloads = []) {
   const removeDownload = useCallback(
     async (gid) => {
       try {
-        return await removeMutation.mutateAsync(gid);
+        return await removeAsync(gid);
       } catch (err) {
         console.error('[DOWNLOADS] Failed to remove download:', err.message);
         throw err;
       }
     },
-    [removeMutation],
+    [removeAsync],
   );
 
   return {

@@ -3,19 +3,18 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 import fs from 'fs';
 import { stat } from 'fs/promises';
-import { join, basename, resolve, sep } from 'node:path';
+import { join, basename } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { nodeToWebStream } from '@/lib/streamUtils';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // Increase timeout for large folder downloads
 export const maxDuration = 300; // 5 minutes
@@ -63,10 +62,9 @@ export async function GET(req, { params }) {
 
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
     const downloadName = subPath ? basename(subPath) : share.fileName;
-    const resolvedPath = resolve(filePath) + sep;
 
-    // Security: prevent directory traversal
-    if (!resolvedPath.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
 

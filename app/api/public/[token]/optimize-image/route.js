@@ -3,11 +3,11 @@
 import { NextResponse } from 'next/server';
 import {
   verifyShare, validateSharePath, clientIpFromHeaders,
-  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath,
+  readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
 import fs from 'fs';
 import { stat, mkdir } from 'fs/promises';
-import { join, resolve, dirname, sep, extname } from 'node:path';
+import { join, resolve, dirname, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
@@ -15,10 +15,10 @@ import { optiCachePath } from '@/lib/optiCache.mjs';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { Semaphore } from '@/lib/semaphore';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
+import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
-const RESOLVED_UPLOAD_DIR = resolve(process.cwd(), UPLOAD_DIR) + sep;
 
 // Semaphore to limit concurrent image optimizations to 20
 const optimizationSemaphore = new Semaphore(20);
@@ -82,10 +82,14 @@ export async function GET(req, { params }) {
 
     const filePath = join(UPLOAD_DIR, pathCheck.fullPath);
 
-    // Security: prevent directory traversal
-    const resolvedTarget = resolve(filePath) + sep;
-    if (!resolvedTarget.startsWith(RESOLVED_UPLOAD_DIR)) {
+    // Security: prevent directory traversal (including via symlinks)
+    if (!(await isWithinShare(share, pathCheck.fullPath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Cache dirs under UPLOAD_DIR are hidden from share listings; don't serve them either
+    if (isCachePath(filePath)) {
+      return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
     if (!fs.existsSync(filePath)) {

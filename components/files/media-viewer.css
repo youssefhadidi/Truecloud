@@ -456,16 +456,20 @@
 /* A centred carousel: the half-width side padding lets the first and last
    thumbnails reach the middle, which is where the active one sits and where
    scrolling the strip picks the file from. Positioned so thumbnail
-   offsetLeft is measured from the strip itself. */
+   offsetLeft is measured from the strip itself. The size and gap are
+   variables because ThumbnailStrip sizes the spacers that stand in for
+   unmounted thumbnails from them. */
 .mv-strip__scroll {
+  --mv-thumb-size: 64px;
+  --mv-strip-gap: 8px;
   position: relative;
   display: flex;
-  gap: 8px;
+  gap: var(--mv-strip-gap);
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding: 10px calc(50% - 32px);
+  padding: 10px calc(50% - var(--mv-thumb-size) / 2);
 }
 
 .mv-strip__scroll::-webkit-scrollbar {
@@ -479,8 +483,8 @@
 .mv-thumb {
   position: relative;
   display: block;
-  width: 64px;
-  height: 64px;
+  width: var(--mv-thumb-size);
+  height: var(--mv-thumb-size);
   border-radius: 10px;
   flex-shrink: 0;
   overflow: hidden;
@@ -545,13 +549,13 @@
 
 @media (max-width: 767px) {
   .mv-strip__scroll {
-    gap: 6px;
-    padding: 8px calc(50% - 26px);
+    --mv-thumb-size: 52px;
+    --mv-strip-gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 
   .mv-thumb {
-    width: 52px;
-    height: 52px;
     border-radius: 8px;
   }
 }

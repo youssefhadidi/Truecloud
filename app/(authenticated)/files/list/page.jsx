@@ -19,11 +19,13 @@ import { useFilesContext } from '../FilesContext';
 import { useFilesPage } from '@/hooks/useFilesPage';
 import { useFileHandlers } from '@/hooks/useFileHandlers';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useStableCallback } from '@/hooks/useStableCallbacks';
+import { useTransfers } from '@/lib/redux/hooks';
 import { useNavigation, useMediaViewer, useDragAndDrop, useContextMenu, useFileUtils } from '@/hooks/useFileOperations';
 import { useShareOrDownload } from '@/hooks/useShareOrDownload';
 import { useFavorites, useToggleFavorite } from '@/lib/api/favorites';
 import { useLikedPaths, useToggleLike } from '@/lib/api/likes';
-import { useMoveFiles, useDeleteFile, fetchFoldersHelper } from '@/lib/api/files';
+import { useMoveFiles, useDeleteFile, fetchFoldersHelper, filesQueryOptions } from '@/lib/api/files';
 import { getFileExtension } from '@/lib/clientFileUtils';
 import { parseUsbPath, USB_PREFIX } from '@/lib/usbPath';
 import Btn from '@/components/ui/Btn';
@@ -34,7 +36,10 @@ import FolderPinModal from '@/components/FolderPinModal';
 import { setFolderPin, clearAllFolderPins, useFolderPins, appendFolderPinToUrl } from '@/lib/folderPinStore';
 import { useTranslation } from '@/components/LanguageProvider';
 
-const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
+// Mounted only while a file is open; its code is fetched when the browser is
+// idle (see FilesPageContent), so the first open doesn't wait on the download.
+const loadMediaViewer = () => import('@/components/files/MediaViewer');
+const MediaViewer = lazy(loadMediaViewer);
 const GridView = lazy(() => import('@/components/files/GridView'));
 const ListView = lazy(() => import('@/components/files/ListView'));
 const ShareModal = lazy(() => import('@/components/files/ShareModal'));
@@ -50,6 +55,19 @@ function LoadingPanel({ label = 'Loading…' }) {
   );
 }
 
+const NOOP = () => {};
+
+// How long the pointer has to rest on a folder before its listing is fetched:
+// long enough that sweeping across the grid doesn't request every folder passed.
+const FOLDER_PREFETCH_DELAY_MS = 150;
+
+// Subscribes to per-file transfer progress on its own, so upload progress
+// events re-render this panel rather than the whole file browser.
+function TransfersPanel() {
+  const transfers = useTransfers();
+  return <UploadStatus transfers={transfers} />;
+}
+
 function EmptyState({ label }) {
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-3)' }}>
@@ -57,6 +75,12 @@ function EmptyState({ label }) {
       <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
     </div>
   );
+}
+
+function isTyping(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }
 
 function FilesPageContent() {
@@ -87,6 +111,15 @@ function FilesPageContent() {
   }, [isGlobalSearch, globalSearchResults]);
 
   const displayFiles = isGlobalSearch ? searchFiles : state.files;
+
+  useEffect(() => {
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(loadMediaViewer, { timeout: 5000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(loadMediaViewer, 2000); // Safari has no requestIdleCallback
+    return () => clearTimeout(id);
+  }, []);
 
   const uploadInputRef = useRef(null);
   const gridViewRef = useRef(null);
@@ -290,13 +323,9 @@ function FilesPageContent() {
 
   // Keyboard shortcuts. Skip when typing or when a modal/inline-editor owns the
   // keystroke. Media viewer has its own handler — defer to it when open.
-  useEffect(() => {
-    const isTyping = (t) => {
-      if (!t) return false;
-      const tag = t.tagName;
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
-    };
-
+  // A stable handler reading the latest state, so the listener is attached once
+  // instead of on every render.
+  const handleShortcutKey = useStableCallback((e) => {
     const modalOpen = () =>
       Boolean(
         state.sharingFile ||
@@ -309,122 +338,110 @@ function FilesPageContent() {
 
     const readOnly = Boolean(state.usbMode);
 
-    const onKey = (e) => {
-      if (e.defaultPrevented) return;
-      if (isTyping(e.target)) return;
+    if (e.defaultPrevented) return;
+    if (isTyping(e.target)) return;
 
-      // Escape: exit selection mode. Defer to modals / media viewer.
-      if (e.key === 'Escape') {
-        if (state.viewerFile || modalOpen()) return;
-        if (state.selectionMode) {
-          e.preventDefault();
-          state.setSelectionMode(false);
-          state.setSelectedFiles([]);
-        }
-        return;
-      }
-
-      if (state.viewerFile) return;
-
-      const ctrl = e.ctrlKey || e.metaKey;
-      const { altKey: alt, shiftKey: shift } = e;
-
-      // Alt+←/→ — navigate history (overrides browser back/forward)
-      if (alt && !ctrl && !shift && e.key === 'ArrowLeft') {
-        if (navigation.canGoBack) {
-          e.preventDefault();
-          navigation.goBack();
-        }
-        return;
-      }
-      if (alt && !ctrl && !shift && e.key === 'ArrowRight') {
-        if (navigation.canGoForward) {
-          e.preventDefault();
-          navigation.goForward();
-        }
-        return;
-      }
-
-      // Ctrl/Cmd+A — select all in current folder
-      if (ctrl && !alt && !shift && (e.key === 'a' || e.key === 'A')) {
-        if (isGlobalSearch || readOnly || modalOpen()) return;
-        if (selectableFiles.length === 0) return;
+    // Escape: exit selection mode. Defer to modals / media viewer.
+    if (e.key === 'Escape') {
+      if (state.viewerFile || modalOpen()) return;
+      if (state.selectionMode) {
         e.preventDefault();
-        if (!state.selectionMode) state.setSelectionMode(true);
-        if (allSelected) state.setSelectedFiles([]);
-        else state.setSelectedFiles(selectableFiles.map((f) => f.name));
-        return;
+        state.setSelectionMode(false);
+        state.setSelectedFiles([]);
       }
+      return;
+    }
 
-      if (modalOpen()) return;
+    if (state.viewerFile) return;
 
-      // Delete — two-step bulk delete (first press shows confirm, second deletes)
-      if (!ctrl && !alt && !shift && e.key === 'Delete') {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const { altKey: alt, shiftKey: shift } = e;
+
+    // Alt+←/→ — navigate history (overrides browser back/forward)
+    if (alt && !ctrl && !shift && e.key === 'ArrowLeft') {
+      if (navigation.canGoBack) {
+        e.preventDefault();
+        navigation.goBack();
+      }
+      return;
+    }
+    if (alt && !ctrl && !shift && e.key === 'ArrowRight') {
+      if (navigation.canGoForward) {
+        e.preventDefault();
+        navigation.goForward();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd+A — select all in current folder
+    if (ctrl && !alt && !shift && (e.key === 'a' || e.key === 'A')) {
+      if (isGlobalSearch || readOnly || modalOpen()) return;
+      if (selectableFiles.length === 0) return;
+      e.preventDefault();
+      if (!state.selectionMode) state.setSelectionMode(true);
+      if (allSelected) state.setSelectedFiles([]);
+      else state.setSelectedFiles(selectableFiles.map((f) => f.name));
+      return;
+    }
+
+    if (modalOpen()) return;
+
+    // Delete — two-step bulk delete (first press shows confirm, second deletes)
+    if (!ctrl && !alt && !shift && e.key === 'Delete') {
+      if (readOnly || isGlobalSearch) return;
+      if (!state.selectionMode || state.selectedFiles.length === 0 || bulkDeleting) return;
+      e.preventDefault();
+      if (bulkDeleteConfirming) handleBulkDelete();
+      else setBulkDeleteConfirming(true);
+      return;
+    }
+
+    // F2 — rename the single selected file
+    if (!ctrl && !alt && !shift && e.key === 'F2') {
+      if (readOnly || isGlobalSearch) return;
+      if (state.selectedFiles.length !== 1) return;
+      const file = state.files.find((f) => f.name === state.selectedFiles[0]);
+      if (!file) return;
+      e.preventDefault();
+      handlers.initiateRename(file);
+      return;
+    }
+
+    // Single-letter shortcuts (no modifier)
+    if (ctrl || alt || shift) return;
+
+    switch (e.key) {
+      case 'n':
+      case 'N':
+        if (readOnly || isGlobalSearch || state.creatingFolder) return;
+        e.preventDefault();
+        handlers.initiateCreateFolder();
+        return;
+      case 'm':
+      case 'M':
         if (readOnly || isGlobalSearch) return;
-        if (!state.selectionMode || state.selectedFiles.length === 0 || bulkDeleting) return;
+        if (!state.selectionMode || state.selectedFiles.length === 0) return;
         e.preventDefault();
-        if (bulkDeleteConfirming) handleBulkDelete();
-        else setBulkDeleteConfirming(true);
+        setMoveModalOpen(true);
         return;
-      }
-
-      // F2 — rename the single selected file
-      if (!ctrl && !alt && !shift && e.key === 'F2') {
-        if (readOnly || isGlobalSearch) return;
-        if (state.selectedFiles.length !== 1) return;
-        const file = state.files.find((f) => f.name === state.selectedFiles[0]);
-        if (!file) return;
+      case 'g':
+      case 'G':
         e.preventDefault();
-        handlers.initiateRename(file);
+        state.setViewMode('grid');
         return;
-      }
-
-      // Single-letter shortcuts (no modifier)
-      if (ctrl || alt || shift) return;
-
-      switch (e.key) {
-        case 'n':
-        case 'N':
-          if (readOnly || isGlobalSearch || state.creatingFolder) return;
-          e.preventDefault();
-          handlers.initiateCreateFolder();
-          return;
-        case 'm':
-        case 'M':
-          if (readOnly || isGlobalSearch) return;
-          if (!state.selectionMode || state.selectedFiles.length === 0) return;
-          e.preventDefault();
-          setMoveModalOpen(true);
-          return;
-        case 'g':
-        case 'G':
-          e.preventDefault();
-          state.setViewMode('grid');
-          return;
-        case 'l':
-        case 'L':
-          e.preventDefault();
-          state.setViewMode('list');
-          return;
-        default:
-          return;
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [
-    state,
-    navigation,
-    handlers,
-    isGlobalSearch,
-    selectableFiles,
-    allSelected,
-    moveModalOpen,
-    pendingLock,
-    bulkDeleteConfirming,
-    bulkDeleting,
-    handleBulkDelete,
-  ]);
+      case 'l':
+      case 'L':
+        e.preventDefault();
+        state.setViewMode('list');
+        return;
+      default:
+        return;
+    }
+  });
+  useEffect(() => {
+    window.addEventListener('keydown', handleShortcutKey);
+    return () => window.removeEventListener('keydown', handleShortcutKey);
+  }, [handleShortcutKey]);
 
   const toggleSelection = useCallback(
     (file, mods = {}) => {
@@ -545,6 +562,55 @@ function FilesPageContent() {
     },
     [queryClient],
   );
+
+  // Stable props for the memo'd grid/list views and the viewer: an inline arrow
+  // is a new function each render, which re-renders every visible cell.
+  const confirmDeleteCurrent = useStableCallback(() => handlers.confirmDelete(state.deletingFile));
+  const confirmRenameCurrent = useStableCallback(() => handlers.confirmRename(state.renamingFile, state.newFileName));
+
+  // A global-search hit lives outside the browsed folder: go to it (a folder)
+  // or to its folder, scrolled to it (a file).
+  const navigateToSearchResult = useStableCallback((name, file) => {
+    const item = file || displayFiles.find((f) => f.name === name);
+    setGlobalSearchQuery('');
+    if (item?.isDirectory) state.setCurrentPath(item._fullPath || item._parentPath || name);
+    else {
+      state.setCurrentPath(item?._parentPath || '');
+      setPendingScrollTarget(name);
+    }
+  });
+  const openSearchResultFolder = useStableCallback((file) => {
+    setGlobalSearchQuery('');
+    state.setCurrentPath(file._parentPath || '');
+    setPendingScrollTarget(file.name);
+  });
+
+  // Fetch a folder's listing while the pointer rests on it, so opening it is
+  // served from the cache. Skipped for locked folders (they'd answer 423 until
+  // unlocked), search results and USB drives (listed by another endpoint).
+  const folderPrefetchTimerRef = useRef(null);
+  const prefetchFolder = useStableCallback((file) => {
+    if (isGlobalSearch || state.usbMode || file.locked) return;
+    clearTimeout(folderPrefetchTimerRef.current);
+    folderPrefetchTimerRef.current = setTimeout(() => {
+      const path = state.currentPath ? `${state.currentPath}/${file.name}` : file.name;
+      queryClient.prefetchQuery(filesQueryOptions(path));
+    }, FOLDER_PREFETCH_DELAY_MS);
+  });
+  const cancelFolderPrefetch = useStableCallback(() => clearTimeout(folderPrefetchTimerRef.current));
+  useEffect(() => () => clearTimeout(folderPrefetchTimerRef.current), []);
+
+  const deleteFromViewer = useStableCallback((file) => {
+    // Move to an adjacent file before the list refetches so the viewer stays
+    // open; the delete invalidation then refreshes the list and the thumbnail
+    // strip (dropping this file).
+    const list = state.viewableFiles;
+    const idx = list.findIndex((f) => f.id === file.id);
+    const next = list[idx + 1] || list[idx - 1] || null;
+    handlers.confirmDelete(file);
+    if (next) mediaViewer.selectViewerFile(next);
+    else mediaViewer.closeMediaViewer();
+  });
 
   const handleConfirmMove = async (destinationPath) => {
     if (destinationPath === state.currentPath) {
@@ -1077,40 +1143,20 @@ function FilesPageContent() {
                         newFileName={state.newFileName}
                         setNewFileName={state.setNewFileName}
                         cancelDelete={handlers.cancelDelete}
-                        confirmDelete={() => handlers.confirmDelete(state.deletingFile)}
+                        confirmDelete={confirmDeleteCurrent}
                         cancelRename={handlers.cancelRename}
-                        confirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
+                        confirmRename={confirmRenameCurrent}
                         processingFile={state.processingFile}
                         handleContextMenu={contextMenu.handleContextMenu}
                         getFileIcon={fileUtils.getFileIcon}
-                        navigateToFolder={
-                          isGlobalSearch
-                            ? (name, file) => {
-                                const path = file?._fullPath || file?._parentPath || name;
-                                setGlobalSearchQuery('');
-                                if (file?.isDirectory) state.setCurrentPath(path);
-                                else {
-                                  state.setCurrentPath(file?._parentPath || '');
-                                  setPendingScrollTarget(name);
-                                }
-                              }
-                            : handleFolderClick
-                        }
+                        navigateToFolder={isGlobalSearch ? navigateToSearchResult : handleFolderClick}
                         formatFileSize={fileUtils.formatFileSize}
                         openMediaViewer={
-                          isGlobalSearch
-                            ? (file) => {
-                                setGlobalSearchQuery('');
-                                state.setCurrentPath(file._parentPath || '');
-                                setPendingScrollTarget(file.name);
-                              }
-                            : readOnly
-                            ? () => {}
-                            : mediaViewer.openMediaViewer
+                          isGlobalSearch ? openSearchResultFolder : readOnly ? NOOP : mediaViewer.openMediaViewer
                         }
-                        initiateRename={isGlobalSearch || readOnly ? () => {} : handlers.initiateRename}
-                        handleDownload={isGlobalSearch || readOnly ? () => {} : fileUtils.handleDownload}
-                        initiateDelete={isGlobalSearch || readOnly ? () => {} : handlers.initiateDelete}
+                        initiateRename={isGlobalSearch || readOnly ? NOOP : handlers.initiateRename}
+                        handleDownload={isGlobalSearch || readOnly ? NOOP : fileUtils.handleDownload}
+                        initiateDelete={isGlobalSearch || readOnly ? NOOP : handlers.initiateDelete}
                         initiateShare={isGlobalSearch || readOnly ? undefined : handlers.initiateShare}
                         sharedPaths={isGlobalSearch || readOnly ? undefined : state.sharedPaths}
                         favoritePaths={isGlobalSearch || readOnly ? undefined : favoritePaths}
@@ -1123,6 +1169,8 @@ function FilesPageContent() {
                         onPauseDownload={state.pauseDownload}
                         onResumeDownload={state.resumeDownload}
                         onRemoveDownload={state.removeDownload}
+                        onPrefetchFolder={prefetchFolder}
+                        onCancelPrefetch={cancelFolderPrefetch}
                       />
                     </Suspense>
                   </div>
@@ -1150,37 +1198,17 @@ function FilesPageContent() {
                       newFileName={state.newFileName}
                       onNewFileNameChange={state.setNewFileName}
                       onCancelRename={handlers.cancelRename}
-                      onConfirmRename={() => handlers.confirmRename(state.renamingFile, state.newFileName)}
+                      onConfirmRename={confirmRenameCurrent}
                       processingFile={state.processingFile}
                       currentPath={state.currentPath}
-                      onNavigateToFolder={
-                        isGlobalSearch
-                          ? (name, file) => {
-                              const item = displayFiles.find((f) => f.name === name) || file;
-                              setGlobalSearchQuery('');
-                              if (item?.isDirectory) state.setCurrentPath(item._fullPath || item._parentPath || name);
-                              else {
-                                state.setCurrentPath(item?._parentPath || '');
-                                setPendingScrollTarget(name);
-                              }
-                            }
-                          : handleFolderClick
-                      }
+                      onNavigateToFolder={isGlobalSearch ? navigateToSearchResult : handleFolderClick}
                       onOpenMediaViewer={
-                        isGlobalSearch
-                          ? (file) => {
-                              setGlobalSearchQuery('');
-                              state.setCurrentPath(file._parentPath || '');
-                              setPendingScrollTarget(file.name);
-                            }
-                          : readOnly
-                          ? () => {}
-                          : mediaViewer.openMediaViewer
+                        isGlobalSearch ? openSearchResultFolder : readOnly ? NOOP : mediaViewer.openMediaViewer
                       }
-                      onInitiateRename={isGlobalSearch || readOnly ? () => {} : handlers.initiateRename}
-                      onHandleDownload={isGlobalSearch || readOnly ? () => {} : fileUtils.handleDownload}
-                      onInitiateDelete={isGlobalSearch || readOnly ? () => {} : handlers.initiateDelete}
-                      onConfirmDelete={() => handlers.confirmDelete(state.deletingFile)}
+                      onInitiateRename={isGlobalSearch || readOnly ? NOOP : handlers.initiateRename}
+                      onHandleDownload={isGlobalSearch || readOnly ? NOOP : fileUtils.handleDownload}
+                      onInitiateDelete={isGlobalSearch || readOnly ? NOOP : handlers.initiateDelete}
+                      onConfirmDelete={confirmDeleteCurrent}
                       onCancelDelete={handlers.cancelDelete}
                       formatFileSize={fileUtils.formatFileSize}
                       onContextMenu={isGlobalSearch ? undefined : contextMenu.handleContextMenu}
@@ -1194,6 +1222,8 @@ function FilesPageContent() {
                       onPauseDownload={state.pauseDownload}
                       onResumeDownload={state.resumeDownload}
                       onRemoveDownload={state.removeDownload}
+                      onPrefetchFolder={prefetchFolder}
+                      onCancelPrefetch={cancelFolderPrefetch}
                       isGlobalSearch={isGlobalSearch}
                     />
                   </Suspense>
@@ -1313,33 +1343,21 @@ function FilesPageContent() {
         onClose={contextMenu.closeContextMenu}
       />
 
-      <Suspense fallback={null}>
-        <MediaViewer
-          viewerFile={state.viewerFile}
-          viewableFiles={state.viewableFiles}
-          currentPath={state.currentPath}
-          onClose={mediaViewer.closeMediaViewer}
-          onNavigate={mediaViewer.navigateViewer}
-          onSelectFile={mediaViewer.selectViewerFile}
-          onDelete={
-            readOnly
-              ? undefined
-              : (file) => {
-                  // Move to an adjacent file before the list refetches so the
-                  // viewer stays open; the delete invalidation then refreshes
-                  // the list and the thumbnail strip (dropping this file).
-                  const list = state.viewableFiles;
-                  const idx = list.findIndex((f) => f.id === file.id);
-                  const next = list[idx + 1] || list[idx - 1] || null;
-                  handlers.confirmDelete(file);
-                  if (next) mediaViewer.selectViewerFile(next);
-                  else mediaViewer.closeMediaViewer();
-                }
-          }
-        />
-      </Suspense>
+      {state.viewerFile && (
+        <Suspense fallback={null}>
+          <MediaViewer
+            viewerFile={state.viewerFile}
+            viewableFiles={state.viewableFiles}
+            currentPath={state.currentPath}
+            onClose={mediaViewer.closeMediaViewer}
+            onNavigate={mediaViewer.navigateViewer}
+            onSelectFile={mediaViewer.selectViewerFile}
+            onDelete={readOnly ? undefined : deleteFromViewer}
+          />
+        </Suspense>
+      )}
 
-      <UploadStatus transfers={state.transfers} uploads={state.uploads} />
+      <TransfersPanel />
 
       {state.sharingFile && (
         <Suspense fallback={null}>

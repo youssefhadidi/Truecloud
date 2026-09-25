@@ -1,0 +1,126 @@
+/** @format */
+
+.xv {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.xv-scroll {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Fixed layout with explicit column widths: only a window of rows is mounted,
+   so columns must not resize to whichever rows happen to be rendered. Every
+   row is exactly --xv-row-h tall (set by XlsxViewer from its ROW_HEIGHT),
+   which is what lets it map a scroll offset to a row index. */
+.xv-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.xv-table tr {
+  height: var(--xv-row-h);
+}
+
+.xv-table td {
+  height: var(--xv-row-h);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  padding: 0 10px;
+  line-height: calc(var(--xv-row-h) - 2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.xv-table td.xv-num {
+  text-align: right;
+}
+
+.xv-table td.xv-rownum {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-weight: 600;
+  text-align: right;
+}
+
+.xv-table tr.xv-header td:not(.xv-rownum) {
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.xv-table tr.xv-spacer,
+.xv-table tr.xv-spacer td {
+  height: auto;
+  padding: 0;
+  border: none;
+}
+
+.xv-loading {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 3;
+}
+
+.xv-empty {
+  padding: 24px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.xv-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.xv-tab {
+  padding: 5px 12px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 500;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms;
+}
+
+.xv-tab--active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.xv-footer {
+  padding: 8px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.xv-footer__note {
+  color: var(--warning);
+}

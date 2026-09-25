@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { FiX, FiDownload, FiTrash2, FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2, FiMessageSquare } from 'react-icons/fi';
 import Confirm from '@/components/Confirm';
@@ -119,7 +119,7 @@ function UnsupportedViewer({ file, getFileUrl }) {
   );
 }
 
-export default function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, onDelete, shareToken, sharePassword }) {
+function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, onDelete, shareToken, sharePassword }) {
   const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState(null);
   const [aiOpen, setAiOpen] = useState(false);
@@ -512,3 +512,6 @@ export default function MediaViewer({ viewerFile, viewableFiles, currentPath, on
     </div>
   );
 }
+
+// Memo'd: the file browser re-renders for reasons unrelated to the open file.
+export default memo(MediaViewer);

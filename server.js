@@ -34,17 +34,10 @@ const CURRENT_APP_VERSION = require('./package.json').version;
 
 // Dynamic imports for ES modules
 let getToken;
-let verifyShare;
-let clientIpFromHeaders;
 
 async function loadEsModules() {
   const nextAuth = await import('next-auth/jwt');
   getToken = nextAuth.getToken;
-
-  const shareAuth = await import('./lib/shareAuth.mjs');
-  verifyShare = shareAuth.verifyShare;
-  clientIpFromHeaders = shareAuth.clientIpFromHeaders;
-
 }
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -54,8 +47,7 @@ const handle = app.getRequestHandler();
 // Unified WebSocket clients set - all messages route through here
 const wsClients = new Set();
 
-// Per-user index for targeted broadcasts (AI chat streams, etc.). Share-token
-// sockets are not indexed here; AI features are session-only.
+// Per-user index for targeted broadcasts (AI chat streams, etc.).
 const userWsClients = new Map();
 
 function addUserWs(userId, ws) {
@@ -240,9 +232,9 @@ ensureSqliteRollbackJournal().then(() => loadEsModules()).then(() => {
   const wss = new WebSocketServer({ noServer: true });
 
   // Authenticate WebSocket upgrade requests. Returns the authenticated userId
-  // when a valid NextAuth session is present, or `'share'` for share-token
-  // sessions (which don't have a user id but are allowed to connect for
-  // generic broadcasts like file-change). Returns null when unauthenticated.
+  // when a valid NextAuth session is present, null otherwise. Share visitors
+  // are deliberately not accepted: every broadcast here (file changes across
+  // all paths, jobs, torrents, logs, metrics) is server-wide, not share-scoped.
   // Cookie *names* only (never values) — enough to tell "browser sent no session
   // cookie" apart from "cookie present but this instance can't decrypt it".
   // Tolerates the array form Bun can hand back for a repeated header — this must
@@ -252,7 +244,7 @@ ensureSqliteRollbackJournal().then(() => loadEsModules()).then(() => {
       .split(';').map((c) => c.split('=')[0].trim()).filter(Boolean);
 
   async function authenticateWsUpgrade(request) {
-    // 1. Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
+    // Check NextAuth session via getToken (same approach as pages/api/files/upload.js)
     try {
       const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
       if (token?.id) return { userId: token.id };
@@ -261,20 +253,6 @@ ensureSqliteRollbackJournal().then(() => loadEsModules()).then(() => {
       // Most often: NEXTAUTH_SECRET missing/renamed on this instance (getToken
       // throws MissingSecret), or a cookie that won't decrypt with that secret.
       console.warn('[ws] getToken threw:', err?.message || err);
-    }
-
-    // 2. Check share token + password query params
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    const shareToken = url.searchParams.get('token');
-    const sharePassword = url.searchParams.get('password');
-
-    if (shareToken && sharePassword) {
-      try {
-        const result = await verifyShare(shareToken, sharePassword, clientIpFromHeaders(request));
-        if (result.valid) return { userId: null };
-      } catch {
-        // Share verification failed
-      }
     }
 
     return null;
@@ -297,8 +275,7 @@ ensureSqliteRollbackJournal().then(() => loadEsModules()).then(() => {
       if (!authResult) {
         console.warn(
           `[ws] upgrade rejected: 401 (host=${request.headers.host}` +
-          `, cookies=[${cookieNames(request.headers.cookie).join(',') || 'none'}]` +
-          `, share=${url.searchParams.has('token')})`,
+          `, cookies=[${cookieNames(request.headers.cookie).join(',') || 'none'}])`,
         );
         // end() rather than write()+destroy(): destroy() can discard the buffered
         // response, leaving the browser with a bare closed socket (shown as
