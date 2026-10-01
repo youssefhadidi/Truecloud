@@ -1,6 +1,6 @@
 /** @format */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FiFolder, FiFile, FiImage, FiVideo, FiBox } from 'react-icons/fi';
 import { is3dFile, isImage, isVideo } from '@/lib/clientFileUtils';
@@ -395,23 +395,9 @@ export function useShareOperations({
     [viewerFile, viewableFiles, setViewerFile],
   );
 
-  // Keyboard navigation for media viewer
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (!viewerFile) return;
-
-      if (e.key === 'ArrowRight') {
-        navigateViewer('next');
-      } else if (e.key === 'ArrowLeft') {
-        navigateViewer('prev');
-      } else if (e.key === 'Escape') {
-        closeMediaViewer();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [viewerFile, viewableFiles, navigateViewer, closeMediaViewer]);
+  // Keyboard navigation is owned by MediaViewer, which knows when a key
+  // belongs to a text field, a focused video or fullscreen — same as the
+  // signed-in files view (see useMediaViewer in useFileOperations.js).
 
   // ============ Drag & Drop ============
   const handleDragOver = useCallback(

@@ -47,8 +47,9 @@ export async function GET(req, { params }) {
     // Get optional subpath for directory shares
     const subPath = url.searchParams.get('path') || '';
 
-    // Validate the path is within share scope
-    const pathCheck = validateSharePath(share, subPath);
+    // Validate the path is within share scope. A single-file share has
+    // nothing inside it, so any path names the shared file itself.
+    const pathCheck = validateSharePath(share, share.isDirectory ? subPath : '');
     if (!pathCheck.allowed) {
       return NextResponse.json({ error: pathCheck.error }, { status: 400 });
     }

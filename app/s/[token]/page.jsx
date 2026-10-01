@@ -3,14 +3,14 @@
 'use client';
 
 import { use, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
 import {
   FiLock, FiFile, FiFolder, FiUpload, FiDownload, FiGrid, FiList,
-  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2, FiMail,
+  FiHome, FiChevronRight, FiCheckSquare, FiSquare, FiTrash2, FiMail, FiEye,
 } from 'react-icons/fi';
 import { useSharePage } from '@/hooks/useSharePage';
 import { useShareOperations } from '@/hooks/useShareOperations';
-import { isImage, isVideo, isAudio, isPdf, isXlsx, is3dFile } from '@/lib/clientFileUtils';
+import { formatFileSize } from '@/lib/clientFileUtils';
+import { isViewableFile } from '@/lib/getFileType';
 import {
   useShare, useShareFiles, useDeleteShareFile, useIdentifyShare, useClearShareIdentity,
 } from '@/lib/api/publicShares';
@@ -23,8 +23,6 @@ import { useTranslation } from '@/components/LanguageProvider';
 // Lazy load heavy components
 const MediaViewer = lazy(() => import('@/components/files/MediaViewer'));
 const ContextMenu = lazy(() => import('@/components/files/ContextMenu'));
-const Viewer3D = dynamic(() => import('@/components/files/Viewer3D'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading 3D viewer...</div> });
-const XlsxViewer = dynamic(() => import('@/components/files/XlsxViewer'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-gray-400">Loading spreadsheet...</div> });
 const ShareGrid = lazy(() => import('@/components/files/ShareGrid'));
 const ShareList = lazy(() => import('@/components/files/ShareList'));
 
@@ -56,6 +54,9 @@ export default function SharePage({ params }) {
   const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [email, setEmail] = useState('');
+  // A single-file share opens straight into the viewer; closing it drops back
+  // to the file card, which can reopen it.
+  const [singleViewerOpen, setSingleViewerOpen] = useState(true);
   // Fetch share metadata
   const {
     data: shareResponse,
@@ -67,6 +68,19 @@ export default function SharePage({ params }) {
   const needsEmail = !!shareResponse?.privateUploads && !shareResponse?.uploaderEmail;
   const identifyMutation = useIdentifyShare();
   const clearIdentityMutation = useClearShareIdentity();
+
+  // A single-file share is shown as a one-file folder so it gets the exact
+  // viewer (and viewer URLs) a file inside a shared folder gets.
+  const singleFile = useMemo(
+    () =>
+      shareResponse && !shareResponse.isDirectory && shareResponse.fileName
+        ? { id: shareResponse.fileName, name: shareResponse.fileName, size: shareResponse.size, updatedAt: shareResponse.updatedAt }
+        : null,
+    [shareResponse],
+  );
+  const singleFileList = useMemo(() => (singleFile ? [singleFile] : []), [singleFile]);
+  const closeSingleViewer = useCallback(() => setSingleViewerOpen(false), []);
+  const noopSelect = useCallback(() => {}, []);
 
   // Use share hooks for state management
   const shareState = useSharePage(token, shareResponse ? { ...shareResponse, files: shareFiles } : null);
@@ -523,7 +537,8 @@ export default function SharePage({ params }) {
   }
 
   // Single file view
-  if (shareResponse && !shareResponse.isDirectory) {
+  if (singleFile) {
+    const viewable = isViewableFile(singleFile);
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16, overflow: 'auto' }}>
         <div
@@ -533,69 +548,50 @@ export default function SharePage({ params }) {
             borderRadius: 'var(--r-lg)',
             boxShadow: 'var(--shadow-md)',
             padding: 32,
-            maxWidth: 720,
+            maxWidth: 480,
             width: '100%',
           }}
         >
           <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>{shareResponse.fileName}</h2>
+            <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 8, wordBreak: 'break-word' }}>{singleFile.name}</h2>
             <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 20 }}>
-              {shareResponse.size ? `${Math.round(shareResponse.size / 1024 / 1024)}MB` : t('sharePage.unknownSize')}
+              {singleFile.size != null ? formatFileSize(singleFile.size) : t('sharePage.unknownSize')}
             </p>
 
-            {isImage(shareResponse.fileName) && (
-              <img
-                src={`/api/public/${token}/optimize-image?quality=85&w=1200&h=1200${submittedPassword ? `&pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                alt={shareResponse.fileName}
-                style={{ maxWidth: '100%', maxHeight: 500, margin: '0 auto 20px', objectFit: 'contain', borderRadius: 'var(--r-sm)' }}
-              />
-            )}
-
-            {(isVideo(shareResponse.fileName) || isAudio(shareResponse.fileName) || isPdf(shareResponse.fileName)) && (
-              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
-                {isVideo(shareResponse.fileName) && (
-                  <video controls style={{ width: '100%', maxHeight: 500 }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
-                    {t('sharePage.videoNotSupported')}
-                  </video>
-                )}
-                {isAudio(shareResponse.fileName) && (
-                  <audio controls style={{ width: '100%' }} src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}>
-                    {t('sharePage.audioNotSupported')}
-                  </audio>
-                )}
-                {isPdf(shareResponse.fileName) && (
-                  <iframe
-                    src={`/api/public/${token}/stream${submittedPassword ? `?pwd=${encodeURIComponent(submittedPassword)}` : ''}`}
-                    style={{ width: '100%', height: 500, border: 'none' }}
-                    title={shareResponse.fileName}
-                  />
-                )}
-              </div>
-            )}
-
-            {is3dFile(shareResponse.fileName) && (
-              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden', height: 500 }}>
-                <Viewer3D fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} singleFileShare />
-              </div>
-            )}
-
-            {isXlsx(shareResponse.fileName) && (
-              <div style={{ marginBottom: 20, borderRadius: 'var(--r-sm)', overflow: 'hidden', height: 500 }}>
-                <XlsxViewer fileName={shareResponse.fileName} currentPath="" shareToken={token} sharePassword={submittedPassword} />
-              </div>
-            )}
-
-            <Btn
-              variant="primary"
-              size="lg"
-              onClick={() => operations.handleDownload({ name: shareResponse.fileName })}
-              style={{ width: '100%' }}
-            >
-              <FiDownload size={16} />
-              {t('common.download')}
-            </Btn>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {viewable && (
+                <Btn variant="surface" size="lg" onClick={() => setSingleViewerOpen(true)} style={{ width: '100%' }}>
+                  <FiEye size={16} />
+                  {t('menu.view')}
+                </Btn>
+              )}
+              <Btn
+                variant="primary"
+                size="lg"
+                onClick={() => operations.handleDownload({ name: singleFile.name })}
+                style={{ width: '100%' }}
+              >
+                <FiDownload size={16} />
+                {t('common.download')}
+              </Btn>
+            </div>
           </div>
         </div>
+
+        {viewable && singleViewerOpen && (
+          <Suspense fallback={null}>
+            <MediaViewer
+              viewerFile={singleFile}
+              viewableFiles={singleFileList}
+              currentPath=""
+              shareToken={token}
+              sharePassword={submittedPassword}
+              singleFileShare
+              onClose={closeSingleViewer}
+              onSelectFile={noopSelect}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -924,7 +920,7 @@ export default function SharePage({ params }) {
                       onFileClick={(file) => {
                         if (file.isDirectory) {
                           operations.navigateToSubFolder(file.name);
-                        } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                        } else if (isViewableFile(file)) {
                           operations.openMediaViewer(file);
                         }
                       }}
@@ -954,7 +950,7 @@ export default function SharePage({ params }) {
                       onFileClick={(file) => {
                         if (file.isDirectory) {
                           operations.navigateToSubFolder(file.name);
-                        } else if (isImage(file.name) || isVideo(file.name) || isAudio(file.name) || isPdf(file.name) || is3dFile(file.name) || isXlsx(file.name)) {
+                        } else if (isViewableFile(file)) {
                           operations.openMediaViewer(file);
                         }
                       }}

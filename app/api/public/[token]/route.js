@@ -64,6 +64,7 @@ export async function GET(req, { params }) {
       fileName: share.fileName,
       isDirectory: share.isDirectory,
       size: fileStats.size,
+      updatedAt: fileStats.mtime,
       mimeType: lookup(share.fileName) || 'application/octet-stream',
       ownerUsername: share.owner.username,
       createdAt: share.createdAt,

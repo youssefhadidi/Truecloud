@@ -358,7 +358,7 @@ function SubtitlePicker({ tracks, selected, onSelect, uiLang }) {
 
 /* ─── Player ─────────────────────────────────────────────── */
 
-export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
+export function VideoPlayer({ file, getFileUrl, currentPath, shareToken, sharePassword }) {
   const [status, setStatus] = useState(null); // null | 'pending' | 'transcoding' | 'ready' | 'native' | 'disabled' | 'failed'
   const [progress, setProgress] = useState(0);
   // >0 while this file is waiting on the single encode slot behind another
@@ -385,7 +385,25 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const streamUrl = getFileUrl(file, 'video');
 
   // The path the folder-lock PIN is keyed on — the file itself, not its folder.
+  // On a share link it is the file's path inside the share instead.
   const targetPath = currentPath ? `${currentPath}/${file.name || file.id}` : file.name || file.id;
+
+  // The status and subtitle endpoints for this viewer: the signed-in routes
+  // (folder PIN appended, since native fetch and <track src> skip the axios
+  // interceptor), or the share link's twins (password in the query, for the
+  // same reason).
+  const mediaApiUrl = useCallback(
+    (kind, extra = {}) => {
+      if (shareToken) {
+        const params = new URLSearchParams({ path: targetPath, ...extra });
+        if (sharePassword) params.set('pwd', sharePassword);
+        return `/api/public/${encodeURIComponent(shareToken)}/${kind}?${params}`;
+      }
+      const params = new URLSearchParams({ path: currentPath || '', ...extra });
+      return appendFolderPinToUrl(`/api/files/${kind}/${encodeURIComponent(file.id)}?${params}`, targetPath);
+    },
+    [shareToken, sharePassword, targetPath, currentPath, file.id],
+  );
 
   useLayoutEffect(() => {
     setStatus(null);
@@ -401,16 +419,9 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   // list comes from the source file, so it is valid whether playback ends up
   // native or HLS, and it costs one ffprobe.
   useEffect(() => {
-    if (shareToken) return undefined; // share links don't expose the subtitle API
-
     const ac = new AbortController();
-    const params = new URLSearchParams({ path: currentPath || '' });
-    const listUrl = appendFolderPinToUrl(
-      `/api/files/subtitles/${encodeURIComponent(file.id)}?${params}`,
-      targetPath,
-    );
 
-    fetch(listUrl, { signal: ac.signal })
+    fetch(mediaApiUrl('subtitles'), { signal: ac.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (ac.signal.aborted || !data) return;
@@ -419,7 +430,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
       .catch(() => {}); // no subtitles is a normal outcome, not an error
 
     return () => ac.abort();
-  }, [file.id, currentPath, shareToken, targetPath]);
+  }, [mediaApiUrl]);
 
   // Until the viewer picks, default to the track matching the UI language —
   // a French UI opens on the French subtitles. Derived rather than stored, so
@@ -449,16 +460,10 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
           kind="subtitles"
           label={subtitleLabel(track, lang)}
           srcLang={track.lang || undefined}
-          src={appendFolderPinToUrl(
-            `/api/files/subtitles/${encodeURIComponent(file.id)}?${new URLSearchParams({
-              path: currentPath || '',
-              track: String(track.id),
-            })}`,
-            targetPath,
-          )}
+          src={mediaApiUrl('subtitles', { track: String(track.id) })}
         />
       )),
-    [subtitles, lang, file.id, currentPath, targetPath],
+    [subtitles, lang, mediaApiUrl],
   );
 
   useEffect(() => {
@@ -615,16 +620,10 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   const checkStatus = useCallback(
     async (signal) => {
       try {
-        const params = new URLSearchParams({ path: currentPath || '' });
-        // Native fetch doesn't go through the axios interceptor, so the
-        // folder PIN (if any) needs to be appended manually. The server
-        // returns a bare hlsUrl too — re-append the PIN before handing it
-        // to hls.js, otherwise the manifest fetch will 423.
-        const statusUrl = appendFolderPinToUrl(
-          withHevcSupport(`/api/files/transcode-status/${encodeURIComponent(file.id)}?${params}`),
-          targetPath,
-        );
-        const res = await fetch(statusUrl, { signal });
+        // The server returns a bare hlsUrl for signed-in viewers — re-append
+        // the PIN before handing it to hls.js, otherwise the manifest fetch
+        // will 423. A share's hlsUrl already carries the share password.
+        const res = await fetch(withHevcSupport(mediaApiUrl('transcode-status')), { signal });
         if (!res.ok) return null;
         const data = await res.json();
         if (!mountedRef.current) return null;
@@ -633,14 +632,14 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         if (data.status === 'pending' || data.status === 'transcoding' || data.hlsUrl) loadHls().catch(() => {});
         if (data.progress !== undefined) setProgress(data.progress);
         setQueuePosition(data.queuePosition ?? 0);
-        if (data.hlsUrl) setHlsUrl(appendFolderPinToUrl(data.hlsUrl, targetPath));
+        if (data.hlsUrl) setHlsUrl(shareToken ? data.hlsUrl : appendFolderPinToUrl(data.hlsUrl, targetPath));
         return data.status;
       } catch (err) {
         if (err.name === 'AbortError') return null;
         return null;
       }
     },
-    [file.id, currentPath, targetPath],
+    [mediaApiUrl, shareToken, targetPath],
   );
 
   const triggerTranscode = useCallback(() => {
@@ -656,11 +655,6 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
   useEffect(() => {
     mountedRef.current = true;
     triggeredRef.current = false;
-
-    if (shareToken) {
-      setStatus('native');
-      return undefined;
-    }
 
     const ac = new AbortController();
     let debounceTimer = null;
@@ -695,7 +689,7 @@ export function VideoPlayer({ file, getFileUrl, currentPath, shareToken }) {
         triggerAbortRef.current = null;
       }
     };
-  }, [file.id, fileExt, shareToken, checkStatus, triggerTranscode]);
+  }, [file.id, fileExt, checkStatus, triggerTranscode]);
 
   const onDownload = () => {
     const url = getFileUrl(file, 'download');

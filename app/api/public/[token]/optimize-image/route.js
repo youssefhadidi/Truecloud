@@ -5,8 +5,8 @@ import {
   verifyShare, validateSharePath, clientIpFromHeaders,
   readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
-import fs from 'fs';
-import { stat, mkdir } from 'fs/promises';
+import { stat, mkdir, readFile, writeFile, rename, unlink } from 'fs/promises';
+import { randomBytes } from 'crypto';
 import { join, resolve, dirname, extname } from 'node:path';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
@@ -14,14 +14,16 @@ import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { optiCachePath } from '@/lib/optiCache.mjs';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { Semaphore } from '@/lib/semaphore';
+import { optimizedImageCache } from '@/lib/thumbnailCache';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
 
-// Semaphore to limit concurrent image optimizations to 20
-const optimizationSemaphore = new Semaphore(20);
+// Semaphore to limit concurrent image optimizations — same cap as the
+// signed-in route
+const optimizationSemaphore = new Semaphore(10);
 
 export const maxDuration = 30;
 
@@ -92,11 +94,12 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: CACHE_PATH_ERROR }, { status: 403 });
     }
 
-    if (!fs.existsSync(filePath)) {
+    let fileStats;
+    try {
+      fileStats = await stat(filePath);
+    } catch {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
-
-    const fileStats = await stat(filePath);
 
     // Only process image files
     const fileExt = extname(fileName).toLowerCase();
@@ -116,11 +119,11 @@ export async function GET(req, { params }) {
 
     // Skip optimization for very small files or SVG
     if (mimeType === 'image/svg+xml' || fileExt === '.svg' || fileStats.size < OPTIMIZE_MIN_BYTES) {
-      const fileBuffer = fs.readFileSync(filePath);
+      const fileBuffer = await readFile(filePath);
       return new NextResponse(fileBuffer, {
         headers: {
           'Content-Type': mimeType,
-          'Content-Length': fileStats.size.toString(),
+          'Content-Length': fileBuffer.length.toString(),
           ...cacheHeaders,
         },
       });
@@ -138,11 +141,25 @@ export async function GET(req, { params }) {
     });
     const cacheDir = dirname(cachePath);
 
-    // The key covers the source's size and mtime, so any file found here was
-    // made from the current version.
-    if (fs.existsSync(cachePath)) {
-      // Serve cached version without semaphore
-      const cachedBuffer = fs.readFileSync(cachePath);
+    // Memory cache — the same one the signed-in route fills, keyed on the
+    // same path, so a variant either side made is served from RAM.
+    const memoryCached = optimizedImageCache.get(cachePath);
+    if (memoryCached) {
+      return new NextResponse(memoryCached, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Content-Length': memoryCached.length.toString(),
+          ...cacheHeaders,
+          'X-Cache': 'MEMORY',
+        },
+      });
+    }
+
+    // Disk cache. The key covers the source's size and mtime, so any file
+    // found here was made from the current version.
+    try {
+      const cachedBuffer = await readFile(cachePath);
+      optimizedImageCache.set(cachePath, cachedBuffer);
       return new NextResponse(cachedBuffer, {
         headers: {
           'Content-Type': 'image/webp',
@@ -151,6 +168,8 @@ export async function GET(req, { params }) {
           'X-Cache': 'HIT',
         },
       });
+    } catch {
+      // Not cached yet, will optimize
     }
 
     // Acquire semaphore only for actual optimization
@@ -171,13 +190,17 @@ export async function GET(req, { params }) {
         .webp({ quality })
         .toBuffer();
 
-      // Cache the optimized image
-      try {
-        await mkdir(cacheDir, { recursive: true });
-        fs.writeFileSync(cachePath, optimizedBuffer);
-      } catch (cacheError) {
-        console.error('Failed to cache optimized image:', cacheError);
-      }
+      // Memory cache + fire-and-forget disk write. Written to a temp name and
+      // renamed, so a concurrent request never reads a half-written file.
+      optimizedImageCache.set(cachePath, optimizedBuffer);
+      const tmpPath = `${cachePath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
+      mkdir(cacheDir, { recursive: true })
+        .then(() => writeFile(tmpPath, optimizedBuffer))
+        .then(() => rename(tmpPath, cachePath))
+        .catch(async (cacheError) => {
+          await unlink(tmpPath).catch(() => {});
+          console.error('Failed to cache optimized image:', cacheError);
+        });
 
       return new NextResponse(optimizedBuffer, {
         headers: {
@@ -190,11 +213,11 @@ export async function GET(req, { params }) {
     } catch (sharpError) {
       // If sharp fails, return original image
       console.error('Image optimization failed:', sharpError);
-      const fileBuffer = fs.readFileSync(filePath);
+      const fileBuffer = await readFile(filePath);
       return new NextResponse(fileBuffer, {
         headers: {
           'Content-Type': mimeType,
-          'Content-Length': fileStats.size.toString(),
+          'Content-Length': fileBuffer.length.toString(),
           // Fallback bytes, not the variant this URL names — don't pin them.
           'Cache-Control': 'no-store',
         },

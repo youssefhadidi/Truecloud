@@ -119,7 +119,7 @@ function UnsupportedViewer({ file, getFileUrl }) {
   );
 }
 
-function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, onDelete, shareToken, sharePassword }) {
+function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNavigate, onSelectFile, onDelete, shareToken, sharePassword, singleFileShare = false }) {
   const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState(null);
   const [aiOpen, setAiOpen] = useState(false);
@@ -354,11 +354,11 @@ function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNaviga
   function renderMedia() {
     switch (fileType) {
       case '3d':
-        return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} onClick={stopProp} />;
+        return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} singleFileShare={singleFileShare} onClick={stopProp} />;
       case 'image':
         return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} onSwipe={multi ? handleSwipe : undefined} />;
       case 'video':
-        return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} />;
+        return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} sharePassword={sharePassword} />;
       case 'audio':
         return <AudioPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} sharePassword={sharePassword} />;
       case 'pdf': {
