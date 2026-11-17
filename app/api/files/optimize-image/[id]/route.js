@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { randomBytes } from 'crypto';
 import { optiCachePath } from '@/lib/optiCache.mjs';
+import { isHeif, resizeHeifToBuffer } from '@/lib/heifVips.mjs';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
@@ -160,29 +161,41 @@ export async function GET(req, { params }) {
     let optimizationFailed = false;
 
     try {
-      // Optimize image using sharp
-      let sharpPipeline = sharp(filePath, {
-        failOn: 'none',
-        failOnError: false,
-        limitInputPixels: false,
-      }).rotate();
-
-      // Only resize if dimensions are not 0x0 (0x0 means preserve original)
-      if (maxWidth !== 0 || maxHeight !== 0) {
-        sharpPipeline = sharpPipeline.resize(maxWidth, maxHeight, {
-          fit: 'inside',
-          withoutEnlargement: true,
+      // HEIC/HEIF go to out-of-process vips; null means it isn't installed.
+      // A vips failure lands in the catch and is never retried in-process.
+      if (isHeif(fileName)) {
+        optimizedBuffer = await resizeHeifToBuffer(filePath, {
+          width: maxWidth,
+          height: maxHeight,
+          quality: format === 'jpeg' ? 100 : quality,
+          format,
         });
       }
 
-      // Apply format conversion
-      if (format === 'jpeg') {
-        sharpPipeline = sharpPipeline.jpeg({ quality: 100 });
-      } else {
-        sharpPipeline = sharpPipeline.webp({ quality });
-      }
+      if (!optimizedBuffer) {
+        let sharpPipeline = sharp(filePath, {
+          failOn: 'none',
+          failOnError: false,
+          limitInputPixels: false,
+        }).rotate();
 
-      optimizedBuffer = await sharpPipeline.toBuffer();
+        // Only resize if dimensions are not 0x0 (0x0 means preserve original)
+        if (maxWidth !== 0 || maxHeight !== 0) {
+          sharpPipeline = sharpPipeline.resize(maxWidth, maxHeight, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          });
+        }
+
+        // Apply format conversion
+        if (format === 'jpeg') {
+          sharpPipeline = sharpPipeline.jpeg({ quality: 100 });
+        } else {
+          sharpPipeline = sharpPipeline.webp({ quality });
+        }
+
+        optimizedBuffer = await sharpPipeline.toBuffer();
+      }
     } catch (sharpError) {
       // If sharp fails, flag it and use original image
       console.error('Image optimization failed, serving original:', sharpError);

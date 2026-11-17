@@ -12,6 +12,7 @@ import { lookup } from 'mime-types';
 import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
 import { optiCachePath } from '@/lib/optiCache.mjs';
+import { isHeif, resizeHeifToBuffer } from '@/lib/heifVips.mjs';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { Semaphore } from '@/lib/semaphore';
 import { optimizedImageCache } from '@/lib/thumbnailCache';
@@ -176,8 +177,13 @@ export async function GET(req, { params }) {
     await optimizationSemaphore.acquire();
 
     try {
-      // Optimize image using sharp
-      const optimizedBuffer = await sharp(filePath, {
+      // HEIC/HEIF go to out-of-process vips; null means it isn't installed.
+      // A vips failure lands in the catch and is never retried in-process.
+      let optimizedBuffer = isHeif(fileName)
+        ? await resizeHeifToBuffer(filePath, { width: maxWidth, height: maxHeight, quality, format: 'webp' })
+        : null;
+
+      optimizedBuffer ??= await sharp(filePath, {
         failOn: 'none',
         failOnError: false,
         limitInputPixels: false,
