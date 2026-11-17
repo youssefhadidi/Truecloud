@@ -12,6 +12,7 @@ import { join, basename } from 'node:path';
 import { lookup } from 'mime-types';
 import archiver from 'archiver';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { fileRangeResponse } from '@/lib/fileRangeResponse';
 import { logger } from '@/lib/logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -136,22 +137,15 @@ export async function GET(req, { params }) {
       });
     }
 
-    // If it's a file, stream it directly.
-    // nodeToWebStream ensures the underlying fs.ReadStream is destroyed
-    // when the client disconnects, preventing file descriptor leaks.
+    // If it's a file, stream it with range support so an interrupted browser
+    // download can resume — see lib/fileRangeResponse.js.
     const mimeType = lookup(downloadName) || 'application/octet-stream';
 
-    return new NextResponse(
-      nodeToWebStream(fs.createReadStream(filePath)),
-      {
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': fileStats.size.toString(),
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(downloadName))}"; filename*=UTF-8''${encodeURIComponent(basename(downloadName))}`,
-          'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=3600',
-        },
-      }
-    );
+    return fileRangeResponse(req, filePath, fileStats, {
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(basename(downloadName))}"; filename*=UTF-8''${encodeURIComponent(basename(downloadName))}`,
+      'Cache-Control': share.privateUploads ? 'private, no-store' : 'public, max-age=3600',
+    });
   } catch (error) {
     logger.error('Public download: handler error', { error: error.message });
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });

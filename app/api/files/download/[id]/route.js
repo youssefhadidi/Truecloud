@@ -10,6 +10,7 @@ import archiver from 'archiver';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { nodeToWebStream } from '@/lib/streamUtils';
+import { fileRangeResponse } from '@/lib/fileRangeResponse';
 import { requireFolderUnlock } from '@/lib/folderLocks';
 import { logger } from '@/lib/logger';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
@@ -129,11 +130,8 @@ export async function GET(req, { params }) {
       });
     }
 
-    // If it's a file, stream it directly (don't load entire file into memory).
-    // nodeToWebStream wraps the Node.js Readable in a Web ReadableStream with a
-    // cancel() hook that calls nodeStream.destroy() when the client disconnects.
-    // Without this, disconnected clients leave file descriptors open indefinitely
-    // until the OS FD limit is hit, crashing the entire app.
+    // If it's a file, stream it with range support so an interrupted browser
+    // download can resume — see lib/fileRangeResponse.js.
     const mimeType = lookup(fileName) || 'application/octet-stream';
 
     // Determine cache duration based on file type
@@ -144,17 +142,11 @@ export async function GET(req, { params }) {
       cacheControl = 'public, max-age=604800'; // 1 week for media
     }
 
-    return new NextResponse(
-      nodeToWebStream(fs.createReadStream(filePath)),
-      {
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': fileStats.size.toString(),
-          'Content-Disposition': `inline; filename="${encodeURIComponent(basename(fileName))}"; filename*=UTF-8''${encodeURIComponent(basename(fileName))}`,
-          'Cache-Control': cacheControl,
-        },
-      }
-    );
+    return fileRangeResponse(req, filePath, fileStats, {
+      'Content-Type': mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(basename(fileName))}"; filename*=UTF-8''${encodeURIComponent(basename(fileName))}`,
+      'Cache-Control': cacheControl,
+    });
   } catch (error) {
     logger.error('Download: handler error', { error: error.message });
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });
