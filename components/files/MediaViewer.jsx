@@ -85,6 +85,11 @@ const PdfViewer = dynamic(() => import('./viewers/PdfViewer'), {
 // worker, which pre-generates exactly this variant.
 const { quality: VIEWER_IMAGE_QUALITY, width: VIEWER_IMAGE_WIDTH, height: VIEWER_IMAGE_HEIGHT } = VIEWER_IMAGE;
 
+/** Identity of the image ImageViewer reports loaded (share listings may lack ids). */
+function viewerImageKey(file) {
+  return file.id ?? file.name;
+}
+
 function UnsupportedViewer({ file, getFileUrl }) {
   const { t } = useTranslation();
   return (
@@ -125,6 +130,10 @@ function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNaviga
   const [aiOpen, setAiOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Which image has finished loading in ImageViewer; neighbours are
+  // prefetched only after it has. url -> AbortController for those prefetches.
+  const [loadedImageKey, setLoadedImageKey] = useState(null);
+  const prefetchesRef = useRef(new Map());
 
   // Deleting is only offered to authenticated users (never share visitors)
   // and only when the host page wires up an onDelete handler.
@@ -212,18 +221,58 @@ function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNaviga
   );
 
   // Warm the cache for the neighbouring images so stepping through a folder
-  // shows the next photo at once instead of a blurred placeholder. Delayed a
-  // beat so the current file isn't competing with them for bandwidth.
+  // shows the next photo at once instead of a blurred placeholder.
+  //
+  // Only once the photo on screen has loaded: a neighbour's HEIC decode takes
+  // seconds of server CPU and would slow the one being looked at. Low-priority
+  // fetches (not `new Image()`) so they can be cancelled: moving on aborts the
+  // prefetches left behind, and the server drops them if still queued instead
+  // of decoding photos nobody is waiting for.
   useEffect(() => {
-    if (currentIndex < 0 || !viewableFiles?.length) return undefined;
-    const id = setTimeout(() => {
-      for (const i of [currentIndex + 1, currentIndex - 1]) {
-        const f = viewableFiles[i];
-        if (f && getFileType(f) === 'image') new Image().src = getFileUrl(f, 'image');
+    const prefetches = prefetchesRef.current;
+    const current = currentIndex >= 0 ? viewableFiles?.[currentIndex] : null;
+    const neighbours = [currentIndex + 1, currentIndex - 1]
+      .map((i) => (current ? viewableFiles[i] : null))
+      .filter((f) => f && getFileType(f) === 'image');
+    const currentIsImage = current && getFileType(current) === 'image';
+
+    const keep = new Set(neighbours.map((f) => getFileUrl(f, 'image')));
+    if (currentIsImage) keep.add(getFileUrl(current, 'image'));
+    for (const [url, controller] of prefetches) {
+      if (!keep.has(url)) {
+        controller.abort();
+        prefetches.delete(url);
       }
-    }, 400);
+    }
+
+    if (!current || (currentIsImage && loadedImageKey !== viewerImageKey(current))) return undefined;
+    const id = setTimeout(
+      () => {
+        for (const f of neighbours) {
+          const url = getFileUrl(f, 'image');
+          if (prefetches.has(url)) continue;
+          const controller = new AbortController();
+          prefetches.set(url, controller);
+          // Read the whole body so the response lands in the HTTP cache
+          fetch(url, { signal: controller.signal, priority: 'low', credentials: 'same-origin' })
+            .then((res) => res.blob())
+            .catch(() => {});
+        }
+      },
+      // Non-image (video, pdf…): no load signal to wait for, keep a short delay
+      currentIsImage ? 0 : 400,
+    );
     return () => clearTimeout(id);
-  }, [currentIndex, viewableFiles, getFileUrl]);
+  }, [currentIndex, viewableFiles, getFileUrl, loadedImageKey]);
+
+  // Closing the viewer cancels whatever is still prefetching
+  useEffect(() => {
+    const prefetches = prefetchesRef.current;
+    return () => {
+      for (const controller of prefetches.values()) controller.abort();
+      prefetches.clear();
+    };
+  }, []);
 
   // Keyboard nav
   useEffect(() => {
@@ -356,7 +405,7 @@ function MediaViewer({ viewerFile, viewableFiles, currentPath, onClose, onNaviga
       case '3d':
         return <Viewer3D fileId={viewerFile.id} currentPath={currentPath} fileName={viewerFile.name} shareToken={shareToken} sharePassword={sharePassword} singleFileShare={singleFileShare} onClick={stopProp} />;
       case 'image':
-        return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} onSwipe={multi ? handleSwipe : undefined} />;
+        return <ImageViewer file={viewerFile} currentPath={currentPath} getFileUrl={getFileUrl} shareToken={shareToken} sharePassword={sharePassword} onSwipe={multi ? handleSwipe : undefined} onLoaded={(f) => setLoadedImageKey(viewerImageKey(f))} />;
       case 'video':
         return <VideoPlayer file={viewerFile} getFileUrl={getFileUrl} currentPath={currentPath} shareToken={shareToken} sharePassword={sharePassword} />;
       case 'audio':

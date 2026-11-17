@@ -5,26 +5,16 @@ import {
   verifyShare, validateSharePath, clientIpFromHeaders,
   readShareEmail, authorizePrivatePath, privateAccessErrorBody, shareInnerPath, isWithinShare,
 } from '@/lib/shareAuth';
-import { stat, mkdir, readFile, writeFile, rename, unlink } from 'fs/promises';
-import { randomBytes } from 'crypto';
-import { join, resolve, dirname, extname } from 'node:path';
+import { stat, readFile } from 'fs/promises';
+import { join, extname } from 'node:path';
 import { lookup } from 'mime-types';
-import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
-import { optiCachePath } from '@/lib/optiCache.mjs';
-import { isHeif, resizeHeifToBuffer } from '@/lib/heifVips.mjs';
+import { getOptimizedImage } from '@/lib/optimizeImage';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
-import { Semaphore } from '@/lib/semaphore';
-import { optimizedImageCache } from '@/lib/thumbnailCache';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 import { isCachePath, CACHE_PATH_ERROR } from '@/lib/cachePaths.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
-
-// Semaphore to limit concurrent image optimizations — same cap as the
-// signed-in route
-const optimizationSemaphore = new Semaphore(10);
 
 export const maxDuration = 30;
 
@@ -130,109 +120,29 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Same key the signed-in route and the cache worker use (lib/optiCache.mjs),
-    // so a share visitor gets the variant a signed-in viewer already made.
-    const lastSlash = pathCheck.fullPath.lastIndexOf('/');
-    const relativeCacheDir = lastSlash >= 0 ? pathCheck.fullPath.substring(0, lastSlash) : '';
-    const cachePath = optiCachePath(resolve(process.cwd(), OPTI_CACHE_DIR), relativeCacheDir, resolve(filePath), fileStats, {
-      quality,
-      width: maxWidth,
-      height: maxHeight,
-      format: 'webp',
+    // Memory, disk, a shared in-flight job, or a new one (lib/optimizeImage.js).
+    // Same cache key as the signed-in route, so a share visitor gets the
+    // variant a signed-in viewer already made.
+    const { buffer, cache } = await getOptimizedImage({
+      filePath,
+      stat: fileStats,
+      variant: { quality, width: maxWidth, height: maxHeight, format: 'webp' },
+      signal: req.signal,
     });
-    const cacheDir = dirname(cachePath);
 
-    // Memory cache — the same one the signed-in route fills, keyed on the
-    // same path, so a variant either side made is served from RAM.
-    const memoryCached = optimizedImageCache.get(cachePath);
-    if (memoryCached) {
-      return new NextResponse(memoryCached, {
-        headers: {
-          'Content-Type': 'image/webp',
-          'Content-Length': memoryCached.length.toString(),
-          ...cacheHeaders,
-          'X-Cache': 'MEMORY',
-        },
-      });
-    }
-
-    // Disk cache. The key covers the source's size and mtime, so any file
-    // found here was made from the current version.
-    try {
-      const cachedBuffer = await readFile(cachePath);
-      optimizedImageCache.set(cachePath, cachedBuffer);
-      return new NextResponse(cachedBuffer, {
-        headers: {
-          'Content-Type': 'image/webp',
-          'Content-Length': cachedBuffer.length.toString(),
-          ...cacheHeaders,
-          'X-Cache': 'HIT',
-        },
-      });
-    } catch {
-      // Not cached yet, will optimize
-    }
-
-    // Acquire semaphore only for actual optimization
-    await optimizationSemaphore.acquire();
-
-    try {
-      // HEIC/HEIF go to out-of-process vips; null means it isn't installed.
-      // A vips failure lands in the catch and is never retried in-process.
-      let optimizedBuffer = isHeif(fileName)
-        ? await resizeHeifToBuffer(filePath, { width: maxWidth, height: maxHeight, quality, format: 'webp' })
-        : null;
-
-      optimizedBuffer ??= await sharp(filePath, {
-        failOn: 'none',
-        failOnError: false,
-        limitInputPixels: false,
-      })
-        .rotate()
-        .resize(maxWidth, maxHeight, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .webp({ quality })
-        .toBuffer();
-
-      // Memory cache + fire-and-forget disk write. Written to a temp name and
-      // renamed, so a concurrent request never reads a half-written file.
-      optimizedImageCache.set(cachePath, optimizedBuffer);
-      const tmpPath = `${cachePath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
-      mkdir(cacheDir, { recursive: true })
-        .then(() => writeFile(tmpPath, optimizedBuffer))
-        .then(() => rename(tmpPath, cachePath))
-        .catch(async (cacheError) => {
-          await unlink(tmpPath).catch(() => {});
-          console.error('Failed to cache optimized image:', cacheError);
-        });
-
-      return new NextResponse(optimizedBuffer, {
-        headers: {
-          'Content-Type': 'image/webp',
-          'Content-Length': optimizedBuffer.length.toString(),
-          ...cacheHeaders,
-          'X-Cache': 'MISS',
-        },
-      });
-    } catch (sharpError) {
-      // If sharp fails, return original image
-      console.error('Image optimization failed:', sharpError);
-      const fileBuffer = await readFile(filePath);
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': fileBuffer.length.toString(),
-          // Fallback bytes, not the variant this URL names — don't pin them.
-          'Cache-Control': 'no-store',
-        },
-      });
-    } finally {
-      // Release semaphore after optimization completes
-      optimizationSemaphore.release();
-    }
+    const failed = cache === 'ORIGINAL';
+    return new NextResponse(buffer, {
+      headers: {
+        'Content-Type': failed ? mimeType : 'image/webp',
+        'Content-Length': buffer.length.toString(),
+        // Fallback bytes, not the variant this URL names — don't pin them.
+        ...(failed ? { 'Cache-Control': 'no-store' } : cacheHeaders),
+        'X-Cache': cache,
+      },
+    });
   } catch (error) {
+    // The client went away while its job was still queued
+    if (error?.name === 'AbortError') return new NextResponse(null, { status: 499 });
     console.error('GET /api/public/[token]/optimize-image - Error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
   }

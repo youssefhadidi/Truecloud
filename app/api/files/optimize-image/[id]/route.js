@@ -2,27 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import { requireAuthNoActivity } from '@/lib/authCheck';
-import { stat, mkdir, readFile, writeFile, rename, unlink } from 'fs/promises';
-import { join, resolve, dirname, extname } from 'node:path';
+import { stat, readFile } from 'fs/promises';
+import { join, extname } from 'node:path';
 import { lookup } from 'mime-types';
-import sharp from 'sharp';
 import { IMAGE_EXTENSIONS } from '@/lib/extensions';
-import { randomBytes } from 'crypto';
-import { optiCachePath } from '@/lib/optiCache.mjs';
-import { isHeif, resizeHeifToBuffer } from '@/lib/heifVips.mjs';
+import { getOptimizedImage } from '@/lib/optimizeImage';
 import { OPTIMIZE_MIN_BYTES } from '@/lib/imageVariants.mjs';
 import { hasRootAccess, checkPathAccess } from '@/lib/pathPermissions';
 import { safeDecodeURIComponent } from '@/lib/safeUriDecode';
 import { requireFolderUnlock } from '@/lib/folderLocks';
-import { Semaphore } from '@/lib/semaphore';
-import { optimizedImageCache } from '@/lib/thumbnailCache';
 import { buildValidators, evaluateConditional, mediaCacheControl } from '@/lib/httpRange';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-const OPTI_CACHE_DIR = process.env.OPTI_CACHE_DIR || './opti-cache';
-
-// Semaphore to limit concurrent image optimizations to 10
-const optimizationSemaphore = new Semaphore(10);
 
 // Image optimization may take time, set appropriate timeout
 export const maxDuration = 30;
@@ -113,126 +104,28 @@ export async function GET(req, { params }) {
       });
     }
 
-    // Same key the share route and the cache worker use (lib/optiCache.mjs)
-    const cachePath = optiCachePath(resolve(process.cwd(), OPTI_CACHE_DIR), relativePath, resolve(filePath), fileStats, {
-      quality,
-      width: maxWidth,
-      height: maxHeight,
-      format,
+    // Memory, disk, a shared in-flight job, or a new one (lib/optimizeImage.js)
+    const { buffer, cache } = await getOptimizedImage({
+      filePath,
+      stat: fileStats,
+      variant: { quality, width: maxWidth, height: maxHeight, format },
+      signal: req.signal,
     });
-    const cacheDir = dirname(cachePath);
 
-    // Fast path: check memory cache first
-    const memoryCached = optimizedImageCache.get(cachePath);
-    if (memoryCached) {
-      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-      return new NextResponse(memoryCached, {
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': memoryCached.length.toString(),
-          ...cacheHeaders,
-          'X-Cache': 'MEMORY',
-        },
-      });
-    }
-
-    // Disk cache. The key covers the source's size and mtime, so any file
-    // found here was made from the current version.
-    try {
-      const cachedBuffer = await readFile(cachePath);
-      optimizedImageCache.set(cachePath, cachedBuffer);
-      const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-      return new NextResponse(cachedBuffer, {
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': cachedBuffer.length.toString(),
-          ...cacheHeaders,
-          'X-Cache': 'HIT',
-        },
-      });
-    } catch {
-      // Not cached yet, will optimize
-    }
-
-    // Acquire semaphore only for actual optimization
-    await optimizationSemaphore.acquire();
-
-    let optimizedBuffer;
-    let optimizationFailed = false;
-
-    try {
-      // HEIC/HEIF go to out-of-process vips; null means it isn't installed.
-      // A vips failure lands in the catch and is never retried in-process.
-      if (isHeif(fileName)) {
-        optimizedBuffer = await resizeHeifToBuffer(filePath, {
-          width: maxWidth,
-          height: maxHeight,
-          quality: format === 'jpeg' ? 100 : quality,
-          format,
-        });
-      }
-
-      if (!optimizedBuffer) {
-        let sharpPipeline = sharp(filePath, {
-          failOn: 'none',
-          failOnError: false,
-          limitInputPixels: false,
-        }).rotate();
-
-        // Only resize if dimensions are not 0x0 (0x0 means preserve original)
-        if (maxWidth !== 0 || maxHeight !== 0) {
-          sharpPipeline = sharpPipeline.resize(maxWidth, maxHeight, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          });
-        }
-
-        // Apply format conversion
-        if (format === 'jpeg') {
-          sharpPipeline = sharpPipeline.jpeg({ quality: 100 });
-        } else {
-          sharpPipeline = sharpPipeline.webp({ quality });
-        }
-
-        optimizedBuffer = await sharpPipeline.toBuffer();
-      }
-    } catch (sharpError) {
-      // If sharp fails, flag it and use original image
-      console.error('Image optimization failed, serving original:', sharpError);
-      optimizationFailed = true;
-      optimizedBuffer = await readFile(filePath);
-    } finally {
-      // Release semaphore immediately after optimization (don't wait for cache write)
-      optimizationSemaphore.release();
-    }
-
-    // Store in memory cache + fire-and-forget disk cache write. Written to a
-    // temp name and renamed, so a concurrent request that finds the file never
-    // reads (and memory-caches) a half-written one.
-    if (!optimizationFailed) {
-      optimizedImageCache.set(cachePath, optimizedBuffer);
-      const tmpPath = `${cachePath}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
-      mkdir(cacheDir, { recursive: true })
-        .then(() => writeFile(tmpPath, optimizedBuffer))
-        .then(() => rename(tmpPath, cachePath))
-        .catch(async (cacheError) => {
-          await unlink(tmpPath).catch(() => {});
-          console.error('Failed to cache optimized image:', cacheError);
-        });
-    }
-
-    const contentType = format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-    return new NextResponse(optimizedBuffer, {
+    const failed = cache === 'ORIGINAL';
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': contentType,
-        'Content-Length': optimizedBuffer.length.toString(),
+        'Content-Type': failed ? lookup(fileName) || 'application/octet-stream' : format === 'jpeg' ? 'image/jpeg' : 'image/webp',
+        'Content-Length': buffer.length.toString(),
         // A failed optimization serves the original instead; don't let the
         // browser pin that in place of the real variant.
-        ...(optimizationFailed ? { 'Cache-Control': 'no-store' } : cacheHeaders),
-        'X-Cache': optimizationFailed ? 'ORIGINAL' : 'MISS',
+        ...(failed ? { 'Cache-Control': 'no-store' } : cacheHeaders),
+        'X-Cache': cache,
       },
     });
   } catch (error) {
+    // The client went away while its job was still queued
+    if (error?.name === 'AbortError') return new NextResponse(null, { status: 499 });
     console.error('Optimize image error:', error);
     return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
   }

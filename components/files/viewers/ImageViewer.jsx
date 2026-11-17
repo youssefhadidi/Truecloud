@@ -16,7 +16,11 @@ const ZOOM_STEP = 0.5; // react-zoom-pan-pinch step: scale × e^step per click
 const SWIPE_MIN_DX = 50;
 const SWIPE_MAX_MS = 600;
 
-export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, onSwipe }) {
+/**
+ * @param {{ onLoaded?: (file) => void }} props - onLoaded: the full image
+ *   finished loading (or failed), so the viewer may start prefetching.
+ */
+export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePassword, onSwipe, onLoaded }) {
   const { t } = useTranslation();
   const [fullLoaded, setFullLoaded] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
@@ -163,7 +167,9 @@ export function ImageViewer({ file, currentPath, getFileUrl, shareToken, sharePa
             onLoad={() => {
               setFullLoaded(true);
               transformRef.current?.resetTransform(0);
+              onLoaded?.(file);
             }}
+            onError={() => onLoaded?.(file)}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
             onTouchStart={(e) => e.preventDefault()}
